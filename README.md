@@ -18,7 +18,9 @@ Supported values of `key` are:
 * `strict`: Raises error instead of warnings when unknown instructions are encountered or jump to addresses exceed the ROM size.
 * `addresses`: Specify that each line should have a comment containing the address and source bytes. `value` is not important.
 * `rom_window`: Size of the ROM window. For example `0x8000`.
-* `names`: Path to a file containing label names. Each line should be in the format `generated_label_name real_label_name`.
+* `names`: Path to a file containing label names.
+   Each line should either be a comment, empty,
+   or starts with `generated_label_name real_label_name`.
 
 ## Emulator
 

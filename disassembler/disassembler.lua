@@ -998,7 +998,7 @@ if args_assoc.names then
 	local raw_to_real = {}
 	local last_global_label
 	for line in name_content:gmatch("[^\n]+") do
-		local raw, real = line:match("([%w_%.]+)%s+([%w_%.]+)")
+		local raw, real = line:match("^%s*([%w_%.]+)%s+([%w_%.]+)")
 		if raw then
 			if raw:find("^%.") then
 				if not last_global_label then
