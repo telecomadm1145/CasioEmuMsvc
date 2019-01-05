@@ -64,11 +64,19 @@ local function get_real_pc()
 	return (cpu.csr << 16) | cpu.pc
 end
 
-function break_at(addr)
+function break_at(addr, commands)
 	if not addr then
 		addr = get_real_pc()
 	end
-	break_targets[addr] = true
+	if commands then
+		if type(commands) ~= 'function' then
+			printf('Invalid secomd argument to break_at: %s', commands)
+			return
+		end
+	else
+		commands = function() end
+	end
+	break_targets[addr] = commands
 end
 
 function unbreak_at(addr)
@@ -84,9 +92,11 @@ end
 
 emu:post_tick(function()
 	local real_pc = get_real_pc()
-	if break_targets[real_pc] then
+	local commands = break_targets[real_pc]
+	if commands then
 		printf("********** breakpoint reached at %05X **********", real_pc)
 		emu:set_paused(true)
+		commands()
 	end
 end)
 
@@ -107,7 +117,10 @@ The supported functions are:
 
 printf()        Print with format.
 ins             Log all register values to the screen.
-break_at        Set breakpoint. If input not specified, break at current address.
+break_at        Set breakpoint.
+                If input not specified, break at current address.
+                Second argument (optional) is a function that is executed whenever
+                this breakpoint hits.
 unbreak_at      Delete breakpoint.
                 If input not specified, delete breakpoint at current address.
                 Have no effect if there is no breakpoint at specified position.
