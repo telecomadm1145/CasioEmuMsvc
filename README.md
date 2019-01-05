@@ -14,6 +14,11 @@ Supported values of `key` are:
 * `input`: Path to input file. Defaults to `/dev/stdin`,
 * `output`: Path to output file. Defaults to `/dev/stdout`,
 * `entry`: Comma-separated list of 0-indexed indices of used (reset/interrupt) vectors. (each vector takes 2 bytes, so the address of vector with index `i` is `2*i`)
+* `entry_addresses_file`: Path to a file containing entry addresses. Workaround
+   for the fact that the disassembler cannot determine every dynamic function
+   call. All lines should either be empty, has a comment (any character can be
+   used to start a comment - `#`, `;` or `--` are all fine), or start with a
+   hexadecimal value without prefix '0x' indicates the address.
 * `complement_entries`: Specify that the list of entries (above) should be inverted in range [1..127].
 * `strict`: Raises error instead of warnings when unknown instructions are encountered or jump to addresses exceed the ROM size.
 * `addresses`: Specify that each line should have a comment containing the address and source bytes. `value` is not important.

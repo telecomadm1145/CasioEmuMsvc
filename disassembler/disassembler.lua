@@ -579,7 +579,16 @@ do
 end
 
 print("Disassembling binary...")
+
 local to_disassemble = {}
+
+function add_disassemble_address(address)
+	local new_streak = make_streak()
+	local label_obj = add_label(new_streak, address)
+	to_disassemble[{bit.band(address, 0xF0000), bit.band(address, 0xFFFF),
+			new_streak}] = true
+end
+
 do
 	local entry_ords_in = {}
 	for entry in args_assoc.entry:gmatch("[^,]+") do
@@ -597,11 +606,31 @@ do
 	for entry_ord in next, entry_ords_in do
 		local address = fetch(math.floor(2 * entry_ord))
 		if address % 2 == 0 then
-			local new_streak = make_streak()
-			local label_obj = add_label(new_streak, address)
-			to_disassemble[{0, address, new_streak}] = true
+			add_disassemble_address(address)
 		else
 			printf("ignoring entry %s (%04X)", entry_ord, address)
+		end
+	end
+end
+
+if args_assoc.entry_addresses_file then
+	local handle = io.open(args_assoc.entry_addresses_file, "r")
+	if not handle then
+		panic("Failed to open \"%s\"", args_assoc.names)
+	end
+	local addresses = handle:read("*a")
+	handle:close()
+	for line in addresses:gmatch("[^\n]+") do
+		address = line:match('^%s*(%w+)')
+		if address then
+			address_ord = tonumber(address, 16)
+			if address_ord then
+				add_disassemble_address(address_ord)
+			else
+				panic2('address: invalid entry address line %q', line)
+			end
+		else
+			-- Comment line or empty line
 		end
 	end
 end
