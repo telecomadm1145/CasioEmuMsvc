@@ -76,6 +76,12 @@ function break_at(addr, commands)
 	else
 		commands = function() end
 	end
+
+    if not next(break_targets) then
+        -- if break_targets is initially empty and later non-empty
+		emu:post_tick(post_tick)
+	end
+
 	break_targets[addr] = commands
 end
 
@@ -84,13 +90,17 @@ function unbreak_at(addr)
 		addr = get_real_pc()
 	end
 	break_targets[addr] = nil
+
+    if not next(break_targets) then
+        emu:post_tick(nil)
+    end
 end
 
 function cont()
 	emu:set_paused(false)
 end
 
-emu:post_tick(function()
+function post_tick()
 	local real_pc = get_real_pc()
 	local commands = break_targets[real_pc]
 	if commands then
@@ -98,7 +108,7 @@ emu:post_tick(function()
 		emu:set_paused(true)
 		commands()
 	end
-end)
+end
 
 function printf(...)
 	print(string.format(...))
