@@ -15,7 +15,16 @@ namespace casioemu
 	private:
 		Emulator &emulator;
 
-		MMURegion ***segment_dispatch;
+		struct MemoryByte
+		{
+			MMURegion *region;
+			/**
+			 * Lua index to a function to execute when this byte is read from
+			 * or written to as data. If this is LUA_REFNIL, no function is executed.
+			 */
+			int on_read, on_write;
+		};
+		MemoryByte **segment_dispatch;
 
 	public:
 		MMU(Emulator &emulator);

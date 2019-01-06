@@ -71,6 +71,10 @@ Those Lua functions and variables can be used at the Lua prompt of the emulator.
 
 * `code[address]`: Access code. (By words, only use even address, otherwise program will panic)
 * `data[address]`: Access data. (By bytes)
+* `data:watch(offset, fn)`: Set watchpoint at address `offset` - `fn` is called whenever
+data is written to. If `fn` is `nil`, clear the watchpoint.
+* `data:rwatch(offset, fn)`: Set watchpoint at address `offset` - `fn` is called whenever
+data is read from as data. If `fn` is `nil`, clear the watchpoint.
 
 ### Build
 

@@ -137,6 +137,8 @@ cpu.xxx         Get register value.
 code            Access code. (By words, only use even address,
                 otherwise program will panic)
 data            Access data. (By bytes)
+data:watch		Set write watchpoint.
+data:rwatch		Set read watchpoint.
 help()          Print this help message.
 p(...)          Shorthand for `print`.
 ]])
