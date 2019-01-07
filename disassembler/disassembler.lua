@@ -1,6 +1,21 @@
 #! /usr/bin/env luajit
 
 if not bit then
+	-- First, try using Lua 5.3's bitwise operators implementation.
+	f = loadstring [[
+		bit = {}
+		function bit.band(a, b)   return a & b  end
+		function bit.bor(a, b)    return a | b  end
+		function bit.bxor(a, b)   return a ~ b  end
+		function bit.lshift(a, b) return a << b end
+		function bit.rshift(a, b) return a >> b end
+	]]
+	if f ~= nil then
+		f()
+	end
+end
+
+if not bit then
 	bit = {}
 
 	local function normalize(r)
