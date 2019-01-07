@@ -1086,15 +1086,15 @@ do
 			handle:write(("%s:\n"):format(label.name))
 		end
 
-		local out_head = {}
+		local out_head
 		local out_body = {}
 		local out_tail
 		if args_assoc.addresses then
-			out_tail = {("; %05X |"):format(address)}
+			out_tail = ("; %05X |"):format(address)
 		end
 
 		if instr then
-			table.insert(out_head, instr.mnemonic)
+			out_head = instr.mnemonic
 			for ix = 1, #instr.params do
 				if instr.offsetable ~= 0 and instr.offsetable == ix - 1 and (instr.params[ix][2] == "dlab" or instr.params[ix][2] == "im") then
 					if instr.params[ix][2] == "im" and instr.params[ix][1] >= 0xFF00 then
@@ -1102,24 +1102,24 @@ do
 					end
 					out_body[#out_body] = out_body[#out_body]:gsub("%[", formats[instr.params[ix][2]]:format(instr.params[ix][1], instr) .. "[")
 				else
-					local paramtbl = {}
+					local param = ''
 					if instr.offsetable == ix then
 						if instr.dsr then
-							table.insert(paramtbl, formats[instr.dsr[2]]:format(instr.dsr[1], instr))
-							table.insert(paramtbl, ":")
+							param = param .. formats[instr.dsr[2]]:format(instr.dsr[1], instr)
+							param = param .. ":"
 						end
-						table.insert(paramtbl, "[")
+						param = param .. "["
 					end
-					table.insert(paramtbl, formats[instr.params[ix][2]]:format(instr.params[ix][1], instr))
+					param = param .. formats[instr.params[ix][2]]:format(instr.params[ix][1], instr)
 					if instr.offsetable == ix then
-						table.insert(paramtbl, "]")
+						param = param .. "]"
 					end
-					table.insert(out_body, table.concat(paramtbl))
+					table.insert(out_body, param)
 				end
 			end
 			if args_assoc.addresses then
 				for ix = 1, instr.length / 2 do
-					table.insert(out_tail, ("%04X"):format(instr.opcode[ix]))
+					out_tail = out_tail .. ' ' .. ("%04X"):format(instr.opcode[ix])
 				end
 			end
 		else
@@ -1129,27 +1129,21 @@ do
 					handle:write(("%s:\n"):format(datalabel.name))
 				end
 			end
-			table.insert(out_head, "dw")
+			out_head = "dw"
 			local data = fetch(address)
 			table.insert(out_body, ("0x%04X"):format(data))
 			if args_assoc.addresses then
-				table.insert(out_tail, ("%04X"):format(data))
+				out_tail = out_tail .. ' ' .. ("%04X"):format(data)
 			end
 		end
 
-		table.insert(out_head, table.concat(out_body, ", "))
+		out_head = out_head .. ' ' .. table.concat(out_body, ", ")
 
 		if args_assoc.addresses then
-			handle:write(("\t%-30s %s\n"):format(
-				table.concat(out_head, " "),
-				table.concat(out_tail, " ")
-			))
+			handle:write(("\t%-30s %s\n"):format(out_head, out_tail))
 		else
-			handle:write(("\t%s\n"):format(
-				table.concat(out_head, " ")
-			))
+			handle:write(("\t%s\n"):format(out_head))
 		end
-
 
 		last_instr = instr
 	end
