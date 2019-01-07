@@ -32,6 +32,18 @@ namespace casioemu
 			if (memory_model == MM_LARGE)
 				Push16(reg_lcsr);
 			Push16(reg_lr);
+
+			if (stack.empty())
+				logger::Info("PUSH LR is called before %06zX, but the stack is empty\n",
+						((size_t)reg_csr.raw) << 16 | reg_pc.raw);
+			else if (stack.back().lr_pushed)
+				logger::Info("PUSH LR is called before %06zX, but LR is already pushed for the last frame\n",
+						((size_t)reg_csr.raw) << 16 | reg_pc.raw);
+			else
+			{
+				stack.back().lr_pushed = true;
+				stack.back().lr_push_address = reg_sp;
+			}
 		}
 		if (impl_operands[1].value & 1)
 			Push16(reg_ea);
@@ -54,6 +66,16 @@ namespace casioemu
 			reg_ea = Pop16();
 		if (impl_operands[0].value & 8)
 		{
+			/**
+			 * Sometimes a function calls another function in one branch, and
+			 * does not call another function in another branch. In that case
+			 * the compiler may decide to do a `push lr` / `pop lr` in only the
+			 * branch that has to save `lr`.
+			 */
+			if (!stack.empty() && stack.back().lr_pushed &&
+					stack.back().lr_push_address == reg_sp)
+				stack.back().lr_pushed = false;
+
 			reg_lr = Pop16();
 			if (memory_model == MM_LARGE)
 				reg_lcsr = Pop16() & 0x000F;
@@ -62,6 +84,10 @@ namespace casioemu
 			reg_psw = Pop16();
 		if (impl_operands[0].value & 2)
 		{
+			if (!stack.empty() && stack.back().lr_pushed &&
+					stack.back().lr_push_address == reg_sp)
+				stack.pop_back();
+
 			reg_pc = Pop16();
 			if (memory_model == MM_LARGE)
 				reg_csr = Pop16() & 0x000F;

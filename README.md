@@ -68,6 +68,7 @@ Those Lua functions and variables can be used at the Lua prompt of the emulator.
 	* `r0` to `r15`
 	* One of the register names specified in `CPU.cpp:200..216`
 	* `erN`, `xrN`, `qrN` are **not** supported.
+* `cpu.bt`: A string containing the current stack trace.
 
 * `code[address]`: Access code. (By words, only use even address, otherwise program will panic)
 * `data[address]`: Access data. (By bytes)

@@ -179,12 +179,26 @@ namespace casioemu
 	{
 		reg_lr = reg_pc;
 		reg_lcsr = reg_csr;
+		if (!stack.empty() && !stack.back().lr_pushed)
+			logger::Info("BL is executed before %06zX without saving LR value\n",
+					((size_t)reg_csr.raw) << 16 | reg_pc.raw);
 		OP_B();
+		stack.push_back({false, 0, reg_csr, reg_pc});
 	}
 
 	// * Miscellaneous Instructions
 	void CPU::OP_RT()
 	{
+		if (stack.empty())
+			logger::Info("RT is executed before %06zX, but the stack is empty\n",
+					((size_t)reg_csr.raw) << 16 | reg_pc.raw);
+		else
+		{
+			if (stack.back().lr_pushed)
+				logger::Info("RT is executed before %06zX, but LR is pushed for the last frame\n",
+						((size_t)reg_csr.raw) << 16 | reg_pc.raw);
+			stack.pop_back();
+		}
 		reg_csr = reg_lcsr;
 		reg_pc = reg_lr;
 	}

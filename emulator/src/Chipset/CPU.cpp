@@ -6,6 +6,7 @@
 #include "../Logger.hpp"
 
 #include <sstream>
+#include <iomanip>
 
 namespace casioemu
 {
@@ -320,7 +321,13 @@ namespace casioemu
 		lua_newtable(emulator.lua_state);
 		lua_pushcfunction(emulator.lua_state, [](lua_State *lua_state) {
 			CPU *cpu = *(CPU **)lua_topointer(lua_state, 1);
-			auto it = cpu->register_proxies.find(lua_tostring(lua_state, 2));
+			std::string index = lua_tostring(lua_state, 2);
+			if (index == "bt")
+			{
+				lua_pushstring(lua_state, cpu->GetBacktrace().c_str());
+				return 1;
+			}
+			auto it = cpu->register_proxies.find(index);
 			if (it == cpu->register_proxies.end())
 				return 0;
 			RegisterStub *reg_stub = it->second;
@@ -439,6 +446,7 @@ namespace casioemu
 		reg_sp = emulator.chipset.mmu.ReadCode(0);
 		reg_dsr = 0;
 		reg_psw = 0;
+		stack.clear();
 	}
 
 	void CPU::Raise(size_t exception_level, size_t index)
@@ -462,6 +470,37 @@ namespace casioemu
 	bool CPU::GetMasterInterruptEnable()
 	{
 		return reg_psw & PSW_MIE;
+	}
+
+	std::string CPU::GetBacktrace() const
+	{
+		std::stringstream output;
+		output << std::hex << std::setfill('0') << std::uppercase;
+		for (StackFrame frame : stack)
+		{
+			output << "  function "
+				<< std::setw(6) << (((size_t)frame.new_csr) << 16 | frame.new_pc)
+				<< " returns to " << std::setw(6);
+			if (frame.lr_pushed)
+			{
+				uint16_t saved_lr, saved_lcsr = 0;
+				MMU &mmu = emulator.chipset.mmu;
+				saved_lr = ((uint16_t)mmu.ReadData(frame.lr_push_address + 1))
+					<< 8 | mmu.ReadData(frame.lr_push_address);
+				if (memory_model == MM_LARGE)
+					saved_lcsr = mmu.ReadData(frame.lr_push_address + 2);
+				output << (((size_t)saved_lcsr) << 16 | saved_lr);
+
+				output << " - lr pushed at "
+					<< std::setw(4) << frame.lr_push_address;
+			}
+			else
+			{
+				output << (((size_t)reg_lcsr) << 16 | reg_lr);
+			}
+			output << '\n';
+		}
+		return output.str();
 	}
 }
 

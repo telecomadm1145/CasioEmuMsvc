@@ -143,6 +143,7 @@ emu:tick()      Execute one command.
 emu:shutdown()  Shutdown the emulator.
 
 cpu.xxx         Get register value.
+cpu.bt          Current stack trace.
 
 code            Access code. (By words, only use even address,
                 otherwise program will panic)

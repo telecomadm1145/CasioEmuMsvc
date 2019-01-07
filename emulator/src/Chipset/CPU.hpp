@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 #include <map>
+#include <vector>
 
 namespace casioemu
 {
@@ -136,6 +137,15 @@ namespace casioemu
 		bool GetMasterInterruptEnable();
 
 	private:
+		struct StackFrame
+		{
+			bool lr_pushed;
+			uint16_t lr_push_address, new_csr, new_pc;
+		};
+		std::vector<StackFrame> stack;
+
+		std::string GetBacktrace() const;
+
 		uint16_t Fetch();
 
 		enum OpcodeHint
