@@ -53,6 +53,7 @@ Supported values of `key` are: (if `value` is not mentioned then it does not mat
 ### Available Lua functions
 
 Those Lua functions and variables can be used at the Lua prompt of the emulator.
+Some functions require `script=emulator/lua-common.lua` flag to be passed.
 
 * `printf()`: Print with format.
 * `ins()`: Log all register values to the screen.
