@@ -1155,7 +1155,8 @@ do
 		out_head = out_head .. ' ' .. table.concat(out_body, ", ")
 
 		if args_assoc.addresses then
-			handle:write(("\t%-30s %s\n"):format(out_head, out_tail))
+			handle:write(("\t%-30s "):format(out_head))
+			handle:write(out_tail .. "\n")
 		else
 			handle:write(("\t%s\n"):format(out_head))
 		end
