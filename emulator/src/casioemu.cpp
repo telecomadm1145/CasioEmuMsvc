@@ -13,9 +13,14 @@
 #include "Logger.hpp"
 #include "Data/EventCode.hpp"
 
+#include <cstdio>
+#include <cstdlib>
+
+#include <readline/readline.h>
+#include <readline/history.h>
+
 using namespace casioemu;
 
-std::mutex input_mx;
 int main(int argc, char *argv[])
 {
 	std::map<std::string, std::string> argv_map;
@@ -55,36 +60,48 @@ int main(int argc, char *argv[])
 		PANIC("IMG_Init failed: %s\n", IMG_GetError());
 
 	{
-		Emulator emulator(argv_map, 20, 128 * 1024);
+		static Emulator emulator(argv_map, 20, 128 * 1024);
 
-		std::condition_variable input_cv;
-		bool input_processed;
-		std::string console_input_str;
 		std::thread console_input_thread([&] {
+			struct terminate_thread {};
+			rl_event_hook = [](){
+				if (!emulator.Running())
+					throw terminate_thread{};
+				return 0;
+			};
+
 			while (1)
 			{
-				std::cout << "> ";
-				std::getline(std::cin, console_input_str);
-				if (std::cin.fail())
+				char *console_input_c_str;
+				try
+				{
+					console_input_c_str = readline("> ");
+				}
+				catch (terminate_thread)
+				{
+					rl_cleanup_after_signal();
+					return;
+				}
+
+				if (console_input_c_str == NULL)
 				{
 					logger::Info("Console thread shutting down\n");
 					break;
 				}
 
-				input_processed = false;
-				SDL_Event event;
-				SDL_zero(event);
-				event.type = SDL_USEREVENT;
-				event.user.code = CE_EVENT_INPUT;
-				SDL_PushEvent(&event);
+				// Ignore empty lines.
+				if (console_input_c_str[0] == 0)
+					continue;
 
-				std::unique_lock<std::mutex> input_lock(input_mx);
-				input_cv.wait(input_lock, [&] {
-					return input_processed;
-				});
+				add_history(console_input_c_str);
+
+				std::lock_guard<std::recursive_mutex> access_lock(emulator.access_mx);
+				if (!emulator.Running())
+					break;
+				emulator.ExecuteCommand(console_input_c_str);
+				free(console_input_c_str);
 			}
 		});
-		console_input_thread.detach();
 
 		while (emulator.Running())
 		{
@@ -97,15 +114,6 @@ int main(int argc, char *argv[])
 			case SDL_USEREVENT:
 				switch (event.user.code)
 				{
-				case CE_EVENT_INPUT:
-					{
-						std::lock_guard<std::mutex> input_lock(input_mx);
-						emulator.ExecuteCommand(console_input_str);
-						input_processed = true;
-					}
-					input_cv.notify_one();
-					break;
-
 				case CE_FRAME_REQUEST:
 					emulator.Frame();
 					break;
@@ -139,8 +147,11 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		input_mx.lock();
+		console_input_thread.join();
 	}
+
+	rl_free_line_state();
+	rl_deprep_terminal();
 
 	IMG_Quit();
 	SDL_Quit();
