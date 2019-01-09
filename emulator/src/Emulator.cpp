@@ -7,6 +7,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <string>
 #include <chrono>
 
 namespace casioemu
@@ -26,14 +27,47 @@ namespace casioemu
 		LoadModelDefition();
 
 		interface_background = GetModelInfo("rsd_interface");
+		if (interface_background.dest.x != 0 || interface_background.dest.y != 0)
+			PANIC("rsd_interface must have dest x and y coordinate zero\n");
 
+		int width = interface_background.src.w, height = interface_background.src.h;
+		try
+		{
+			std::size_t pos;
+
+			auto width_iter = argv_map.find("width");
+			if (width_iter != argv_map.end())
+			{
+				width = std::stoi(width_iter->second, &pos, 0);
+				if (pos != width_iter->second.size())
+					PANIC("width parameter has extraneous trailing characters\n");
+			}
+
+			auto height_iter = argv_map.find("height");
+			if (height_iter != argv_map.end())
+			{
+				height = std::stoi(height_iter->second, &pos, 0);
+				if (pos != height_iter->second.size())
+					PANIC("height parameter has extraneous trailing characters\n");
+			}
+		}
+		catch (std::invalid_argument const&)
+		{
+			PANIC("invalid width/height parameter\n");
+		}
+		catch (std::out_of_range const&)
+		{
+			PANIC("out of range width/height parameter\n");
+		}
+
+		SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
 		window = SDL_CreateWindow(
 			std::string(GetModelInfo("model_name")).c_str(),
 			SDL_WINDOWPOS_UNDEFINED,
 			SDL_WINDOWPOS_UNDEFINED,
-			interface_background.src.w,
-			interface_background.src.h,
-			SDL_WINDOW_SHOWN
+			width, height,
+			SDL_WINDOW_SHOWN |
+			(argv_map.count("resizable") ? SDL_WINDOW_RESIZABLE : 0)
 		);
 		if (!window)
 			PANIC("SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -104,6 +138,28 @@ namespace casioemu
 	{
 		std::lock_guard<std::recursive_mutex> access_lock(access_mx);
 
+		int w, h;
+		SDL_GetWindowSize(window, &w, &h);
+
+		// For mouse events, rescale the coordinates from window size to original size.
+		switch (event.type)
+		{
+		case SDL_MOUSEBUTTONDOWN:
+		case SDL_MOUSEBUTTONUP:
+			event.button.x *= (float) interface_background.dest.w / w;
+			event.button.y *= (float) interface_background.dest.h / h;
+			break;
+		case SDL_MOUSEMOTION:
+			event.motion.x *= (float) interface_background.dest.w / w;
+			event.motion.y *= (float) interface_background.dest.h / h;
+			event.motion.xrel *= (float) interface_background.dest.w / w;
+			event.motion.yrel *= (float) interface_background.dest.h / h;
+			break;
+		case SDL_MOUSEWHEEL:
+			event.wheel.x *= (float) interface_background.dest.w / w;
+			event.wheel.y *= (float) interface_background.dest.h / h;
+			break;
+		}
 		chipset.UIEvent(event);
 	}
 
@@ -215,26 +271,39 @@ namespace casioemu
 			if (!paused)
 				Tick();
 
-		SDL_Event event;
-		SDL_zero(event);
-		event.type = SDL_USEREVENT;
-		event.user.code = CE_FRAME_REQUEST;
-		SDL_PushEvent(&event);
+		if (chipset.GetRequireFrame())
+		{
+			SDL_Event event;
+			SDL_zero(event);
+			event.type = SDL_USEREVENT;
+			event.user.code = CE_FRAME_REQUEST;
+			SDL_PushEvent(&event);
+		}
 	}
 
 	void Emulator::Frame()
 	{
 		std::lock_guard<std::recursive_mutex> access_lock(access_mx);
-		if (chipset.GetRequireFrame())
-		{
-			SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-			SDL_RenderClear(renderer);
-			SDL_SetTextureColorMod(interface_texture, 255, 255, 255);
-			SDL_SetTextureAlphaMod(interface_texture, 255);
-			SDL_RenderCopy(renderer, interface_texture, &interface_background.src, &interface_background.dest);
-			chipset.Frame();
-			SDL_RenderPresent(renderer);
-		}
+
+		// create texture `tx` with the same format as `interface_texture`
+		Uint32 format;
+		SDL_QueryTexture(interface_texture, &format, nullptr, nullptr, nullptr);
+		SDL_Texture* tx = SDL_CreateTexture(renderer, format, SDL_TEXTUREACCESS_TARGET, interface_background.dest.w, interface_background.dest.h);
+
+		// render on `tx`
+		SDL_SetRenderTarget(renderer, tx);
+		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+		SDL_RenderClear(renderer);
+		SDL_SetTextureColorMod(interface_texture, 255, 255, 255);
+		SDL_SetTextureAlphaMod(interface_texture, 255);
+		SDL_RenderCopy(renderer, interface_texture, &interface_background.src, nullptr);
+		chipset.Frame();
+
+		// resize and copy `tx` to screen
+		SDL_SetRenderTarget(renderer, nullptr);
+		SDL_RenderCopy(renderer, tx, nullptr, nullptr);
+		SDL_DestroyTexture(tx);
+		SDL_RenderPresent(renderer);
 	}
 
 	void Emulator::Tick()

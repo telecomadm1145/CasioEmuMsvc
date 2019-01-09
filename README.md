@@ -49,6 +49,8 @@ Supported values of `key` are: (if `value` is not mentioned then it does not mat
 * `preserve_ram`: Specify that the RAM should **not** be dumped (to the value associated with the `ram` key) on program exit, in other words, *preserve* the existing RAM dump in the file.
 * `strict_memory`: Pause the emulator if the program attempt to write to unwritable memory regions corresponding to ROM. (writing to unmapped memory regions does not pause the program)
 * `script`: Specify a path to Lua file to be executed on program startup (using `value` parameter).
+* `resizable`: Whether the window can be resized.
+* `width`, `height`: Initial window width/height on program start. The values can be in hexadecimal (prefix `0x`), octal (prefix `0`) or decimal.
 
 ### Available Lua functions
 

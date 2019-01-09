@@ -118,6 +118,15 @@ int main(int argc, char *argv[])
 				case SDL_WINDOWEVENT_CLOSE:
 					emulator.Shutdown();
 					break;
+				case SDL_WINDOWEVENT_RESIZED:
+					{
+						SDL_Event event;
+						SDL_zero(event);
+						event.type = SDL_USEREVENT;
+						event.user.code = CE_FRAME_REQUEST;
+						SDL_PushEvent(&event);
+					}
+					break;
 				}
 				break;
 
