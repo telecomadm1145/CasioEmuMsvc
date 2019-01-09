@@ -141,10 +141,8 @@ do
 	local condition_names = {"ge", "lt", "gt", "le", "ges", "lts", "gts", "les", "ne", "eq", "nv", "ov", "ps", "ns", "al"}
 	formats = {
 		[ "lab"] = {format = function(self, value, instr)
-			if instr.context ~= value.context and not value.context_head then
-				if not value.context then
-					return value.name
-				end
+			if instr.context ~= value.context and not value.context_head and
+				value.context and value.name.sub(1, 1) == '.' then
 				return value.context.name .. value.name
 			end
 			return value.name
