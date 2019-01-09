@@ -1042,21 +1042,41 @@ if args_assoc.names then
 	for line in name_content:gmatch("[^\n]+") do
 		local raw, real = line:match("^%s*([%w_%.]+)%s+([%w_%.]+)")
 		if raw then
+			local addr = tonumber(raw, 16)
+			if addr then
+				if not label_by_address[addr] then
+					panic("rename: address %06X is not a label", addr)
+				end
+				raw = label_by_address[addr].name
+				if label_by_address[addr].context_head then
+					last_global_label = raw
+				else
+					raw = label_by_address[addr].context.name .. raw
+				end
+			end
 			if raw:find("^%.") then
+				-- .l_123
 				if not last_global_label then
 					panic("rename: fix that rename list pls")
 				end
 				raw_to_real[last_global_label .. raw] = real
+			elseif raw:find("%.") then
+				-- f_12345.l_123
+				raw_to_real[raw] = real
 			else
+				-- f_12345
 				last_global_label = raw
 				raw_to_real[raw] = real
 			end
 		end
 	end
+
+	local raw_used = {}
 	for address, label in next, label_by_address do
 		local raw = label.name:find("^%.") and (label.context.name .. label.name) or label.name
 		local real = raw_to_real[raw]
 		if real then
+			raw_used[raw] = true
 			label.name = real
 		end
 	end
@@ -1064,6 +1084,7 @@ if args_assoc.names then
 		local raw = label.context.name
 		local real = raw_to_real[raw]
 		if real then
+			raw_used[raw] = true
 			label.context.name = real
 		end
 	end
@@ -1071,7 +1092,13 @@ if args_assoc.names then
 		local raw = datalabel.name
 		local real = raw_to_real[raw]
 		if real then
+			raw_used[raw] = true
 			datalabel.name = real
+		end
+	end
+	for raw, real in pairs(raw_to_real) do
+		if not raw_used[raw] then
+			printf("rename: unused label %q -> %q", raw, real)
 		end
 	end
 	print("  Done.")

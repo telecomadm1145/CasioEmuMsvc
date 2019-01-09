@@ -26,6 +26,8 @@ Supported values of `key` are:
 * `names`: Path to a file containing label names.
    Each line should either be a comment, empty,
    or starts with `generated_label_name real_label_name`.
+   `generated_label_name` can either be a global label `f_01234`, local label `.l_5`,
+   `f_01234.l_5` or a label address - a hex number without leading `0x`.
 
 ## Emulator
 
