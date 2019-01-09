@@ -1062,6 +1062,13 @@ if args_assoc.names then
 			label.name = real
 		end
 	end
+	for address, label in next, label_by_address do
+		local raw = label.context.name
+		local real = raw_to_real[raw]
+		if real then
+			label.context.name = real
+		end
+	end
 	for address, datalabel in next, datalabel_by_address do
 		local raw = datalabel.name
 		local real = raw_to_real[raw]
