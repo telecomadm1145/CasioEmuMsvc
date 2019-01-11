@@ -142,7 +142,7 @@ do
 	formats = {
 		[ "lab"] = {format = function(self, value, instr)
 			if instr.context ~= value.context and not value.context_head and
-				value.context and value.name.sub(1, 1) == '.' then
+				value.context and value.name:sub(1, 1) == '.' then
 				return value.context.name .. value.name
 			end
 			return value.name
