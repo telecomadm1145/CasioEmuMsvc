@@ -626,26 +626,35 @@ do
 	end
 end
 
-if args_assoc.entry_addresses_file then
-	local handle = io.open(args_assoc.entry_addresses_file, "r")
+local rename_list
+if args_assoc.names then
+	print("Reading rename list...")
+	local handle = io.open(args_assoc.names, "r")
 	if not handle then
 		panic("Failed to open \"%s\"", args_assoc.names)
 	end
-	local addresses = handle:read("*a")
+	local name_content = handle:read("*a")
 	handle:close()
-	for line in addresses:gmatch("[^\n]+") do
-		address = line:match('^%s*(%w+)')
-		if address then
-			address_ord = tonumber(address, 16)
-			if address_ord then
-				add_disassemble_address(address_ord)
-			else
-				panic2('address: invalid entry address line %q', line)
+
+	rename_list = {}
+	for line in name_content:gmatch("[^\n]+") do
+		local raw, real = line:match("^%s*([%w_%.]+)%s+([%w_%.]+)")
+		if not raw then
+			raw = line:match("^%s*([%w_%.]+)")
+		end
+
+		if raw then
+			local addr = tonumber(raw, 16)
+			if addr then
+				add_disassemble_address(addr)
+				raw = addr
 			end
-		else
-			-- Comment line or empty line
+			if real then
+				rename_list[#rename_list+1] = {raw, real}
+			end
 		end
 	end
+	print("  Done.")
 end
 
 local resolve_variable_branch
@@ -1029,46 +1038,40 @@ do
 end
 print("  Done.")
 
-if args_assoc.names then
+if rename_list then
 	print("Renaming labels...")
-	local handle = io.open(args_assoc.names, "r")
-	if not handle then
-		panic("Failed to open \"%s\"", args_assoc.names)
-	end
-	local name_content = handle:read("*a")
-	handle:close()
 	local raw_to_real = {}
 	local last_global_label
-	for line in name_content:gmatch("[^\n]+") do
-		local raw, real = line:match("^%s*([%w_%.]+)%s+([%w_%.]+)")
-		if raw then
-			local addr = tonumber(raw, 16)
-			if addr then
-				if not label_by_address[addr] then
-					panic("rename: address %06X is not a label", addr)
-				end
-				raw = label_by_address[addr].name
-				if label_by_address[addr].context_head then
-					last_global_label = raw
-				else
-					raw = label_by_address[addr].context.name .. raw
-				end
+	for ix = 1, #rename_list do
+		local raw, real = rename_list[ix][1], rename_list[ix][2]
+		if type(raw) == 'number' then
+			local addr = raw
+			if not label_by_address[addr] then
+				panic("rename: address %06X is not a label", addr)
 			end
-			if raw:find("^%.") then
-				-- .l_123
-				if not last_global_label then
-					panic("rename: fix that rename list pls")
-				end
-				raw_to_real[last_global_label .. raw] = real
-			elseif raw:find("%.") then
-				-- f_12345.l_123
-				raw_to_real[raw] = real
-			else
-				-- f_12345
+			raw = label_by_address[addr].name
+			if label_by_address[addr].context_head then
 				last_global_label = raw
-				raw_to_real[raw] = real
+			else
+				raw = label_by_address[addr].context.name .. raw
 			end
 		end
+		if raw:find("^%.") then
+			-- .l_123
+			if not last_global_label then
+				panic("rename: fix that rename list pls")
+			end
+			raw = last_global_label .. raw
+		elseif raw:find("%.") then
+			-- f_12345.l_123
+		else
+			-- f_12345
+			last_global_label = raw
+		end
+		if raw_to_real[raw] then
+			panic("rename: duplicate entry %s -> %s", raw, real)
+		end
+		raw_to_real[raw] = real
 	end
 
 	local raw_used = {}
