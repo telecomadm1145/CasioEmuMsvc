@@ -45,7 +45,7 @@ Each argument should have one of these two formats:
 
 Supported values of `key` are: (if `value` is not mentioned then it does not matter)
 
-* `paused`: Pause the emulator on start. Note that this causes the emulator to not render correctly.
+* `paused`: Pause the emulator on start.
 * `model`: Specify the path to model folder. Example `value`: `models/fx570esplus`.
 * `ram`: Load RAM dump from the path specified in `value`.
 * `clean_ram`: If `ram` is specified, this prevents the calculator from loading the file, instead starting from a *clean* RAM state.
