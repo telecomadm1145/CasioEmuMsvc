@@ -905,72 +905,72 @@ while next(to_disassemble) do
 			local segment, address, streak = unpack(address_tuple)
 			if segment + address >= binary_source_length then
 				panic2("runloop: out of data at %01X:%04X", bit.rshift(segment, 16), address)
-				break
-			end
-			while true do
-				local instr, seen = disassemble(segment, address)
-				if seen then
-					break
-				end
-				if instr.mnemonic == "?" then
-					panic2("runloop: unknown instruction at %01X:%04X", bit.rshift(segment, 16), address)
-					break
-				end
-				address = bit.band(address + instr.length, 0xFFFF)
-				if  instr.mnemonic == "rt"
-				or  instr.mnemonic == "rti"
-				or (instr.mnemonic == "pop" and (
-						(instr.params[1] and instr.params[1][2] == "pc") or
-						(instr.params[2] and instr.params[2][2] == "pc") or
-						(instr.params[3] and instr.params[3][2] == "pc") or
-						(instr.params[4] and instr.params[4][2] == "pc")
-					)) then
-					instr.break_streak = true
-				end
-				if instr.mnemonic == "bc" then
-					local td_segment = segment
-					local td_address = bit.band(address + instr.params[2][1] * 2, 0xFFFF)
-					local label_obj = add_label(streak, td_segment + td_address, instr)
-					new_to_disassemble[{td_segment, td_address, streak}] = true
-					instr.params[2] = {label_obj, "lab"}
-					if instr.params[1][1] == 0x000E then
+			else
+				while true do
+					local instr, seen = disassemble(segment, address)
+					if seen then
+						break
+					end
+					if instr.mnemonic == "?" then
+						panic2("runloop: unknown instruction at %01X:%04X", bit.rshift(segment, 16), address)
+						break
+					end
+					address = bit.band(address + instr.length, 0xFFFF)
+					if  instr.mnemonic == "rt"
+					or  instr.mnemonic == "rti"
+					or (instr.mnemonic == "pop" and (
+							(instr.params[1] and instr.params[1][2] == "pc") or
+							(instr.params[2] and instr.params[2][2] == "pc") or
+							(instr.params[3] and instr.params[3][2] == "pc") or
+							(instr.params[4] and instr.params[4][2] == "pc")
+						)) then
 						instr.break_streak = true
 					end
-				end
-				if instr.mnemonic == "b" or instr.mnemonic == "bl" then
-					if instr.params[1][2] == "im" then
-						local td_segment = bit.lshift(instr.params[1][1], 16)
-						local td_address = instr.params[2][1]
-						local new_streak = make_streak()
-						local label_obj = add_label(new_streak, td_segment + td_address, instr)
-						new_to_disassemble[{td_segment, td_address, new_streak}] = true
-						instr.params[2] = nil
-						instr.params[1] = {label_obj, "lab"}
-					else
-						variable_branches[instr] = streak
-					end
-					if instr.mnemonic == "b" then
-						instr.break_streak = true
-					end
-				end
-				if (instr.mnemonic == "l"
-				or instr.mnemonic == "st"
-				or instr.mnemonic == "lea"
-				or instr.mnemonic == "sb"
-				or instr.mnemonic == "tb"
-				or instr.mnemonic == "rb")
-				and (not instr.dsr or (instr.dsr and instr.dsr[2] == "im")) then
-					local td_segment = instr.dsr and instr.dsr[1] or 0
-					for ix = 1, #instr.params do
-						if instr.params[ix][2] == "im" and instr.params[ix][1] >= 0x100 and instr.params[ix][1] < 0xFF00 then
-							local td_address = instr.params[ix][1]
-							local label_obj = add_data_label(td_segment + td_address, instr)
-							instr.params[ix] = {label_obj, "dlab"}
+					if instr.mnemonic == "bc" then
+						local td_segment = segment
+						local td_address = bit.band(address + instr.params[2][1] * 2, 0xFFFF)
+						local label_obj = add_label(streak, td_segment + td_address, instr)
+						new_to_disassemble[{td_segment, td_address, streak}] = true
+						instr.params[2] = {label_obj, "lab"}
+						if instr.params[1][1] == 0x000E then
+							instr.break_streak = true
 						end
 					end
-				end
-				if instr.break_streak then
-					break
+					if instr.mnemonic == "b" or instr.mnemonic == "bl" then
+						if instr.params[1][2] == "im" then
+							local td_segment = bit.lshift(instr.params[1][1], 16)
+							local td_address = instr.params[2][1]
+							local new_streak = make_streak()
+							local label_obj = add_label(new_streak, td_segment + td_address, instr)
+							new_to_disassemble[{td_segment, td_address, new_streak}] = true
+							instr.params[2] = nil
+							instr.params[1] = {label_obj, "lab"}
+						else
+							variable_branches[instr] = streak
+						end
+						if instr.mnemonic == "b" then
+							instr.break_streak = true
+						end
+					end
+					if (instr.mnemonic == "l"
+					or instr.mnemonic == "st"
+					or instr.mnemonic == "lea"
+					or instr.mnemonic == "sb"
+					or instr.mnemonic == "tb"
+					or instr.mnemonic == "rb")
+					and (not instr.dsr or (instr.dsr and instr.dsr[2] == "im")) then
+						local td_segment = instr.dsr and instr.dsr[1] or 0
+						for ix = 1, #instr.params do
+							if instr.params[ix][2] == "im" and instr.params[ix][1] >= 0x100 and instr.params[ix][1] < 0xFF00 then
+								local td_address = instr.params[ix][1]
+								local label_obj = add_data_label(td_segment + td_address, instr)
+								instr.params[ix] = {label_obj, "dlab"}
+							end
+						end
+					end
+					if instr.break_streak then
+						break
+					end
 				end
 			end
 		end
@@ -1174,11 +1174,13 @@ if rename_list then
 		end
 	end
 	for address, label in next, label_by_address do
-		local raw = label.context.name
-		local real = raw_to_real[raw]
-		if real then
-			raw_used[raw] = true
-			label.context.name = real
+		if label.context then
+			local raw = label.context.name
+			local real = raw_to_real[raw]
+			if real then
+				raw_used[raw] = true
+				label.context.name = real
+			end
 		end
 	end
 	for address, datalabel in next, datalabel_by_address do
