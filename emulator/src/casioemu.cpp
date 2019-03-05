@@ -7,6 +7,7 @@
 #include <string>
 #include <map>
 #include <mutex>
+#include <atomic>
 #include <condition_variable>
 
 #include "Emulator.hpp"
@@ -73,12 +74,16 @@ int main(int argc, char *argv[])
 	}
 
 	{
-		static Emulator emulator(argv_map, 20, 128 * 1024);
+		Emulator emulator(argv_map, 20, 128 * 1024);
+		// Note: argv_map must be destructed after emulator.
+
+		// Used to signal to the console input thread when to stop.
+		static std::atomic<bool> running(true);
 
 		std::thread console_input_thread([&] {
 			struct terminate_thread {};
 			rl_event_hook = [](){
-				if (!emulator.Running())
+				if (!running)
 					throw terminate_thread{};
 				return 0;
 			};
@@ -113,6 +118,16 @@ int main(int argc, char *argv[])
 					break;
 				emulator.ExecuteCommand(console_input_c_str);
 				free(console_input_c_str);
+
+				if (!emulator.Running())
+				{
+					SDL_Event event;
+					SDL_zero(event);
+					event.type = SDL_USEREVENT;
+					event.user.code = CE_EMU_STOPPED;
+					SDL_PushEvent(&event);
+					return;
+				}
 			}
 		});
 
@@ -129,6 +144,10 @@ int main(int argc, char *argv[])
 				{
 				case CE_FRAME_REQUEST:
 					emulator.Frame();
+					break;
+				case CE_EMU_STOPPED:
+					if (emulator.Running())
+						PANIC("CE_EMU_STOPPED event received while emulator is still running\n");
 					break;
 				}
 				break;
@@ -160,6 +179,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
+		running = false;
 		console_input_thread.join();
 	}
 

@@ -4,7 +4,8 @@ namespace casioemu
 {
 	enum EventCode
 	{
-		CE_FRAME_REQUEST
+		CE_FRAME_REQUEST,
+		CE_EMU_STOPPED
 	};
 }
 
