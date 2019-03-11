@@ -57,3 +57,21 @@ do
 		button_map = buttons
 	})
 end
+
+function inject(str)
+	if 200 ~= #str then
+		print "Input 200 hexadecimal digits please"
+		return
+	end
+
+	adr = 0x8154
+	for byte in str:gmatch '..' do
+		data[adr] = tonumber(byte, 16)
+		adr = adr + 1
+	end
+
+	break_at(0x2796, function()
+		ppc()
+		unbreak_at(0x2796)
+	end)
+end
