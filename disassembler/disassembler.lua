@@ -1,5 +1,8 @@
 #! /usr/bin/env luajit
 
+loadstring = loadstring or load
+unpack = unpack or table.unpack
+
 if not bit then
 	-- First, try using Lua 5.3's bitwise operators implementation.
 	f = loadstring [[
