@@ -59,11 +59,14 @@ namespace casioemu
 			this_obj->screen_buffer[offset] = data;
 		}, emulator);
 
-		region_range.Setup(0xF030, 1, "Screen/Range", this, MMURegion::DefaultRead<uint8_t, 0x07>, SetRequireFrameWrite<uint8_t, 0x07, &Screen::screen_range>, emulator);
+		region_range.Setup(0xF030, 1, "Screen/Range", this, DefaultRead<uint8_t, 0x07, &Screen::screen_range>,
+				SetRequireFrameWrite<uint8_t, 0x07, &Screen::screen_range>, emulator);
 
-		region_mode.Setup(0xF031, 1, "Screen/Mode", this, MMURegion::DefaultRead<uint8_t, 0x07>, SetRequireFrameWrite<uint8_t, 0x07, &Screen::screen_mode>, emulator);
+		region_mode.Setup(0xF031, 1, "Screen/Mode", this, DefaultRead<uint8_t, 0x07, &Screen::screen_mode>,
+				SetRequireFrameWrite<uint8_t, 0x07, &Screen::screen_mode>, emulator);
 
-		region_contrast.Setup(0xF032, 1, "Screen/Contrast", this, MMURegion::DefaultRead<uint8_t, 0x1F>, SetRequireFrameWrite<uint8_t, 0x1F, &Screen::screen_contrast>, emulator);
+		region_contrast.Setup(0xF032, 1, "Screen/Contrast", this, DefaultRead<uint8_t, 0x1F, &Screen::screen_contrast>,
+				SetRequireFrameWrite<uint8_t, 0x1F, &Screen::screen_contrast>, emulator);
 	}
 
 	void Screen::Uninitialise()

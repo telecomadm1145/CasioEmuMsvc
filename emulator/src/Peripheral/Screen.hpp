@@ -51,6 +51,19 @@ namespace casioemu
 		ColourInfo ink_colour;
 
 		/**
+		 * Similar to MMURegion::DefaultRead, but takes the pointer to the Screen
+		 * object as the userdata instead of the uint8_t member.
+		 */
+		template<typename value_type, value_type mask = (value_type)-1,
+			value_type Screen:: *member_ptr>
+		static uint8_t DefaultRead(MMURegion *region, size_t offset)
+		{
+			auto this_obj = (Screen *)(region->userdata);
+			value_type value = this_obj->*member_ptr;
+			return (value & mask) >> ((offset - region->base) * 8);
+		}
+
+		/**
 		 * Similar to MMURegion::DefaultWrite, except this also set the
 		 * (require_frame) flag of (Peripheral) class.
 		 * If (only_on_change) is true, (require_frame) is not set if the new value
