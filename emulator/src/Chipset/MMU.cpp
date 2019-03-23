@@ -62,7 +62,10 @@ namespace casioemu
 				lua_pushinteger(lua_state, mmu->ReadData(offset));
 				return 1;
 			}
-			else if (std::strcmp(lua_tostring(lua_state, 2), "rwatch") == 0)
+			const char *key = lua_tostring(lua_state, 2);
+			if (key == nullptr)  // the key is not a string
+				return 0;
+			if (std::strcmp(key, "rwatch") == 0)
 			{
 				// execute Lua function whenever address is read from
 				lua_pushcfunction(lua_state, [](lua_State *lua_state) {
@@ -91,7 +94,7 @@ namespace casioemu
 				});
 				return 1;
 			}
-			else if (std::strcmp(lua_tostring(lua_state, 2), "watch") == 0)
+			else if (std::strcmp(key, "watch") == 0)
 			{
 				// execute Lua function whenever address is written to
 				lua_pushcfunction(lua_state, [](lua_State *lua_state) {
