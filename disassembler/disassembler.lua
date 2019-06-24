@@ -437,6 +437,34 @@ local function fetch(address)
 	return binary_source:byte(address + 1) + 0x100 * binary_source:byte(address + 2)
 end
 
+--instruction_by_address: {full_address -> union[instruction_type, tail_type]}
+--	where
+--	instruction_type = {
+--		address: number,  -- full_address
+--		dsr: param_type,
+--		length: number,
+--
+--		mnemonic: string,
+--		params: {param_type...}
+--		offsetable: number = 0 | index to 'params'
+--
+--		opcode: {number...},  -- each number is 16 bit
+--		instruction,  -- unused, == opcode[1]
+--		imm16,  -- unused
+--
+--		context: context_type,
+--		under_label: label_type,
+--		break_streak: true|nil,
+--	}
+--	param_type = {{number, type: str = key of table 'formats'}
+--	tail_type = { head: instruction_type }
+--	context_type = {
+--		name: string,
+--		head: label_type,
+--	}
+--	label_type = {
+--		# see function add_label
+--	}
 local instruction_by_address = {}
 local function disassemble(segment, address)
 	local full_address = segment + address
@@ -550,6 +578,7 @@ local function add_label(streak, address, xref)
 	return label_obj
 end
 
+--comments_by_address: {full_address -> union[table[type='jt'], str]}
 local comments_by_address = {}
 local function add_comment(address, comment)
 	comments_by_address[address] = comments_by_address[address] or {}
