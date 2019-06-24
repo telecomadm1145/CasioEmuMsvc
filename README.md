@@ -31,7 +31,8 @@ Supported values of `key` are: (if `value` is not mentioned then it does not mat
 * `ram`: Load RAM dump from the path specified in `value`.
 * `clean_ram`: If `ram` is specified, this prevents the calculator from loading the file, instead starting from a *clean* RAM state.
 * `preserve_ram`: Specify that the RAM should **not** be dumped (to the value associated with the `ram` key) on program exit, in other words, *preserve* the existing RAM dump in the file.
-* `strict_memory`: Pause the emulator if the program attempt to write to unwritable memory regions corresponding to ROM. (writing to unmapped memory regions does not pause the program)
+* `strict_memory`: Print an error message if the program attempt to write to unwritable memory regions corresponding to ROM. (writing to unmapped memory regions always print an error message)
+* `pause_on_mem_error`: Pause the emulator when a memory error message is printed.
 * `history`: Path to a file to load/save command history.
 * `script`: Specify a path to Lua file to be executed on program startup (using `value` parameter).
 * `resizable`: Whether the window can be resized.
