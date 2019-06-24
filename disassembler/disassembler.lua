@@ -90,6 +90,14 @@ local args_assoc = {
 	strict = false,
 	-- Each line should have a comment containing the address and source bytes
 	addresses = false,
+	-- Add comments for word-manipulation commands.
+	-- Example:
+	--   mov r0, 1
+	--   mov r1, 1
+	-- and
+	--   mov er0, 257
+	-- are equivalent (but the latter is not valid assembly code)
+	word_commands = false,
 	rom_window = 0, -- Size of the ROM window. For example `0x8000`
 	-- Path to a file containing label names.
 	-- Each line should either be a comment, empty, or starts with
@@ -1089,6 +1097,36 @@ do
 	end
 end
 print("  Done.")
+
+if args_assoc.word_commands then
+	print("Adding comments for word-manipulation commands...")
+	local next_opcode = {
+		['mov'] = 'mov',
+		['cmp'] = 'cmpc',
+		['add'] = 'addc',
+		['sub'] = 'subc',
+	}
+	for addr, instr in pairs(instruction_by_address) do
+		local prev_instr = instruction_by_address[addr - 2]
+		if prev_instr and not prev_instr.head and not instr.head and
+			next_opcode[prev_instr.mnemonic] == instr.mnemonic and
+			prev_instr.context == instr.context and
+			prev_instr.params[1][2] == 'r' and instr.params[1][2] == 'r' and
+			prev_instr.params[2][2] == 'im' and instr.params[2][2] == 'im' then
+			local r = prev_instr.params[1][1]
+			if r % 2 == 0 and instr.params[1][1] == r + 1 then
+				local val = instr.params[2][1] * 256 + prev_instr.params[2][1]
+				local val_repr = ('%d | %04X'):format(val, val)
+				if val >= 0x8000 then
+					val_repr = val_repr .. (' | -%d'):format(0x10000-val)
+				end
+				add_comment(addr - 2, ('Equiv: %s er%d, %s'):format(
+					prev_instr.mnemonic, r, val_repr))
+			end
+		end
+	end
+	print("  Done.")
+end
 
 if rename_list then
 	print("Renaming labels...")
