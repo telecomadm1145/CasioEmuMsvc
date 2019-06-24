@@ -6,6 +6,7 @@
 #include "../Logger.hpp"
 
 #include <fstream>
+#include <cstring>
 
 namespace casioemu
 {
@@ -44,13 +45,13 @@ namespace casioemu
 		std::ofstream ram_handle(emulator.argv_map["ram"], std::ofstream::binary);
 		if (ram_handle.fail())
 		{
-			logger::Info("[BatteryBackedRAM] std::ofstream failed: %s\n", strerror(errno));
+			logger::Info("[BatteryBackedRAM] std::ofstream failed: %s\n", std::strerror(errno));
 			return;
 		}
 		ram_handle.write((char *)ram_buffer, 0xE00);
 		if (ram_handle.fail())
 		{
-			logger::Info("[BatteryBackedRAM] std::ofstream failed: %s\n", strerror(errno));
+			logger::Info("[BatteryBackedRAM] std::ofstream failed: %s\n", std::strerror(errno));
 			return;
 		}
 	}
@@ -60,13 +61,13 @@ namespace casioemu
 		std::ifstream ram_handle(emulator.argv_map["ram"], std::ifstream::binary);
 		if (ram_handle.fail())
 		{
-			logger::Info("[BatteryBackedRAM] std::ifstream failed: %s\n", strerror(errno));
+			logger::Info("[BatteryBackedRAM] std::ifstream failed: %s\n", std::strerror(errno));
 			return;
 		}
 		ram_handle.read((char *)ram_buffer, 0xE00);
 		if (ram_handle.fail())
 		{
-			logger::Info("[BatteryBackedRAM] std::ifstream failed: %s\n", strerror(errno));
+			logger::Info("[BatteryBackedRAM] std::ifstream failed: %s\n", std::strerror(errno));
 			return;
 		}
 	}

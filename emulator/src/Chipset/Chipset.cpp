@@ -15,6 +15,7 @@
 
 #include <fstream>
 #include <algorithm>
+#include <cstring>
 
 namespace casioemu
 {
@@ -78,7 +79,7 @@ namespace casioemu
 	{
 		std::ifstream rom_handle(emulator.GetModelFilePath(emulator.GetModelInfo("rom_path")), std::ifstream::binary);
 		if (rom_handle.fail())
-			PANIC("std::ifstream failed: %s\n", strerror(errno));
+			PANIC("std::ifstream failed: %s\n", std::strerror(errno));
 		rom_data = std::vector<unsigned char>((std::istreambuf_iterator<char>(rom_handle)), std::istreambuf_iterator<char>());
 
 		for (auto &peripheral : peripherals)
