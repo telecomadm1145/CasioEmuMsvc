@@ -6,35 +6,16 @@ An emulator and disassembler for the CASIO calculator series using the nX-U8/100
 
 Each argument should have one of these two formats:
 
-* `key=value` where `key` does not contain any equal signs.
+* `key=value`.
 * `path`: equivalent to `input=path`.
 
-Supported values of `key` are:
-
-* `input`: Path to input file. Defaults to `/dev/stdin`,
-* `output`: Path to output file. Defaults to `/dev/stdout`,
-* `entry`: Comma-separated list of 0-indexed indices of used (reset/interrupt) vectors. (each vector takes 2 bytes, so the address of vector with index `i` is `2*i`)
-* `complement_entries`: Specify that the list of entries (above) should be inverted in range [1..127].
-* `strict`: Raises error instead of warnings when unknown instructions are encountered or jump to addresses exceed the ROM size.
-* `addresses`: Specify that each line should have a comment containing the address and source bytes. `value` is not important.
-* `rom_window`: Size of the ROM window. For example `0x8000`.
-* `names`: Path to a file containing label names.
-   Each line should either be a comment, empty,
-   or starts with `raw_label_name real_label_name` (`real_label_name` may be empty).
-   `raw_label_name` may have one of the following formats:
-   * A global label `f_01234`
-   * A local label `.l_5`
-   * A global label followed by a local label `f_01234.l_5`
-   * An address - a hex number without leading `0x`. In that case, it's considered a
-   possible address for the code to reach - this is necessary because the disassembler
-   cannot resolve all variable branches/function calls.
-
+For the supported values of `key`: see `args_assoc` in `disassembler.lua` file.
 
 ## Emulator
 
 ### Supported models
 
-* fx-570ES PLUS
+See `models` folder.
 
 ### Command-line arguments
 
@@ -59,13 +40,6 @@ Supported values of `key` are: (if `value` is not mentioned then it does not mat
 ### Available Lua functions
 
 Those Lua functions and variables can be used at the Lua prompt of the emulator.
-Some functions require `script=emulator/lua-common.lua` flag to be passed.
-
-* `printf()`: Print with format.
-* `ins()`: Log all register values to the screen.
-* `break_at`: Set breakpoint. If called with no arguments, break at current address.
-* `unbreak_at`: Delete breakpoint. If input not specified, delete breakpoint at current address. Have no effect if there are no breakpoints at specified position.
-* `cont()`: Continue program execution.
 
 * `emu:set_paused`: Set emulator state. Call with a boolean value.
 * `emu:tick()`: Execute one command.
@@ -73,7 +47,7 @@ Some functions require `script=emulator/lua-common.lua` flag to be passed.
 
 * `cpu.xxx`: Get register value. `xxx` should be one of
 	* `r0` to `r15`
-	* One of the register names specified in `CPU.cpp:200..216`
+	* One of the register names. See `register_record_sources` array in `emulator\src\Chipset\CPU.cpp`.
 	* `erN`, `xrN`, `qrN` are **not** supported.
 * `cpu.bt`: A string containing the current stack trace.
 
@@ -83,6 +57,9 @@ Some functions require `script=emulator/lua-common.lua` flag to be passed.
 data is written to. If `fn` is `nil`, clear the watchpoint.
 * `data:rwatch(offset, fn)`: Set watchpoint at address `offset` - `fn` is called whenever
 data is read from as data. If `fn` is `nil`, clear the watchpoint.
+
+Some additional functions are available in `lua-common.lua` file.
+To use those, it's necessary to pass the flag `script=emulator/lua-common.lua`.
 
 ### Build
 

@@ -77,14 +77,34 @@ if not bit then
 end
 
 local args_assoc = {
-	input = "/dev/stdin",
-	output = "/dev/stdout",
+	input = "/dev/stdin", -- Path to input file
+	output = "/dev/stdout", -- Path to output file
+	-- Comma-separated list of 0-indexed indices of used (reset/interrupt)
+	-- vectors (each vector takes 2 bytes, so the address of vector with index
+	-- `i` is `2*i`)
 	entry = "",
+	-- The list of entries (above) should be inverted in range [1..127]
 	complement_entries = false,
+	-- Raises error instead of warnings when unknown instructions are
+	-- encountered or jump to addresses exceed the ROM size.
 	strict = false,
+	-- Each line should have a comment containing the address and source bytes
 	addresses = false,
-	rom_window = 0
+	rom_window = 0, -- Size of the ROM window. For example `0x8000`
+	-- Path to a file containing label names.
+	-- Each line should either be a comment, empty, or starts with
+	-- `raw_label_name real_label_name` (`real_label_name` may be empty).
+	-- `raw_label_name` may have one of the following formats:
+	-- * A global label `f_01234`
+	-- * A local label `.l_5`
+	-- * A global label followed by a local label `f_01234.l_5`
+	-- * An address - a hex number without leading `0x`. In that case, it's
+	-- considered a possible address for the code to reach - this is necessary
+	-- because the disassembler cannot resolve all variable branches/function
+	-- calls.
+	names = nil,
 }
+-- For boolean arguments, any value provided is considered 'true'
 
 for ix, arg in next, {...} do
 	local key, value = arg:match("^([^=]+)=(.+)$")
