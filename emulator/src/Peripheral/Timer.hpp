@@ -16,8 +16,8 @@ namespace casioemu
 		InterruptSource interrupt_source;
 
 		bool raise_required;
-		unsigned int ext_to_int_counter, ext_to_int_next, ext_to_int_int_done;
-		const unsigned int ext_to_int_frequency = 10000;
+		uint64_t ext_to_int_counter, ext_to_int_next, ext_to_int_int_done;
+		static const uint64_t ext_to_int_frequency = 10000;
 
 	public:
 		using Peripheral::Peripheral;
