@@ -1,5 +1,43 @@
 local break_targets = {}
 
+local posttickfns = {}
+
+function addposttick(fn)
+	if type(fn) ~= 'function' then
+		print('Argument is not a function')
+		return
+	end
+	if not next(posttickfns) then
+		emu:post_tick(function()
+			for i, fn in pairs(posttickfns) do
+				fn()
+			end
+		end)
+	end
+	table.insert(posttickfns, fn)
+end
+
+function rmposttick(fn)
+	if fn == nil then
+		if not next(posttickfns) then
+			print('There is no posttick handler')
+		end
+		posttickfns[#posttickfns] = nil
+	else
+		for i,f in pairs(posttickfns) do
+			if f==fn then
+				table.remove(posttickfns,i)
+				return
+			end
+		end
+		print('Posttick handler not found')
+	end
+
+	if not next(posttickfns) then
+		emu:post_tick(nil)
+	end
+end
+
 local function get_real_pc()
 	return (cpu.csr << 16) | cpu.pc & ~1
 end
@@ -19,7 +57,7 @@ function break_at(addr, commands)
 
     if not next(break_targets) then
         -- if break_targets is initially empty and later non-empty
-		emu:post_tick(post_tick)
+		addposttick(break_posttick)
 	end
 
 	break_targets[addr] = commands
@@ -32,7 +70,7 @@ function unbreak_at(addr)
 	break_targets[addr] = nil
 
     if not next(break_targets) then
-        emu:post_tick(nil)
+        rmposttick(break_posttick)
     end
 end
 
@@ -40,7 +78,7 @@ function cont()
 	emu:set_paused(false)
 end
 
-function post_tick()
+function break_posttick()
 	local real_pc = get_real_pc()
 	local commands = break_targets[real_pc]
 	if commands then
@@ -91,6 +129,10 @@ data:watch      Set write watchpoint.
 data:rwatch     Set read watchpoint.
 help()          Print this help message.
 
+addposttick     Add a function as post-tick handler. (wrapper over emu:post_tick)
+rmposttick      Remove a post-tick handler. If called without argument,
+                delete the most-recently added handler.
+
 er(x)           Value of register ERx.
 
 GDB-style functions:
@@ -105,6 +147,8 @@ h()             help()
 n()/nexti()     Go to next instruction.
 c()             cont
 s()             emu:tick()
+tr(filename)    Start tracing (record all executed instructions)
+trs()           Stop tracing.
 q()             emu:shutdown()
 b               break/pause (breakpoint set with b should not be deleted with unbreak_at)
 del             Delete breakpoint or watchpoint
@@ -595,4 +639,44 @@ function pbuf()
 		end
 	end
 	print(getscr(d))
+end
+
+local trace_handle, trace_last_pc = nil, nil
+
+local function trace_posttick()
+	local pc = get_real_pc()
+	if pc ~= trace_last_pc then
+		local indent = ('  '):rep(#cpu.bt:gsub('[^\n]',''))
+		if line_by_addr[pc] then
+			trace_handle:write(('%s%s %s\n'):format(indent,
+					dis_lines[line_by_addr[pc]]:sub(2,39),
+					label_by_addr[pc]
+			))
+		else
+			trace_handle:write(('%s%s; %05X\n'):format(indent,
+				(' '):rep(31), pc
+			))
+		end
+		trace_last_pc = pc
+	end
+end
+
+function tr(filename)
+	if trace_handle ~= nil then
+		print('Trace already turned on')
+		return
+	end
+	trace_handle = io.open(filename or 'log', 'w')
+	trace_last_pc = nil
+	addposttick(trace_posttick)
+end
+
+function trs()
+	if not trace_handle then
+		print('Trace is not turned on')
+		return
+	end
+	rmposttick(trace_posttick)
+	trace_handle:close()
+	trace_handle = nil
 end
