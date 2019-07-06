@@ -32,6 +32,7 @@ namespace casioemu
 		std::thread *tick_thread;
 
 		SpriteInfo interface_background;
+		int width, height;
 
 		/**
 		 * A bunch of internally used methods for encapsulation purposes.
@@ -81,6 +82,7 @@ namespace casioemu
 		void Shutdown();
 		void Tick();
 		void Frame();
+		void WindowResize(int width, int height);
 		void ExecuteCommand(std::string command);
 		unsigned int GetCyclesPerSecond();
 		bool GetPaused();

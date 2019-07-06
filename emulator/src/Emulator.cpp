@@ -30,7 +30,8 @@ namespace casioemu
 		if (interface_background.dest.x != 0 || interface_background.dest.y != 0)
 			PANIC("rsd_interface must have dest x and y coordinate zero\n");
 
-		int width = interface_background.src.w, height = interface_background.src.h;
+		width = interface_background.dest.w;
+		height = interface_background.dest.h;
 		try
 		{
 			std::size_t pos;
@@ -138,26 +139,23 @@ namespace casioemu
 	{
 		std::lock_guard<std::recursive_mutex> access_lock(access_mx);
 
-		int w, h;
-		SDL_GetWindowSize(window, &w, &h);
-
 		// For mouse events, rescale the coordinates from window size to original size.
 		switch (event.type)
 		{
 		case SDL_MOUSEBUTTONDOWN:
 		case SDL_MOUSEBUTTONUP:
-			event.button.x *= (float) interface_background.dest.w / w;
-			event.button.y *= (float) interface_background.dest.h / h;
+			event.button.x *= (float) interface_background.dest.w / width;
+			event.button.y *= (float) interface_background.dest.h / height;
 			break;
 		case SDL_MOUSEMOTION:
-			event.motion.x *= (float) interface_background.dest.w / w;
-			event.motion.y *= (float) interface_background.dest.h / h;
-			event.motion.xrel *= (float) interface_background.dest.w / w;
-			event.motion.yrel *= (float) interface_background.dest.h / h;
+			event.motion.x *= (float) interface_background.dest.w / width;
+			event.motion.y *= (float) interface_background.dest.h / height;
+			event.motion.xrel *= (float) interface_background.dest.w / width;
+			event.motion.yrel *= (float) interface_background.dest.h / height;
 			break;
 		case SDL_MOUSEWHEEL:
-			event.wheel.x *= (float) interface_background.dest.w / w;
-			event.wheel.y *= (float) interface_background.dest.h / h;
+			event.wheel.x *= (float) interface_background.dest.w / width;
+			event.wheel.y *= (float) interface_background.dest.h / height;
 			break;
 		}
 		chipset.UIEvent(event);
@@ -301,9 +299,18 @@ namespace casioemu
 
 		// resize and copy `tx` to screen
 		SDL_SetRenderTarget(renderer, nullptr);
-		SDL_RenderCopy(renderer, tx, nullptr, nullptr);
+		SDL_Rect dest {0, 0, width, height};
+		SDL_RenderCopy(renderer, tx, nullptr, &dest);
 		SDL_DestroyTexture(tx);
 		SDL_RenderPresent(renderer);
+	}
+
+	void Emulator::WindowResize(int _width, int _height)
+	{
+		std::lock_guard<std::recursive_mutex> access_lock(access_mx);
+		width = _width;
+		height = _height;
+		Frame();
 	}
 
 	void Emulator::Tick()
