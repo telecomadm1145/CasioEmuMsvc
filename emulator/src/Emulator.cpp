@@ -279,6 +279,11 @@ namespace casioemu
 		}
 	}
 
+	void Emulator::Repaint()
+	{
+		SDL_RenderPresent(renderer);
+	}
+
 	void Emulator::Frame()
 	{
 		std::lock_guard<std::recursive_mutex> access_lock(access_mx);
@@ -302,7 +307,7 @@ namespace casioemu
 		SDL_Rect dest {0, 0, width, height};
 		SDL_RenderCopy(renderer, tx, nullptr, &dest);
 		SDL_DestroyTexture(tx);
-		SDL_RenderPresent(renderer);
+		Repaint();
 	}
 
 	void Emulator::WindowResize(int _width, int _height)

@@ -81,6 +81,10 @@ namespace casioemu
 		void HandleMemoryError();
 		void Shutdown();
 		void Tick();
+		/**
+		 * Called when SDL_WINDOWEVENT_EXPOSED event is received. Does not re-frame.
+		 */
+		void Repaint();
 		void Frame();
 		void WindowResize(int width, int height);
 		void ExecuteCommand(std::string command);

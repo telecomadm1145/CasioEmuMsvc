@@ -180,6 +180,9 @@ int main(int argc, char *argv[])
 					}
 					emulator.WindowResize(event.window.data1, event.window.data2);
 					break;
+				case SDL_WINDOWEVENT_EXPOSED:
+					emulator.Repaint();
+					break;
 				}
 				break;
 
