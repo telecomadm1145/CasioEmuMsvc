@@ -37,6 +37,7 @@ Supported values of `key` are: (if `value` is not mentioned then it does not mat
 * `script`: Specify a path to Lua file to be executed on program startup (using `value` parameter).
 * `resizable`: Whether the window can be resized.
 * `width`, `height`: Initial window width/height on program start. The values can be in hexadecimal (prefix `0x`), octal (prefix `0`) or decimal.
+* `exit_on_console_shutdown`: Exit the emulator when the console thread is shut down.
 
 ### Available Lua functions
 

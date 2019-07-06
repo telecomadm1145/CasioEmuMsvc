@@ -103,7 +103,20 @@ int main(int argc, char *argv[])
 
 				if (console_input_c_str == NULL)
 				{
-					logger::Info("Console thread shutting down\n");
+					if(argv_map.find("exit_on_console_shutdown") != argv_map.end())
+					{
+						std::cout << '\n';
+						SDL_Event event;
+						SDL_zero(event);
+						event.type = SDL_WINDOWEVENT;
+						event.window.event = SDL_WINDOWEVENT_CLOSE;
+						SDL_PushEvent(&event);
+					}
+					else
+					{
+						logger::Info("Console thread shutting down\n");
+					}
+
 					break;
 				}
 
