@@ -72,7 +72,7 @@ namespace casioemu
 		);
 		if (!window)
 			PANIC("SDL_CreateWindow failed: %s\n", SDL_GetError());
-		renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+		renderer = SDL_CreateRenderer(window, -1, 0);
 		if (!renderer)
 			PANIC("SDL_CreateRenderer failed: %s\n", SDL_GetError());
 
