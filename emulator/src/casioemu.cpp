@@ -53,8 +53,8 @@ int main(int argc, char *argv[])
 		exit(2);
 	}
 
-	int sdlFlags = SDL_INIT_VIDEO & SDL_INIT_TIMER;
-	if (SDL_Init(sdlFlags) != sdlFlags)
+	int sdlFlags = SDL_INIT_VIDEO | SDL_INIT_TIMER;
+	if (SDL_Init(sdlFlags) != 0)
 		PANIC("SDL_Init failed: %s\n", SDL_GetError());
 
 	int imgFlags = IMG_INIT_PNG;
