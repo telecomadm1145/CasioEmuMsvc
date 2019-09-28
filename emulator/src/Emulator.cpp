@@ -207,10 +207,23 @@ namespace casioemu
 		lua_model_ref = LUA_REFNIL;
 		lua_pushcfunction(lua_state, [](lua_State *lua_state) {
 			Emulator *emu = *(Emulator **)lua_topointer(lua_state, 1);
-			if (emu->lua_model_ref != LUA_REFNIL)
-				PANIC("emu.model invoked twice\n");
-			emu->lua_model_ref = luaL_ref(lua_state, LUA_REGISTRYINDEX);
-			return 0;
+			switch (lua_gettop(lua_state))
+			{
+			case 1:
+				// emu:model() returns the model table
+				lua_geti(lua_state, LUA_REGISTRYINDEX, emu->lua_model_ref);
+				return 1;
+
+			case 2:
+				// emu:model(t) sets the model table
+				if (emu->lua_model_ref != LUA_REFNIL)
+					PANIC("emu.model invoked twice\n");
+				emu->lua_model_ref = luaL_ref(lua_state, LUA_REGISTRYINDEX);
+				return 0;
+
+			default:
+				PANIC("Invalid number of arguments (%d)\n", lua_gettop(lua_state));
+			}
 		});
 		lua_setfield(lua_state, -2, "model");
 		lua_pre_tick_ref = LUA_REFNIL;
