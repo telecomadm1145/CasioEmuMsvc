@@ -15,6 +15,13 @@ namespace casioemu
 	    renderer = emulator.GetRenderer();
 	    require_frame = true;
 
+		/*
+		 * When real_hardware is false, the program should emulate the behavior of the
+		 * calculator emulator provided by Casio, which has different keyboard input
+		 * interface.
+		 */
+		real_hardware = emulator.GetModelInfo("real_hardware");
+
 		interrupt_source.Setup(5, emulator);
 
 		region_ki.Setup(0xF040, 1, "Keyboard/KI", &keyboard_in, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
@@ -48,6 +55,15 @@ namespace casioemu
 			if (!offset)
 				keyboard->RecalculateKI();
 		}, emulator);
+
+		if (!real_hardware)
+		{
+			keyboard_pd_emu = emulator.GetModelInfo("pd_value");
+			region_ready_emu.Setup(0x8E00, 1, "Keyboard/ReadyStatusEmulator", &keyboard_ready_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
+			region_ki_emu.Setup(0x8E01, 1, "Keyboard/KIEmulator", &keyboard_in_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
+			region_ko_emu.Setup(0x8E02, 1, "Keyboard/KOEmulator", &keyboard_out_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
+			region_pd_emu.Setup(0xF050, 1, "Keyboard/PdValue", &keyboard_pd_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
+		}
 
 		{
 			for (auto &button : buttons)
@@ -142,6 +158,12 @@ namespace casioemu
 		keyboard_out = 0;
 		keyboard_out_mask = 0;
 
+		if (!real_hardware)
+		{
+			keyboard_in_emu = 0;
+			keyboard_out_emu = 0;
+		}
+
 		RecalculateGhost();
 	}
 
@@ -222,7 +244,25 @@ namespace casioemu
 		if (button.type == Button::BT_POWER && button.pressed && !old_pressed)
 			emulator.chipset.Reset();
 		if (button.type == Button::BT_BUTTON && button.pressed != old_pressed)
-			RecalculateGhost();
+		{
+			if (real_hardware)
+				RecalculateGhost();
+			else
+			{
+				// The emulator provided by Casio does not support multiple keys being pressed at once.
+				if (button.pressed)
+				{
+					// Report an arbitrary pressed key.
+					has_input = keyboard_in_emu = button.ki_bit;
+					keyboard_out_emu = button.ko_bit;
+				}
+				else
+				{
+					// This key is released. There might still be other keys being held.
+					has_input = keyboard_in_emu = keyboard_out_emu = 0;
+				}
+			}
+		}
 	}
 
 	void Keyboard::PressAt(int x, int y, bool stick)
@@ -342,7 +382,10 @@ namespace casioemu
 		if (had_effect)
 		{
 			require_frame = true;
-			RecalculateGhost();
+			if (real_hardware)
+				RecalculateGhost();
+			else
+				has_input = keyboard_in_emu = keyboard_out_emu = 0;
 		}
 	}
 }

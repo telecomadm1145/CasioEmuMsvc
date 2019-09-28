@@ -32,6 +32,8 @@ do
 		model_name = "fx-82ES PLUS A",
 		interface_image_path = "interface.png",
 		rom_path = "rom.bin",
+		hardware_id = 3,
+		real_hardware = 1,
 		csr_mask = 0x0001,
 		rsd_interface = {0, 0, 410, 810-26, 0, 0},
 		rsd_pixel = {410, 252,  3,  3,  61, 127},

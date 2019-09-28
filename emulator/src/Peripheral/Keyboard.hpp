@@ -15,6 +15,10 @@ namespace casioemu
 		uint16_t keyboard_out, keyboard_out_mask;
 		uint8_t keyboard_in, input_filter, keyboard_ghost[8];
 
+		bool real_hardware;
+		MMURegion region_ready_emu, region_ko_emu, region_ki_emu, region_pd_emu;
+		uint8_t keyboard_ready_emu, keyboard_out_emu, keyboard_in_emu, keyboard_pd_emu;
+
 		uint8_t has_input;
 		InterruptSource interrupt_source;
 

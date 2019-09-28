@@ -12,8 +12,11 @@ namespace casioemu
 {
 	void BatteryBackedRAM::Initialise()
 	{
-		ram_buffer = new uint8_t[0xE00];
-		for (size_t ix = 0; ix != 0xE00; ++ix)
+		bool real_hardware = emulator.GetModelInfo("real_hardware");
+		ram_size = real_hardware ? 0xE00 : 0xF00;
+
+		ram_buffer = new uint8_t[ram_size];
+		for (size_t ix = 0; ix != ram_size; ++ix)
 			ram_buffer[ix] = 0;
 
 		ram_file_requested = false;
@@ -30,6 +33,12 @@ namespace casioemu
 		}, [](MMURegion *region, size_t offset, uint8_t data) {
 			((uint8_t *)region->userdata)[offset - region->base] = data;
 		}, emulator);
+		if (!real_hardware)
+			region_2.Setup(0x9800, 0x0100, "BatteryBackedRAM/2", ram_buffer + 0xE00, [](MMURegion *region, size_t offset) {
+				return ((uint8_t *)region->userdata)[offset - region->base];
+			}, [](MMURegion *region, size_t offset, uint8_t data) {
+				((uint8_t *)region->userdata)[offset - region->base] = data;
+			}, emulator);
 	}
 
 	void BatteryBackedRAM::Uninitialise()
@@ -48,7 +57,7 @@ namespace casioemu
 			logger::Info("[BatteryBackedRAM] std::ofstream failed: %s\n", std::strerror(errno));
 			return;
 		}
-		ram_handle.write((char *)ram_buffer, 0xE00);
+		ram_handle.write((char *)ram_buffer, ram_size);
 		if (ram_handle.fail())
 		{
 			logger::Info("[BatteryBackedRAM] std::ofstream failed: %s\n", std::strerror(errno));
@@ -64,7 +73,7 @@ namespace casioemu
 			logger::Info("[BatteryBackedRAM] std::ifstream failed: %s\n", std::strerror(errno));
 			return;
 		}
-		ram_handle.read((char *)ram_buffer, 0xE00);
+		ram_handle.read((char *)ram_buffer, ram_size);
 		if (ram_handle.fail())
 		{
 			logger::Info("[BatteryBackedRAM] std::ifstream failed: %s\n", std::strerror(errno));
