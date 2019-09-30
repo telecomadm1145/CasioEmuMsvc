@@ -29,7 +29,7 @@ namespace casioemu
 			n_byte = 5;
 			break;
 		case HW_CLASSWIZ:
-			n_byte = 11;
+			n_byte = 13;
 			break;
 		}
 		for (int i = 0; i < n_byte; ++ i)
