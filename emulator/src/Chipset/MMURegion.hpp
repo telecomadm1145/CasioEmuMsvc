@@ -24,6 +24,13 @@ namespace casioemu
 		Emulator *emulator;
 
 		MMURegion();
+		// Note: it should not be possible to copy region because there can only be at most one region
+		// registered for each memory byte
+		MMURegion(const MMURegion &) = delete;
+		// Note: registered regions are referenced by pointer so they should not change their address
+		MMURegion(MMURegion &&) = delete;
+		MMURegion &operator=(const MMURegion &) = delete;
+		MMURegion &operator=(MMURegion &&) = delete;
 		~MMURegion();
 		void Setup(size_t base, size_t size, std::string description, void *userdata, ReadFunction read, WriteFunction write, Emulator &emulator);
 		void Kill();
