@@ -12,12 +12,11 @@
 
 namespace casioemu
 {
-	Emulator::Emulator(std::map<std::string, std::string> &_argv_map, unsigned int _timer_interval, unsigned int _cycles_per_second, bool _paused) : paused(_paused), argv_map(_argv_map), cycles(_cycles_per_second, _timer_interval), chipset(*new Chipset(*this))
+	Emulator::Emulator(std::map<std::string, std::string> &_argv_map, bool _paused) : paused(_paused), argv_map(_argv_map), chipset(*new Chipset(*this))
 	{
 		std::lock_guard<std::recursive_mutex> access_lock(access_mx);
 
 		running = true;
-		timer_interval = _timer_interval;
 		model_path = argv_map["model"];
 
 		lua_state = luaL_newstate();
@@ -25,6 +24,17 @@ namespace casioemu
 
 		SetupLuaAPI();
 		LoadModelDefition();
+
+		int hardware_id = GetModelInfo("hardware_id");
+		if (hardware_id != HW_ES_PLUS && hardware_id != HW_CLASSWIZ)
+			PANIC("Unknown hardware id %d\n", hardware_id);
+		this->hardware_id = (HardwareId)hardware_id;
+
+		unsigned int cycles_per_second = hardware_id == HW_ES_PLUS ? 128 * 1024 : 1024 * 1024;
+		timer_interval = 20;
+
+		cycles.Setup(cycles_per_second, timer_interval);
+		chipset.Setup();
 
 		interface_background = GetModelInfo("rsd_interface");
 		if (interface_background.dest.x != 0 || interface_background.dest.y != 0)
@@ -412,7 +422,7 @@ namespace casioemu
 		paused = _paused;
 	}
 
-	Emulator::Cycles::Cycles(Uint64 _cycles_per_second, unsigned int _timer_interval)
+	void Emulator::Cycles::Setup(Uint64 _cycles_per_second, unsigned int _timer_interval)
 	{
 		cycles_per_second = _cycles_per_second;
 		timer_interval = _timer_interval;

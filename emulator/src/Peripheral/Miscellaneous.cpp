@@ -5,8 +5,13 @@
 #include "../Chipset/Chipset.hpp"
 #include "../Chipset/CPU.hpp"
 
+#include <sstream>
+#include <iomanip>
+
 namespace casioemu
 {
+	constexpr uint16_t Miscellaneous::addr [];
+
 	void Miscellaneous::Initialise()
 	{
 		region_dsr.Setup(0xF000, 1, "Miscellaneous/DSR", this, [](MMURegion *region, size_t) {
@@ -16,11 +21,23 @@ namespace casioemu
 		}, emulator);
 
 		// * TODO: figure out what these are
-		region_F00A.Setup(0xF00A, 1, "Miscellaneous/Unknown/F00A*1", &data_F00A, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
-		region_F018.Setup(0xF018, 1, "Miscellaneous/Unknown/F018*1", &data_F018, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
-		region_F033.Setup(0xF033, 1, "Miscellaneous/Unknown/F033*1", &data_F033, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
-		region_F034.Setup(0xF034, 1, "Miscellaneous/Unknown/F034*1", &data_F034, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
-		region_F041.Setup(0xF041, 1, "Miscellaneous/Unknown/F041*1", &data_F041, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
+
+		int n_byte;
+		switch (emulator.hardware_id)
+		{
+		case HW_ES_PLUS:
+			n_byte = 5;
+			break;
+		case HW_CLASSWIZ:
+			n_byte = 11;
+			break;
+		}
+		for (int i = 0; i < n_byte; ++ i)
+		{
+			std::ostringstream stream;
+			stream << "Miscellaneous/Unknown/" << std::hex << std::uppercase << addr[i] << "*1";
+			region[i].Setup(addr[i], 1, stream.str(), &data[i], MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
+		}
 		region_F048.Setup(0xF048, 8, "Miscellaneous/Unknown/F048*8", &data_F048, MMURegion::DefaultRead<uint64_t>, MMURegion::DefaultWrite<uint64_t>, emulator);
 		region_F220.Setup(0xF220, 4, "Miscellaneous/Unknown/F220*4", &data_F220, MMURegion::DefaultRead<uint32_t>, MMURegion::DefaultWrite<uint32_t>, emulator);
 	}

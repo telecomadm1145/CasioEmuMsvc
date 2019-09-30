@@ -1,5 +1,6 @@
 #include "Keyboard.hpp"
 
+#include "../Data/HardwareId.hpp"
 #include "../Logger.hpp"
 #include "../Chipset/MMU.hpp"
 #include "../Emulator.hpp"
@@ -59,9 +60,10 @@ namespace casioemu
 		if (!real_hardware)
 		{
 			keyboard_pd_emu = emulator.GetModelInfo("pd_value");
-			region_ready_emu.Setup(0x8E00, 1, "Keyboard/ReadyStatusEmulator", &keyboard_ready_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
-			region_ki_emu.Setup(0x8E01, 1, "Keyboard/KIEmulator", &keyboard_in_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
-			region_ko_emu.Setup(0x8E02, 1, "Keyboard/KOEmulator", &keyboard_out_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
+			int offset = emulator.hardware_id == HW_ES_PLUS ? 0 : 0x40000;
+			region_ready_emu.Setup(offset + 0x8E00, 1, "Keyboard/ReadyStatusEmulator", &keyboard_ready_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
+			region_ki_emu.Setup(offset + 0x8E01, 1, "Keyboard/KIEmulator", &keyboard_in_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
+			region_ko_emu.Setup(offset + 0x8E02, 1, "Keyboard/KOEmulator", &keyboard_out_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
 			region_pd_emu.Setup(0xF050, 1, "Keyboard/PdValue", &keyboard_pd_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
 		}
 

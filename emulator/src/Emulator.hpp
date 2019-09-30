@@ -9,6 +9,7 @@
 #include <mutex>
 #include <thread>
 
+#include "Data/HardwareId.hpp"
 #include "Data/ModelInfo.hpp"
 #include "Data/SpriteInfo.hpp"
 
@@ -44,12 +45,13 @@ namespace casioemu
 		void RunStartupScript();
 
 	public:
-		Emulator(std::map<std::string, std::string> &argv_map, unsigned int timer_interval, unsigned int cycles_per_second, bool paused = false);
+		Emulator(std::map<std::string, std::string> &argv_map, bool paused = false);
 		~Emulator();
 
 		std::recursive_mutex access_mx;
 		lua_State *lua_state;
 		int lua_model_ref, lua_pre_tick_ref, lua_post_tick_ref;
+		HardwareId hardware_id;
 		std::map<std::string, std::string> &argv_map;
 
 	private:
@@ -62,7 +64,7 @@ namespace casioemu
 		 */
 		struct Cycles
 		{
-			Cycles(Uint64 cycles_per_second, unsigned int timer_interval);
+			void Setup(Uint64 cycles_per_second, unsigned int timer_interval);
 			void Reset();
 			Uint64 GetDelta();
 			Uint64 ticks_at_reset, cycles_emulated, cycles_per_second, performance_frequency, diff_cap;

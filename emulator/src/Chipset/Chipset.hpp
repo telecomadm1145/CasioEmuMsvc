@@ -47,8 +47,6 @@ namespace casioemu
 		void AcceptInterrupt();
 		void RaiseSoftware(size_t index);
 
-		const size_t mmu_segments[3] = {0, 1, 8};
-
 		void ConstructPeripherals();
 		void DestructPeripherals();
 
@@ -61,6 +59,7 @@ namespace casioemu
 
 	public:
 		Chipset(Emulator &emulator);
+		void Setup(); // must be called after emulator.hardware_id is initialized
 		~Chipset();
 
 		Emulator &emulator;

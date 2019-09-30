@@ -1,3 +1,9 @@
+local hwid = emu:model().hardware_id
+local stack_end = hwid == 3 and 0x8e00 or 0xf000
+local screen_nrow = hwid == 3 and 32 or 64
+local screen_ncol = hwid == 3 and 12 or 24 -- bytes = 8 pixels
+local screen_row_width = hwid == 3 and 16 or 32 -- > screen_ncol
+
 local break_targets = {}
 
 local posttickfns = {}
@@ -554,7 +560,7 @@ function pst(radius)
 	w = io.write
 	linecnt = 0
 	for i = sp-radius, sp+radius-1 do
-		if i >= 0x8e00 then
+		if i >= stack_end then
 			break
 		end
 
@@ -582,11 +588,11 @@ end
 function getscr(d)
 	-- Convert a table of 96*32 bytes to string representation.
 	local lines={}
-	for row=0,30,2 do
+	for row=0,screen_nrow-1,2 do
 		local line=''
-		for col=1,12 do
-			local byte1=d[row*12+col]
-			local byte2=d[(row+1)*12+col]
+		for col=1,screen_ncol do
+			local byte1=d[row*screen_ncol+col]
+			local byte2=d[(row+1)*screen_ncol+col]
 			for bit=1,4 do
 				local x=((byte1&0xc0)>>4)+((byte2&0xc0)>>6)
 				-- assume this file is saved in utf-8, each block-drawing character
@@ -601,42 +607,21 @@ function getscr(d)
 	return table.concat(lines,'\n')
 end
 
-function getscr0(d)
-	-- Same as `getscr`, but wider.
-	-- You can add `getscr = getscr0` if you have wide terminal.
-	local lines={}
-	for row=0,30,2 do
-		local line=''
-		for col=1,12 do
-			local byte1=d[row*12+col]
-			local byte2=d[(row+1)*12+col]
-			for bit=1,8 do
-				line=line.. ({' ','▄',"▀",'█'})[((byte1&128)>>6)+((byte2&128)>>7)+1]
-				byte1=byte1<<1
-				byte2=byte2<<1
-			end
-		end
-		table.insert(lines,line)
-	end
-	return table.concat(lines,'\n')
-end
-
 function pscr()
 	local d={}
-	for row=0,31 do
-		for col=0,11 do
-			table.insert(d,data[0xf800+16*row+col])
+	for row=0,screen_nrow-1 do
+		for col=0,screen_ncol-1 do
+			table.insert(d,data[0xf800+screen_row_width*row+col])
 		end
 	end
 	print(getscr(d))
 end
 
-function pbuf()
+function pbuf(x)
+	local base=hwid==3 and 0x87d0 or (x==2 and 0xe3d4 or 0xddd4)
 	local d={}
-	for row=0,31 do
-		for col=0,11 do
-			table.insert(d,data[0x87d0+12*row+col])
-		end
+	for i=base,base+screen_nrow*screen_ncol-1 do
+		table.insert(d,data[i])
 	end
 	print(getscr(d))
 end
