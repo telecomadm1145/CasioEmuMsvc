@@ -61,13 +61,17 @@ namespace casioemu
 		 * it's queried for the number of cycles that need to be emulated in the
 		 * callback. This ensures that only as many cycles are emulated in a period
 		 * of time as many would be in real life.
+		 *
+		 * Note that it's assumed that the GetDelta function is called once every
+		 * timer_interval milliseconds. It's up to the timer to make sure that
+		 * there's no drift.
 		 */
 		struct Cycles
 		{
 			void Setup(Uint64 cycles_per_second, unsigned int timer_interval);
 			void Reset();
 			Uint64 GetDelta();
-			Uint64 ticks_at_reset, cycles_emulated, cycles_per_second, performance_frequency, diff_cap;
+			Uint64 ticks_now, cycles_emulated, cycles_per_second;
 			unsigned int timer_interval;
 		} cycles;
 

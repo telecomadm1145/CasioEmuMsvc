@@ -96,6 +96,7 @@ namespace casioemu
 		cycles.Reset();
 
 		tick_thread = new std::thread([this] {
+			auto iteration_end = std::chrono::steady_clock::now();
 			while (1)
 			{
 				{
@@ -105,7 +106,12 @@ namespace casioemu
 					TimerCallback();
 				}
 
-				std::this_thread::sleep_for(std::chrono::milliseconds(timer_interval));
+				iteration_end += std::chrono::milliseconds(timer_interval);
+				auto now = std::chrono::steady_clock::now();
+				if (iteration_end > now)
+					std::this_thread::sleep_until(iteration_end);
+				else // in case the computer is not fast enough or paused
+					iteration_end = now;
 			}
 		});
 
@@ -424,25 +430,23 @@ namespace casioemu
 
 	void Emulator::Cycles::Setup(Uint64 _cycles_per_second, unsigned int _timer_interval)
 	{
+		ticks_now = 0;
+		cycles_emulated = 0;
 		cycles_per_second = _cycles_per_second;
 		timer_interval = _timer_interval;
-		diff_cap = cycles_per_second * timer_interval / 1000;
-		performance_frequency = SDL_GetPerformanceFrequency();
 	}
 
 	void Emulator::Cycles::Reset()
 	{
-		ticks_at_reset = SDL_GetPerformanceCounter();
+		ticks_now = 0;
 		cycles_emulated = 0;
 	}
 
 	Uint64 Emulator::Cycles::GetDelta()
 	{
-		Uint64 ticks_now = SDL_GetPerformanceCounter();
-		Uint64 cycles_to_have_been_emulated_by_now = (double)(ticks_now - ticks_at_reset) / performance_frequency * cycles_per_second;
+		ticks_now += timer_interval;
+		Uint64 cycles_to_have_been_emulated_by_now = ticks_now * cycles_per_second / 1000;
 		Uint64 diff = cycles_to_have_been_emulated_by_now - cycles_emulated;
-		if (diff > diff_cap)
-			diff = diff_cap;
 		cycles_emulated = cycles_to_have_been_emulated_by_now;
 		return diff;
 	}
