@@ -399,8 +399,11 @@ namespace casioemu
 	{
 		std::lock_guard<std::recursive_mutex> access_lock(access_mx);
 
+		lua_State *thread = lua_newthread(lua_state);
+
+		// load command to thread's stack
 		const char *ugly_string_data_ptr = command.c_str();
-		if (lua_load(lua_state, [](lua_State *, void *data, size_t *size) {
+		if (lua_load(thread, [](lua_State *, void *data, size_t *size) {
 			char **ugly_string_data_ptr_ptr = (char **)data;
 			if (!*ugly_string_data_ptr_ptr)
 				return (const char *)nullptr;
@@ -410,17 +413,17 @@ namespace casioemu
 			return result;
 		}, &ugly_string_data_ptr, "stdin", "t") != LUA_OK)
 		{
-			logger::Info("%s\n", lua_tostring(lua_state, -1));
-			lua_pop(lua_state, 1);
-			return;
+			logger::Info("%s\n", lua_tostring(thread, -1));
+		}
+		else
+		{
+			int status = lua_resume(thread, nullptr, 0);
+			// * TODO Is it necessary to clear the stack?
+			if (status != LUA_OK && status != LUA_YIELD)
+				logger::Info("%s\n", lua_tostring(thread, -1));
 		}
 
-		if (lua_pcall(lua_state, 0, 0, 0) != LUA_OK)
-		{
-			logger::Info("%s\n", lua_tostring(lua_state, -1));
-			lua_pop(lua_state, 1);
-			return;
-		}
+		lua_pop(lua_state, 1); // thread
 	}
 
 	void Emulator::SetPaused(bool _paused)
