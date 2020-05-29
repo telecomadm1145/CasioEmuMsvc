@@ -1120,6 +1120,29 @@ if args_assoc.word_commands then
 				if val >= 0x8000 then
 					val_repr = val_repr .. (' | -%d'):format(0x10000-val)
 				end
+				-- try to parse a string (only ASCII supported)
+				local len = 0
+				local all_ascii = true
+				local str = ""
+				while val + len < binary_source_length do
+					local char = binary_source:byte(val + len + 1)
+					if char == 0 then
+						break
+					end
+					if 0x20 > char or char > 0x7e then
+						all_ascii = false
+						break
+					end
+					str = str .. string.char(char)
+					len = len + 1
+					if len > 16 then
+						break
+					end
+				end
+				if all_ascii and len <= 16 and len > 0 then
+					val_repr = val_repr .. ' | "' .. str:gsub('"', '\\"') .. '"'
+				end
+
 				add_comment(addr - 2, ('Equiv: %s er%d, %s'):format(
 					prev_instr.mnemonic, r, val_repr))
 			end
