@@ -246,26 +246,40 @@ function until0(addr)
 	end
 end
 
-function getn_data(x) -- Calculator 10-byte decimal fp number to float.
+function getn_str(x) -- Calculator 10-byte decimal fp number to string.
 	-- `x` should be a list of 10 integers
-	-- Return nil for invalid number.
+	-- Return nil for invalid number (numbers with hexadecimal digits in the mantissa part are considered valid)
+	-- If there's any hexadecimal characters in the number they're returned in uppercase.
 
 	if not ({[0]=true,[1]=true,[5]=true,[6]=true})[x[10]] then
 		return nil
 	end
-	if x[1]>=10 then
+	if x[1]>=16 then
 		return nil
 	end
 
-	for i=1,9 do x[i]=("%02x"):format(x[i]) end
-	local a = tonumber(x[1] .. '.' .. table.concat(x):sub(3,14))
-	if a == nil then return nil end
+	for i=1,9 do x[i]=("%02X"):format(x[i]) end
+	local a = x[1]:sub(2,2) .. '.' .. table.concat(x):sub(3,16)
 	local exp = tonumber(x[9])
 	if exp == nil then return nil end
 
-	if x[10]>4 then a = -a end
+	if x[10]>4 then a = "-"..a end
 	if x[10]==0 or x[10]==5 then exp = exp - 100 end
-	return a * 10^exp
+	a=a.."e"..exp
+
+	if a=="0.00000000000000e-100" then return "0" end
+
+	if a:sub(1,1)~="0" then -- prettify a
+		b=tonumber(a)
+		if b~=nil then return ("%.15g"):format(b) end
+	end
+	return a
+end
+
+function getn_data(x) -- Calculator 10-byte decimal fp number to float.
+	-- `x` should be a list of 10 integers
+	-- Return nil for invalid number.
+	return tonumber(getn_str(x))
 end
 
 function getn(adr)
@@ -273,8 +287,8 @@ function getn(adr)
 	for i = 0,9 do
 		x[i+1] = data[adr+i]
 	end
-	local a = getn_data(x)
-	if a then return ('%.15g'):format(a) else return '<?>' end
+	local a = getn_str(x)
+	if a then return a else return '<?>' end
 end
 
 function er(x)
@@ -518,19 +532,23 @@ function pn(adr)
 	print(getn(adr))
 end
 
-function getrn(adr) -- Similar to getn_data, but with register order
+function getrn_str(adr) -- Similar to getn_str, but with register order
 	local x = {}
 	for j=1,8 do
 		x[j] = data[adr+10-j]
 	end
 	x[9] = data[adr]
 	x[10] = data[adr+1]
-	return getn_data(x)
+	return getn_str(x)
 end
 
-function prs() -- Print calculator number registers
+function getrn_data(adr) -- Similar to getn_data, but with register order
+	return tonumber(getrn_str(x))
+end
+
+function prs() -- Print calculator number registers (specific to ES+)
 	local x = {0x8000, 0x8010, 0x8020, 0x8030, 0x803C, 0x8046, 0x8050}
-	for i,v in ipairs(x) do x[i]=getrn(v) end
+	for i,v in ipairs(x) do x[i]=getrn_str(v) end
 
 	printf(' R0: %20s | R1: %20s | R2: %20s',x[1],x[2],x[3])
 	printf(' R3: %20s | R4: %20s | R5: %20s',x[4],x[5],x[6])
