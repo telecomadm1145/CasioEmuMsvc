@@ -6,4 +6,5 @@ models/*/*.bin
 models/*/*.asm
 models/*/*.names
 ignore/
+build/
 test/
