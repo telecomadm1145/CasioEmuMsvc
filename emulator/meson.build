@@ -1,5 +1,10 @@
 project('emulator', 'cpp', version: '1.0.0')
 
+lua_dependency = dependency('lua53', required : false)
+if not lua_dependency.found()
+	lua_dependency = dependency('lua5.3')
+endif
+
 executable('emulator', sources: [
 	'src/Logger.cpp',
 	'src/Peripheral/ROMWindow.cpp',
@@ -26,6 +31,6 @@ executable('emulator', sources: [
 	dependency('threads'),
 	dependency('SDL2'),
 	dependency('SDL2_image'),
-	dependency('lua53'),
+	lua_dependency,
 	dependency('readline'),
 ])
