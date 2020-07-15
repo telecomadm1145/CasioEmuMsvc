@@ -381,12 +381,6 @@ namespace casioemu
 		 */
 		reg_dsr	= 0;
 
-		for (auto &proxy : register_proxies)
-		{
-			proxy.second->read = false;
-			proxy.second->written = false;
-		}
-
 		while (1)
 		{
 			impl_opcode = Fetch();

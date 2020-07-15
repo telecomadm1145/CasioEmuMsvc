@@ -21,7 +21,6 @@ namespace casioemu
 		{
 			size_t type_size;
 			std::string name;
-			bool read, written;
 
 			uint16_t raw;
 		};
@@ -37,13 +36,11 @@ namespace casioemu
 
 			operator value_type()
 			{
-				read = true;
 				return raw;
 			}
 
 			Register<value_type> &operator =(value_type value)
 			{
-				written = true;
 				raw = value;
 				return *this;
 			}
