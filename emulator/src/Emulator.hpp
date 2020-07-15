@@ -19,6 +19,19 @@ namespace casioemu
 	class CPU;
 	class MMU;
 
+	/**
+	 * A mutex that ensures that a thread cannot get the mutex right after it's released if there are another waiting thread.
+	 */
+	class FairRecursiveMutex
+	{
+		std::recursive_mutex main;
+		std::mutex pending;
+
+	public:
+		void lock();
+		void unlock();
+	};
+
 	class Emulator
 	{
 		SDL_Window *window;
@@ -48,7 +61,7 @@ namespace casioemu
 		Emulator(std::map<std::string, std::string> &argv_map, bool paused = false);
 		~Emulator();
 
-		std::recursive_mutex access_mx;
+		FairRecursiveMutex access_mx;
 		lua_State *lua_state;
 		int lua_model_ref, lua_pre_tick_ref, lua_post_tick_ref;
 		HardwareId hardware_id;

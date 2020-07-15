@@ -105,7 +105,6 @@ int main(int argc, char *argv[])
 				{
 					if(argv_map.find("exit_on_console_shutdown") != argv_map.end())
 					{
-						std::cout << '\n';
 						SDL_Event event;
 						SDL_zero(event);
 						event.type = SDL_WINDOWEVENT;
@@ -126,7 +125,7 @@ int main(int argc, char *argv[])
 
 				add_history(console_input_c_str);
 
-				std::lock_guard<std::recursive_mutex> access_lock(emulator.access_mx);
+				std::lock_guard<decltype(emulator.access_mx)> access_lock(emulator.access_mx);
 				if (!emulator.Running())
 					break;
 				emulator.ExecuteCommand(console_input_c_str);
@@ -199,7 +198,7 @@ int main(int argc, char *argv[])
 		console_input_thread.join();
 	}
 
-	rl_free_line_state();
+	std::cout << '\n';
 	rl_deprep_terminal();
 
 	IMG_Quit();

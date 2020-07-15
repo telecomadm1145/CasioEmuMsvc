@@ -14,7 +14,7 @@ namespace casioemu
 {
 	Emulator::Emulator(std::map<std::string, std::string> &_argv_map, bool _paused) : paused(_paused), argv_map(_argv_map), chipset(*new Chipset(*this))
 	{
-		std::lock_guard<std::recursive_mutex> access_lock(access_mx);
+		std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
 		running = true;
 		model_path = argv_map["model"];
@@ -100,7 +100,7 @@ namespace casioemu
 			while (1)
 			{
 				{
-					std::lock_guard<std::recursive_mutex> access_lock(access_mx);
+					std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 					if (!Running())
 						break;
 					TimerCallback();
@@ -131,7 +131,7 @@ namespace casioemu
 			tick_thread->join();
 		delete tick_thread;
 		
-		std::lock_guard<std::recursive_mutex> access_lock(access_mx);
+		std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
 		SDL_DestroyTexture(interface_texture);
 		SDL_DestroyRenderer(renderer);
@@ -153,7 +153,7 @@ namespace casioemu
 
 	void Emulator::UIEvent(SDL_Event &event)
 	{
-		std::lock_guard<std::recursive_mutex> access_lock(access_mx);
+		std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
 		// For mouse events, rescale the coordinates from window size to original size.
 		switch (event.type)
@@ -291,7 +291,7 @@ namespace casioemu
 
 	void Emulator::TimerCallback()
 	{
-		std::lock_guard<std::recursive_mutex> access_lock(access_mx);
+		std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
 		Uint64 cycles_to_emulate = cycles.GetDelta();
 		for (Uint64 ix = 0; ix != cycles_to_emulate; ++ix)
@@ -315,7 +315,7 @@ namespace casioemu
 
 	void Emulator::Frame()
 	{
-		std::lock_guard<std::recursive_mutex> access_lock(access_mx);
+		std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
 		// create texture `tx` with the same format as `interface_texture`
 		Uint32 format;
@@ -341,7 +341,7 @@ namespace casioemu
 
 	void Emulator::WindowResize(int _width, int _height)
 	{
-		std::lock_guard<std::recursive_mutex> access_lock(access_mx);
+		std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 		width = _width;
 		height = _height;
 		Frame();
@@ -390,14 +390,14 @@ namespace casioemu
 
 	void Emulator::Shutdown()
 	{
-		std::lock_guard<std::recursive_mutex> access_lock(access_mx);
+		std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
 		running = false;
 	}
 
 	void Emulator::ExecuteCommand(std::string command)
 	{
-		std::lock_guard<std::recursive_mutex> access_lock(access_mx);
+		std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
 		lua_State *thread = lua_newthread(lua_state);
 
@@ -467,5 +467,17 @@ namespace casioemu
 	unsigned int Emulator::GetCyclesPerSecond()
 	{
 		return cycles.cycles_per_second;
+	}
+
+	void FairRecursiveMutex::lock()
+	{
+		pending.lock();
+		main.lock();
+		pending.unlock();
+	}
+
+	void FairRecursiveMutex::unlock()
+	{
+		main.unlock();
 	}
 }
