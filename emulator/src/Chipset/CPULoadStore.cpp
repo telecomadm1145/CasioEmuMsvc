@@ -43,6 +43,8 @@ namespace casioemu
 
 	void CPU::LoadStore(uint16_t offset, size_t length)
 	{
+		if (length % 2 == 0)
+			offset &= ~1;
 		size_t reg_base = impl_operands[0].value;
 		if (impl_hint & H_ST)
 		{
