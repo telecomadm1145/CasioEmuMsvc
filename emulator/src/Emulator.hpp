@@ -8,6 +8,7 @@
 #include <lua.hpp>
 #include <mutex>
 #include <thread>
+#include <condition_variable>
 
 #include "Data/HardwareId.hpp"
 #include "Data/ModelInfo.hpp"
@@ -24,8 +25,9 @@ namespace casioemu
 	 */
 	class FairRecursiveMutex
 	{
-		std::recursive_mutex main;
-		std::mutex pending;
+		std::mutex m;
+		std::condition_variable c;
+		std::thread::id holding;
 
 	public:
 		void lock();

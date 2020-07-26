@@ -471,13 +471,20 @@ namespace casioemu
 
 	void FairRecursiveMutex::lock()
 	{
-		pending.lock();
-		main.lock();
-		pending.unlock();
+		std::unique_lock<std::mutex> lock(m);
+		if (holding==std::thread::id{})
+			return;
+		if (holding!=std::thread::id{})
+			c.wait(lock, [&]{ return holding==std::thread::id{}; });
+		holding=std::this_thread::get_id();
 	}
 
 	void FairRecursiveMutex::unlock()
 	{
-		main.unlock();
+		{
+			std::lock_guard<std::mutex> lock(m);
+			holding={};
+		}
+		c.notify_one();
 	}
 }
