@@ -9,6 +9,7 @@
 #include <sstream>
 #include <string>
 #include <chrono>
+#include <cassert>
 
 namespace casioemu
 {
@@ -469,22 +470,52 @@ namespace casioemu
 		return cycles.cycles_per_second;
 	}
 
+	FairRecursiveMutex::FairRecursiveMutex() : holding{}, recursive_count{}
+	{
+	}
+
+	FairRecursiveMutex::~FairRecursiveMutex()
+	{
+		assert(0 == recursive_count);
+	}
+
 	void FairRecursiveMutex::lock()
 	{
 		std::unique_lock<std::mutex> lock(m);
-		if (holding==std::thread::id{})
+		assert((holding == std::thread::id{}) == (recursive_count == 0));
+		if (holding == std::this_thread::get_id())
+		{
+			++recursive_count;
 			return;
-		if (holding!=std::thread::id{})
-			c.wait(lock, [&]{ return holding==std::thread::id{}; });
-		holding=std::this_thread::get_id();
+		}
+		if (holding != std::thread::id{} or not waiting.empty())
+		{
+			waiting.emplace();
+			auto& c = waiting.back();
+			c.wait(lock, [&]{
+				assert(not waiting.empty());
+				assert((holding == std::thread::id{}) == (recursive_count == 0));
+				return recursive_count == 0 && &waiting.front() == &c;
+			});
+			waiting.pop();
+		}
+		assert(holding == std::thread::id{});
+		assert(recursive_count == 0);
+		holding = std::this_thread::get_id();
+		recursive_count = 1;
 	}
 
 	void FairRecursiveMutex::unlock()
 	{
+		std::lock_guard<std::mutex> lock(m);
+		assert(holding == std::this_thread::get_id());
+		assert(recursive_count > 0);
+		--recursive_count;
+		if (recursive_count == 0)
 		{
-			std::lock_guard<std::mutex> lock(m);
-			holding={};
+			holding = {};
+			if (not waiting.empty())
+				waiting.front().notify_one(); // the notify_one must be called while m is locked, otherwise the condition variable might be destroyed (as noted on https://en.cppreference.com/w/cpp/thread/condition_variable/notify_one)
 		}
-		c.notify_one();
 	}
 }

@@ -9,6 +9,7 @@
 #include <mutex>
 #include <thread>
 #include <condition_variable>
+#include <queue>
 
 #include "Data/HardwareId.hpp"
 #include "Data/ModelInfo.hpp"
@@ -26,10 +27,13 @@ namespace casioemu
 	class FairRecursiveMutex
 	{
 		std::mutex m;
-		std::condition_variable c;
 		std::thread::id holding;
+		int recursive_count;
+		std::queue<std::condition_variable> waiting;
 
 	public:
+		FairRecursiveMutex();
+		~FairRecursiveMutex();
 		void lock();
 		void unlock();
 	};
