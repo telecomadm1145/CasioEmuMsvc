@@ -1,6 +1,8 @@
 NOTE: This is a **modified** version of the Casio emulator developed by [LBPHacker](../../../../LBPHacker) and [user202729](../../../../user202729) that removes all warnings from `MMU.cpp` and removes the panic code when an invalid instruction is reached. The rest remains the same.  
 This repository will get updated with new models in the `models` folder. Note that ROMs are **not** included (for copyright reasons), you have to obtain one from somewhere else or dump it from a real calculator or emulator. (note that models labeled with `_emu` are for ROMs dumped from official emulators)
 
+A compiled binary (includes ROMs!) can be found [here](https://drive.google.com/file/d/11co4YDYDUsCghI-DrhpqYU0PDO7BL-uZ/view?usp=share_link). Note that because the program was probably not well-optimized, it might experience hangs if it performs poorly.
+
 # CasioEmu
 
 An emulator and disassembler for the CASIO calculator series using the nX-U8/100 core.
@@ -25,9 +27,9 @@ See `models` folder.
 Each argument should have one of these two formats:
 
 * `key=value` where `key` does not contain any equal signs.
-* `path`: equivalent to `model=path`.
+* `path`: equivalent to `model=path`. (you cannot use both at the same time)
 
-Supported values of `key` are: (if `value` is not mentioned then it does not matter)
+Supported values of `key` are: (if `value` is not mentioned then it does not matter [0 = off, 1 = on])
 
 * `paused`: Pause the emulator on start.
 * `model`: Specify the path to model folder. Example `value`: `models/fx570esplus`.
@@ -41,6 +43,8 @@ Supported values of `key` are: (if `value` is not mentioned then it does not mat
 * `resizable`: Whether the window can be resized.
 * `width`, `height`: Initial window width/height on program start. The values can be in hexadecimal (prefix `0x`), octal (prefix `0`) or decimal.
 * `exit_on_console_shutdown`: Exit the emulator when the console thread is shut down.
+
+Note that passing an argument at least twice will cause the program to panic.
 
 ### Available Lua functions
 

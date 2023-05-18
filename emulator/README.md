@@ -2,13 +2,13 @@
 
 Assuming your current directory is this one, you have
 [meson](https://mesonbuild.com/) and [ninja](https://ninja-build.org/) installed
-and you have the proper ROM in `../../models/fx570esplus`:
+and you have the proper ROM (name `rom.bin`) in `../../models/<model>`:
 
 ```
 $ meson build && cd build
-$ meson configure -Dwerror=true -Dwarning_level=3 -Dcpp_std=c++11
+$ meson configure -Dwarning_level=3 -Dcpp_std=c++11
 $ ninja
-$ ./emulator ../../models/fx570esplus
+$ ./emulator ../../models/<model>
 ```
 
 Unlike the previous, terrible excuse of a build system, this one is likely to
