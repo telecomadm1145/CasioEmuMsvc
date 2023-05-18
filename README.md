@@ -68,12 +68,7 @@ To use those, it's necessary to pass the flag `script=emulator/lua-common.lua`.
 
 ### Build
 
-Run `make` in the `emulator` folder. Dependencies: (listed in the `Makefile`)
-
-* Lua 5.3 (note: the include files should be put in `lua5.3` folder, otherwise change the `#include` lines accordingly)
-* SDL2
-* SDL2\_image
-* pthread (already available for UNIX systems)
+Instructions in `emulator` folder. (not written by the forker)
 
 ### Usage
 
