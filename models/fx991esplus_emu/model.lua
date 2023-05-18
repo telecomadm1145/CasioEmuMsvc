@@ -29,12 +29,13 @@ do
 	generate(188, 289, 34, 30, 1, 2,   0, 62, {0x27, 'Up', 0x36, 'Down',})
 
 	emu:model({
-		model_name = "fx-82ES PLUS A",
+		model_name = "fx-991ES PLUS",
 		interface_image_path = "interface.png",
 		rom_path = "rom.bin",
 		hardware_id = 3,
-		real_hardware = 1,
+		real_hardware = 0,
 		csr_mask = 0x0001,
+		pd_value = 0x00,
 		rsd_interface = {0, 0, 410, 810, 0, 0},
 		rsd_pixel = {410, 252,  3,  3,  61, 141},
 		rsd_s     = {410,   0, 10, 14,  61, 127},
@@ -58,22 +59,4 @@ do
 		ink_colour = {49, 49, 49}, --[[ink_colour = {30, 52, 90},--]]
 		button_map = buttons
 	})
-end
-
-function inject(str)
-	if 200 ~= #str then
-		print "Input 200 hexadecimal digits please"
-		return
-	end
-
-	adr = 0x8154
-	for byte in str:gmatch '..' do
-		data[adr] = tonumber(byte, 16)
-		adr = adr + 1
-	end
-
-	break_at(0x2796, function()
-		ppc()
-		unbreak_at(0x2796)
-	end)
 end

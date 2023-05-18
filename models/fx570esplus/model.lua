@@ -55,7 +55,7 @@ do
 		rsd_down  = {410, 210, 10, 14, 313, 127},
 		rsd_up    = {410, 224, 10, 14, 319, 127},
 		rsd_disp  = {410, 238, 20, 14, 329, 127},
-		ink_colour = {30, 52, 90},
+		ink_colour = {49, 49, 49}, --[[ink_colour = {30, 52, 90},--]]
 		button_map = buttons
 	})
 end

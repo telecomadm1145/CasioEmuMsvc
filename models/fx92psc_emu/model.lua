@@ -11,11 +11,11 @@ do
 	end
 	-- Refer to https://wiki.libsdl.org/SDL_Keycode for key names.
 	emu:model({
-		model_name = "fx-580VN X",
+		model_name = "fx-92+ Spéciale Collège",
 		interface_image_path = "interface.png",
 		rom_path = "rom.bin",
 		hardware_id = 4,
-		real_hardware = 1,
+		real_hardware = 0,
 		csr_mask = 0x000F,
 		pd_value = 0x00,
 		rsd_interface = {0, 0, 284, 597, 0, 0},

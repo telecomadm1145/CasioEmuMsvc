@@ -11,7 +11,7 @@ do
 	end
 	-- Refer to https://wiki.libsdl.org/SDL_Keycode for key names.
 	emu:model({
-		model_name = "fx-580VNX",
+		model_name = "fx-580VN X",
 		interface_image_path = "interface.png",
 		rom_path = "rom.bin",
 		hardware_id = 4,

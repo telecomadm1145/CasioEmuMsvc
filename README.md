@@ -72,6 +72,6 @@ Instructions in `emulator` folder. (not written by the forker)
 
 ### Usage
 
-Run the generated executable at `emulator/bin/casioemu`.
+Run the generated executable at `emulator/build/casioemu`.
 
 To interact with the calculator keyboard, use the mouse (left click to press, right click to stick) or the keyboard (see `models/*/model.lua` for keyboard configuration).
