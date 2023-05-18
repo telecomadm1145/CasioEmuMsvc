@@ -34,11 +34,9 @@ namespace casioemu
 			Push16(reg_lr);
 
 			if (stack.empty())
-				logger::Info("PUSH LR is called before %06zX, but the stack is empty\n",
-						((size_t)reg_csr.raw) << 16 | reg_pc.raw);
+				{}
 			else if (stack.back().lr_pushed)
-				logger::Info("PUSH LR is called before %06zX, but LR is already pushed for the last frame\n",
-						((size_t)reg_csr.raw) << 16 | reg_pc.raw);
+				{}
 			else
 			{
 				stack.back().lr_pushed = true;

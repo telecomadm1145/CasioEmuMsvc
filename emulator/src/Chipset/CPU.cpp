@@ -275,7 +275,7 @@ namespace casioemu
 			for (size_t px = 0; px != permutation_count; ++px)
 			{
 				if (opcode_dispatch[permutation_buffer[px]])
-					PANIC("clashing opcode %04X\n", permutation_buffer[px]);
+					continue;
 				opcode_dispatch[permutation_buffer[px]] = &handler_stub;
 			}
 		}
@@ -358,15 +358,9 @@ namespace casioemu
 	uint16_t CPU::Fetch()
 	{
 		if (reg_csr.raw & ~impl_csr_mask)
-		{
-			logger::Info("warning: CSR masked bits set\n");
 			reg_csr.raw &= impl_csr_mask;
-		}
 		if (reg_pc.raw & 1)
-		{
-			logger::Info("warning: PC LSB set\n");
 			reg_pc.raw &= ~1;
-		}
 		uint16_t opcode = emulator.chipset.mmu.ReadCode((reg_csr.raw << 16) | reg_pc.raw);
 		reg_pc.raw = (uint16_t)(reg_pc.raw + 2);
 		return opcode;
@@ -387,7 +381,7 @@ namespace casioemu
 			OpcodeSource *handler = opcode_dispatch[impl_opcode];
 
 			if (!handler)
-				PANIC("unrecognized instruction %04X at %06zX\n", impl_opcode, (((size_t)reg_csr.raw) << 16) | (reg_pc.raw - 2));
+				continue;
 
 			impl_long_imm = 0;
 			if (handler->hint & H_TI)
@@ -427,6 +421,7 @@ namespace casioemu
 
 			if (!(handler->hint & H_DS))
 				break;
+			
 		}
 	}
 
