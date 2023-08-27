@@ -1,7 +1,7 @@
 NOTE: This is a **modified** version of the Casio emulator developed by [LBPHacker](../../../../LBPHacker) and [user202729](../../../../user202729) that removes all warnings from `MMU.cpp` and removes the panic code when an invalid instruction is reached. The rest remains the same.  
 This repository will get updated with new models in the `models` folder. Note that ROMs are **not** included (for copyright reasons), you have to obtain one from somewhere else or dump it from a real calculator or emulator. (note that models labeled with `_emu` are for ROMs dumped from official emulators)
 
-A compiled binary (includes ROMs!) can be found [here](https://drive.google.com/file/d/11co4YDYDUsCghI-DrhpqYU0PDO7BL-uZ/view?usp=share_link). Note that because the program was probably not well-optimized, it might experience hangs if it performs poorly.
+A compiled binary (includes ROMs!) can be found [here](https://cdn.discordapp.com/attachments/840569630950424626/1145186021647069226/casioemu.zip). Note that because the program was probably not well-optimized, it might experience hangs if it performs poorly.
 
 # CasioEmu
 
