@@ -14,6 +14,8 @@
 #include "../Peripheral/Miscellaneous.hpp"
 #include "../Peripheral/Timer.hpp"
 
+#include "../Gui/ui.hpp"
+
 #include <fstream>
 #include <algorithm>
 #include <cstring>

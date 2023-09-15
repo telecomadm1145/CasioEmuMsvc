@@ -1,8 +1,13 @@
 #include "Config.hpp"
+#include "Gui/imgui_impl_sdl2.h"
+#include "Gui/ui.hpp"
 
 #include <SDL.h>
 #include <SDL_image.h>
 #include <iostream>
+#include <iterator>
+#include <ostream>
+#include <readline/chardefs.h>
 #include <thread>
 #include <string>
 #include <map>
@@ -13,6 +18,10 @@
 #include "Emulator.hpp"
 #include "Logger.hpp"
 #include "Data/EventCode.hpp"
+#include "SDL_events.h"
+#include "SDL_keyboard.h"
+#include "SDL_mouse.h"
+#include "SDL_video.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -72,7 +81,10 @@ int main(int argc, char *argv[])
 		if (err && err != ENOENT)
 			PANIC("error while reading history file: %s\n", std::strerror(err));
 	}
-
+	std::thread t1(test_gui);
+	t1.detach();
+	// while(1)
+	// 	;
 	{
 		Emulator emulator(argv_map);
 		// Note: argv_map must be destructed after emulator.
@@ -142,9 +154,10 @@ int main(int argc, char *argv[])
 				}
 			}
 		});
-
+		
 		while (emulator.Running())
 		{
+			//std::cout<<SDL_GetMouseFocus()<<","<<emulator.window<<std::endl;
 			SDL_Event event;
 			if (!SDL_WaitEvent(&event))
 				PANIC("SDL_WaitEvent failed: %s\n", SDL_GetError());
@@ -171,12 +184,12 @@ int main(int argc, char *argv[])
 					emulator.Shutdown();
 					break;
 				case SDL_WINDOWEVENT_RESIZED:
-					if (!argv_map.count("resizable"))
-					{
-						// Normally, in this case, the window manager should not
-						// send resized event, but some still does (such as xmonad)
-						break;
-					}
+					// if (!argv_map.count("resizable"))
+					// {
+					// 	// Normally, in this case, the window manager should not
+					// 	// send resized event, but some still does (such as xmonad)
+					// 	break;
+					// }
 					emulator.WindowResize(event.window.data1, event.window.data2);
 					break;
 				case SDL_WINDOWEVENT_EXPOSED:
@@ -189,6 +202,13 @@ int main(int argc, char *argv[])
 			case SDL_MOUSEBUTTONUP:
 			case SDL_KEYDOWN:
 			case SDL_KEYUP:
+			case SDL_TEXTINPUT:
+			case SDL_MOUSEMOTION:
+				if(SDL_GetKeyboardFocus()!=emulator.window || SDL_GetMouseFocus()!=emulator.window)
+				{
+					ImGui_ImplSDL2_ProcessEvent(&event);
+					break;
+				}
 				emulator.UIEvent(event);
 				break;
 			}

@@ -5,7 +5,7 @@
 #include "../Emulator.hpp"
 #include "../Chipset/Chipset.hpp"
 #include "../Logger.hpp"
-
+#include "../Gui/ui.hpp"
 #include <fstream>
 #include <cstring>
 
@@ -53,6 +53,7 @@ namespace casioemu
 			}, [](MMURegion *region, size_t offset, uint8_t data) {
 				((uint8_t *)region->userdata)[offset - region->base] = data;
 			}, emulator);
+		n_ram_buffer =(char*) ram_buffer;
 	}
 
 	void BatteryBackedRAM::Uninitialise()

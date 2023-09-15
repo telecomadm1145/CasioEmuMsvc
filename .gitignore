@@ -8,3 +8,7 @@ models/*/*.names
 ignore/
 build/
 test/
+emulator/.cache/
+emulator/.xmake/
+emulator/build/
+.vscode/

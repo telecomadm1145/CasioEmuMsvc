@@ -40,7 +40,7 @@ namespace casioemu
 
 	class Emulator
 	{
-		SDL_Window *window;
+		
 		SDL_Renderer *renderer;
 		SDL_Texture *interface_texture;
 		unsigned int timer_interval;
@@ -64,6 +64,7 @@ namespace casioemu
 		void RunStartupScript();
 
 	public:
+		SDL_Window *window;
 		Emulator(std::map<std::string, std::string> &argv_map, bool paused = false);
 		~Emulator();
 

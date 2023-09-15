@@ -79,7 +79,7 @@ namespace casioemu
 			SDL_WINDOWPOS_UNDEFINED,
 			width, height,
 			SDL_WINDOW_SHOWN |
-			(argv_map.count("resizable") ? SDL_WINDOW_RESIZABLE : 0)
+			(SDL_WINDOW_RESIZABLE)
 		);
 		if (!window)
 			PANIC("SDL_CreateWindow failed: %s\n", SDL_GetError());
