@@ -8,8 +8,9 @@ An emulator and disassembler for the CASIO calculator series using the nX-U8/100
 With debuggers.
 
 ## Build
-
-0. notice that this project has already included the full `fx991cn` debugging resources  
+0. install xmake  
+   `curl -fsSL https://xmake.io/shget.text | bash` 
+1. notice that this project has already included the full `fx991cn` debugging resources  
    which means you don need to download any extra resources for `fx991cnx`  
    To run debug on it, please:  
    ```
@@ -18,9 +19,6 @@ With debuggers.
    xmake run CasioEmuX ../models/fx991cnx
    ```  
    Other models please follow the instructions below:
-
-1. install xmake  
-   `curl -fsSL https://xmake.io/shget.text | bash`  
 
 2. build `disas`  
    ```
