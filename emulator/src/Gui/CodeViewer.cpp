@@ -21,7 +21,7 @@ CodeViewer::CodeViewer(std::string path){
     std::thread t1([this](){
         std::ifstream f(src_path,std::ios::in);
     if(!f.is_open()){
-        PANIC("Fail to open disassembly code src: %s",src_path.c_str());
+        PANIC("\nFail to open disassembly code src: %s\n",src_path.c_str());
     }
     casioemu::logger::Info("Start to read code src ...\n");
     char buf[200]{0};

@@ -44,7 +44,9 @@ int test_gui(){
     char buf[100]{0};
     // Main loop
     bool done = false;
-    code_viewer=new CodeViewer("./_disas.txt");
+    while(!m_emu)
+        ;
+    code_viewer=new CodeViewer(m_emu->GetModelFilePath("_disas.txt"));
     //cv.LookUp(1, 0x1235);
     while (!done)
     {

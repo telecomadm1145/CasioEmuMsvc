@@ -89,6 +89,7 @@ int main(int argc, char *argv[])
 	{
 		Emulator emulator(argv_map);
 		m_emu = &emulator;
+		
 		// Note: argv_map must be destructed after emulator.
 
 		// Used to signal to the console input thread when to stop.
