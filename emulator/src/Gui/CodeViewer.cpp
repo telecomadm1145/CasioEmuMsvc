@@ -137,7 +137,7 @@ void CodeViewer::DrawContent(){
             }else {
                 if(edit_active){
                     ImGui::InputText("##data", e.srcbuf, strlen(e.srcbuf),ImGuiInputTextFlags_ReadOnly|ImGuiInputTextFlags_AlwaysOverwrite);
-                    ImGui::SetKeyboardFocusHere();
+                    //ImGui::SetKeyboardFocusHere();
                     // if(!ImGui::IsItemActive())
                     // {
                     //     edit_active=false;
@@ -172,7 +172,7 @@ void CodeViewer::DrawMonitor(){
     if(m_emu!=nullptr){
     casioemu::Chipset& chipset = m_emu->chipset;
     std::string s=chipset.cpu.GetBacktrace();
-    ImGui::InputTextMultiline("##1",(char*)s.c_str(),s.size(),ImVec2(0,0),ImGuiInputTextFlags_ReadOnly);
+    ImGui::InputTextMultiline("##as",(char*)s.c_str(),s.size(),ImVec2(ImGui::GetWindowWidth(),0),ImGuiInputTextFlags_ReadOnly);
     }
 }
 
