@@ -54,6 +54,7 @@ namespace casioemu
 				((uint8_t *)region->userdata)[offset - region->base] = data;
 			}, emulator);
 		n_ram_buffer =(char*) ram_buffer;
+		logger::Info("inited hex editor!");
 	}
 
 	void BatteryBackedRAM::Uninitialise()

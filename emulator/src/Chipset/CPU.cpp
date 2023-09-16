@@ -4,6 +4,7 @@
 #include "Chipset.hpp"
 #include "MMU.hpp"
 #include "../Logger.hpp"
+#include "../Gui/ui.hpp"
 
 #include <sstream>
 #include <iomanip>
@@ -412,6 +413,9 @@ namespace casioemu
 			 */
 			impl_flags_out = PSW_Z;
 			(this->*(handler->handler_function))();
+			if(code_viewer && code_viewer->TryTrigBP(reg_csr, reg_pc)){
+				emulator.SetPaused(true);
+			}
 			reg_psw &= ~impl_flags_changed;
 			reg_psw |= impl_flags_out & impl_flags_changed;
 

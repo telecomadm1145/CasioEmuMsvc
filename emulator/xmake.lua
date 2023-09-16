@@ -3,9 +3,10 @@ add_requires("imgui",  {configs = {sdl2renderer = true}})
 target("CasioEmuX")
 
     set_kind("binary")
-    add_cxflags("--std=c++17")
+    add_cxflags("--std=c++17 -g")
     add_files("src/*.cpp","src/*/*.cpp")
     add_packages("readline","libsdl","libsdl_image","lua")
     set_rundir("./")
     add_packages("imgui", {public = true})
+    
     

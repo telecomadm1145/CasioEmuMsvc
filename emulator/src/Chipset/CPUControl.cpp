@@ -4,6 +4,7 @@
 #include "Chipset.hpp"
 #include "MMU.hpp"
 
+#include "../Gui/ui.hpp"
 namespace casioemu
 {
 	// * Control Register Access Instructions
@@ -173,6 +174,7 @@ namespace casioemu
 		}
 		else
 			reg_pc = impl_operands[1].value;
+		
 	}
 
 	void CPU::OP_BL()

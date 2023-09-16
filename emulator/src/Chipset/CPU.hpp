@@ -132,6 +132,7 @@ namespace casioemu
 		void Raise(size_t exception_level, size_t index);
 		size_t GetExceptionLevel();
 		bool GetMasterInterruptEnable();
+		std::string GetBacktrace() const;
 
 	private:
 		struct StackFrame
@@ -141,7 +142,7 @@ namespace casioemu
 		};
 		std::vector<StackFrame> stack;
 
-		std::string GetBacktrace() const;
+		
 
 		uint16_t Fetch();
 

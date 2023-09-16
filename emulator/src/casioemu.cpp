@@ -4,6 +4,7 @@
 
 #include <SDL.h>
 #include <SDL_image.h>
+#include <cstdint>
 #include <iostream>
 #include <iterator>
 #include <ostream>
@@ -87,6 +88,7 @@ int main(int argc, char *argv[])
 	// 	;
 	{
 		Emulator emulator(argv_map);
+		m_emu = &emulator;
 		// Note: argv_map must be destructed after emulator.
 
 		// Used to signal to the console input thread when to stop.
@@ -178,6 +180,7 @@ int main(int argc, char *argv[])
 				break;
 
 			case SDL_WINDOWEVENT:
+				
 				switch (event.window.event)
 				{
 				case SDL_WINDOWEVENT_CLOSE:
@@ -190,7 +193,9 @@ int main(int argc, char *argv[])
 					// 	// send resized event, but some still does (such as xmonad)
 					// 	break;
 					// }
+					if(event.window.windowID == SDL_GetWindowID(emulator.window)){
 					emulator.WindowResize(event.window.data1, event.window.data2);
+					}
 					break;
 				case SDL_WINDOWEVENT_EXPOSED:
 					emulator.Repaint();
