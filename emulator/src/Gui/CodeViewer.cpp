@@ -78,7 +78,7 @@ CodeElem CodeViewer::LookUp(uint8_t seg,uint16_t offset,int *idx){
     return {.segment=it->segment,.offset=it->offset};
 }
 
-bool CodeViewer::TryTrigBP(uint8_t seg,uint16_t offset){
+bool CodeViewer::TryTrigBP(uint8_t seg,uint16_t offset,bool bp_mode){
     for(auto it=break_points.begin();it!=break_points.end();it++){
         if(it->second==1){
             //TODO: We ignore a second trigger
@@ -87,10 +87,19 @@ bool CodeViewer::TryTrigBP(uint8_t seg,uint16_t offset){
                 break_points[it->first]=2;
                 cur_col = it->first;
                 need_roll=true;
-                m_emu->SetPaused(true);
+                return true;
             }
         }
     }
+    if( !bp_mode &&( debug_flags & DEBUG_STEP || debug_flags & DEBUG_RET_TRACE)){
+        int idx=0;
+        LookUp(seg, offset,&idx);
+        break_points[idx]=2;
+        cur_col=idx;
+        need_roll=true;
+        return true;
+    }
+    return false;
 }
 
 void CodeViewer::DrawContent(){
@@ -142,16 +151,18 @@ void CodeViewer::DrawContent(){
                     // {
                     //     edit_active=false;
                     // }
-                    if(ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_DownArrow))){
-                        cur_col++;
-                        if(cur_col>=max_row)
-                            cur_col = max_row;
-                        need_roll = true;
-                    }else if(ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_UpArrow))){
-                        cur_col--;
-                        if(cur_col<0)
-                            cur_col=0;
-                        need_roll = true;
+                    if(ImGui::IsWindowFocused()){
+                        if( ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_DownArrow))){
+                            cur_col++;
+                            if(cur_col>=max_row)
+                                cur_col = max_row;
+                            need_roll = true;
+                        }else if(ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_UpArrow))){
+                            cur_col--;
+                            if(cur_col<0)
+                                cur_col=0;
+                            need_roll = true;
+                        }
                     }
                 }
             }
@@ -175,6 +186,8 @@ void CodeViewer::DrawMonitor(){
     ImGui::InputTextMultiline("##as",(char*)s.c_str(),s.size(),ImVec2(ImGui::GetWindowWidth(),0),ImGuiInputTextFlags_ReadOnly);
     }
 }
+
+static bool step_debug=false,trace_debug=false;
 
 void CodeViewer::DrawWindow(){
 
@@ -205,15 +218,20 @@ void CodeViewer::DrawWindow(){
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::CalcTextSize("000000").x);
     ImGui::InputText("##input", adrbuf, 8);
-    
     if(adrbuf[0]!='\0' && ImGui::IsItemFocused()){
         uint32_t addr = std::stoi(adrbuf,0,16);
         JumpTo(addr>>16, addr&0x0ffff);
     }
+    ImGui::SameLine();
+    ImGui::Checkbox("STEP", &step_debug);
+    ImGui::SameLine();
+    ImGui::Checkbox("TRACE", &trace_debug);
+    
     //ImGui::BeginChild("##scrolling");
     DrawMonitor();
     //ImGui::EndChild();
     ImGui::End();
+    debug_flags = DEBUG_BREAKPOINT | (step_debug?DEBUG_STEP:0) | (trace_debug?DEBUG_RET_TRACE:0);
 
 }
 

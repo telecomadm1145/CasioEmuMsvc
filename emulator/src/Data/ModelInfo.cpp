@@ -4,6 +4,8 @@
 #include "SpriteInfo.hpp"
 #include "ColourInfo.hpp"
 
+
+
 namespace casioemu
 {
 	ModelInfo Emulator::GetModelInfo(std::string key)

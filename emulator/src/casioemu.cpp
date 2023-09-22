@@ -31,6 +31,8 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
+#include <python3.10/Python.h>
+
 using namespace casioemu;
 
 int main(int argc, char *argv[])
@@ -82,8 +84,7 @@ int main(int argc, char *argv[])
 		if (err && err != ENOENT)
 			PANIC("error while reading history file: %s\n", std::strerror(err));
 	}
-	std::thread t1(test_gui);
-	t1.detach();
+	
 	// while(1)
 	// 	;
 	{
@@ -157,13 +158,20 @@ int main(int argc, char *argv[])
 				}
 			}
 		});
-		
+		test_gui();
+		std::thread t1([&](){
+			while(1){
+				gui_loop();
+			}
+		});
+		t1.detach();
 		while (emulator.Running())
 		{
+			
 			//std::cout<<SDL_GetMouseFocus()<<","<<emulator.window<<std::endl;
 			SDL_Event event;
-			if (!SDL_WaitEvent(&event))
-				PANIC("SDL_WaitEvent failed: %s\n", SDL_GetError());
+			if (!SDL_PollEvent(&event))
+				continue;
 
 			switch (event.type)
 			{
@@ -226,7 +234,7 @@ int main(int argc, char *argv[])
 
 	std::cout << '\n';
 	rl_deprep_terminal();
-
+	
 	IMG_Quit();
 	SDL_Quit();
 

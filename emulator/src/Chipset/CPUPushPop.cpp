@@ -4,6 +4,8 @@
 #include "Chipset.hpp"
 #include "MMU.hpp"
 
+#include "../Gui/ui.hpp"
+
 namespace casioemu
 {
 	// * PUSH/POP Instructions
@@ -82,13 +84,21 @@ namespace casioemu
 			reg_psw = Pop16();
 		if (impl_operands[0].value & 2)
 		{
-			if (!stack.empty() && stack.back().lr_pushed &&
-					stack.back().lr_push_address == reg_sp)
-				stack.pop_back();
-
+			int oldsp = reg_sp;
 			reg_pc = Pop16();
 			if (memory_model == MM_LARGE)
 				reg_csr = Pop16() & 0x000F;
+			if(code_viewer){
+				if(code_viewer->debug_flags & DEBUG_RET_TRACE){
+					if(code_viewer->TryTrigBP(reg_csr, reg_pc,false)){
+						emulator.SetPaused(true);
+					}
+				}
+			}
+			if (!stack.empty() && stack.back().lr_pushed &&
+					stack.back().lr_push_address == oldsp)
+				stack.pop_back();
+			
 		}
 	}
 
