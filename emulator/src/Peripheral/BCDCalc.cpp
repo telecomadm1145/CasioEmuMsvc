@@ -570,5 +570,7 @@ namespace casioemu
 		data_F400 = 0xFF;
 		data_F402 = 0;
 		data_F402_copy = 0;
+		data_F404 = 0;
+		data_F405 = 0;
 	}
 }
