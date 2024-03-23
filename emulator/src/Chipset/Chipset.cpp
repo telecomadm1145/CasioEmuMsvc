@@ -35,7 +35,7 @@ namespace casioemu
 
 		cpu.SetMemoryModel(CPU::MM_LARGE);
 
-		std::initializer_list<int> segments_es_plus{ 0, 1, 8 }, segments_classwiz{ 0, 1, 2, 3, 4, 5 }, segments_classwiz_ii{ 0,1,2,3,4,5,6,7,8 };
+		std::initializer_list<int> segments_es_plus{ 0, 1, 8 }, segments_classwiz{ 0, 1, 2, 3, 4, 5 }, segments_classwiz_ii{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 		for (auto segment_index : emulator.hardware_id == HW_ES_PLUS ? segments_es_plus : emulator.hardware_id == HW_CLASSWIZ ? segments_classwiz : segments_classwiz_ii)
 			mmu.GenerateSegmentDispatch(segment_index);
 
@@ -189,6 +189,7 @@ namespace casioemu
 		size_t old_exception_level = cpu.GetExceptionLevel();
 
 		size_t index = 0;
+		bool acceptable = true;
 		// * Reset has priority over everything.
 		if (interrupts_active[INT_RESET])
 			index = INT_RESET;
@@ -209,15 +210,24 @@ namespace casioemu
 		//   the currect exception level is greater than 1.
 		if (!index && interrupts_active[INT_BREAK])
 			index = INT_BREAK;
-		if (!index && interrupts_active[INT_NONMASKABLE] && old_exception_level <= 2)
+		if (!index && interrupts_active[INT_NONMASKABLE]) {
 			index = INT_NONMASKABLE;
-		if (!index && old_exception_level <= 1)
-			for (size_t ix = INT_MASKABLE; ix != INT_SOFTWARE; ++ix)
+			if(old_exception_level > 2) {
+				acceptable = false;
+			}
+		}
+		if (!index){
+			for (size_t ix = INT_MASKABLE; ix != INT_SOFTWARE; ++ix){
 				if (interrupts_active[ix])
 				{
 					index = ix;
+					if(old_exception_level > 1) {
+						acceptable = false;
+					}
 					break;
 				}
+			}
+		}
 
 		size_t exception_level;
 		switch (index)
@@ -240,19 +250,22 @@ namespace casioemu
 			break;
 		}
 
-		if (index >= INT_MASKABLE && index < INT_SOFTWARE)
-		{
-			if (InterruptEnabledBySFR(index))
+		if(acceptable) {
+			if (index >= INT_MASKABLE && index < INT_SOFTWARE)
 			{
-				SetInterruptPendingSFR(index);
-				if (cpu.GetMasterInterruptEnable())
-					cpu.Raise(exception_level, index);
+				if (InterruptEnabledBySFR(index))
+				{
+					SetInterruptPendingSFR(index);
+					if (cpu.GetMasterInterruptEnable())
+						cpu.Raise(exception_level, index);
+				}
+			}
+			else
+			{
+				cpu.Raise(exception_level, index);
 			}
 		}
-		else
-		{
-			cpu.Raise(exception_level, index);
-		}
+		
 
 		run_mode = RM_RUN;
 

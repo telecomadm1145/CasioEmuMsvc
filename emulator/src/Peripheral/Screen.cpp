@@ -27,8 +27,8 @@ namespace casioemu
 			OFFSET, // bytes
 			ROW_SIZE_DISP; // bytes used to display
 
-		MMURegion region_buffer, region_buffer1, region_contrast, region_mode, region_range;
-		uint8_t *screen_buffer, *screen_buffer1, screen_contrast, screen_mode, screen_range;
+		MMURegion region_buffer, region_buffer1, region_contrast, region_mode, region_range, region_select;
+		uint8_t *screen_buffer, *screen_buffer1, screen_contrast, screen_mode, screen_range, screen_select;
 
 	    SDL_Renderer *renderer;
 	    SDL_Texture *interface_texture;
@@ -273,29 +273,47 @@ namespace casioemu
 
 		screen_buffer = new uint8_t[(N_ROW + 1) * ROW_SIZE];
 
-		region_buffer.Setup(0xF800, (N_ROW + 1) * ROW_SIZE, "Screen/Buffer", this, [](MMURegion *region, size_t offset) {
-			offset -= region->base;
-			if (offset % ROW_SIZE >= ROW_SIZE_DISP)
-				return (uint8_t)0;
-			return ((Screen *)region->userdata)->screen_buffer[offset];
-		}, [](MMURegion *region, size_t offset, uint8_t data) {
-			offset -= region->base;
-			if (offset % ROW_SIZE >= ROW_SIZE_DISP)
-				return;
-
-			auto this_obj = (Screen *)region->userdata;
-			// * Set require_frame to true only if the value changed.
-			this_obj->require_frame |= this_obj->screen_buffer[offset] != data;
-			this_obj->screen_buffer[offset] = data;
-		}, emulator);
-
-		if (emulator.hardware_id == HW_CLASSWIZ_II) {
-			screen_buffer1 = new uint8_t[(N_ROW + 1) * ROW_SIZE];
-			region_buffer1.Setup(0x89000, (N_ROW + 1) * ROW_SIZE, "Screen/Buffer1", this, [](MMURegion* region, size_t offset) {
+		if (emulator.hardware_id != HW_CLASSWIZ_II) {
+			region_buffer.Setup(0xF800, (N_ROW + 1) * ROW_SIZE, "Screen/Buffer", this, [](MMURegion *region, size_t offset) {
 				offset -= region->base;
 				if (offset % ROW_SIZE >= ROW_SIZE_DISP)
 					return (uint8_t)0;
-				return ((Screen*)region->userdata)->screen_buffer1[offset];
+				return ((Screen *)region->userdata)->screen_buffer[offset];
+			}, [](MMURegion *region, size_t offset, uint8_t data) {
+				offset -= region->base;
+				if (offset % ROW_SIZE >= ROW_SIZE_DISP)
+					return;
+
+				auto this_obj = (Screen *)region->userdata;
+				// * Set require_frame to true only if the value changed.
+				this_obj->require_frame |= this_obj->screen_buffer[offset] != data;
+				this_obj->screen_buffer[offset] = data;
+			}, emulator);
+		} else {
+			screen_buffer1 = new uint8_t[(N_ROW + 1) * ROW_SIZE];
+			region_select.Setup(0xF037, 1, "Screen/Select", this, DefaultRead<uint8_t, 0x04, &Screen::screen_select>,
+				SetRequireFrameWrite<uint8_t, 0x04, &Screen::screen_select>, emulator);
+			if(!emulator.GetModelInfo("real_hardware")) {
+				region_buffer.Setup(0xF800, (N_ROW + 1) * ROW_SIZE, "Screen/Buffer", this, [](MMURegion *region, size_t offset) {
+					offset -= region->base;
+					if (offset % ROW_SIZE >= ROW_SIZE_DISP)
+						return (uint8_t)0;
+					return ((Screen *)region->userdata)->screen_buffer[offset];
+				}, [](MMURegion *region, size_t offset, uint8_t data) {
+					offset -= region->base;
+					if (offset % ROW_SIZE >= ROW_SIZE_DISP)
+						return;
+
+					auto this_obj = (Screen *)region->userdata;
+					// * Set require_frame to true only if the value changed.
+					this_obj->require_frame |= this_obj->screen_buffer[offset] != data;
+					this_obj->screen_buffer[offset] = data;
+				}, emulator);
+				region_buffer1.Setup(0x89000, (N_ROW + 1) * ROW_SIZE, "Screen/Buffer1", this, [](MMURegion* region, size_t offset) {
+					offset -= region->base;
+					if (offset % ROW_SIZE >= ROW_SIZE_DISP)
+						return (uint8_t)0;
+					return ((Screen*)region->userdata)->screen_buffer1[offset];
 				}, [](MMURegion* region, size_t offset, uint8_t data) {
 					offset -= region->base;
 					if (offset % ROW_SIZE >= ROW_SIZE_DISP)
@@ -306,6 +324,32 @@ namespace casioemu
 					this_obj->require_frame |= this_obj->screen_buffer1[offset] != data;
 					this_obj->screen_buffer1[offset] = data;
 				}, emulator);
+			} else {
+				region_buffer.Setup(0xF800, (N_ROW + 1) * ROW_SIZE, "Screen/Buffer", this, [](MMURegion *region, size_t offset) {
+					offset -= region->base;
+					if (offset % ROW_SIZE >= ROW_SIZE_DISP)
+						return (uint8_t)0;
+					if(((Screen *)region->userdata)->screen_select & 0x04) {
+						return ((Screen *)region->userdata)->screen_buffer1[offset];
+					} else {
+						return ((Screen *)region->userdata)->screen_buffer[offset];
+					}
+				}, [](MMURegion *region, size_t offset, uint8_t data) {
+					offset -= region->base;
+					if (offset % ROW_SIZE >= ROW_SIZE_DISP)
+						return;
+
+					auto this_obj = (Screen *)region->userdata;
+					// * Set require_frame to true only if the value changed.
+					if(((Screen *)region->userdata)->screen_select & 0x04) {
+						this_obj->require_frame |= this_obj->screen_buffer1[offset] != data;
+						this_obj->screen_buffer1[offset] = data;
+					} else {
+						this_obj->require_frame |= this_obj->screen_buffer[offset] != data;
+						this_obj->screen_buffer[offset] = data;
+					}
+				}, emulator);
+			}
 		}
 
 		region_range.Setup(0xF030, 1, "Screen/Range", this, DefaultRead<uint8_t, 0x07, &Screen::screen_range>,
@@ -321,7 +365,8 @@ namespace casioemu
 	template<HardwareId hardware_id> void Screen<hardware_id>::Uninitialise()
 	{
 		delete[] screen_buffer;
-		delete[] screen_buffer1;
+		if(emulator.hardware_id == HW_CLASSWIZ_II)
+			delete[] screen_buffer1;
 	}
 
 	template<HardwareId hardware_id> void Screen<hardware_id>::Frame()
@@ -331,7 +376,7 @@ namespace casioemu
 		int ink_alpha_on = 20 + screen_contrast * 16;
 		if (ink_alpha_on > 255)
 			ink_alpha_on = 255;
-		int ink_alpha_off = (screen_contrast - 8) * 7;
+		int ink_alpha_off = (screen_contrast - 8) * 5;
 		if (ink_alpha_off < 0)
 			ink_alpha_off = 0;
 
@@ -367,13 +412,27 @@ namespace casioemu
 
 		if (enable_status)
 		{
-			for (int ix = Sprite::SPR_PIXEL + 1; ix != Sprite::SPR_MAX; ++ix)
-			{
-				if (screen_buffer[sprite_bitmap[ix].offset] & sprite_bitmap[ix].mask)
-					SDL_SetTextureAlphaMod(interface_texture, ink_alpha_on);
-				else
-					SDL_SetTextureAlphaMod(interface_texture, ink_alpha_off);
-				SDL_RenderCopy(renderer, interface_texture, &sprite_info[ix].src, &sprite_info[ix].dest);
+			int ink_alpha = ink_alpha_off;
+			if(emulator.hardware_id == HW_CLASSWIZ_II) {
+				for (int ix = Sprite::SPR_PIXEL + 1; ix != Sprite::SPR_MAX; ++ix)
+				{
+					ink_alpha = ink_alpha_off;
+					if (screen_buffer[sprite_bitmap[ix].offset] & sprite_bitmap[ix].mask)
+						ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.333;
+					if (screen_buffer1[sprite_bitmap[ix].offset] & sprite_bitmap[ix].mask)
+						ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.667;
+					SDL_SetTextureAlphaMod(interface_texture, ink_alpha);
+					SDL_RenderCopy(renderer, interface_texture, &sprite_info[ix].src, &sprite_info[ix].dest);
+				}
+			} else {
+				for (int ix = Sprite::SPR_PIXEL + 1; ix != Sprite::SPR_MAX; ++ix)
+				{
+					if (screen_buffer[sprite_bitmap[ix].offset] & sprite_bitmap[ix].mask)
+						SDL_SetTextureAlphaMod(interface_texture, ink_alpha_on);
+					else
+						SDL_SetTextureAlphaMod(interface_texture, ink_alpha_off);
+					SDL_RenderCopy(renderer, interface_texture, &sprite_info[ix].src, &sprite_info[ix].dest);
+				}
 			}
 		}
 
@@ -393,9 +452,9 @@ namespace casioemu
 						{
 							ink_alpha = ink_alpha_off;
 							if (!clear_dots && screen_buffer[iy * ROW_SIZE + OFFSET + ix] & mask)
-								ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.3;
+								ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.333;
 							if (!clear_dots && screen_buffer1[iy * ROW_SIZE + OFFSET + ix] & mask)
-								ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.7;
+								ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.667;
 							SDL_SetTextureAlphaMod(interface_texture, ink_alpha);
 							SDL_RenderCopy(renderer, interface_texture, &sprite_info[SPR_PIXEL].src, &dest);
 						}

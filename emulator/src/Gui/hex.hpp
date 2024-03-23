@@ -311,7 +311,7 @@ struct MemoryEditor
                         {
                             ImGui::SetKeyboardFocusHere(0);
                             sprintf(AddrInputBuf, format_data, s.AddrDigitsCount, base_display_addr + addr);
-                            sprintf(DataInputBuf, format_byte, ReadFn ? ReadFn(mem_data, addr) : (ImU8)mmu->ReadData(base_display_addr + addr));
+                            sprintf(DataInputBuf, format_byte, ReadFn ? ReadFn(mem_data, addr) : (ImU8)mmu->ReadData(base_display_addr + addr, false));
                         }
                         struct UserData
                         {
@@ -338,7 +338,7 @@ struct MemoryEditor
                         };
                         UserData user_data;
                         user_data.CursorPos = -1;
-                        sprintf(user_data.CurrentBufOverwrite, format_byte, ReadFn ? ReadFn(mem_data, addr) : (ImU8)mmu->ReadData(base_display_addr + addr));
+                        sprintf(user_data.CurrentBufOverwrite, format_byte, ReadFn ? ReadFn(mem_data, addr) : (ImU8)mmu->ReadData(base_display_addr + addr, false));
                         ImGuiInputTextFlags flags = ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_NoHorizontalScroll | ImGuiInputTextFlags_CallbackAlways;
 #if IMGUI_VERSION_NUM >= 18104
                         flags |= ImGuiInputTextFlags_AlwaysOverwrite;
@@ -361,14 +361,14 @@ struct MemoryEditor
                             if (WriteFn)
                                 WriteFn(mem_data, addr, (ImU8)data_input_value);
                             else
-                                mmu->WriteData(base_display_addr + addr, (uint8_t)data_input_value);
+                                mmu->WriteData(base_display_addr + addr, (uint8_t)data_input_value, false);
                         }
                         ImGui::PopID();
                     }
                     else
                     {
                         // NB: The trailing space is not visible but ensure there's no gap that the mouse cannot click on.
-                        ImU8 b = ReadFn ? ReadFn(mem_data, addr) : (ImU8)mmu->ReadData(base_display_addr + addr);
+                        ImU8 b = ReadFn ? ReadFn(mem_data, addr) : (ImU8)mmu->ReadData(base_display_addr + addr, false);
 
                         if (OptShowHexII)
                         {
@@ -416,7 +416,7 @@ struct MemoryEditor
                             draw_list->AddRectFilled(pos, ImVec2(pos.x + s.GlyphWidth, pos.y + s.LineHeight), ImGui::GetColorU32(ImGuiCol_FrameBg));
                             draw_list->AddRectFilled(pos, ImVec2(pos.x + s.GlyphWidth, pos.y + s.LineHeight), ImGui::GetColorU32(ImGuiCol_TextSelectedBg));
                         }
-                        unsigned char c = ReadFn ? ReadFn(mem_data, addr) : (ImU8)mmu->ReadData(base_display_addr + addr);
+                        unsigned char c = ReadFn ? ReadFn(mem_data, addr) : (ImU8)mmu->ReadData(base_display_addr + addr, false);
                         char display_c = (c < 32 || c >= 128) ? '.' : c;
                         draw_list->AddText(pos, (display_c == c) ? color_text : color_disabled, &display_c, &display_c + 1);
                         pos.x += s.GlyphWidth;

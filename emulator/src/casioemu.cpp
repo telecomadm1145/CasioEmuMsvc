@@ -85,7 +85,6 @@ int main(int argc, char *argv[]) {
         // Used to signal to the console input thread when to stop.
         static std::atomic<bool> running(true);
 
-        test_gui();
         std::thread console_input_thread([&] {
             while (1) {
                 char *console_input_c_str;
@@ -139,12 +138,32 @@ int main(int argc, char *argv[]) {
             }
         });
         std::thread t1([&]() {
+            test_gui();
             while (1) {
+                SDL_Event event;
                 gui_loop();
+                if (!SDL_PollEvent(&event))
+                    continue;
+                
+                switch(event.type) {
+                    case SDL_WINDOWEVENT:
+                        switch(event.window.event) {
+                            case SDL_WINDOWEVENT_CLOSE:
+                                emulator.Shutdown();
+                                break;
+                            case SDL_WINDOWEVENT_RESIZED:
+                                ImGui_ImplSDL2_ProcessEvent(&event);
+                                break;
+                        }
+                        break;
+                    default:
+                        break;
+                }
             }
         });
         t1.detach();
 
+        SDL_Delay(1000);
         while (emulator.Running()) {
 
             // std::cout<<SDL_GetMouseFocus()<<","<<emulator.window<<std::endl;
@@ -178,6 +197,7 @@ int main(int argc, char *argv[]) {
                     // 	// send resized event, but some still does (such as xmonad)
                     // 	break;
                     // }
+                    ImGui_ImplSDL2_ProcessEvent(&event);
                     if (event.window.windowID == SDL_GetWindowID(emulator.window)) {
                         emulator.WindowResize(event.window.data1, event.window.data2);
                     }
@@ -194,6 +214,7 @@ int main(int argc, char *argv[]) {
             case SDL_KEYUP:
             case SDL_TEXTINPUT:
             case SDL_MOUSEMOTION:
+            case SDL_MOUSEWHEEL:
                 if (SDL_GetKeyboardFocus() != emulator.window || SDL_GetMouseFocus() != emulator.window) {
                     ImGui_ImplSDL2_ProcessEvent(&event);
                     break;

@@ -32,8 +32,8 @@ namespace casioemu
 		void SetupInternals();
 		void GenerateSegmentDispatch(size_t segment_index);
 		uint16_t ReadCode(size_t offset);
-		uint8_t ReadData(size_t offset);
-		void WriteData(size_t offset, uint8_t data);
+		uint8_t ReadData(size_t offset, bool softwareRead = true);
+		void WriteData(size_t offset, uint8_t data, bool softwareWrite = true);
 
 		void RegisterRegion(MMURegion *region);
 		void UnregisterRegion(MMURegion *region);

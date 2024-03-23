@@ -48,7 +48,7 @@ void gui_loop(){
 }
 int test_gui(){
     //SDL_Delay(1000*5);
-    window = SDL_CreateWindow("CasioEmuX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1816, 1100, window_flags);
+    window = SDL_CreateWindow("CasioEmuX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, window_flags);
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
     if (renderer == nullptr)
     {
@@ -61,7 +61,7 @@ int test_gui(){
     io.WantCaptureKeyboard=true;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-    io.FontGlobalScale = 1.0/0.5;
+    io.FontGlobalScale = 1.0;
     //io.WantTextInput = true;
     //io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // IF using Docking Branch
     

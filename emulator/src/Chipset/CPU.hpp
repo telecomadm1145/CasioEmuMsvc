@@ -126,6 +126,8 @@ namespace casioemu
 		reg16_t reg_sp, reg_ea;
 		reg8_t reg_dsr;
 
+		bool real_hardware;
+
 		void SetMemoryModel(MemoryModel memory_model);
 		void Next();
 		void Reset();

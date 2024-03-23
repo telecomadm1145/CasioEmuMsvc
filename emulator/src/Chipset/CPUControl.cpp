@@ -12,6 +12,9 @@ namespace casioemu
 	{
 		impl_operands[0].value |= (impl_operands[0].value & 0x80) ? 0xFF00 : 0;
 		reg_sp += impl_operands[0].value;
+		if(real_hardware) {
+			reg_sp &= 0xfffe;
+		}
 	}
 
 	void CPU::OP_CTRL()
@@ -50,6 +53,9 @@ namespace casioemu
 			break;
 		case 11:
 			reg_sp = impl_operands[1].value;
+			if(real_hardware) {
+				reg_sp &= 0xfffe;
+			}
 			break;
 		}
 	}

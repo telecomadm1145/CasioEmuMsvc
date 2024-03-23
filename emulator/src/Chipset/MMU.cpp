@@ -171,7 +171,7 @@ namespace casioemu
 		return (((uint16_t)region->read(region, offset + 1)) << 8) | region->read(region, offset);
 	}
 
-	uint8_t MMU::ReadData(size_t offset)
+	uint8_t MMU::ReadData(size_t offset, bool softwareRead)
 	{
 		if (offset >= (1 << 24))
 			PANIC("offset doesn't fit 24 bits\n");
@@ -189,7 +189,7 @@ namespace casioemu
 
 		MemoryByte &byte = segment[segment_offset];
 		MMURegion *region = byte.region;
-		if (byte.on_read != LUA_REFNIL)
+		if (byte.on_read != LUA_REFNIL && softwareRead)
 		{
 			lua_geti(emulator.lua_state, LUA_REGISTRYINDEX, byte.on_read);
 			if (lua_pcall(emulator.lua_state, 0, 0, 0) != LUA_OK)
@@ -209,7 +209,7 @@ namespace casioemu
 		return region->read(region, offset);
 	}
 
-	void MMU::WriteData(size_t offset, uint8_t data)
+	void MMU::WriteData(size_t offset, uint8_t data, bool softwareWrite)
 	{
 		if (offset >= (1 << 24))
 			PANIC("offset doesn't fit 24 bits\n");
@@ -227,7 +227,7 @@ namespace casioemu
 
 		MemoryByte &byte = segment[segment_offset];
 		MMURegion *region = byte.region;
-		if (byte.on_write != LUA_REFNIL)
+		if (byte.on_write != LUA_REFNIL && softwareWrite)
 		{
 			lua_geti(emulator.lua_state, LUA_REGISTRYINDEX, byte.on_write);
 			if (lua_pcall(emulator.lua_state, 0, 0, 0) != LUA_OK)

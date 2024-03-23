@@ -57,22 +57,22 @@ namespace casioemu
 			bcdcalc->data_F402 = data;
 			bcdcalc->F402_write = true;
 		}, emulator);
-		region_F404.Setup(0xF404, 1, "BCDCalc/F404", this, [](MMURegion* region, size_t offset) {
-			BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
-			return bcdcalc->data_F404;
-		}, [](MMURegion* region, size_t, uint8_t data) {
-			BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
-			bcdcalc->data_F404 = data;
-			bcdcalc->F404_write = true;
-		}, emulator);
-		region_F405.Setup(0xF405, 1, "BCDCalc/F405", this, [](MMURegion* region, size_t offset) {
-			BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
-			return bcdcalc->data_F405;
-		}, [](MMURegion* region, size_t, uint8_t data) {
-			BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
-			bcdcalc->data_F405 = data;
-			bcdcalc->F405_write = true;
-		}, emulator);
+		// region_F404.Setup(0xF404, 1, "BCDCalc/F404", this, [](MMURegion* region, size_t offset) {
+		// 	BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
+		// 	return bcdcalc->data_F404;
+		// }, [](MMURegion* region, size_t, uint8_t data) {
+		// 	BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
+		// 	bcdcalc->data_F404 = data;
+		// 	bcdcalc->F404_write = true;
+		// }, emulator);
+		// region_F405.Setup(0xF405, 1, "BCDCalc/F405", this, [](MMURegion* region, size_t offset) {
+		// 	BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
+		// 	return bcdcalc->data_F405;
+		// }, [](MMURegion* region, size_t, uint8_t data) {
+		// 	BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
+		// 	bcdcalc->data_F405 = data;
+		// 	bcdcalc->F405_write = true;
+		// }, emulator);
 	}
 
 	void BCDCalc::GenerateParams() {
