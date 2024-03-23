@@ -46,7 +46,7 @@ void gui_loop(){
     ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
     SDL_RenderPresent(renderer);
 }
-int test_gui(){
+int test_gui(bool* guiCreated){
     //SDL_Delay(1000*5);
     window = SDL_CreateWindow("CasioEmuX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, window_flags);
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
@@ -77,6 +77,8 @@ int test_gui(){
     // char buf[100]{0};
     // Main loop
     // bool done = false;
+
+    *guiCreated = true;
     while(!m_emu)
         ;
     code_viewer=new CodeViewer(m_emu->GetModelFilePath("_disas.txt"));

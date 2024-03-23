@@ -137,8 +137,10 @@ int main(int argc, char *argv[]) {
                 }
             }
         });
+
+        bool guiCreated = false;
         std::thread t1([&]() {
-            test_gui();
+            test_gui(&guiCreated);
             while (1) {
                 SDL_Event event;
                 gui_loop();
@@ -163,7 +165,6 @@ int main(int argc, char *argv[]) {
         });
         t1.detach();
 
-        SDL_Delay(1000);
         while (emulator.Running()) {
 
             // std::cout<<SDL_GetMouseFocus()<<","<<emulator.window<<std::endl;
@@ -197,7 +198,6 @@ int main(int argc, char *argv[]) {
                     // 	// send resized event, but some still does (such as xmonad)
                     // 	break;
                     // }
-                    ImGui_ImplSDL2_ProcessEvent(&event);
                     if (event.window.windowID == SDL_GetWindowID(emulator.window)) {
                         emulator.WindowResize(event.window.data1, event.window.data2);
                     }
@@ -215,7 +215,7 @@ int main(int argc, char *argv[]) {
             case SDL_TEXTINPUT:
             case SDL_MOUSEMOTION:
             case SDL_MOUSEWHEEL:
-                if (SDL_GetKeyboardFocus() != emulator.window || SDL_GetMouseFocus() != emulator.window) {
+                if ((SDL_GetKeyboardFocus() != emulator.window || SDL_GetMouseFocus() != emulator.window) && guiCreated) {
                     ImGui_ImplSDL2_ProcessEvent(&event);
                     break;
                 }

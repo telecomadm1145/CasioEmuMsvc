@@ -2,7 +2,7 @@
 #include "../Emulator.hpp"
 #include "../Chipset/MMU.hpp"
 #include "CodeViewer.hpp"
-int test_gui();
+int test_gui(bool* guiCreated);
 void gui_cleanup();
 void gui_loop();
 extern char *n_ram_buffer;
