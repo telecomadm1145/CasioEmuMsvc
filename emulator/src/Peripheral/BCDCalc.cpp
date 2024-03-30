@@ -57,22 +57,22 @@ namespace casioemu
 			bcdcalc->data_F402 = data;
 			bcdcalc->F402_write = true;
 		}, emulator);
-		// region_F404.Setup(0xF404, 1, "BCDCalc/F404", this, [](MMURegion* region, size_t offset) {
-		// 	BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
-		// 	return bcdcalc->data_F404;
-		// }, [](MMURegion* region, size_t, uint8_t data) {
-		// 	BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
-		// 	bcdcalc->data_F404 = data;
-		// 	bcdcalc->F404_write = true;
-		// }, emulator);
-		// region_F405.Setup(0xF405, 1, "BCDCalc/F405", this, [](MMURegion* region, size_t offset) {
-		// 	BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
-		// 	return bcdcalc->data_F405;
-		// }, [](MMURegion* region, size_t, uint8_t data) {
-		// 	BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
-		// 	bcdcalc->data_F405 = data;
-		// 	bcdcalc->F405_write = true;
-		// }, emulator);
+		 region_F404.Setup(0xF404, 1, "BCDCalc/F404", this, [](MMURegion* region, size_t offset) {
+		 	BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
+		 	return bcdcalc->data_F404;
+		 }, [](MMURegion* region, size_t, uint8_t data) {
+		 	BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
+		 	bcdcalc->data_F404 = data;
+		 	bcdcalc->F404_write = true;
+		 }, emulator);
+		 region_F405.Setup(0xF405, 1, "BCDCalc/F405", this, [](MMURegion* region, size_t offset) {
+		 	BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
+		 	return bcdcalc->data_F405;
+		 }, [](MMURegion* region, size_t, uint8_t data) {
+		 	BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
+		 	bcdcalc->data_F405 = data;
+		 	bcdcalc->F405_write = true;
+		 }, emulator);
 	}
 
 	void BCDCalc::GenerateParams() {
@@ -94,18 +94,533 @@ namespace casioemu
 	}
 	void BCDCalc::F405control() {
 		if (data_mode == 0xFF && param1 == 0) {
-			//
+			if (data_c) {
+				data_mode = (emulator.chipset.mmu.ReadData(CalcAddr(0, 0)) & 0x0F) + 0x20;
+				data_type_1 = 0;
+				data_type_2 = 0;
+				data_operator = 0x0D;
+				param1 = 1;
+				param4 = 0;
+				data_F405_copy = 0;
+			}
+			else if (data_b) {
+				data_mode = 0x18;
+				data_type_1 = 1;
+				data_type_2 = 0;
+				data_operator = 0x08;
+				param1 = 1;
+				param4 = 0;
+				data_F405_copy = 0;
+			}
+			else if (data_a) {
+				data_mode = 0x18;
+				data_type_1 = 1;
+				data_type_2 = 0;
+				data_operator = 0x0C;
+				param1 = 1;
+				param4 = 0;
+				data_F405_copy = 0;
+			}
+			else {
+				switch (((data_F405_copy >> 1) & 0x0F) - 1) {
+				case 0:
+					if (data_F405_copy & 0x01) {
+						data_mode = (emulator.chipset.mmu.ReadData(CalcAddr(0, 0)) & 0x0F) + 0x20;
+						data_type_1 = 0;
+						data_type_2 = 0;
+						data_operator = 0x0D;
+						data_c = 1;
+						param1 = 1;
+						param4 = 0;
+						data_F405_copy = 0;
+					}
+					else {
+						data_mode = 0x18;
+						data_type_1 = 0x03;
+						data_type_2 = 0x01;
+						data_operator = 0x0B;
+						data_c = 1;
+						param1 = 1;
+						param4 = 0;
+						data_F405_copy = 0;
+					}
+					break;
+				case 1:
+					if (data_F405_copy & 0x01) {
+						data_mode = 0x18;
+						data_type_1 = 1;
+						data_type_2 = 0;
+						data_operator = 0x08;
+						data_b = 1;
+						param1 = 1;
+						param4 = 0;
+						data_F405_copy = 0;
+					}
+					else {
+						data_mode = 0x10;
+						data_type_1 = 0x03;
+						data_type_2 = 0x01;
+						data_operator = 0x0B;
+						data_b = 1;
+						param1 = 1;
+						param4 = 0;
+						data_F405_copy = 0;
+					}
+					break;
+				case 2:
+					if (data_F405_copy & 0x01) {
+						data_mode = 0x18;
+						data_type_1 = 1;
+						data_type_2 = 0;
+						data_operator = 0x0C;
+						data_a = 1;
+						param1 = 1;
+						param4 = 0;
+						data_F405_copy = 0;
+					}
+					else {
+						data_mode = 0x20;
+						data_type_1 = 0x03;
+						data_type_2 = 0x01;
+						data_operator = 0x0B;
+						data_a = 1;
+						param1 = 1;
+						param4 = 0;
+						data_F405_copy = 0;
+					}
+					break;
+				case 3:
+				case 4:
+				case 5:
+				case 6:
+					data_F404_copy += 1;
+					if (data_F404_copy < 2) {
+						data_type_2 = 0;
+					}
+					else if (data_F404_copy < 4) {
+						data_type_2 = 1;
+					}
+					else if (data_F404_copy < 8) {
+						data_type_2 = 2;
+					}
+					else {
+						data_type_2 = 3;
+					}
+					if ((data_F405_copy & 0x0C) == 8) {
+						data_operator = 0x08;
+					}
+					else {
+						data_operator = 0x09;
+					}
+					data_mode = 0;
+					data_type_1 = data_F405_copy & 0x03;
+					data_F404_copy += 0xFF << data_type_2;
+					if (data_F404_copy) {
+						data_d = 1;
+					}
+					else {
+						data_d = 0;
+						data_mode = 0x3F;
+					}
+					param1 = 1;
+					param4 = 0;
+					data_F405_copy = 0;
+					break;
+				default:
+					data_type_1 = 0;
+					data_type_2 = 0;
+					data_operator = 0;
+					data_a = 1;
+					param1 = 1;
+					param4 = 0;
+					data_F405_copy = 0;
+					break;
+				}
+			}
 		}
 		else {
 			if (((data_a | data_b | data_c | data_d) != 0) && param1 == 0) {
 				if (data_c != 0) {
-					//
+					switch (data_mode - 0x18) {
+					case 0:
+						data_mode = 0x19;
+						data_type_1 = 0x02;
+						data_type_2 = 0x01;
+						data_operator = 0x0B;
+						break;
+					case 1:
+						data_mode = 0x1A;
+						data_type_1 = 0x02;
+						data_type_2 = 0x02;
+						data_operator = 0x01;
+						break;
+					case 2:
+						data_mode = 0x1B;
+						data_type_1 = 0x02;
+						data_type_2 = 0x02;
+						data_operator = 0x01;
+						break;
+					case 3:
+						data_mode = 0x1C;
+						data_type_1 = 0x01;
+						data_type_2 = 0x00;
+						data_operator = 0x0A;
+						break;
+					case 4:
+						data_mode = (emulator.chipset.mmu.ReadData(CalcAddr(0, 0)) & 0x0F) + 0x20;
+						data_type_1 = 0x00;
+						data_type_2 = 0x00;
+						data_operator = 0x0D;
+						break;
+					case 8:
+						data_mode = 0x3F;
+						data_type_1 = 0x01;
+						data_type_2 = 0x00;
+						data_operator = 0x09;
+						break;
+					case 9:
+					case 10:
+					case 11:
+					case 12:
+					case 13:
+					case 14:
+					case 15:
+					case 16:
+					case 17:
+						data_mode += 0x10;
+						data_type_1 = 0x01;
+						data_type_2 = 0x00;
+						data_operator = 0x09;
+						break;
+					case 25:
+						data_mode = 0x3F;
+						data_type_1 = 0x01;
+						data_type_2 = 0x03;
+						data_operator = 0x01;
+						break;
+					case 26:
+						data_mode = 0x31;
+						data_type_1 = 0x01;
+						data_type_2 = 0x03;
+						data_operator = 0x01;
+						break;
+					case 27:
+						data_mode = 0x34;
+						data_type_1 = 0x01;
+						data_type_2 = 0x03;
+						data_operator = 0x02;
+						break;
+					case 28:
+						data_mode = 0x3F;
+						data_type_1 = 0x01;
+						data_type_2 = 0x02;
+						data_operator = 0x01;
+						break;
+					case 29:
+						data_mode = 0x31;
+						data_type_1 = 0x01;
+						data_type_2 = 0x02;
+						data_operator = 0x01;
+						break;
+					case 30:
+						data_mode = 0x32;
+						data_type_1 = 0x01;
+						data_type_2 = 0x02;
+						data_operator = 0x01;
+						break;
+					case 31:
+						data_mode = 0x33;
+						data_type_1 = 0x01;
+						data_type_2 = 0x02;
+						data_operator = 0x01;
+						break;
+					case 32:
+						data_mode = 0x34;
+						data_type_1 = 0x01;
+						data_type_2 = 0x02;
+						data_operator = 0x01;
+						break;
+					case 33:
+						data_mode = 0x35;
+						data_type_1 = 0x01;
+						data_type_2 = 0x02;
+						data_operator = 0x01;
+						break;
+					default:
+						data_mode = 0x3F;
+						data_type_1 = 0x00;
+						data_type_2 = 0x00;
+						data_operator = 0x00;
+						if (data_F404_copy) {
+							data_c = 1;
+						}
+						else {
+							data_c = 0;
+						}
+						break;
+					}
+					if (data_mode == 0x3F && data_F404_copy) {
+						data_F404_copy -= 1;
+						data_mode = 0xFF;
+					}
 				}
 				else if (data_b == 0 && data_a == 0) {
-					//
+					if (data_F404_copy < 2) {
+						data_type_2 = 0;
+					}
+					else if (data_F404_copy < 4) {
+						data_type_2 = 1;
+					}
+					else if (data_F404_copy < 8) {
+						data_type_2 = 2;
+					}
+					else {
+						data_type_2 = 3;
+					}
+					data_mode = 0;
+					param1 = 1;
+					data_F404_copy += 0xFF << data_type_2;
+					if (!data_F404_copy) {
+						data_d = 0;
+						data_mode = 0x3F;
+					}
 				}
 				else {
-					//
+					uint8_t flag = data_F410 >> 7;
+					uint8_t data_mode_backup = data_mode;
+					switch (data_mode) {
+					case 0:
+					case 3:
+					case 6:
+						data_mode = 0x3F;
+						data_type_1 = 0x00;
+						data_type_2 = 0x00;
+						data_operator = 0x00;
+						break;
+					case 1:
+						if (flag) {
+							data_mode = 0x3F;
+							data_type_1 = 0x00;
+							data_type_2 = 0x00;
+							data_operator = 0x00;
+						}
+						else {
+							data_mode = 0x00;
+							data_type_1 = 0x01;
+							data_type_2 = 0x03;
+							data_operator = 0x01;
+						}
+						break;
+					case 2:
+						if (flag) {
+							data_mode = 0x3F;
+							data_type_1 = 0x00;
+							data_type_2 = 0x00;
+							data_operator = 0x00;
+						}
+						else {
+							data_mode = 0x01;
+							data_type_1 = 0x01;
+							data_type_2 = 0x03;
+							data_operator = 0x01;
+						}
+						break;
+					case 4:
+						if (flag) {
+							data_mode = 0x3F;
+							data_type_1 = 0x00;
+							data_type_2 = 0x00;
+							data_operator = 0x00;
+						}
+						else {
+							data_mode = 0x03;
+							data_type_1 = 0x01;
+							data_type_2 = 0x03;
+							data_operator = 0x01;
+						}
+						break;
+					case 5:
+						if (flag) {
+							data_mode = 0x3F;
+							data_type_1 = 0x00;
+							data_type_2 = 0x00;
+							data_operator = 0x00;
+						}
+						else {
+							data_mode = 0x04;
+							data_type_1 = 0x01;
+							data_type_2 = 0x03;
+							data_operator = 0x01;
+						}
+						break;
+					case 7:
+						if (flag) {
+							data_mode = 0x3F;
+							data_type_1 = 0x00;
+							data_type_2 = 0x00;
+							data_operator = 0x00;
+						}
+						else {
+							data_mode = 0x06;
+							data_type_1 = 0x01;
+							data_type_2 = 0x03;
+							data_operator = 0x01;
+						}
+						break;
+					case 8:
+						if (flag) {
+							data_mode = 0x3F;
+							data_type_1 = 0x00;
+							data_type_2 = 0x00;
+							data_operator = 0x00;
+						}
+						else {
+							data_mode = 0x07;
+							data_type_1 = 0x01;
+							data_type_2 = 0x03;
+							data_operator = 0x01;
+						}
+						break;
+					case 9:
+						if (flag) {
+							data_mode = 0x08;
+							data_type_1 = 0x01;
+							data_type_2 = 0x03;
+							data_operator = 0x01;
+						}
+						else {
+							data_mode = 0x3F;
+							data_type_1 = 0x00;
+							data_type_2 = 0x00;
+							data_operator = 0x00;
+						}
+						break;
+					case 16:
+						data_mode = 0x11;
+						data_type_1 = 0x02;
+						data_type_2 = 0x01;
+						data_operator = 0x0B;
+						break;
+					case 17:
+						data_mode = 0x12;
+						data_type_1 = 0x02;
+						data_type_2 = 0x01;
+						data_operator = 0x01;
+						break;
+					case 18:
+						data_mode = 0x13;
+						data_type_1 = 0x02;
+						data_type_2 = 0x01;
+						data_operator = 0x01;
+						break;
+					case 19:
+						data_mode = 0x14;
+						data_type_1 = 0x01;
+						data_type_2 = 0x00;
+						data_operator = 0x0B;
+						break;
+					case 20:
+						data_mode = 0x18;
+						data_type_1 = 0x00;
+						data_type_2 = 0x00;
+						data_operator = 0x0A;
+						break;
+					case 24:
+						data_mode = 0x19;
+						data_type_1 = 0x00;
+						data_type_2 = 0x00;
+						data_operator = 0x0B;
+						break;
+					case 25:
+						data_mode = 0x1A;
+						data_type_1 = 0x01;
+						data_type_2 = 0x02;
+						data_operator = 0x02;
+						break;
+					case 26:
+						if (flag) {
+							data_mode = 0x02;
+							data_type_1 = 0x01;
+							data_type_2 = 0x03;
+							data_operator = 0x01;
+						}
+						else {
+							data_mode = 0x1B;
+							data_type_1 = 0x01;
+							data_type_2 = 0x02;
+							data_operator = 0x02;
+						}
+						break;
+					case 27:
+						if (flag) {
+							data_mode = 0x05;
+							data_type_1 = 0x01;
+							data_type_2 = 0x03;
+							data_operator = 0x01;
+						}
+						else {
+							data_mode = 0x09;
+							data_type_1 = 0x01;
+							data_type_2 = 0x02;
+							data_operator = 0x02;
+						}
+						break;
+					case 32:
+						data_mode = 0x21;
+						data_type_1 = 0x02;
+						data_type_2 = 0x01;
+						data_operator = 0x0B;
+						break;
+					case 33:
+						data_mode = 0x22;
+						data_type_1 = 0x02;
+						data_type_2 = 0x01;
+						data_operator = 0x01;
+						break;
+					case 34:
+						data_mode = 0x23;
+						data_type_1 = 0x02;
+						data_type_2 = 0x01;
+						data_operator = 0x01;
+						break;
+					case 35:
+						data_mode = 0x24;
+						data_type_1 = 0x01;
+						data_type_2 = 0x03;
+						data_operator = 0x0C;
+						break;
+					case 36:
+						data_mode = 0x19;
+						data_type_1 = 0x00;
+						data_type_2 = 0x03;
+						data_operator = 0x08;
+						break;
+					default:
+						break;
+					}
+					if (data_mode == 0x3F) {
+						uint8_t data_tmp = emulator.chipset.mmu.ReadData(CalcAddr(0, 0));
+						emulator.chipset.mmu.WriteData(CalcAddr(0, 0), ((data_tmp ^ data_mode_backup) & 0x0F) ^ data_tmp);
+						if (data_F404_copy) {
+							data_F404_copy--;
+							if (data_b) {
+								data_mode = 0x18;
+								data_type_1 = 0x01;
+								data_type_2 = 0x00;
+								data_operator = 0x08;
+							}
+							else if (data_a) {
+								data_mode = 0x18;
+								data_type_1 = 0x01;
+								data_type_2 = 0x00;
+								data_operator = 0x0C;
+							}
+						}
+						else {
+							data_a = 0;
+							data_b = 0;
+						}
+					}
 				}
 				if ((data_a | data_b | data_c) != 0) {
 					param1 = 1;
@@ -535,13 +1050,14 @@ namespace casioemu
 			param1 = 0;
 			param2 = 0;
 			param3 = 0;
-			param4 = 0;
 			if (data_F400 != 0xFF) {
 				GenerateParams();
+				param4 = 0;
 				data_F400 = 0xFF;
 			}
 			data_F402_copy = data_F402;
 			if (data_F405 & 0x7F) {
+				data_F405_copy = data_F405;
 				data_F404_copy = data_F404;
 				data_F405 = 0;
 				data_mode = 0xFF;

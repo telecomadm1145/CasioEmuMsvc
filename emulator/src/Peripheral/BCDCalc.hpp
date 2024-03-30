@@ -23,7 +23,7 @@ namespace casioemu
 		bool F405_write;
 
 		uint8_t data_operator, data_type_1, data_type_2, param1, param2, param3, param4, data_F404_copy,
-			data_mode, data_repeat_flag, data_a, data_b, data_c, data_d, data_F402_copy;
+			data_mode, data_repeat_flag, data_a, data_b, data_c, data_d, data_F402_copy, data_F405_copy;
 
 	public:
 		using Peripheral::Peripheral;
