@@ -175,7 +175,7 @@ namespace casioemu
 		{&CPU::OP_EXTBW      ,                         0, 0x8DCF, {{0,      0,  0}, {0,      0,  0}}},
 		{&CPU::OP_EXTBW      ,                         0, 0x8FEF, {{0,      0,  0}, {0,      0,  0}}},
 		// * Software Interrupt Instructions
-		{&CPU::OP_SWI        ,                         0, 0xE500, {{0, 0x003F,  0}, {0,      0,  0}}},
+		{&CPU::OP_SWI        ,                         0, 0xE500, {{0, 0x00FF,  0}, {0,      0,  0}}},
 		{&CPU::OP_BRK        ,                         0, 0xFFFF, {{0,      0,  0}, {0,      0,  0}}},
 		// * Branch Instructions
 		{&CPU::OP_B          ,        H_TI              , 0xF000, {{0,      0,  0}, {0, 0x000F,  8}}},

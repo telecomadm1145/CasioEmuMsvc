@@ -162,7 +162,7 @@ namespace casioemu
 	// * Software Interrupt Instructions
 	void CPU::OP_SWI()
 	{
-		emulator.chipset.RaiseSoftware(impl_operands[0].value);
+		emulator.chipset.RaiseSoftware(impl_operands[0].value & 0x3F);
 	}
 
 	void CPU::OP_BRK()
