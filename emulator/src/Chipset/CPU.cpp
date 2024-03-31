@@ -228,9 +228,6 @@ namespace casioemu
 			impl_last_dsr = impl_operands[0].value;
 
 		reg_dsr = impl_last_dsr;
-		/*if ((reg_dsr & 0x07) <= 5) {
-			reg_dsr &= 0x0F;
-		}*/
 	}
 
 	CPU::CPU(Emulator &_emulator) : emulator(_emulator), reg_lr(reg_elr[0]), reg_lcsr(reg_ecsr[0]), reg_psw(reg_epsw[0])
@@ -252,6 +249,8 @@ namespace casioemu
 
 		impl_csr_mask = emulator.GetModelInfo("csr_mask");
 		real_hardware = emulator.GetModelInfo("real_hardware");
+
+		fetch_addition = 2;
 	}
 
 	void CPU::SetupOpcodeDispatch()
@@ -367,7 +366,8 @@ namespace casioemu
 		if (reg_pc.raw & 1)
 			reg_pc.raw &= ~1;
 		uint16_t opcode = emulator.chipset.mmu.ReadCode((reg_csr.raw << 16) | reg_pc.raw);
-		reg_pc.raw = (uint16_t)(reg_pc.raw + 2);
+		reg_pc.raw = (uint16_t)(reg_pc.raw + fetch_addition);
+		fetch_addition = 2;
 		return opcode;
 	}
 
@@ -448,6 +448,7 @@ namespace casioemu
 		reg_sp = emulator.chipset.mmu.ReadCode(0);
 		reg_dsr = 0;
 		reg_psw = 0;
+		fetch_addition = 2;
 		stack.clear();
 	}
 
@@ -462,6 +463,11 @@ namespace casioemu
 
 		reg_csr.raw = 0;
 		reg_pc.raw = emulator.chipset.mmu.ReadCode(index * 2);
+	}
+
+	void CPU::CorruptByDSR()
+	{
+		fetch_addition = 0x0FF0;
 	}
 
 	size_t CPU::GetExceptionLevel()

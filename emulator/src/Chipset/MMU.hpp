@@ -15,6 +15,8 @@ namespace casioemu
 	private:
 		Emulator &emulator;
 
+		bool real_hardware;
+
 		struct MemoryByte
 		{
 			MMURegion *region;
@@ -34,6 +36,7 @@ namespace casioemu
 		uint16_t ReadCode(size_t offset);
 		uint8_t ReadData(size_t offset, bool softwareRead = true);
 		void WriteData(size_t offset, uint8_t data, bool softwareWrite = true);
+		size_t getRealOffset(size_t offset);
 
 		void RegisterRegion(MMURegion *region);
 		void UnregisterRegion(MMURegion *region);

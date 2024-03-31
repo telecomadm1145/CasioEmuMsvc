@@ -85,6 +85,8 @@ namespace casioemu
 		size_t impl_hint;
 		uint16_t impl_csr_mask;
 
+		size_t fetch_addition;
+
 		void SetupOpcodeDispatch();
 		void SetupRegisterProxies();
 
@@ -132,6 +134,7 @@ namespace casioemu
 		void Next();
 		void Reset();
 		void Raise(size_t exception_level, size_t index);
+		void CorruptByDSR();
 		size_t GetExceptionLevel();
 		bool GetMasterInterruptEnable();
 		std::string GetBacktrace() const;

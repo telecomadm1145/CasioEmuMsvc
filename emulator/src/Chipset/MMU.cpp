@@ -5,6 +5,7 @@
 #include "Chipset.hpp"
 #include "../Logger.hpp"
 #include "../Gui/ui.hpp"
+#include "CPU.hpp"
 
 namespace casioemu
 {
@@ -38,6 +39,8 @@ namespace casioemu
 	void MMU::SetupInternals()
 	{
 		me_mmu = this;
+		real_hardware = emulator.GetModelInfo("real_hardware");
+
 		*(MMU **)lua_newuserdata(emulator.lua_state, sizeof(MMU *)) = this;
 		lua_newtable(emulator.lua_state);
 		lua_pushcfunction(emulator.lua_state, [](lua_State *lua_state) {
@@ -176,6 +179,30 @@ namespace casioemu
 		if (offset >= (1 << 24))
 			PANIC("offset doesn't fit 24 bits\n");
 
+		/*
+		things about accessing unmapped segment is actually far more complex on real hardware;
+		the result seems to be also affected by the next instruction,
+		and not every address of a certain segment gives the same result.
+		the code here only provides a simple simulation which could deal with 2 qr code errors on fx991cncw:
+		1.x=an in solver,exe,page down,exe twice,then catalog;
+		2.1234567890123xan in solver,exe,page down,exe,catalog,up
+		*/
+		if(emulator.hardware_id == HW_CLASSWIZ_II && real_hardware) {
+			offset = getRealOffset(offset);
+			switch (offset)
+			{
+			case 0x1000001:
+				emulator.chipset.cpu.CorruptByDSR();
+				return 0;
+			case 0x1000002:
+				return 0;
+			case 0x1000003:
+				return 0xFF;
+			default:
+				break;
+			}
+		}
+		
 		size_t segment_index = offset >> 16;
 		size_t segment_offset = offset & 0xFFFF;
 
@@ -245,6 +272,22 @@ namespace casioemu
 		}
 
 		region->write(region, offset, data);
+	}
+
+	size_t MMU::getRealOffset(size_t offset) {
+		size_t segment_index = offset >> 16;
+		if(segment_index < 0x10)
+			return offset;
+		if(segment_index == 0xF0 || segment_index == 0x98)
+			return 0x1000001;
+		if((segment_index & 0x07) > 5) {
+			if(offset & 0x02 || !(offset & 0xFF)) {
+				return 0x1000002;
+			} else {
+				return 0x1000003;
+			}
+		}
+		return offset & 0x0FFFFF; 
 	}
 
 	void MMU::RegisterRegion(MMURegion *region)
