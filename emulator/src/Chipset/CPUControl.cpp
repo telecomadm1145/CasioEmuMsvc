@@ -84,7 +84,7 @@ namespace casioemu
 	void CPU::OP_CR_EA()
 	{
 		size_t op0_index = (impl_opcode >> 8) & 0x000F;
-		size_t register_size = impl_opcode >> 8;
+		size_t register_size = impl_hint >> 8;
 
 		if (impl_hint & H_ST)
 			for (size_t ix = register_size - 1; ix != (size_t)-1; --ix)
