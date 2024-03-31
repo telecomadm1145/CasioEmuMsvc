@@ -199,7 +199,7 @@ namespace casioemu
 				if (interrupts_active[ix])
 				{
 					if (old_exception_level > 1)
-						PANIC("software interrupt while exception level was greater than 1\n");
+						logger::Info("software interrupt while exception level was greater than 1\n");//test on real hardware shows that SWI seems to be raised normally when ELEVEL=2
 					index = ix;
 					break;
 				}
