@@ -15,9 +15,9 @@ namespace casioemu
 	void Miscellaneous::Initialise()
 	{
 		region_dsr.Setup(0xF000, 1, "Miscellaneous/DSR", this, [](MMURegion *region, size_t) {
-			return (uint8_t)((Miscellaneous *)region->userdata)->emulator.chipset.cpu.reg_dsr;
+			return (uint8_t)((Miscellaneous *)region->userdata)->emulator.chipset.cpu.impl_last_dsr;
 		}, [](MMURegion *region, size_t, uint8_t data) {
-			((Miscellaneous *)region->userdata)->emulator.chipset.cpu.reg_dsr = data;
+			((Miscellaneous *)region->userdata)->emulator.chipset.cpu.impl_last_dsr = data;
 		}, emulator);
 
 		// * TODO: figure out what these are

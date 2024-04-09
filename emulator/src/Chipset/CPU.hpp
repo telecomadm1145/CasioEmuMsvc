@@ -74,7 +74,6 @@ namespace casioemu
 		typedef Register<uint8_t> reg8_t;
 		typedef Register<uint16_t> reg16_t;
 
-		uint8_t impl_last_dsr;
 		uint8_t impl_flags_changed, impl_flags_out, impl_flags_in;
 		uint8_t impl_shift_buffer;
 		uint16_t impl_opcode, impl_long_imm;
@@ -128,6 +127,8 @@ namespace casioemu
 		reg16_t reg_sp, reg_ea;
 		reg8_t reg_dsr;
 
+		uint8_t impl_last_dsr;
+		
 		bool real_hardware;
 
 		void SetMemoryModel(MemoryModel memory_model);
