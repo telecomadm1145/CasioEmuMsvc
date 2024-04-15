@@ -60,10 +60,44 @@ namespace casioemu
 		if (!real_hardware)
 		{
 			keyboard_pd_emu = emulator.GetModelInfo("pd_value");
+			keyboard_ready_emu = 1;
+			emu_ki_readcount = 0;
+			emu_ko_readcount = 0;
 			int offset = emulator.hardware_id == HW_ES_PLUS ? 0 : emulator.hardware_id == HW_CLASSWIZ ? 0x40000 : 0x80000;
-			region_ready_emu.Setup(offset + 0x8E00, 1, "Keyboard/ReadyStatusEmulator", &keyboard_ready_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
-			region_ki_emu.Setup(offset + 0x8E01, 1, "Keyboard/KIEmulator", &keyboard_in_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
-			region_ko_emu.Setup(offset + 0x8E02, 1, "Keyboard/KOEmulator", &keyboard_out_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
+			region_ready_emu.Setup(offset + 0x8E00, 1, "Keyboard/ReadyStatusEmulator", this, [](MMURegion *region, size_t offset) {
+				Keyboard *keyboard = ((Keyboard *)region->userdata);
+				return keyboard->keyboard_ready_emu;
+			}, [](MMURegion *region, size_t offset, uint8_t data) {
+				Keyboard *keyboard = ((Keyboard *)region->userdata);
+				if(data == 8) {
+					keyboard->emulator.chipset.EmuTimerSkipped = true;
+					if(keyboard->keyboard_in_emu == 4 && keyboard->keyboard_out_emu == 16) {
+						keyboard->keyboard_ready_emu = 1;
+					} else {
+						keyboard->keyboard_ready_emu = 0;
+					}
+					return;
+				} else if(data == 4) {
+					keyboard->emulator.chipset.EmuTimerSkipped = true;
+				}
+				keyboard->keyboard_ready_emu = data;
+			}, emulator);
+			region_ki_emu.Setup(offset + 0x8E01, 1, "Keyboard/KIEmulator", this, [](MMURegion *region, size_t offset) {
+				Keyboard *keyboard = ((Keyboard *)region->userdata);
+				keyboard->emu_ki_readcount++;
+				uint8_t value = keyboard->keyboard_in_emu;
+				if(keyboard->emu_ki_readcount > 1)
+					keyboard->keyboard_in_emu = 0;
+				return value;
+			}, MMURegion::IgnoreWrite, emulator);
+			region_ko_emu.Setup(offset + 0x8E02, 1, "Keyboard/KOEmulator", this, [](MMURegion *region, size_t offset) {
+				Keyboard *keyboard = ((Keyboard *)region->userdata);
+				keyboard->emu_ko_readcount++;
+				uint8_t value = keyboard->keyboard_out_emu;
+				if(keyboard->emu_ko_readcount > 1)
+					keyboard->keyboard_out_emu = 0;
+				return value;
+			}, MMURegion::IgnoreWrite, emulator);
 			region_pd_emu.Setup(0xF050, 1, "Keyboard/PdValue", &keyboard_pd_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
 		}
 
@@ -163,7 +197,9 @@ namespace casioemu
 		if (!real_hardware)
 		{
 			keyboard_in_emu = 0;
+			emu_ki_readcount = 0;
 			keyboard_out_emu = 0;
+			emu_ko_readcount = 0;
 		}
 
 		RecalculateGhost();
@@ -257,6 +293,8 @@ namespace casioemu
 					// Report an arbitrary pressed key.
 					has_input = keyboard_in_emu = button.ki_bit;
 					keyboard_out_emu = button.ko_bit;
+					emu_ki_readcount = emu_ko_readcount = 0;
+					emulator.chipset.EmuTimerSkipped = true;
 				}
 				else
 				{

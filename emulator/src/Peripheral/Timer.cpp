@@ -12,7 +12,8 @@ namespace casioemu
 		interrupt_source.Setup(9, emulator);
 
 		real_hardware = emulator.GetModelInfo("real_hardware");
-		TimerSkipped = false;
+		EmuStopped = false;
+		emulator.chipset.EmuTimerSkipped = false;
 		
 		region_interval.Setup(0xF020, 2, "Timer/Interval", &data_interval, MMURegion::DefaultRead<uint16_t>, [](MMURegion *region, size_t offset, uint8_t data) {
 			uint16_t *value = (uint16_t *)(region->userdata);
@@ -33,7 +34,6 @@ namespace casioemu
 			Timer *timer = (Timer *)region->userdata;
 			timer->data_control = data & 0x01;
 			timer->raise_required = false;
-			timer->TimerSkipped = false;
 		}, emulator);
 
 		region_F024.Setup(0xF024, 1, "Timer/Unknown/F024*1", &data_F024, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
@@ -47,7 +47,8 @@ namespace casioemu
 		DivideTicks();
 
 		raise_required = false;
-		TimerSkipped = false;
+		EmuStopped = false;
+		emulator.chipset.EmuTimerSkipped = false;
 		data_control = 0;
 	}
 
@@ -65,23 +66,19 @@ namespace casioemu
 	{
 		if (raise_required && interrupt_source.Success()) {
 			raise_required = false;
-			TimerSkipped = false;
+		}
+
+		if(EmuStopped && emulator.chipset.GetRunningState()) {
+			EmuStopped = false;
+			emulator.chipset.EmuTimerSkipped = false;
 		}
 	}
 
 	void Timer::DivideTicks()
 	{
-		if(emulator.hardware_id == HW_CLASSWIZ_II && !real_hardware && !emulator.chipset.GetRunningState()) {
-			uint8_t keyboard_ready_emu = emulator.chipset.mmu.ReadData(0x088E00);
-			if(keyboard_ready_emu == 8) {
-				TimerSkipped = true;
-				if(emulator.chipset.mmu.ReadData(0x088E01) == 4 && emulator.chipset.mmu.ReadData(0x088E02) == 16) {
-					emulator.chipset.mmu.WriteData(0x088E00, 1);
-				} else {
-					emulator.chipset.mmu.WriteData(0x088E00, 0);
-				}
-			} else if(keyboard_ready_emu == 4) {
-				TimerSkipped = true;
+		if(emulator.hardware_id == HW_CLASSWIZ_II && !real_hardware) {
+			if(!emulator.chipset.GetRunningState()) {
+				EmuStopped = true;
 			}
 		}
 		++ext_to_int_int_done;
@@ -94,7 +91,7 @@ namespace casioemu
 
 		if (data_control & 0x01)
 		{
-			if (data_counter == (TimerSkipped ? 1 : data_interval))
+			if (data_counter >= (emulator.chipset.EmuTimerSkipped ? 1 : data_interval))
 			{
 				data_counter = 0;
 				if (interrupt_source.Enabled())

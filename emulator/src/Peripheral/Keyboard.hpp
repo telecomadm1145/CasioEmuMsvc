@@ -19,6 +19,8 @@ namespace casioemu
 		MMURegion region_ready_emu, region_ko_emu, region_ki_emu, region_pd_emu;
 		uint8_t keyboard_ready_emu, keyboard_out_emu, keyboard_in_emu, keyboard_pd_emu;
 
+		int emu_ki_readcount, emu_ko_readcount;
+
 		uint8_t has_input;
 		InterruptSource interrupt_source;
 

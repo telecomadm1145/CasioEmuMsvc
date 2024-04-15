@@ -67,6 +67,8 @@ namespace casioemu
 		MMU &mmu;
 		std::vector<unsigned char> rom_data;
 
+		bool EmuTimerSkipped;
+
 		/**
 		 * This exists because the Emulator that owns this Chipset is not ready
 		 * to supply a ROM path upon construction. It has to call `LoadROM` later
