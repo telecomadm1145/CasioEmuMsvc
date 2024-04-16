@@ -130,6 +130,13 @@ Key(keycode)
 Keyboard:Relea	Release all pressed keys.
 seAll()
 
+Keyboard:Start	Start to track the key inputs.Keycodes will be saved as binary in
+KeyLog(filenam	the specified file.
+e)
+
+Keyboard:StopK	Stop and save the key log.
+eyLog()
+
 pst()           Print 48 bytes of the stack before and after SP.
 
 emu:set_paused  Set emulator state.
@@ -183,7 +190,9 @@ nrop            Next "ROP instruction".
 keyinj(file,pti	Short for Keyboard:KeyInject(filename,ptime,dtime).
 me,dtime)
 press(keycode)	Short for Keyboard:PressKey(keycode).
-relkey()		Short for Keyboard:ReleaseAll().
+relkey()	Short for Keyboard:ReleaseAll().
+keylog(file)	Short for Keyboard:StartKeyLog(filename).
+stoplog()	Short for Keyboard:StopKeyLog().
 ]])
 end
 
@@ -268,6 +277,14 @@ end
 
 function relkey()
 	Keyboard:ReleaseAll()
+end
+
+function keylog(filename)
+	Keyboard:StartKeyLog(filename)
+end
+
+function stoplog()
+	Keyboard:StopKeyLog()
 end
 
 function until0(addr)

@@ -105,6 +105,7 @@ namespace casioemu
 		}
 
 		isInjectorTriggered = false;
+		isKeyLogToggled = false;
 
 		*(Keyboard **)lua_newuserdata(emulator.lua_state, sizeof(Keyboard *)) = this;
 		lua_newtable(emulator.lua_state);
@@ -154,6 +155,30 @@ namespace casioemu
 			return 0;
 		});
 		lua_setfield(emulator.lua_state, -2, "KeyInject");
+		lua_pushcfunction(emulator.lua_state, [](lua_State *lua_state) {
+			Keyboard *keyboard = *(Keyboard **)lua_topointer(lua_state, 1);
+			if(lua_gettop(lua_state) != 2 ) {
+				logger::Info("Invalid argument nums!\n");
+				return 0;
+			}
+			keyboard->keylog_filename = lua_tostring(lua_state, 2);
+			keyboard->isKeyLogToggled = true;
+			keyboard->KeyLogIndex = 0;
+			keyboard->KeyLog = new uint8_t[100000];
+			return 0;
+		});
+		lua_setfield(emulator.lua_state, -2, "StartKeyLog");
+		lua_pushcfunction(emulator.lua_state, [](lua_State *lua_state) {
+			Keyboard *keyboard = *(Keyboard **)lua_topointer(lua_state, 1);
+			if(!keyboard->isKeyLogToggled) {
+				logger::Info("KeyLog not started!\n");
+				return 0;
+			}
+			keyboard->isKeyLogToggled = false;
+			keyboard->StoreKeyLog();
+			return 0;
+		});
+		lua_setfield(emulator.lua_state, -2, "StopKeyLog");
 		lua_setfield(emulator.lua_state, -2, "__index");
 		lua_pushcfunction(emulator.lua_state, [](lua_State *) {
 			return 0;
@@ -326,6 +351,14 @@ namespace casioemu
 		}
 	}
 
+	void Keyboard::Uninitialise() {
+		if(isKeyLogToggled) {
+			StoreKeyLog();
+			delete[] KeyLog;
+			isKeyLogToggled = false;
+		}
+	}
+
 	void Keyboard::PressButton(Button& button, bool stick)
 	{
 		bool old_pressed = button.pressed;
@@ -363,6 +396,27 @@ namespace casioemu
 					has_input = keyboard_in_emu = keyboard_out_emu = 0;
 				}
 			}
+		}
+		
+		if(isKeyLogToggled) {
+			uint8_t keycode = 0;
+			if(button.type == Button::BT_POWER) {
+				keycode = 0xFF;
+			} else if(button.type == Button::BT_BUTTON) {
+				for(int bit = 1; bit <= 0x80; bit = bit << 1) {
+					if(button.ko_bit == bit)
+						break;
+					keycode++;
+				}
+				keycode = keycode << 4;
+				for(int bit = 1; bit <= 0x80; bit = bit << 1) {
+					if(button.ki_bit == bit)
+						break;
+					keycode++;
+				}
+			}
+			KeyLog[KeyLogIndex] = keycode;
+			KeyLogIndex++;
 		}
 	}
 
@@ -409,6 +463,16 @@ namespace casioemu
 			isInjectorTriggered = false;
 		});
 		inj_t.detach();
+	}
+
+	void Keyboard::StoreKeyLog() {
+		std::ofstream keylog_handle(keylog_filename, std::ofstream::binary);
+		if(keylog_handle.fail()) {
+			logger::Info("Failed to store KeyLog at %s\n", keylog_filename);
+			return;
+		}
+		keylog_handle.write((char*)KeyLog, KeyLogIndex);
+		keylog_handle.close();
 	}
 
 	void Keyboard::RecalculateGhost()

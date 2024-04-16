@@ -48,20 +48,27 @@ namespace casioemu
 		using Peripheral::Peripheral;
 
 		const char* keyseq_filename;
+		const char* keylog_filename;
 		int PressTime;
 		int DelayTime;
+		int KeyLogIndex;
 
 		bool isInjectorTriggered;
+		bool isKeyLogToggled;
+		
+		uint8_t* KeyLog;
 
 		void Initialise();
 		void Reset();
 		void Tick();
 		void Frame();
 		void UIEvent(SDL_Event &event);
+		void Uninitialise();
 		void PressButton(Button& button, bool stick);
 		void PressAt(int x, int y, bool stick);
 		void PressButtonByCode(uint8_t code);
 		void StartInject();
+		void StoreKeyLog();
 		void ReleaseAll();
 		void RecalculateKI();
 		void RecalculateGhost();
