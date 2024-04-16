@@ -119,6 +119,17 @@ unbreak_at      Delete breakpoint.
                 Have no effect if there is no breakpoint at specified position.
 cont()          Continue program execution.
 inject          Inject 100 bytes to the input field.
+
+Keyboard:KeyIn	Auto input keys by sequence from a binary file.The time each key
+ject(filename,	is pressed at for and the delay between two presses could be
+ptime,dtime)	specified in milliseconds.
+
+Keyboard:Press	Press a certain key specified by keycode.
+Key(keycode)
+
+Keyboard:Relea	Release all pressed keys.
+seAll()
+
 pst()           Print 48 bytes of the stack before and after SP.
 
 emu:set_paused  Set emulator state.
@@ -168,6 +179,11 @@ u0/until0       Run until address is hit and sp is <= original sp.
 ppc()           Print current PC address.
 calll           Call log. (addr, before, after)
 nrop            Next "ROP instruction".
+
+keyinj(file,pti	Short for Keyboard:KeyInject(filename,ptime,dtime).
+me,dtime)
+press(keycode)	Short for Keyboard:PressKey(keycode).
+relkey()		Short for Keyboard:ReleaseAll().
 ]])
 end
 
@@ -234,6 +250,24 @@ function readdis(filename)
 	end
 
 	return dis_lines, line_by_addr, label_by_addr
+end
+
+function keyinj(filename, ptime, dtime)
+	if ptime == nil then
+		ptime = 100
+	end
+	if dtime == nil then
+		dtime = 150
+	end
+	Keyboard:KeyInject(filename, ptime, dtime)
+end
+
+function press(keycode)
+	Keyboard:PressKey(keycode)
+end
+
+function relkey()
+	Keyboard:ReleaseAll()
 end
 
 function until0(addr)

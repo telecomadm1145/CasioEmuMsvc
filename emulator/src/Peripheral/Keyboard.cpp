@@ -104,6 +104,8 @@ namespace casioemu
 			region_pd_emu.Setup(0xF050, 1, "Keyboard/PdValue", &keyboard_pd_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
 		}
 
+		isInjectorTriggered = false;
+
 		*(Keyboard **)lua_newuserdata(emulator.lua_state, sizeof(Keyboard *)) = this;
 		lua_newtable(emulator.lua_state);
 		lua_newtable(emulator.lua_state);
@@ -126,9 +128,26 @@ namespace casioemu
 		lua_setfield(emulator.lua_state, -2, "ReleaseAll");
 		lua_pushcfunction(emulator.lua_state, [](lua_State *lua_state) {
 			Keyboard *keyboard = *(Keyboard **)lua_topointer(lua_state, 1);
-			if(lua_gettop(lua_state) != 2 ) {
-				logger::Info("Invalid argument nums!\n");
+			if(keyboard->isInjectorTriggered) {
+				logger::Info("Injector already triggered!\n");
 				return 0;
+			}
+			switch(lua_gettop(lua_state)) {
+				case 2:
+					keyboard->PressTime = 100;
+					keyboard->DelayTime = 150;
+					break;
+				case 3:
+					keyboard->PressTime = lua_tointeger(lua_state, 3);
+					keyboard->DelayTime = 150;
+					break;
+				case 4:
+					keyboard->PressTime = lua_tointeger(lua_state, 3);
+					keyboard->DelayTime = lua_tointeger(lua_state, 4);
+					break;
+				default:
+					logger::Info("Invalid argument num!\n");
+					return 0;
 			}
 			keyboard->keyseq_filename = lua_tostring(lua_state, 2);
 			keyboard->StartInject();
@@ -374,6 +393,7 @@ namespace casioemu
 
 	void Keyboard::StartInject() {
 		std::thread inj_t([&]() {
+			isInjectorTriggered = true;
 			std::ifstream keyseq_handle(keyseq_filename, std::ifstream::binary);
 			if(keyseq_handle.fail()) {
 				logger::Info("Failed to load file %s\n", keyseq_filename);
@@ -382,10 +402,11 @@ namespace casioemu
 			std::vector<unsigned char> keyseq_raw = std::vector<unsigned char>((std::istreambuf_iterator<char>(keyseq_handle)), std::istreambuf_iterator<char>());
 			for(int i = 0; i < (int)keyseq_raw.size(); i++) {
 				PressButtonByCode(keyseq_raw[i]);
-				std::this_thread::sleep_for(std::chrono::milliseconds(200));
+				std::this_thread::sleep_for(std::chrono::milliseconds(PressTime));
 				ReleaseAll();
-				std::this_thread::sleep_for(std::chrono::milliseconds(400));
+				std::this_thread::sleep_for(std::chrono::milliseconds(DelayTime));
 			}
+			isInjectorTriggered = false;
 		});
 		inj_t.detach();
 	}

@@ -48,6 +48,10 @@ namespace casioemu
 		using Peripheral::Peripheral;
 
 		const char* keyseq_filename;
+		int PressTime;
+		int DelayTime;
+
+		bool isInjectorTriggered;
 
 		void Initialise();
 		void Reset();
