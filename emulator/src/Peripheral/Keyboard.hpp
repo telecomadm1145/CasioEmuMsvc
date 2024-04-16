@@ -47,6 +47,8 @@ namespace casioemu
 	public:
 		using Peripheral::Peripheral;
 
+		const char* keyseq_filename;
+
 		void Initialise();
 		void Reset();
 		void Tick();
@@ -54,6 +56,8 @@ namespace casioemu
 		void UIEvent(SDL_Event &event);
 		void PressButton(Button& button, bool stick);
 		void PressAt(int x, int y, bool stick);
+		void PressButtonByCode(uint8_t code);
+		void StartInject();
 		void ReleaseAll();
 		void RecalculateKI();
 		void RecalculateGhost();

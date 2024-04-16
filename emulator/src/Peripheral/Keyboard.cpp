@@ -6,6 +6,9 @@
 #include "../Emulator.hpp"
 #include "../Chipset/Chipset.hpp"
 
+#include <fstream>
+#include <thread>
+#include <chrono>
 #include <lua.hpp>
 #include <SDL.h>
 
@@ -100,6 +103,45 @@ namespace casioemu
 			}, MMURegion::IgnoreWrite, emulator);
 			region_pd_emu.Setup(0xF050, 1, "Keyboard/PdValue", &keyboard_pd_emu, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
 		}
+
+		*(Keyboard **)lua_newuserdata(emulator.lua_state, sizeof(Keyboard *)) = this;
+		lua_newtable(emulator.lua_state);
+		lua_newtable(emulator.lua_state);
+		lua_pushcfunction(emulator.lua_state, [](lua_State *lua_state) {
+			Keyboard *keyboard = *(Keyboard **)lua_topointer(lua_state, 1);
+			if(lua_gettop(lua_state) != 2 ) {
+				logger::Info("Invalid argument nums!\n");
+				return 0;
+			}
+			uint8_t code = lua_tointeger(lua_state, 2);
+			keyboard->PressButtonByCode(code);
+			return 0;
+		});
+		lua_setfield(emulator.lua_state, -2, "PressKey");
+		lua_pushcfunction(emulator.lua_state, [](lua_State *lua_state) {
+			Keyboard *keyboard = *(Keyboard **)lua_topointer(lua_state, 1);
+			keyboard->ReleaseAll();
+			return 0;
+		});
+		lua_setfield(emulator.lua_state, -2, "ReleaseAll");
+		lua_pushcfunction(emulator.lua_state, [](lua_State *lua_state) {
+			Keyboard *keyboard = *(Keyboard **)lua_topointer(lua_state, 1);
+			if(lua_gettop(lua_state) != 2 ) {
+				logger::Info("Invalid argument nums!\n");
+				return 0;
+			}
+			keyboard->keyseq_filename = lua_tostring(lua_state, 2);
+			keyboard->StartInject();
+			return 0;
+		});
+		lua_setfield(emulator.lua_state, -2, "KeyInject");
+		lua_setfield(emulator.lua_state, -2, "__index");
+		lua_pushcfunction(emulator.lua_state, [](lua_State *) {
+			return 0;
+		});
+		lua_setfield(emulator.lua_state, -2, "__newindex");
+		lua_setmetatable(emulator.lua_state, -2);
+		lua_setglobal(emulator.lua_state, "Keyboard");
 
 		{
 			for (auto &button : buttons)
@@ -315,6 +357,37 @@ namespace casioemu
 				break;
 			}
 		}
+	}
+
+	void Keyboard::PressButtonByCode(uint8_t code) {
+		if(code == 0xFF) {
+			PressButton(buttons[63], false);
+		} else {
+			int button_index = ((code >> 1) & 0x38) | (code & 0x07);
+			if(button_index < 63) {
+				PressButton(buttons[button_index], false);
+			} else {
+				logger::Info("Invalid button code 0x%02X!\n", code);
+			}
+		}
+	}
+
+	void Keyboard::StartInject() {
+		std::thread inj_t([&]() {
+			std::ifstream keyseq_handle(keyseq_filename, std::ifstream::binary);
+			if(keyseq_handle.fail()) {
+				logger::Info("Failed to load file %s\n", keyseq_filename);
+				return;
+			}
+			std::vector<unsigned char> keyseq_raw = std::vector<unsigned char>((std::istreambuf_iterator<char>(keyseq_handle)), std::istreambuf_iterator<char>());
+			for(int i = 0; i < (int)keyseq_raw.size(); i++) {
+				PressButtonByCode(keyseq_raw[i]);
+				std::this_thread::sleep_for(std::chrono::milliseconds(200));
+				ReleaseAll();
+				std::this_thread::sleep_for(std::chrono::milliseconds(400));
+			}
+		});
+		inj_t.detach();
 	}
 
 	void Keyboard::RecalculateGhost()
