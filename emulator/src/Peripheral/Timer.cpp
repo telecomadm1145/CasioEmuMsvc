@@ -12,6 +12,7 @@ namespace casioemu
 		interrupt_source.Setup(9, emulator);
 
 		real_hardware = emulator.GetModelInfo("real_hardware");
+		cycles_per_second = emulator.GetCyclesPerSecond();
 		EmuStopped = false;
 		emulator.chipset.EmuTimerSkipped = false;
 		
@@ -44,6 +45,7 @@ namespace casioemu
 		ext_to_int_counter = 0;
 		ext_to_int_next = 0;
 		ext_to_int_int_done = 0;
+		cycles_per_second = emulator.GetCyclesPerSecond();
 		DivideTicks();
 
 		raise_required = false;
@@ -86,8 +88,9 @@ namespace casioemu
 		{
 			ext_to_int_int_done = 0;
 			ext_to_int_counter = 0;
+			cycles_per_second = emulator.GetCyclesPerSecond();
 		}
-		ext_to_int_next = emulator.GetCyclesPerSecond() * (ext_to_int_int_done + 1) / ext_to_int_frequency;
+		ext_to_int_next = cycles_per_second * (ext_to_int_int_done + 1) / ext_to_int_frequency;
 
 		if (data_control & 0x01)
 		{

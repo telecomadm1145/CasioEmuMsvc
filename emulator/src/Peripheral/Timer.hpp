@@ -19,6 +19,7 @@ namespace casioemu
 		bool real_hardware;
 		bool EmuStopped;
 		uint64_t ext_to_int_counter, ext_to_int_next, ext_to_int_int_done;
+		unsigned int cycles_per_second;
 		static const uint64_t ext_to_int_frequency = 10000;
 
 	public:

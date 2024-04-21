@@ -451,6 +451,7 @@ namespace casioemu
 			std::ifstream keyseq_handle(keyseq_filename, std::ifstream::binary);
 			if(keyseq_handle.fail()) {
 				logger::Info("Failed to load file %s\n", keyseq_filename);
+				isInjectorTriggered = false;
 				return;
 			}
 			std::vector<unsigned char> keyseq_raw = std::vector<unsigned char>((std::istreambuf_iterator<char>(keyseq_handle)), std::istreambuf_iterator<char>());

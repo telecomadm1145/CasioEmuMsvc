@@ -31,8 +31,8 @@ namespace casioemu
 			PANIC("Unknown hardware id %d\n", hardware_id);
 		this->hardware_id = (HardwareId)hardware_id;
 
-		unsigned int cycles_per_second = hardware_id == HW_ES_PLUS ? 128 * 1024 : hardware_id == HW_CLASSWIZ ? 1024 * 1024 : 2048 * 1024;
-		timer_interval = hardware_id == HW_CLASSWIZ_II ? 10 : 20;
+		cycles_per_second = hardware_id == HW_ES_PLUS ? 128 * 1024 : hardware_id == HW_CLASSWIZ ? 1024 * 1024 : 2048 * 1024;
+		timer_interval = 20;
 
 		cycles.Setup(cycles_per_second, timer_interval);
 		chipset.Setup();
@@ -221,6 +221,16 @@ namespace casioemu
 			return 0;
 		});
 		lua_setfield(lua_state, -2, "set_paused");
+		lua_pushcfunction(lua_state, [](lua_State *lua_state) {
+			Emulator *emu = *(Emulator **)lua_topointer(lua_state, 1);
+			if(lua_gettop(lua_state) != 2) {
+				logger::Info("Invalid argument num!\n");
+				return 0;
+			}
+			emu->SetClockSpeed(lua_tonumber(lua_state, 2));
+			return 0;
+		});
+		lua_setfield(lua_state, -2, "SetClockSpeed");
 		lua_model_ref = LUA_REFNIL;
 		lua_pushcfunction(lua_state, [](lua_State *lua_state) {
 			Emulator *emu = *(Emulator **)lua_topointer(lua_state, 1);
@@ -468,6 +478,10 @@ namespace casioemu
 	unsigned int Emulator::GetCyclesPerSecond()
 	{
 		return cycles.cycles_per_second;
+	}
+
+	void Emulator::SetClockSpeed(float speed) {
+		cycles.Setup((unsigned int)(cycles_per_second * speed), timer_interval);
 	}
 
 	FairRecursiveMutex::FairRecursiveMutex() : holding{}, recursive_count{}

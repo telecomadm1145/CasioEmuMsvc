@@ -142,6 +142,8 @@ pst()           Print 48 bytes of the stack before and after SP.
 emu:set_paused  Set emulator state.
 emu:tick()      Execute one command.
 emu:shutdown()  Shutdown the emulator.
+emu:SetClockSp	Set emulator clock speed to certain times the original.
+eed(speed)
 
 cpu.xxx         Get register value.
 cpu.bt          Current stack trace.
@@ -193,6 +195,8 @@ press(keycode)	Short for Keyboard:PressKey(keycode).
 relkey()	Short for Keyboard:ReleaseAll().
 keylog(file)	Short for Keyboard:StartKeyLog(filename).
 stoplog()	Short for Keyboard:StopKeyLog().
+
+overclock	Set emulator clock speed to certain times the original.
 ]])
 end
 
@@ -259,6 +263,11 @@ function readdis(filename)
 	end
 
 	return dis_lines, line_by_addr, label_by_addr
+end
+
+function overclock(speed)
+	emu:SetClockSpeed(speed)
+	printf("**Clockspeed set to %fx**", speed)
 end
 
 function keyinj(filename, ptime, dtime)
@@ -687,7 +696,7 @@ function pscr()
 end
 
 function pbuf(x)
-	local base=hwid==3 and 0x87d0 or (x==2 and 0xe3d4 or 0xddd4)
+	local base=hwid==3 and 0x87d0 or (hwid==4 and (x==2 and 0xe3d4 or 0xddd4) or (0xca54+(x-1)*0x600))
 	local d={}
 	for i=base,base+screen_nrow*screen_ncol-1 do
 		table.insert(d,data[i])

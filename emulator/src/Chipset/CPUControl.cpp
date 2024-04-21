@@ -45,8 +45,13 @@ namespace casioemu
 			impl_operands[0].value = reg_ecsr[reg_psw & PSW_ELEVEL];
 			break;
 		case 9:
-			if (reg_psw & PSW_ELEVEL)
+			if (reg_psw & PSW_ELEVEL) {
 				impl_operands[0].value = reg_epsw[reg_psw & PSW_ELEVEL];
+			} else {
+				if(real_hardware) {
+					impl_operands[0].value = 0xFF;
+				}
+			}
 			break;
 		case 10:
 			impl_operands[0].value = reg_psw;
