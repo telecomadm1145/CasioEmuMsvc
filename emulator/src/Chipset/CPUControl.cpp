@@ -114,6 +114,8 @@ namespace casioemu
 	void CPU::OP_PSW_OR()
 	{
 		reg_psw |= (impl_opcode & 0xFF);
+		if(impl_opcode & 0x0008)
+			emulator.chipset.isMIBlocked = true;
 	}
 
 	void CPU::OP_PSW_AND()
@@ -218,6 +220,7 @@ namespace casioemu
 		reg_csr = reg_ecsr[reg_psw & PSW_ELEVEL];
 		reg_pc = reg_elr[reg_psw & PSW_ELEVEL];
 		reg_psw = reg_epsw[reg_psw & PSW_ELEVEL];
+		emulator.chipset.isMIBlocked = true;
 	}
 }
 

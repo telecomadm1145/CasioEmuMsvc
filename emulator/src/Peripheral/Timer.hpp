@@ -3,7 +3,6 @@
 
 #include "Peripheral.hpp"
 #include "../Chipset/MMURegion.hpp"
-#include "../Chipset/InterruptSource.hpp"
 
 namespace casioemu
 {
@@ -13,7 +12,7 @@ namespace casioemu
 		uint16_t data_counter, data_interval;
 		uint8_t data_F024, data_control;
 
-		InterruptSource interrupt_source;
+		size_t IntIndex = 4;
 
 		bool raise_required;
 		bool real_hardware;

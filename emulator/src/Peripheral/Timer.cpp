@@ -9,8 +9,6 @@ namespace casioemu
 {
 	void Timer::Initialise()
 	{
-		interrupt_source.Setup(9, emulator);
-
 		real_hardware = emulator.GetModelInfo("real_hardware");
 		cycles_per_second = emulator.GetCyclesPerSecond();
 		EmuStopped = false;
@@ -61,14 +59,12 @@ namespace casioemu
 		++ext_to_int_counter;
 
 		if (raise_required)
-			interrupt_source.TryRaise();
+			emulator.chipset.MaskableInterrupts[IntIndex].TryRaise();
 	}
 
 	void Timer::TickAfterInterrupts()
 	{
-		if (raise_required && interrupt_source.Success()) {
-			raise_required = false;
-		}
+		raise_required = false;
 
 		if(EmuStopped && emulator.chipset.GetRunningState()) {
 			EmuStopped = false;
@@ -97,8 +93,7 @@ namespace casioemu
 			if (data_counter >= (emulator.chipset.EmuTimerSkipped ? 1 : data_interval))
 			{
 				data_counter = 0;
-				if (interrupt_source.Enabled())
-					raise_required = true;
+				raise_required = true;
 			}
 			++data_counter;
 		}

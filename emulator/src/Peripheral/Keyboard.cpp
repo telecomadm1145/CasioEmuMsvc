@@ -26,7 +26,7 @@ namespace casioemu
 		 */
 		real_hardware = emulator.GetModelInfo("real_hardware");
 
-		interrupt_source.Setup(5, emulator);
+		IntRaised = false;
 
 		region_ki.Setup(0xF040, 1, "Keyboard/KI", &keyboard_in, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
 
@@ -279,6 +279,7 @@ namespace casioemu
 		p146 = false;
 		keyboard_out = 0;
 		keyboard_out_mask = 0;
+		IntRaised = false;
 
 		if (!real_hardware)
 		{
@@ -293,8 +294,10 @@ namespace casioemu
 
 	void Keyboard::Tick()
 	{
-		if (has_input && interrupt_source.Enabled())
-			interrupt_source.TryRaise();
+		if (has_input && (!IntRaised)) {
+			emulator.chipset.MaskableInterrupts[IntIndex].TryRaise();
+			IntRaised = true;
+		}
 	}
 
 	void Keyboard::Frame()
@@ -581,6 +584,7 @@ namespace casioemu
 		if (had_effect)
 		{
 			require_frame = true;
+			IntRaised = false;
 			if (real_hardware)
 				RecalculateGhost();
 			else

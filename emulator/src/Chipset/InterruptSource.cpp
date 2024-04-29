@@ -18,41 +18,39 @@ namespace casioemu
 		interrupt_index = _interrupt_index;
 		emulator = &_emulator;
 
+		enabled = false;
 		setup_done = true;
 	}
 
-	bool InterruptSource::Enabled()
+	void InterruptSource::TryRaise()
 	{
 		if (!setup_done)
 			PANIC("Setup not invoked\n");
 
-		return emulator->chipset.InterruptEnabledBySFR(interrupt_index);
-	}
+		emulator->chipset.SetInterruptPendingSFR(interrupt_index, true);
 
-	bool InterruptSource::TryRaise()
-	{
-		if (!setup_done)
-			PANIC("Setup not invoked\n");
-
-		if (!emulator->chipset.InterruptEnabledBySFR(interrupt_index) || emulator->chipset.GetInterruptPendingSFR(interrupt_index))
-		{
-			raise_success = false;
-		}
-		else
-		{
+		if(enabled)
 			emulator->chipset.RaiseMaskable(interrupt_index);
-			raise_success = true;
-		}
-
-		return raise_success;
 	}
 
-	bool InterruptSource::Success()
-	{
+	void InterruptSource::SetEnabled(bool val) {
 		if (!setup_done)
 			PANIC("Setup not invoked\n");
 
-		return raise_success && emulator->chipset.GetInterruptPendingSFR(interrupt_index);
+		enabled = val;
+
+		if(!enabled)
+			ResetInt();
+
+		if(enabled && emulator->chipset.GetInterruptPendingSFR(interrupt_index))
+			emulator->chipset.RaiseMaskable(interrupt_index);
+	}
+
+	void InterruptSource::ResetInt() {
+		if (!setup_done)
+			PANIC("Setup not invoked\n");
+		
+		emulator->chipset.ResetMaskable(interrupt_index);
 	}
 }
 

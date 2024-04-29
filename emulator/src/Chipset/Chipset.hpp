@@ -2,6 +2,7 @@
 #include "../Config.hpp"
 
 #include "MMURegion.hpp"
+#include "InterruptSource.hpp"
 
 #include <string>
 #include <vector>
@@ -51,11 +52,11 @@ namespace casioemu
 		void DestructPeripherals();
 
 		void ConstructInterruptSFR();
+		void ResetInterruptSFR();
 		void DestructInterruptSFR();
 		MMURegion region_int_mask, region_int_pending;
-		uint16_t data_int_mask, data_int_pending;
-		static const size_t managed_interrupt_base = 4, managed_interrupt_amount = 13;
-		static const uint16_t interrupt_bitfield_mask = (1 << managed_interrupt_amount) - 1;
+		uint32_t data_int_mask, data_int_pending;
+		static const size_t managed_interrupt_base = 4;
 
 	public:
 		Chipset(Emulator &emulator);
@@ -66,6 +67,11 @@ namespace casioemu
 		CPU &cpu;
 		MMU &mmu;
 		std::vector<unsigned char> rom_data;
+
+		InterruptSource* MaskableInterrupts;
+		size_t EffectiveMICount;
+
+		bool isMIBlocked;
 
 		bool EmuTimerSkipped;
 
@@ -87,8 +93,8 @@ namespace casioemu
 		void RaiseEmulator();
 		void RaiseNonmaskable();
 		void RaiseMaskable(size_t index);
-		bool InterruptEnabledBySFR(size_t index);
-		void SetInterruptPendingSFR(size_t index);
+		void ResetMaskable(size_t index);
+		void SetInterruptPendingSFR(size_t index, bool val);
 		bool GetInterruptPendingSFR(size_t index);
 
 		void Tick();

@@ -8,15 +8,15 @@ namespace casioemu
 	class InterruptSource
 	{
 		Emulator *emulator;
-		bool raise_success, setup_done;
+		bool enabled, setup_done;
 		size_t interrupt_index;
 
 	public:
 		InterruptSource();
 		void Setup(size_t interrupt_index, Emulator &_emulator);
-		bool Enabled();
-		bool TryRaise();
-		bool Success();
+		void TryRaise();
+		void ResetInt();
+		void SetEnabled(bool val);
 	};
 }
 

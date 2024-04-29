@@ -5,6 +5,7 @@
 #include "../Logger.hpp"
 #include "CPU.hpp"
 #include "MMU.hpp"
+#include "InterruptSource.hpp"
 
 #include "../Peripheral/ROMWindow.hpp"
 #include "../Peripheral/BatteryBackedRAM.hpp"
@@ -53,9 +54,55 @@ namespace casioemu
 
 	void Chipset::ConstructInterruptSFR()
 	{
-		region_int_mask.Setup(0xF010, 2, "Chipset/InterruptMask", &data_int_mask, MMURegion::DefaultRead<uint16_t, interrupt_bitfield_mask>, MMURegion::DefaultWrite<uint16_t, interrupt_bitfield_mask>, emulator);
+		EffectiveMICount = emulator.hardware_id == HW_ES_PLUS ? 12 : emulator.hardware_id == HW_CLASSWIZ ? 17 : 21;
+		MaskableInterrupts = new InterruptSource[EffectiveMICount];
+		for(size_t i = 0; i < EffectiveMICount; i++) {
+			MaskableInterrupts[i].Setup(i + INT_MASKABLE, emulator);
+		}
+		isMIBlocked = false;
 
-		region_int_pending.Setup(0xF014, 2, "Chipset/InterruptPending", &data_int_pending, MMURegion::DefaultRead<uint16_t, interrupt_bitfield_mask>, MMURegion::DefaultWrite<uint16_t, interrupt_bitfield_mask>, emulator);
+		//WDTINT is unused
+		region_int_mask.Setup(0xF010, 4, "Chipset/InterruptMask", this, [](MMURegion *region, size_t offset) {
+			offset -= region->base;
+			Chipset *chipset = (Chipset*)region->userdata;
+			return (uint8_t)((chipset->data_int_mask >> (offset * 8)) & 0xFF);
+		}, [](MMURegion *region, size_t offset, uint8_t data) {
+			offset -= region->base;
+			Chipset *chipset = (Chipset*)region->userdata;
+			size_t mask = (1 << (chipset->EffectiveMICount + 1)) - 2;
+			chipset->data_int_mask = (chipset->data_int_mask & (~(0xFF << (offset * 8)))) | (data << (offset * 8));
+			chipset->data_int_mask &= mask;
+			for(size_t i = 0; i < chipset->EffectiveMICount; i++) {
+				chipset->MaskableInterrupts[i].SetEnabled(chipset->data_int_mask & (1 << (i + 1)));
+			}
+		}, emulator);
+
+		region_int_pending.Setup(0xF014, 4, "Chipset/InterruptPending", this, [](MMURegion *region, size_t offset) {
+			offset -= region->base;
+			Chipset *chipset = (Chipset*)region->userdata;
+			return (uint8_t)((chipset->data_int_pending >> (offset * 8)) & 0xFF);
+		}, [](MMURegion *region, size_t offset, uint8_t data) {
+			offset -= region->base;
+			Chipset *chipset = (Chipset*)region->userdata;
+			size_t mask = (1 << (chipset->EffectiveMICount + 1)) - 2;
+			chipset->data_int_pending = (chipset->data_int_pending & (~(0xFF << (offset * 8)))) | (data << (offset * 8));
+			chipset->data_int_pending &= mask;
+			for(size_t i = 0; i < chipset->EffectiveMICount; i++) {
+				if(chipset->data_int_pending & (1 << (i + 1)))
+					chipset->MaskableInterrupts[i].TryRaise();
+				else
+					chipset->MaskableInterrupts[i].ResetInt();
+			}
+		}, emulator);
+	}
+
+	void Chipset::ResetInterruptSFR() {
+		data_int_mask = 0;
+		data_int_pending = 0;
+		for(size_t i = 0; i < EffectiveMICount; i++) {
+			MaskableInterrupts[i].SetEnabled(false);
+			MaskableInterrupts[i].ResetInt();
+		}
 	}
 
 	void Chipset::DestructInterruptSFR()
@@ -104,8 +151,8 @@ namespace casioemu
 
 	void Chipset::Reset()
 	{
-		data_int_mask = 0;
-		data_int_pending = 0;
+		ResetInterruptSFR();
+		isMIBlocked = false;
 
 		for (auto &peripheral : peripherals)
 			peripheral->Reset();
@@ -173,6 +220,15 @@ namespace casioemu
 			return;
 		interrupts_active[index] = true;
 		pending_interrupt_count++;
+	}
+
+	void Chipset::ResetMaskable(size_t index) {
+		if (index < INT_MASKABLE || index >= INT_SOFTWARE)
+			PANIC("%zu is not a valid maskable interrupt index\n", index);
+		if (!interrupts_active[index])
+			return;
+		interrupts_active[index] = false;
+		pending_interrupt_count--;
 	}
 
 	void Chipset::RaiseSoftware(size_t index)
@@ -250,34 +306,27 @@ namespace casioemu
 			break;
 		}
 
-		if(acceptable) {
-			if (index >= INT_MASKABLE && index < INT_SOFTWARE)
-			{
-				if (InterruptEnabledBySFR(index))
-				{
-					SetInterruptPendingSFR(index);
-					if (cpu.GetMasterInterruptEnable())
-						cpu.Raise(exception_level, index);
-				}
+		if (index >= INT_MASKABLE && index < INT_SOFTWARE)
+		{
+			if (cpu.GetMasterInterruptEnable() && acceptable && (!isMIBlocked)) {
+				SetInterruptPendingSFR(index, false);
+				cpu.Raise(exception_level, index);
+
+				interrupts_active[index] = false;
+				pending_interrupt_count--;
 			}
-			else
-			{
+			run_mode = RM_RUN;
+		}
+		else
+		{
+			if(acceptable) {
 				cpu.Raise(exception_level, index);
 			}
+			run_mode = RM_RUN;
+
+			interrupts_active[index] = false;
+			pending_interrupt_count--;
 		}
-		
-
-		run_mode = RM_RUN;
-
-		// * TODO: introduce delay
-
-		interrupts_active[index] = false;
-		pending_interrupt_count--;
-	}
-
-	bool Chipset::InterruptEnabledBySFR(size_t index)
-	{
-		return data_int_mask & (1 << (index - managed_interrupt_base));
 	}
 
 	bool Chipset::GetInterruptPendingSFR(size_t index)
@@ -285,9 +334,12 @@ namespace casioemu
 		return data_int_pending & (1 << (index - managed_interrupt_base));
 	}
 
-	void Chipset::SetInterruptPendingSFR(size_t index)
+	void Chipset::SetInterruptPendingSFR(size_t index, bool val)
 	{
-		data_int_pending |= (1 << (index - managed_interrupt_base));
+		if(val)
+			data_int_pending |= (1 << (index - managed_interrupt_base));
+		else
+			data_int_pending &= ~(1 << (index - managed_interrupt_base));
 	}
 
 	bool Chipset::GetRequireFrame()
@@ -310,11 +362,11 @@ namespace casioemu
 		for (auto peripheral : peripherals)
 			peripheral->Tick();
 
-		if (pending_interrupt_count)
+		if (pending_interrupt_count) {
 			AcceptInterrupt();
-
-		for (auto peripheral : peripherals)
-			peripheral->TickAfterInterrupts();
+			for (auto peripheral : peripherals)
+				peripheral->TickAfterInterrupts();
+		}
 
 		if (run_mode == RM_RUN)
 			cpu.Next();
