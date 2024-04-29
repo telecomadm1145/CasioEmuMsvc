@@ -92,6 +92,7 @@ namespace casioemu
 		bool GetRunningState();
 		void RaiseEmulator();
 		void RaiseNonmaskable();
+		void ResetNonmaskable();
 		void RaiseMaskable(size_t index);
 		void ResetMaskable(size_t index);
 		void SetInterruptPendingSFR(size_t index, bool val);

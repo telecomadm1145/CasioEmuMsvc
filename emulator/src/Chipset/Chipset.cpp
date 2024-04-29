@@ -75,6 +75,12 @@ namespace casioemu
 			for(size_t i = 0; i < chipset->EffectiveMICount; i++) {
 				chipset->MaskableInterrupts[i].SetEnabled(chipset->data_int_mask & (1 << (i + 1)));
 			}
+			if(chipset->data_int_mask & 1) {
+				if(chipset->GetInterruptPendingSFR(4))
+					chipset->RaiseNonmaskable();
+			} else {
+				chipset->ResetNonmaskable();
+			}
 		}, emulator);
 
 		region_int_pending.Setup(0xF014, 4, "Chipset/InterruptPending", this, [](MMURegion *region, size_t offset) {
@@ -93,6 +99,12 @@ namespace casioemu
 				else
 					chipset->MaskableInterrupts[i].ResetInt();
 			}
+			if(chipset->data_int_pending & 1) {
+				if(chipset->data_int_mask & 1)
+					chipset->RaiseNonmaskable();
+			} else {
+				chipset->ResetNonmaskable();
+			}
 		}, emulator);
 	}
 
@@ -103,6 +115,7 @@ namespace casioemu
 			MaskableInterrupts[i].SetEnabled(false);
 			MaskableInterrupts[i].ResetInt();
 		}
+		ResetNonmaskable();
 	}
 
 	void Chipset::DestructInterruptSFR()
@@ -212,6 +225,13 @@ namespace casioemu
 		pending_interrupt_count++;
 	}
 
+	void Chipset::ResetNonmaskable() {
+		if (!interrupts_active[INT_NONMASKABLE])
+			return;
+		interrupts_active[INT_NONMASKABLE] = false;
+		pending_interrupt_count--;
+	}
+
 	void Chipset::RaiseMaskable(size_t index)
 	{
 		if (index < INT_MASKABLE || index >= INT_SOFTWARE)
@@ -315,18 +335,23 @@ namespace casioemu
 				interrupts_active[index] = false;
 				pending_interrupt_count--;
 			}
-			run_mode = RM_RUN;
+			
 		}
-		else
+		else if(index == INT_NONMASKABLE)
 		{
 			if(acceptable) {
 				cpu.Raise(exception_level, index);
+				SetInterruptPendingSFR(INT_NONMASKABLE, false);
+				interrupts_active[index] = false;
+				pending_interrupt_count--;
 			}
-			run_mode = RM_RUN;
-
+		} else {
+			cpu.Raise(exception_level, index);
 			interrupts_active[index] = false;
 			pending_interrupt_count--;
 		}
+
+		run_mode = RM_RUN;
 	}
 
 	bool Chipset::GetInterruptPendingSFR(size_t index)
