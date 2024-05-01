@@ -3,3 +3,7 @@ models/*/*.txt
 *.exe
 .vscode/
 .vs/
+x64/
+Debug/
+Release/
+packages/
