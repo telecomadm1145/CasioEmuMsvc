@@ -5,6 +5,8 @@ VisualStudioVersion = 17.7.34202.233
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CasioEmuMsvc", "CasioEmuMsvc\CasioEmuMsvc.vcxproj", "{5347D0D2-AB7B-45C8-8588-B0D36EE0ABE3}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "nxU8", "SourceGenerator\SourceGenerator.vcxproj", "{CB4D847C-3429-4974-B871-4DD31AF120F1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +23,14 @@ Global
 		{5347D0D2-AB7B-45C8-8588-B0D36EE0ABE3}.Release|x64.Build.0 = Release|x64
 		{5347D0D2-AB7B-45C8-8588-B0D36EE0ABE3}.Release|x86.ActiveCfg = Release|Win32
 		{5347D0D2-AB7B-45C8-8588-B0D36EE0ABE3}.Release|x86.Build.0 = Release|Win32
+		{CB4D847C-3429-4974-B871-4DD31AF120F1}.Debug|x64.ActiveCfg = Debug|x64
+		{CB4D847C-3429-4974-B871-4DD31AF120F1}.Debug|x64.Build.0 = Debug|x64
+		{CB4D847C-3429-4974-B871-4DD31AF120F1}.Debug|x86.ActiveCfg = Debug|Win32
+		{CB4D847C-3429-4974-B871-4DD31AF120F1}.Debug|x86.Build.0 = Debug|Win32
+		{CB4D847C-3429-4974-B871-4DD31AF120F1}.Release|x64.ActiveCfg = Release|x64
+		{CB4D847C-3429-4974-B871-4DD31AF120F1}.Release|x64.Build.0 = Release|x64
+		{CB4D847C-3429-4974-B871-4DD31AF120F1}.Release|x86.ActiveCfg = Release|Win32
+		{CB4D847C-3429-4974-B871-4DD31AF120F1}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

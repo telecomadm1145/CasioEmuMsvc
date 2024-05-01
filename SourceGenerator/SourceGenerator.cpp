@@ -1,4 +1,4 @@
-#include <iostream>
+﻿#include <iostream>
 #include <fstream>
 #include <string>
 #include <cstring>
@@ -9,20 +9,14 @@
 
 int main(int argc, char** argv) {
 	if (argc != 3) {
-		char* st = new char[0x400];
-		std::ifstream fi {"help.txt"};
-		while (true) {
-			fi.getline(st, 0x400);
-			if (fi.fail() || std::strcmp(st, "*") == 0) {
-				fi.close();
-				return 0;
-			}
-			std::cout << st << "\n";
-		}
+		std::cout <<
+#include "help.txt"
+			;
+		return 0;
 	}
 
-	std::ifstream in {argv[1]}, ex {"example.cpp"};
-	std::ofstream out {argv[2]};
+	std::ifstream in{ argv[1] }, ex{ "example.cpp" };
+	std::ofstream out{ argv[2] };
 	char* st = new char[0x400];
 	while (true) {
 		ex.getline(st, 0x400);
@@ -60,7 +54,7 @@ int main(int argc, char** argv) {
 	std::stringstream temp;
 	unregnspace = 7 + 3 * (maxlen - unitlen); // const
 
-	uint8_t mask, val, chardata [3][0x100];
+	uint8_t mask, val, chardata[3][0x100];
 	// chardata: [0] : byte it is in (buf[k])
 	// [1] : shift length
 	// [2] : number length (binary)
@@ -94,17 +88,19 @@ int main(int argc, char** argv) {
 				if (st[j] == '0' || st[j] == '1') {
 					mask = mask << 1 | 1;
 					val = val << 1 | (st[j] - '0');
-				} else {
+				}
+				else {
 					if (chardata[0][uc] == 0xFF) {
 						chardata[0][uc] = i;
 						chardata[1][uc] = 7 - j;
 						chardata[2][uc] = 1;
-					} else {
+					}
+					else {
 						chardata[1][uc]--;
 						chardata[2][uc]++;
 					}
 					mask <<= 1;
-					val  <<= 1;
+					val <<= 1;
 				}
 			}
 			if (i != 0) out << " && ";
@@ -119,7 +115,7 @@ int main(int argc, char** argv) {
 
 		// implementation
 
-		std::stringstream tempss {""};
+		std::stringstream tempss{ "" };
 
 		// First line start. (assignment)
 		tempss << "	int ";
@@ -129,7 +125,8 @@ int main(int argc, char** argv) {
 				declaredat = true;
 				if (notisfirst) {
 					tempss << ", ";
-				} else {
+				}
+				else {
 					notisfirst = true;
 				}
 				tempss << c << " = buf[" << static_cast<int>(chardata[0][static_cast<unsigned char>(c)])
@@ -148,7 +145,7 @@ int main(int argc, char** argv) {
 			out << "<< tohex(buf[" << i << "], 2) << ' ' ";
 		}
 
-			// the string of spaces at last
+		// the string of spaces at last
 		out << "<< \"";
 		for (int i = 0; i < nspace; i++) out << ' '; // how long is determined by opcodelen and maxlen
 		out << "\"\n";
@@ -173,24 +170,24 @@ int main(int argc, char** argv) {
 
 	// "Unrecognized command"
 		// First line start.
-		out << ";\n	out << tohex(ip, 6) << \"   \" ";
-		for (int i = 0; i < unitlen; i++) {
-			out << "<< tohex(buf[" << i << "], 2) << ' ' ";
-		}
+	out << ";\n	out << tohex(ip, 6) << \"   \" ";
+	for (int i = 0; i < unitlen; i++) {
+		out << "<< tohex(buf[" << i << "], 2) << ' ' ";
+	}
 
-			// the string of spaces at last
-		out << "<< \"";
-		for (int i = 0; i < unregnspace; i++) out << ' ';
-		out << "\"\n";
+	// the string of spaces at last
+	out << "<< \"";
+	for (int i = 0; i < unregnspace; i++) out << ' ';
+	out << "\"\n";
 
-		// Second line start.
-		out << "		<< \"Unrecognized command\"\n"
+	// Second line start.
+	out << "		<< \"Unrecognized command\"\n"
 
 		// Third line start.
-			   "		<< \"\\n\";\n   ";
+		"		<< \"\\n\";\n   ";
 
-		// Fourth line start.
-		for (int i = 0; i < unitlen; i++) out << " buf.pop_front();\n";
+	// Fourth line start.
+	for (int i = 0; i < unitlen; i++) out << " buf.pop_front();\n";
 
 	// done. finalize it.
 

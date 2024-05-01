@@ -1,3 +1,4 @@
+R"a(
 Disassembler source code creator
 
 Usage:
@@ -18,3 +19,4 @@ start_position, length are:
    + In octal if there is 0 prefix
 
 Warning: If the disassembler work on invalid code it may crash!
+)a"
