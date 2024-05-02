@@ -1,4 +1,4 @@
-// Independent from the project.
+﻿// Independent from the project.
 
 #include <iostream>
 #include <fstream>

@@ -1,4 +1,4 @@
-#include "Timer.hpp"
+﻿#include "Timer.hpp"
 
 #include "../Logger.hpp"
 #include "../Chipset/MMU.hpp"

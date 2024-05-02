@@ -1,4 +1,4 @@
-#include "ModelInfo.hpp"
+﻿#include "ModelInfo.hpp"
 
 #include "../Emulator.hpp"
 #include "SpriteInfo.hpp"

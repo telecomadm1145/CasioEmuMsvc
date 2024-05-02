@@ -1,4 +1,4 @@
-#include "CodeViewer.hpp"
+﻿#include "CodeViewer.hpp"
 #include "../Chipset/CPU.hpp"
 #include "../Chipset/Chipset.hpp"
 #include "../Config.hpp"
@@ -190,9 +190,9 @@ void CodeViewer::DrawWindow() {
     if (!is_loaded) {
         ImGui::SetNextWindowSize(ImVec2(w * 50, h * 10), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowContentSize(ImVec2(w * 50, h * 10));
-        ImGui::Begin("Disassemble Window");
+        ImGui::Begin("反汇编窗口");
         ImGui::SetCursorPos(ImVec2(w * 2, h * 5));
-        ImGui::Text("Please wait loading...");
+        ImGui::Text("请稍等，正在加载...");
         ImGui::End();
         return;
     }
@@ -203,12 +203,12 @@ void CodeViewer::DrawWindow() {
     sz.y = h;
     // ImGui::SetNextWindowSize(sz);
     // ImGui::SetNextWindowContentSize(sz);
-    ImGui::Begin("Disassemble Window", 0);
+    ImGui::Begin("反汇编窗口", 0);
     ImGui::BeginChild("##scrolling", ImVec2(0, -ImGui::GetWindowHeight() / 2));
     DrawContent();
     ImGui::EndChild();
     ImGui::Separator();
-    ImGui::Text("Go to Addr:");
+    ImGui::Text("转到地址:");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::CalcTextSize("000000").x);
     ImGui::InputText("##input", adrbuf, 8);
@@ -217,9 +217,9 @@ void CodeViewer::DrawWindow() {
         JumpTo(addr >> 16, addr & 0x0ffff);
     }
     ImGui::SameLine();
-    ImGui::Checkbox("STEP", &step_debug);
+    ImGui::Checkbox("逐过程", &step_debug);
     ImGui::SameLine();
-    ImGui::Checkbox("TRACE", &trace_debug);
+    ImGui::Checkbox("逐语句", &trace_debug);
 
     // ImGui::BeginChild("##scrolling");
     DrawMonitor();

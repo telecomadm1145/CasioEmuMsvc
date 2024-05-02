@@ -1,4 +1,4 @@
-#include "Emulator.hpp"
+﻿#include "Emulator.hpp"
 
 #include "Chipset/Chipset.hpp"
 #include "Logger.hpp"

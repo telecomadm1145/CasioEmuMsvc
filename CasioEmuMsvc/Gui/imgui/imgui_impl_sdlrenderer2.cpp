@@ -1,4 +1,4 @@
-// dear imgui: Renderer Backend for SDL_Renderer for SDL2
+﻿// dear imgui: Renderer Backend for SDL_Renderer for SDL2
 // (Requires: SDL 2.0.17+)
 
 // Note how SDL_Renderer is an _optional_ component of SDL2.

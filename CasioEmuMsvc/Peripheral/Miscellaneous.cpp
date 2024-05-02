@@ -1,4 +1,4 @@
-#include "Miscellaneous.hpp"
+﻿#include "Miscellaneous.hpp"
 
 #include "../Logger.hpp"
 #include "../Emulator.hpp"

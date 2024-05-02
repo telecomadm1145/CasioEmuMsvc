@@ -1,4 +1,4 @@
-#include "Screen.hpp"
+﻿#include "Screen.hpp"
 
 #include "../Chipset/MMURegion.hpp"
 #include "../Data/HardwareId.hpp"
@@ -32,8 +32,9 @@ namespace casioemu
 	};
 	template<bool val, class T1, class T2>
 	using TypeBranch_t = TypeBranch<val, T1, T2>::Type;
+	ScreenBase* m_screen = 0;
 	template <HardwareId hardware_id>
-	class Screen : public Peripheral
+	class Screen : public ScreenBase
 	{
 		static int const N_ROW, // excluding the 1 row used for status line
 			ROW_SIZE, // bytes
@@ -169,11 +170,12 @@ namespace casioemu
 
 
 	public:
-		using Peripheral::Peripheral;
+		using ScreenBase::ScreenBase;
 
 		void Initialise();
 		void Uninitialise();
 		void Frame();
+		void RenderScreen(SDL_Renderer*, SDL_Surface*, int ink_alpha_off, bool clear_dots, int ink_alpha_on) override;
 	};
 
 
@@ -493,18 +495,63 @@ namespace casioemu
 		}
 	}
 
+	template<HardwareId hardware_id>
+	void Screen<hardware_id>::RenderScreen(SDL_Renderer* renderer,SDL_Surface* surface, int ink_alpha_off, bool clear_dots, int ink_alpha_on)
+	{
+		static constexpr auto SPR_PIXEL = (int)Sprite::SPR_PIXEL;
+		SDL_Rect dest = Screen<hardware_id>::sprite_info[SPR_PIXEL].dest;
+		int ink_alpha = ink_alpha_off;
+		if (emulator.hardware_id == HW_CLASSWIZ_II) {
+			for (int iy = 0; iy != N_ROW; ++iy)
+			{
+				dest.x = sprite_info[SPR_PIXEL].dest.x;
+				dest.y = sprite_info[SPR_PIXEL].dest.y + iy * sprite_info[SPR_PIXEL].src.h;
+				for (int ix = 0; ix != ROW_SIZE_DISP; ++ix)
+				{
+					for (uint8_t mask = 0x80; mask; mask >>= 1, dest.x += sprite_info[SPR_PIXEL].src.w)
+					{
+						ink_alpha = ink_alpha_off;
+						if (!clear_dots && screen_buffer[iy * ROW_SIZE + OFFSET + ix] & mask)
+							ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.333;
+						if (!clear_dots && screen_buffer1[iy * ROW_SIZE + OFFSET + ix] & mask)
+							ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.667;
+						SDL_FillRect(surface, &dest, 0xffffffff);//ink_alpha
+					}
+				}
+			}
+		}
+		else {
+			for (int iy = 0; iy != N_ROW; ++iy)
+			{
+				dest.x = sprite_info[SPR_PIXEL].dest.x;
+				dest.y = sprite_info[SPR_PIXEL].dest.y + iy * sprite_info[SPR_PIXEL].src.h;
+				for (int ix = 0; ix != ROW_SIZE_DISP; ++ix)
+				{
+					for (uint8_t mask = 0x80; mask; mask >>= 1, dest.x += sprite_info[SPR_PIXEL].src.w)
+					{
+						if (!clear_dots && screen_buffer[iy * ROW_SIZE + OFFSET + ix] & mask)
+							ink_alpha = ink_alpha_on;
+						else
+							ink_alpha = ink_alpha_off;
+						SDL_FillRect(surface, &dest, 0xffffffff);//ink_alpha
+					}
+				}
+			}
+		}
+	}
+
 	Peripheral* CreateScreen(Emulator& emulator)
 	{
 		switch (emulator.hardware_id)
 		{
 		case HW_ES_PLUS:
-			return new Screen<HW_ES_PLUS>(emulator);
+			return m_screen = new Screen<HW_ES_PLUS>(emulator);
 
 		case HW_CLASSWIZ:
-			return new Screen<HW_CLASSWIZ>(emulator);
+			return m_screen = new Screen<HW_CLASSWIZ>(emulator);
 
 		case HW_CLASSWIZ_II:
-			return new Screen<HW_CLASSWIZ_II>(emulator);
+			return m_screen = new Screen<HW_CLASSWIZ_II>(emulator);
 		default:
 			PANIC("Unknown hardware id\n");
 		}

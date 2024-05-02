@@ -1,4 +1,4 @@
-#include "MMU.hpp"
+﻿#include "MMU.hpp"
 
 #include <cstring>
 #include "../Emulator.hpp"
@@ -209,8 +209,8 @@ namespace casioemu
 		MemoryByte *segment = segment_dispatch[segment_index];
 		if (!segment)
 		{
-			//logger::Info("read from offset %04zX of unmapped segment %02zX\n", segment_offset, segment_index);
-			emulator.HandleMemoryError();
+			logger::Info("read from offset %04zX of unmapped segment %02zX\n", segment_offset, segment_index);
+			//emulator.HandleMemoryError();
 			return 0;
 		}
 
@@ -221,15 +221,15 @@ namespace casioemu
 			lua_geti(emulator.lua_state, LUA_REGISTRYINDEX, byte.on_read);
 			if (lua_pcall(emulator.lua_state, 0, 0, 0) != LUA_OK)
 			{
-				//logger::Info("calling commands on rwatch at %06zX failed: %s\n",
-						//offset, lua_tostring(emulator.lua_state, -1));
+				logger::Info("calling commands on rwatch at %06zX failed: %s\n",
+						offset, lua_tostring(emulator.lua_state, -1));
 				lua_pop(emulator.lua_state, 1);
 			}
 		}
 		if (!region)
 		{
-			//logger::Info("read from unmapped offset %04zX of segment %02zX\n", segment_offset, segment_index);
-			emulator.HandleMemoryError();
+			logger::Info("read from unmapped offset %04zX of segment %02zX\n", segment_offset, segment_index);
+			//emulator.HandleMemoryError();
 			return 0;
 		}
 
@@ -247,7 +247,7 @@ namespace casioemu
 		MemoryByte *segment = segment_dispatch[segment_index];
 		if (!segment)
 		{
-			//logger::Info("write to offset %04zX of unmapped segment %02zX (%02zX)\n", segment_offset, segment_index, data);
+			logger::Info("write to offset %04zX of unmapped segment %02zX (%02zX)\n", segment_offset, segment_index, data);
 			emulator.HandleMemoryError();
 			return;
 		}
@@ -266,8 +266,8 @@ namespace casioemu
 		}
 		if (!region)
 		{
-			//logger::Info("write to unmapped offset %04zX of segment %02zX (%02zX)\n", segment_offset, segment_index, data);
-			emulator.HandleMemoryError();
+			logger::Info("write to unmapped offset %04zX of segment %02zX (%02zX)\n", segment_offset, segment_index, data);
+			//emulator.HandleMemoryError();
 			return;
 		}
 

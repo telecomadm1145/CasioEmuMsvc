@@ -1,4 +1,4 @@
-#include "BCDCalc.hpp"
+﻿#include "BCDCalc.hpp"
 
 #include "../Chipset/MMURegion.hpp"
 #include "../Data/HardwareId.hpp"

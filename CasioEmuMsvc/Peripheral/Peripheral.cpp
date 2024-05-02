@@ -1,4 +1,4 @@
-#include "Peripheral.hpp"
+﻿#include "Peripheral.hpp"
 
 namespace casioemu
 {

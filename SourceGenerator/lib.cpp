@@ -1,4 +1,4 @@
-#include <string>
+﻿#include <string>
 
 std::string tohex(int n, int len) {
     std::string retval = "";

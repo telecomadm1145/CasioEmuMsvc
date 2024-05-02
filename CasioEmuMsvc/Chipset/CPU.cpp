@@ -1,4 +1,4 @@
-#include "CPU.hpp"
+﻿#include "CPU.hpp"
 
 #include "../Emulator.hpp"
 #include "Chipset.hpp"
@@ -489,9 +489,9 @@ namespace casioemu
 		output << std::hex << std::setfill('0') << std::uppercase;
 		for (StackFrame frame : stack)
 		{
-			output << "  function "
+			output << "  函数 0x"
 				<< std::setw(6) << (((size_t)frame.new_csr) << 16 | frame.new_pc)
-				<< " returns to " << std::setw(6);
+				<< " 返回到 0x" << std::setw(6);
 			if (frame.lr_pushed)
 			{
 				uint16_t saved_lr, saved_lcsr = 0;
@@ -502,7 +502,7 @@ namespace casioemu
 					saved_lcsr = mmu.ReadData(frame.lr_push_address + 2);
 				output << (((size_t)saved_lcsr) << 16 | saved_lr);
 
-				output << " - lr pushed at "
+				output << " - 返回函数值在 0x"
 					<< std::setw(4) << frame.lr_push_address;
 			}
 			else

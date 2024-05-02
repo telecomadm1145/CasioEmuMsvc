@@ -105,6 +105,18 @@
     <ClCompile Include="Gui\Command.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Gui\Injector.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\MemBreakPoint.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\WatchWindow.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\VariableWindow.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Config.hpp">
@@ -204,6 +216,21 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Gui\ui.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\Injector.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\MemBreakPoint.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\WatchWindow.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\CwiiHelp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\VariableWindow.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
