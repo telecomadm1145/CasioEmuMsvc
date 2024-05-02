@@ -373,15 +373,17 @@ namespace casioemu
 		}
 		else
 			button.pressed = true;
-		if (button.pressed)
-		{
-			AppendKey(cwii_keymap[7-getHighestBitPosition(button.ki_bit)][getHighestBitPosition(button.ko_bit)]);
-		}
 
 		require_frame = true;
-		
+
 		if (button.type == Button::BT_POWER && button.pressed && !old_pressed)
+		{
+			AppendKey(0x35);
 			emulator.chipset.Reset();
+		}
+		else if (button.pressed) {
+			AppendKey(cwii_keymap[7 - getHighestBitPosition(button.ki_bit)][getHighestBitPosition(button.ko_bit)]);
+		}
 		if (button.type == Button::BT_BUTTON && button.pressed != old_pressed)
 		{
 			if (real_hardware)
