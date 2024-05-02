@@ -5,6 +5,7 @@
 #include "../Chipset/MMU.hpp"
 #include "../Emulator.hpp"
 #include "../Chipset/Chipset.hpp"
+#include "../Gui/KeyLog.h"
 
 #include <fstream>
 #include <thread>
@@ -362,11 +363,9 @@ namespace casioemu
 			isKeyLogToggled = false;
 		}
 	}
-
 	void Keyboard::PressButton(Button& button, bool stick)
 	{
 		bool old_pressed = button.pressed;
-
 		if (stick)
 		{
 			button.stuck = !button.stuck;
@@ -374,9 +373,13 @@ namespace casioemu
 		}
 		else
 			button.pressed = true;
+		if (button.pressed)
+		{
+			AppendKey(cwii_keymap[7-getHighestBitPosition(button.ki_bit)][getHighestBitPosition(button.ko_bit)]);
+		}
 
 		require_frame = true;
-
+		
 		if (button.type == Button::BT_POWER && button.pressed && !old_pressed)
 			emulator.chipset.Reset();
 		if (button.type == Button::BT_BUTTON && button.pressed != old_pressed)

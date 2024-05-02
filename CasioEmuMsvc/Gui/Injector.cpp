@@ -10,14 +10,50 @@
 
 #include "../Config.hpp"
 #include "ui.hpp"
+#include <windows.h>
+#include <fstream>
+#include <iostream>
+const ImWchar* GetPua()
+{
+	static const ImWchar ranges[] =
+	{
+		0xE000, 0xE900, // PUA
+		0,
+	};
+	return &ranges[0];
+}
 Injector::Injector()
 {
 	data_buf = new char[1024];
 	memset(data_buf, 0, 1024);
 	ImGuiIO& io = ImGui::GetIO();
-	//io.Fonts->AddFontFromFileTTF("NotoSansSC-Medium.otf", 18, nullptr, io.Fonts->GetGlyphRangesDefault());
 	io.Fonts->AddFontFromFileTTF("NotoSansSC-Medium.otf", 18, nullptr, io.Fonts->GetGlyphRangesChineseFull());
+	ImFontConfig config;
+	config.MergeMode = true;
+	//config.GlyphOffset = ImVec2(0,1.5);
+	io.Fonts->AddFontFromFileTTF("CWIICN.ttf", 18, &config, GetPua());
 	io.Fonts->Build();
+}
+static std::string OpenFile()
+{
+	OPENFILENAMEA ofn;
+	char fileName[MAX_PATH] = "";
+
+	ZeroMemory(&ofn, sizeof(ofn));
+
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = NULL;
+	ofn.lpstrFilter = "All Files (*.*)\0*.*\0";
+	ofn.lpstrFile = fileName;
+	ofn.nMaxFile = MAX_PATH;
+	ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
+
+	if (GetOpenFileNameA(&ofn))
+	{
+		return std::string(fileName);
+	}
+
+	return "";
 }
 
 void Injector::Show() {
@@ -62,6 +98,35 @@ void Injector::Show() {
 		memcpy(base_addr + 0x9268, data_buf, range);
 		info_msg = "字符串已加载";
 		ImGui::OpenPopup("info");
+	}
+	if (ImGui::Button("加载 Rop 二进制文件")) {
+		auto f = OpenFile();
+		std::ifstream ifs2(f, std::ios::in | std::ios::binary);
+		if (!ifs2) {
+			info_msg = "文件打开失败";
+			ImGui::OpenPopup("info");
+		}
+		else {
+			char load[0x1000]{};
+			ifs2.get(load, 0x1000);
+			ifs2.seekg(0, std::ios::end);
+			auto sz = (size_t)ifs2.tellg();
+			if (sz < 0xF7)
+			{
+				info_msg = "Rop 二进制文件不正确";
+				ImGui::OpenPopup("info");
+			}
+			else {
+				memcpy(base_addr + 0x9268, load + 0x8, 200);
+				memcpy(base_addr + 0x965E, load + 0x5E, 0xF7 - 0x5E);
+				if (sz > 0xF8) {
+					std::cout << "Loaded to stack:" << sz - 0xF8 << "\n";
+					memcpy(base_addr + 0xE300, load + 0xF8, sz - 0xF8);
+				}
+				info_msg = "Rop 已加载，按 Exe 执行";
+				ImGui::OpenPopup("info");
+			}
+		}
 	}
 	if (ImGui::Button("加载Hex字符串")) {
 

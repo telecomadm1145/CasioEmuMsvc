@@ -117,6 +117,9 @@
     <ClCompile Include="Gui\VariableWindow.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Gui\KeyLog.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Config.hpp">
@@ -233,8 +236,14 @@
     <ClInclude Include="Gui\VariableWindow.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Gui\KeyLog.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Font Include="CWIICN.ttf" />
   </ItemGroup>
 </Project>

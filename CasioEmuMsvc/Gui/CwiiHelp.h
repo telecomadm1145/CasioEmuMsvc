@@ -80,7 +80,8 @@ namespace cwii {
 		auto sign = p[13]; // 0xE == 14
 		auto numbersign = 1;
 		auto expsign = 1;
-		ConvertSign(sign, expsign, numbersign);
+		if (!ConvertSign(sign, expsign, numbersign))
+			return "";
 		auto base = HexizeString(p, 12);
 		switch (type) {
 		case 0x0:
@@ -100,9 +101,11 @@ namespace cwii {
 			auto ind = base.find_first_of('A');
 			auto ind2 = base.find_last_of('A');
 			if (ind != ind2) {
-				base[ind] = '+';
+				if (ind < base.size())
+					base[ind] = '+';
 			}
-			base[ind2] = '/';
+			if (ind2 < base.size())
+				base[ind2] = '/';
 			base.erase(0, 1);
 			base.resize(exp, '0');
 			if (numbersign == -1) {
@@ -113,7 +116,8 @@ namespace cwii {
 		case 0x8: {
 			auto numbersign2 = 1;
 			auto expsign2 = 1;
-			ConvertSign(exp, expsign2, numbersign2);
+			if (!ConvertSign(exp, expsign2, numbersign2))
+				return "";
 			std::string fin;
 			auto sqrt1 = trim(base.substr(1, 3));
 			auto a1 = trim(base.substr(4, 2));

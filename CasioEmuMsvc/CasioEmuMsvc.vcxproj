@@ -163,6 +163,7 @@
     <ClCompile Include="Gui\Injector.cpp" />
     <ClCompile Include="Gui\MemBreakPoint.cpp" />
     <ClCompile Include="Gui\WatchWindow.cpp" />
+    <ClCompile Include="Gui\KeyLog.cpp" />
     <ClCompile Include="Logger.cpp" />
     <ClCompile Include="Peripheral\BatteryBackedRAM.cpp" />
     <ClCompile Include="Peripheral\BCDCalc.cpp" />
@@ -203,6 +204,7 @@
     <ClInclude Include="Gui\MemBreakPoint.hpp" />
     <ClInclude Include="Gui\ui.hpp" />
     <ClInclude Include="Gui\WatchWindow.hpp" />
+    <ClInclude Include="Gui\KeyLog.h" />
     <ClInclude Include="Logger.hpp" />
     <ClInclude Include="Peripheral\BatteryBackedRAM.hpp" />
     <ClInclude Include="Peripheral\BCDCalc.hpp" />
@@ -217,6 +219,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Font Include="CWIICN.ttf">
+      <FileType>Document</FileType>
+      <DeploymentContent>false</DeploymentContent>
+    </Font>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

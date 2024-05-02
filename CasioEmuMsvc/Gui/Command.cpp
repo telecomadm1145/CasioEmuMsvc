@@ -13,6 +13,7 @@
 #include "hex.hpp"
 #include "../Peripheral/Screen.hpp"
 #include "VariableWindow.h"
+#include "KeyLog.h"
 
 char* n_ram_buffer = nullptr;
 casioemu::MMU* me_mmu = nullptr;
@@ -24,6 +25,7 @@ static MemBreakPoint* membp;
 static WatchWindow* ww;
 static SDL_Renderer* renderer;
 static VariableWindow* vw;
+static KeyLog* kl;
 static ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 void gui_loop() {
 	if (!m_emu->Running())
@@ -46,7 +48,7 @@ void gui_loop() {
 	membp->Show();
 	ww->Show();
 	vw->Draw();
-
+	kl->Draw();
 	// Rendering
 	ImGui::Render();
 	SDL_RenderSetScale(renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
@@ -95,6 +97,7 @@ int test_gui(bool* guiCreated) {
 	membp = new MemBreakPoint();
 	ww = new WatchWindow();
 	vw = new VariableWindow();
+	kl = new KeyLog();
 	return 0;
 	//ImGui_ImplSDL2_InitForSDLRenderer(renderer);
 }
