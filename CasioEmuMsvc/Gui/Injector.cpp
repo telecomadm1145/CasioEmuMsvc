@@ -22,14 +22,29 @@ const ImWchar* GetPua()
 	};
 	return &ranges[0];
 }
+const ImWchar* GetKanji()
+{
+	static const ImWchar ranges[] =
+	{
+		0x2000, 0x206F, // General Punctuation
+		0x3000, 0x30FF, // CJK Symbols and Punctuations, Hiragana, Katakana
+		0x31F0, 0x31FF, // Katakana Phonetic Extensions
+		0xFF00, 0xFFEF, // Half-width characters
+		0xFFFD, 0xFFFD, // Invalid
+		0x4e00, 0x9FAF, // CJK Ideograms
+		0,
+	};
+	return &ranges[0];
+}
 Injector::Injector()
 {
 	data_buf = new char[1024];
 	memset(data_buf, 0, 1024);
 	ImGuiIO& io = ImGui::GetIO();
-	io.Fonts->AddFontFromFileTTF("NotoSansSC-Medium.otf", 18, nullptr, io.Fonts->GetGlyphRangesChineseFull());
+	io.Fonts->AddFontDefault();
 	ImFontConfig config;
 	config.MergeMode = true;
+	io.Fonts->AddFontFromFileTTF("NotoSansSC-Medium.otf", 18, &config, GetKanji());
 	//config.GlyphOffset = ImVec2(0,1.5);
 	io.Fonts->AddFontFromFileTTF("CWIICN.ttf", 18, &config, GetPua());
 	io.Fonts->Build();

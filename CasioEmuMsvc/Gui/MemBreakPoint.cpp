@@ -91,6 +91,8 @@ void MemBreakPoint::DrawFindContent() {
 }
 
 void MemBreakPoint::TryTrigBp(uint16_t addr, bool write) {
+	if (!this)
+		return;
 	if (target_addr == -1) {
 		return;
 	}

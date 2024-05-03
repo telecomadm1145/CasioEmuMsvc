@@ -120,7 +120,13 @@ void WatchWindow::Show() {
 	ImGui::SameLine();
 	ImGui::SliderInt("范围", &range, 64, 2048);
 	uint16_t offset = chipset.cpu.reg_sp & 0xffff;
-	mem_editor.DrawContents(&m_emu->chipset.mmu,n_ram_buffer + offset - 0x9000, range, offset);
+	mem_editor.ReadFn = [](const ImU8* data, size_t off) -> ImU8 {
+		return me_mmu->ReadData((size_t)data + off);
+	};
+	mem_editor.WriteFn = [](ImU8* data, size_t off, ImU8 d) {
+		return me_mmu->WriteData((size_t)data + off, d);
+	};
+	mem_editor.DrawContents((void*)offset, range, offset);
 	ImGui::EndChild();
 	ImGui::End();
 

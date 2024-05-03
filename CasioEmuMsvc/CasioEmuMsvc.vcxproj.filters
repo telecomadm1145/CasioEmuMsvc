@@ -242,6 +242,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include=".clang-format" />
   </ItemGroup>
   <ItemGroup>
     <Font Include="CWIICN.ttf" />

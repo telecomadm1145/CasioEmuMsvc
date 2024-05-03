@@ -209,8 +209,8 @@ namespace casioemu
 		MemoryByte *segment = segment_dispatch[segment_index];
 		if (!segment)
 		{
-			logger::Info("read from offset %04zX of unmapped segment %02zX\n", segment_offset, segment_index);
-			//emulator.HandleMemoryError();
+			//logger::Info("read from offset %04zX of unmapped segment %02zX\n", segment_offset, segment_index);
+			emulator.HandleMemoryError();
 			return 0;
 		}
 
@@ -226,10 +226,11 @@ namespace casioemu
 				lua_pop(emulator.lua_state, 1);
 			}
 		}
+		membp->TryTrigBp(offset, false);
 		if (!region)
 		{
-			logger::Info("read from unmapped offset %04zX of segment %02zX\n", segment_offset, segment_index);
-			//emulator.HandleMemoryError();
+			//logger::Info("read from unmapped offset %04zX of segment %02zX\n", segment_offset, segment_index);
+			emulator.HandleMemoryError();
 			return 0;
 		}
 
@@ -247,7 +248,7 @@ namespace casioemu
 		MemoryByte *segment = segment_dispatch[segment_index];
 		if (!segment)
 		{
-			logger::Info("write to offset %04zX of unmapped segment %02zX (%02zX)\n", segment_offset, segment_index, data);
+			//logger::Info("write to offset %04zX of unmapped segment %02zX (%02zX)\n", segment_offset, segment_index, data);
 			emulator.HandleMemoryError();
 			return;
 		}
@@ -264,10 +265,11 @@ namespace casioemu
 				lua_pop(emulator.lua_state, 1);
 			}
 		}
+		membp->TryTrigBp(offset, true);
 		if (!region)
 		{
-			logger::Info("write to unmapped offset %04zX of segment %02zX (%02zX)\n", segment_offset, segment_index, data);
-			//emulator.HandleMemoryError();
+			//logger::Info("write to unmapped offset %04zX of segment %02zX (%02zX)\n", segment_offset, segment_index, data);
+			emulator.HandleMemoryError();
 			return;
 		}
 
