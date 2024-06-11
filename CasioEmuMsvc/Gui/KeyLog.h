@@ -1,8 +1,10 @@
 ﻿#pragma once
 #include <vcruntime_string.h>
+#include <functional>
 extern char m_keylog_buffer[4096];
 extern int m_keylog_i;
 extern bool m_keylog_enabled;
+extern std::function<void(int, int)> keybd_in;
 inline void Ucs4Char2Utf8(int codePoint, char* outbuf, int& outlen)
 {
 	outlen = 0;

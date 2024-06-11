@@ -6,6 +6,7 @@
 #include "../Chipset/InterruptSource.hpp"
 
 #include <unordered_map>
+#include <functional>
 
 namespace casioemu
 {

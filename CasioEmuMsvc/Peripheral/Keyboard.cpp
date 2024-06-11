@@ -61,6 +61,27 @@ namespace casioemu
 					keyboard->RecalculateKI();
 				}, emulator);
 
+		keybd_in = [&](int ki, int ko) {
+			if (ki == 114514) {
+				ReleaseAll();
+				emulator.chipset.Reset();
+				return;
+			}
+			Button* selected=0;
+			for (auto& btn : buttons) {
+				if (getHighestBitPosition(btn.ki_bit) == ki && getHighestBitPosition(btn.ko_bit) == ko) {
+					selected = &btn;
+					break;
+				}
+			}
+			if (!selected)
+				return;
+			PressButton(*selected,false);
+			emulator.chipset.MaskableInterrupts[IntIndex].TryRaise();
+			std::this_thread::sleep_for(std::chrono::milliseconds(300));
+			ReleaseAll();
+		};
+
 		if (!real_hardware)
 		{
 			keyboard_pd_emu = emulator.GetModelInfo("pd_value");

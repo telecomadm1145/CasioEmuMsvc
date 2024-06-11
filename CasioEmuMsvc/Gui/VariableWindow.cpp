@@ -80,6 +80,15 @@ void VariableWindow::Draw()
 		base_addr += 0xE;
 		ptr += 0xE;
 	}
+	ImGui::Text("Theta");
+	ImGui::SameLine(90);
+	auto a = cwii::StringizeCwiiNumber(n_ram_buffer + 0xBDEC - 0x9000);
+	ImGui::Text(a.c_str());
+	if (showaddr) {
+		ImGui::Text("地址");
+		ImGui::SameLine(90);
+		ImGui::Text("0xBDEC");
+	}
 	ImGui::Checkbox("显示地址", &showaddr);
 	ImGui::Checkbox("显示十六进制", &showhex);
 	ImGui::Checkbox("进入复数模式时显示虚部", &showimg_auto);

@@ -46,7 +46,7 @@ Injector::Injector()
 	config.MergeMode = true;
 	io.Fonts->AddFontFromFileTTF("NotoSansSC-Medium.otf", 18, &config, GetKanji());
 	//config.GlyphOffset = ImVec2(0,1.5);
-	io.Fonts->AddFontFromFileTTF("CWIICN.ttf", 18, &config, GetPua());
+	io.Fonts->AddFontFromFileTTF("CWIICN.ttf", 15, &config, GetPua());
 	io.Fonts->Build();
 }
 static std::string OpenFile()
@@ -83,7 +83,16 @@ void Injector::Show() {
 	ImGui::BeginChild("输入内容", ImVec2(0, ImGui::GetWindowHeight() * 0.4));
 	editor.DrawContents(data_buf, range);
 	ImGui::EndChild();
+	if (ImGui::Button("暗色")) {
+		ImGui::StyleColorsDark();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("亮色")) {
+		ImGui::StyleColorsLight();
+	}
 	ImGui::SliderInt("输入内容大小", &range, 64, 1024);
+	ImGuiIO& io = ImGui::GetIO();
+	ImGui::SliderFloat("缩放", &io.FontGlobalScale, 0.5, 2);
 	ImGui::Text("an前数字");
 	ImGui::SameLine();
 	ImGui::InputText("偏移", buf, 9);
