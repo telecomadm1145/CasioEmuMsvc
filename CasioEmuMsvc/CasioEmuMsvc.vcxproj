@@ -140,6 +140,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Gui\AppMemoryView.cpp" />
     <ClCompile Include="casioemu.cpp" />
     <ClCompile Include="Chipset\Chipset.cpp" />
     <ClCompile Include="Chipset\CPU.cpp" />
@@ -177,6 +178,7 @@
     <ClCompile Include="Gui\VariableWindow.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Gui\AppMemoryView.h" />
     <ClInclude Include="Chipset\Chipset.hpp" />
     <ClInclude Include="Chipset\CPU.hpp" />
     <ClInclude Include="Chipset\InterruptSource.hpp" />

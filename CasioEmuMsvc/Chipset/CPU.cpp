@@ -482,7 +482,7 @@ namespace casioemu
 	{
 		return reg_psw & PSW_MIE;
 	}
-
+	#if LANGUAGE == 2
 	std::string CPU::GetBacktrace() const
 	{
 		std::stringstream output;
@@ -513,5 +513,34 @@ namespace casioemu
 		}
 		return output.str();
 	}
+	#else
+	std::string CPU::GetBacktrace() const {
+		std::stringstream output;
+		output << std::hex << std::setfill('0') << std::uppercase;
+		for (StackFrame frame : stack) {
+			output << "  function "
+				   << std::setw(6) << (((size_t)frame.new_csr) << 16 | frame.new_pc)
+				   << " returns to " << std::setw(6);
+			if (frame.lr_pushed) {
+				uint16_t saved_lr, saved_lcsr = 0;
+				MMU& mmu = emulator.chipset.mmu;
+				saved_lr = ((uint16_t)mmu.ReadData(frame.lr_push_address + 1))
+							   << 8 |
+						   mmu.ReadData(frame.lr_push_address);
+				if (memory_model == MM_LARGE)
+					saved_lcsr = mmu.ReadData(frame.lr_push_address + 2);
+				output << (((size_t)saved_lcsr) << 16 | saved_lr);
+
+				output << " - lr pushed at "
+					   << std::setw(4) << frame.lr_push_address;
+			}
+			else {
+				output << (((size_t)reg_lcsr) << 16 | reg_lr);
+			}
+			output << '\n';
+		}
+		return output.str();
+	}
+	#endif
 }
 

@@ -120,6 +120,9 @@
     <ClCompile Include="Gui\KeyLog.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Gui\AppMemoryView.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Config.hpp">
@@ -237,6 +240,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Gui\KeyLog.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\AppMemoryView.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

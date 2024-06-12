@@ -138,32 +138,74 @@ inline std::u32string Utf82Ucs4(const std::basic_string<T>& utf8String) {
 char input_buf[4096]{};
 bool stop = true;
 void KeyLog::Draw() {
-	ImGui::Begin("按键日志");
+	ImGui::Begin(
+#if LANGUAGE == 2
+		"按键日志"
+#else
+		"Keylog"
+#endif
+	);
 	ImGui::BeginChild("##keylog", ImVec2(0, ImGui::GetWindowHeight() / 2), true);
 	ImGui::TextWrapped(m_keylog_buffer);
 	ImGui::EndChild();
-	if (ImGui::Button("重置并开始")) {
+	if (ImGui::Button(
+#if LANGUAGE == 2
+			"重置并开始"
+#else
+			"Reset&Start"
+#endif
+			)) {
 		m_keylog_enabled = false; // TODO: avoid race condition there
 		memset(m_keylog_buffer, 0, 4096);
 		m_keylog_i = 0;
 		m_keylog_enabled = true;
 	}
 	ImGui::SameLine();
-	if (ImGui::Button("重置")) {
+	if (ImGui::Button(
+#if LANGUAGE == 2
+			"重置"
+#else
+			"Reset"
+#endif
+			)) {
 		memset(m_keylog_buffer, 0, 4096);
 		m_keylog_i = 0;
 	}
-	if (ImGui::Button("全部复制")) {
+	if (ImGui::Button(
+#if LANGUAGE == 2
+			"全部复制"
+#else
+			"Copy all"
+#endif
+			)) {
 		set_clipboard_text(m_keylog_buffer);
 	}
-	ImGui::InputText("输入的文字", input_buf, 500);
+	ImGui::InputText(
+		"##rec",
+		input_buf, 500);
 	ImGui::SameLine();
-	if (ImGui::Button("从剪贴板导入")) {
+	if (ImGui::Button(
+
+#if LANGUAGE == 2
+			"从剪贴板导入"
+#else
+			"Import from clipboard"
+#endif
+
+			)) {
 		auto cb = get_clipboard_text();
 		strcpy(input_buf, cb.c_str());
 	}
 	if (stop) {
-		if (ImGui::Button("执行")) {
+		if (ImGui::Button(
+
+#if LANGUAGE == 2
+				"执行"
+#else
+				"Execute"
+#endif
+
+				)) {
 			stop = false;
 			std::thread thd{ []() {
 				// cwii_keymap[7 - getHighestBitPosition(button.ki_bit)][getHighestBitPosition(button.ko_bit)]
@@ -200,10 +242,26 @@ void KeyLog::Draw() {
 		}
 	}
 	else {
-		if (ImGui::Button("终止")) {
+		if (ImGui::Button(
+
+#if LANGUAGE == 2
+				"停止"
+#else
+				"Stop"
+#endif
+
+				)) {
 			stop = true;
 		}
 	}
-	ImGui::Checkbox("记录", &m_keylog_enabled);
+	ImGui::Checkbox(
+
+#if LANGUAGE == 2
+		"启用"
+#else
+		"Enabled"
+#endif
+		,
+		&m_keylog_enabled);
 	ImGui::End();
 }

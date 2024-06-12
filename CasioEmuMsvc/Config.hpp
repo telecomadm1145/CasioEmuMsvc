@@ -15,3 +15,10 @@
 
 #define MODEL_DEF_NAME "model.def"
 
+
+// Languages:
+// 1 - English
+// 2 - Chinese
+
+#define LANGUAGE 1
+//#define LANGUAGE 2

@@ -22,24 +22,47 @@ std::string to_hex(unsigned int num) {
 
 	return result;
 }
-void VariableWindow::Draw()
-{
-	ImGui::Begin("变量窗口");
-	std::string vars[] = { "Ans","A","B","C","D","E","F","x","y","z","PreAns" };
+void VariableWindow::Draw() {
+	ImGui::Begin(
+#if LANGUAGE == 2
+		"变量窗口"
+#else
+		"Variable Window"
+#endif
+	);
+	std::string vars[] = { "Ans", "A", "B", "C", "D", "E", "F", "x", "y", "z", "PreAns" };
 	char* base_addr = n_ram_buffer - 0x9000 + 0x965E;
 	int ptr = 0x965E;
 	static bool showaddr = false;
 	static bool showhex = false;
 	static bool showimg_auto = true;
 	static bool showimg_f = false;
-	ImGui::Text("变量");
+	ImGui::Text(
+#if LANGUAGE == 2
+		"变量"
+#else
+		"Variable"
+#endif
+	);
 	ImGui::SameLine(90);
-	ImGui::Text("实部");
+	ImGui::Text(
+#if LANGUAGE == 2
+		"实部"
+#else
+		"Real part"
+#endif
+	);
 	bool is_in_im = (*(n_ram_buffer - 0x9000 + 0x91A1) & 0xFF) == 0xC4;
 	bool s_im = showimg_f ? 1 : (showimg_auto ? is_in_im : 0);
 	if (s_im) {
 		ImGui::SameLine(320);
-		ImGui::Text("虚部");
+		ImGui::Text(
+#if LANGUAGE == 2
+			"虚部"
+#else
+			"Imaginary Part"
+#endif
+		);
 	}
 	for (const auto& v : vars) {
 		if (is_in_im && v == "PreAns")
@@ -55,9 +78,15 @@ void VariableWindow::Draw()
 			ImGui::Text(s.c_str());
 		}
 		if (showhex) {
-			ImGui::Text("十六进制");
+			ImGui::Text(
+#if LANGUAGE == 2
+				"十六进制"
+#else
+				"Hex"
+#endif
+			);
 			ImGui::SameLine(90);
-			s = cwii::HexizeString(base_addr,0xE);
+			s = cwii::HexizeString(base_addr, 0xE);
 			ImGui::Text(s.c_str());
 			if (s_im) {
 				ImGui::SameLine(320);
@@ -65,9 +94,14 @@ void VariableWindow::Draw()
 				ImGui::Text(s.c_str());
 			}
 		}
-		if (showaddr)
-		{
-			ImGui::Text("地址");
+		if (showaddr) {
+			ImGui::Text(
+#if LANGUAGE == 2
+				"地址"
+#else
+				"Address"
+#endif
+			);
 			ImGui::SameLine(90);
 			s = "0x" + to_hex(ptr);
 			ImGui::Text(s.c_str());
@@ -85,13 +119,47 @@ void VariableWindow::Draw()
 	auto a = cwii::StringizeCwiiNumber(n_ram_buffer + 0xBDEC - 0x9000);
 	ImGui::Text(a.c_str());
 	if (showaddr) {
-		ImGui::Text("地址");
+		ImGui::Text(
+#if LANGUAGE == 2
+			"地址"
+#else
+			"Address"
+#endif
+		);
 		ImGui::SameLine(90);
 		ImGui::Text("0xBDEC");
 	}
-	ImGui::Checkbox("显示地址", &showaddr);
-	ImGui::Checkbox("显示十六进制", &showhex);
-	ImGui::Checkbox("进入复数模式时显示虚部", &showimg_auto);
-	ImGui::Checkbox("总是显示虚部", &showimg_f);
+	ImGui::Checkbox(
+#if LANGUAGE == 2
+		"显示地址"
+#else
+		"Show address"
+#endif
+		,
+		&showaddr);
+	ImGui::Checkbox(
+#if LANGUAGE == 2
+		"显示十六进制"
+#else
+		"Show hex"
+#endif
+		,
+		&showhex);
+	ImGui::Checkbox(
+#if LANGUAGE == 2
+		"复数模式显示虚部"
+#else
+		"Show ImP in cmplx"
+#endif
+		,
+		&showimg_auto);
+	ImGui::Checkbox(
+#if LANGUAGE == 2
+		"总是显示虚部"
+#else
+		"Always show ImP"
+#endif
+		,
+		&showimg_f);
 	ImGui::End();
 }

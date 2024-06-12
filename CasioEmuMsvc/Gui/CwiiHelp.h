@@ -1,17 +1,19 @@
 ﻿#pragma once
 #include <string>
+#include <unordered_map>
 namespace cwii {
 	inline std::string trim(const std::string& str) {
 		size_t first = str.find_first_not_of('0');
 		if (first == std::string::npos)
-			return "0";
+			return "";
+
 		size_t last = str.find_last_not_of('0');
 		return str.substr(first, (last - first + 1));
 	}
 	inline std::string trimEnd(const std::string& str) {
 		size_t last = str.find_last_not_of('0');
 		if (last == std::string::npos)
-			return "0";
+			return "";
 		if (str[last] == '.')
 			return str.substr(0, last);
 		return str.substr(0, last + 1);
@@ -19,7 +21,8 @@ namespace cwii {
 	inline std::string trimStart(const std::string& str) {
 		size_t first = str.find_first_not_of('0');
 		if (first == std::string::npos)
-			return "0";
+			return "";
+
 		return str.substr(first);
 	}
 
@@ -70,160 +73,156 @@ namespace cwii {
 		return 1;
 	}
 	inline std::string StringizeCwiiNumber(const char* p) {
-		try {
-
-			auto type = (p[0] >> 4) & 0xF;
-			auto exp = p[12];
-			auto sign = p[13]; // 0xE == 14
-			auto numbersign = 1;
-			auto expsign = 1;
-			if (!ConvertSign(sign, expsign, numbersign))
+		auto type = (p[0] >> 4) & 0xF;
+		auto exp = p[12];
+		auto sign = p[13]; // 0xE == 14
+		auto numbersign = 1;
+		auto expsign = 1;
+		if (!ConvertSign(sign, expsign, numbersign))
+			0;
+		auto base = HexizeString(p, 12);
+		switch (type) {
+		case 0x0:
+		case 0x4: {
+			base[0] = base[1];
+			base[1] = '.';
+			if (numbersign == -1) {
+				base = "-" + base;
+			}
+			auto exps = HexExp(exp, expsign);
+			if (exps != "0")
+				return trimEnd(base) + "x10^" + exps;
+			return trimEnd(base);
+		}
+		case 0x2: {
+			auto ind = base.find_first_of('A');
+			auto ind2 = base.find_last_of('A');
+			if (ind != ind2) {
+				if (ind < base.size())
+					base[ind] = '+';
+			}
+			if (ind2 < base.size())
+				base[ind2] = '/';
+			base.erase(0, 1);
+			base.resize(exp, '0');
+			if (numbersign == -1) {
+				base = "-" + base;
+			}
+			return base;
+		}
+		case 0x8: {
+			auto numbersign2 = 1;
+			auto expsign2 = 1;
+			if (!ConvertSign(exp, expsign2, numbersign2))
 				0;
-			// return "";
-			auto base = HexizeString(p, 12);
-			switch (type) {
-			case 0x0:
-			case 0x4: {
-				auto exps = HexExp(exp, expsign);
-				base[0] = 0;
-				auto ind = base.find_first_not_of('0'); // find non zero
-				if (ind == 0)
-					ind = 1;
-				auto nb = base.substr(ind);
-				auto expn = std::stoi(exps) - ((int)ind - 1);
-				if (std::abs(expn) <= 9) {
-					if (expn > 0) {
-						nb.insert(nb.begin() + expn + 1, '.');
+			std::string fin;
+			auto sqrt1 = trim(base.substr(1, 3));
+			auto a1 = trim(base.substr(4, 2));
+			auto b1 = trim(base.substr(6, 2));
+			auto sqrt2 = trim(base.substr(1 + 8, 3));
+			auto a2 = trim(base.substr(4 + 8, 2));
+			auto b2 = trim(base.substr(6 + 8, 2));
+			if (!(sqrt1.empty() || a1.empty())) {
+				if (numbersign == -1) {
+					fin += "-";
+				}
+				if (a1 == "1" && b1 == "1") {
+					if (sqrt1 != "1") {
+						fin += "sqrt(";
+						fin += sqrt1;
+						fin += ")";
 					}
 					else {
-						return trimEnd(nb.substr(0, 11));
+						fin += "1";
+					}
+				}
+				else if (b1 == "1") {
+					if (a1 != "1")
+						fin += a1;
+					if (sqrt1 != "1") {
+						fin += "sqrt(";
+						fin += sqrt1;
+						fin += ")";
 					}
 				}
 				else {
-					nb.insert(nb.begin() + 1, '.');
-					if (numbersign == -1) {
-						nb.insert(nb.begin(), '-');
+					if (a1 != "1")
+						fin += a1;
+					if (sqrt1 != "1") {
+						fin += "sqrt(";
+						fin += sqrt1;
+						fin += ")";
 					}
-					if (exps != "0")
-						return trimEnd(nb.substr(0, 11)) + "x10^" + exps;
-					return trimEnd(nb.substr(0, 11));
+					fin += "/";
+					fin += b1;
 				}
 			}
-			case 0x2: {
-				auto ind = base.find_first_of('A');
-				auto ind2 = base.find_last_of('A');
-				if (ind != ind2) {
-					if (ind < base.size())
-						base[ind] = '+';
+			if (!(sqrt2.empty() || a2.empty())) {
+				if (numbersign2 == -1) {
+					fin += "-";
 				}
-				if (ind2 < base.size())
-					base[ind2] = '/';
-				base.erase(0, 1);
-				base.resize(exp, '0');
-				if (numbersign == -1) {
-					base = "-" + base;
+				else {
+					if (!fin.empty())
+						fin += "+";
 				}
-				return base;
+				if (a2 == "1" && b2 == "1") {
+					if (sqrt2 != "1") {
+						fin += "sqrt(";
+						fin += sqrt2;
+						fin += ")";
+					}
+					else {
+						fin += "1";
+					}
+				}
+				else if (b2 == "1") {
+					if (a2 != "1")
+						fin += a2;
+					if (sqrt2 != "1") {
+						fin += "sqrt(";
+						fin += sqrt2;
+						fin += ")";
+					}
+				}
+				else {
+					if (a2 != "1")
+						fin += a2;
+					if (sqrt2 != "1") {
+						fin += "sqrt(";
+						fin += sqrt2;
+						fin += ")";
+					}
+					fin += "/";
+					fin += b2;
+				}
 			}
-			case 0x8: {
-				auto numbersign2 = 1;
-				auto expsign2 = 1;
-				if (!ConvertSign(exp, expsign2, numbersign2))
-					0;
-				// return "";
-				std::string fin;
-				auto sqrt1 = trim(base.substr(1, 3));
-				auto a1 = trim(base.substr(4, 2));
-				auto b1 = trim(base.substr(6, 2));
-				auto sqrt2 = trim(base.substr(1 + 8, 3));
-				auto a2 = trim(base.substr(4 + 8, 2));
-				auto b2 = trim(base.substr(6 + 8, 2));
-				if (!(sqrt1.empty() || a1.empty())) {
-					if (numbersign == -1) {
-						fin += "-";
-					}
-					if (a1 == "1" && b1 == "1") {
-						if (sqrt1 != "1") {
-							fin += "sqrt(";
-							fin += sqrt1;
-							fin += ")";
-						}
-						else {
-							fin += "1";
-						}
-					}
-					else if (b1 == "1") {
-						if (a1 != "1")
-							fin += a1;
-						if (sqrt1 != "1") {
-							fin += "sqrt(";
-							fin += sqrt1;
-							fin += ")";
-						}
-					}
-					else {
-						if (a1 != "1")
-							fin += a1;
-						if (sqrt1 != "1") {
-							fin += "sqrt(";
-							fin += sqrt1;
-							fin += ")";
-						}
-						fin += "/";
-						fin += b1;
-					}
-				}
-				if (!(sqrt2.empty() || a2.empty())) {
-					if (numbersign2 == -1) {
-						fin += "-";
-					}
-					else {
-						if (!fin.empty())
-							fin += "+";
-					}
-					if (a2 == "1" && b2 == "1") {
-						if (sqrt2 != "1") {
-							fin += "sqrt(";
-							fin += sqrt2;
-							fin += ")";
-						}
-						else {
-							fin += "1";
-						}
-					}
-					else if (b2 == "1") {
-						if (a2 != "1")
-							fin += a2;
-						if (sqrt2 != "1") {
-							fin += "sqrt(";
-							fin += sqrt2;
-							fin += ")";
-						}
-					}
-					else {
-						if (a2 != "1")
-							fin += a2;
-						if (sqrt2 != "1") {
-							fin += "sqrt(";
-							fin += sqrt2;
-							fin += ")";
-						}
-						fin += "/";
-						fin += b2;
-					}
-				}
-				return fin;
-			} break;
-			// case 0x6:
-			//	return "";
-			case 0xF:
-				return "Error";
-			default:
-				return "";
-			}
-		}
-		catch (...) {
+			return fin;
+		} break;
+		case 0x6:
+			return "Pointer(MatX/VctX)";
+		case 0xF:
+			return "Error";
+		default:
 			return "";
 		}
 	}
+	inline static std::unordered_map<int, std::string> ModeNames = []() {
+		std::unordered_map<int,std::string> a{};
+		a[0] = "Reset 68";
+		a[0x06] = "Matrix";
+		a[0x07] = "Vector";
+		a[0x0D] = "Spreadsheet";
+		a[0x0E] = "Algorithm";
+		a[0x4F] = "Math Box";
+		a[0x88] = "Table";
+		a[0xC1] = "Calculate";
+		a[0xC4] = "Complex";
+		a[0x02] = "Base-N";
+		a[0x03] = "Statistics";
+		a[0x0C] = "Distribution";
+		a[0x45] = "Equation";
+		a[0x4A] = "Ratio";
+		a[0x4B] = "Inequality";
+		return a;
+	}();
 }
