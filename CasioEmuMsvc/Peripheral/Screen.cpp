@@ -374,8 +374,8 @@ namespace casioemu {
 		region_contrast.Setup(0xF032, 1, "Screen/Contrast", this, DefaultRead<uint8_t, 0x3F, &Screen::screen_contrast>,
 			SetRequireFrameWrite<uint8_t, 0x3F, &Screen::screen_contrast>, emulator);
 
-		region_offset.Setup(0xF039, 1, "Screen/DSPOFST", this, DefaultRead<uint8_t, 0xff, &Screen::screen_offset>,
-			SetRequireFrameWrite<uint8_t, 0xff, &Screen::screen_offset>, emulator);
+		region_offset.Setup(0xF039, 1, "Screen/DSPOFST", this, DefaultRead<uint8_t, 0x3F, &Screen::screen_offset>,
+			SetRequireFrameWrite<uint8_t, 0x3F, &Screen::screen_offset>, emulator);
 	}
 
 	template <HardwareId hardware_id>

@@ -86,15 +86,16 @@ void gui_loop() {
 			,
 			0, 0x10000 - casioemu::GetRamBaseAddr(m_emu->hardware_id), casioemu::GetRamBaseAddr(m_emu->hardware_id), spans);
 	}
-	/*if (code_viewer)
-		code_viewer->DrawWindow();*/
-	//injector->Show();
-	//membp->Show();
+	if (code_viewer)
+		code_viewer->DrawWindow();
+	injector->Show();
+	membp->Show();
 	ww->Show();
-	//vw->Draw();
-	/* if (kl)
-		kl->Draw();*/
-	//amv->Draw();
+	vw->Draw();
+	if (kl)
+		kl->Draw();
+	amv->Draw();
+
 	// Rendering
 	ImGui::Render();
 	SDL_RenderSetScale(renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);

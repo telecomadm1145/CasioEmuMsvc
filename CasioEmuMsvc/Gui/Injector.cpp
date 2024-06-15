@@ -4,6 +4,8 @@
 #include "../Chipset/Chipset.hpp"
 #include "../Peripheral/BatteryBackedRAM.hpp"
 
+#include "../Models.h"
+
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -51,8 +53,10 @@ void Injector::Show() {
 	static int range = 64;
 	static char strbuf[1024] = { 0 };
 	static char buf[10] = { 0 };
+	static char buf2[10] = { 0 };
 	static MemoryEditor editor;
 	static const char* info_msg;
+	auto inputbase = m_emu->hardware_id == casioemu::HardwareId::HW_CLASSWIZ_II ? 0x9268 : 0xD180;
 	ImGui::BeginChild(
 #if LANGUAGE == 2
 		"输入内容"
@@ -89,14 +93,9 @@ void Injector::Show() {
 	);
 	ImGui::SameLine();
 	ImGui::InputText(
-#if LANGUAGE == 2
-		"偏移"
-#else
-		"Offset"
-#endif
-		,
+		"##off",
 		buf, 9);
-	char* base_addr = n_ram_buffer - 0x9000;
+	char* base_addr = n_ram_buffer - casioemu::GetRamBaseAddr(m_emu->hardware_id);
 	if (ImGui::Button(
 #if LANGUAGE == 2
 			"计算模式数学输入"
@@ -122,15 +121,15 @@ void Injector::Show() {
 			)) {
 		int off = atoi(buf);
 		if (off > 100) {
-			memset(base_addr + 0x9268, 0x31, 100);
-			memset(base_addr + 0x9268 + 100, 0xa6, 1);
-			memset(base_addr + 0x9268 + 101, 0x31, off - 100);
+			memset(base_addr + inputbase, 0x31, 100);
+			memset(base_addr + inputbase + 100, 0xa6, 1);
+			memset(base_addr + inputbase + 101, 0x31, off - 100);
 		}
 		else {
-			memset(base_addr + 0x9268, 0x31, off);
+			memset(base_addr + inputbase, 0x31, off);
 		}
-		*(base_addr + 0x9268 + off) = 0xfd;
-		*(base_addr + 0x9268 + off + 1) = 0x20;
+		*(base_addr + inputbase + off) = 0xfd;
+		*(base_addr + inputbase + off + 1) = 0x20;
 #if LANGUAGE == 2
 		info_msg = "\"an\" 已输入";
 #else
@@ -145,7 +144,7 @@ void Injector::Show() {
 			"Load to input area"
 #endif
 			)) {
-		memcpy(base_addr + 0x9268, data_buf, range);
+		memcpy(base_addr + inputbase, data_buf, range);
 		info_msg = "字符串已加载";
 		ImGui::OpenPopup("info");
 	}
@@ -177,19 +176,25 @@ void Injector::Show() {
 	//		}
 	//	}
 	// }
+	ImGui::SetNextItemWidth(60);
+	ImGui::InputText("Inject addr", buf2, 10);
+	//ImGui::SameLine();
+	ImGui::InputTextMultiline(
+		"## hex",
+		strbuf, IM_ARRAYSIZE(strbuf) - 1);
 	if (ImGui::Button(
 #if LANGUAGE == 2
 			"加载Hex字符串"
 #else
-			"Load hex string"
+			"Inject hex"
 #endif
 			)) {
 #if LANGUAGE == 2
-		info_msg = "字符串已加载";
+		info_msg = "已加载";
 #else
-		info_msg = "String loaded";
+		info_msg = "Loaded";
 #endif
-
+		auto plc = strtol(buf2, 0, 16);
 		auto valid_hex = [](char c) {
 			if (c >= '0' && c <= '9')
 				return true;
@@ -218,8 +223,8 @@ void Injector::Show() {
 				}
 				hex_buf[0] = strbuf[i], hex_buf[1] = strbuf[i + 1], hex_buf[2] = '\0';
 				uint8_t byte = strtoul(hex_buf, nullptr, 16);
-				*(base_addr + 0x9268 + j) = (char)byte;
-				*(data_buf + j) = (char)byte;
+				me_mmu->WriteData(plc + j, byte);
+				//*(data_buf + j) = (char)byte;
 				i += 2;
 				++j;
 			}
@@ -227,15 +232,6 @@ void Injector::Show() {
 	exit:
 		ImGui::OpenPopup("info");
 	}
-	ImGui::SameLine();
-	ImGui::InputTextMultiline(
-#if LANGUAGE == 2
-		"输入Hex字符串"
-#else
-		"Input hex string"
-#endif
-		,
-		strbuf, IM_ARRAYSIZE(strbuf) - 1);
 
 	if (ImGui::BeginPopupModal("info", 0, ImGuiWindowFlags_AlwaysAutoResize)) {
 		ImGui::Text(info_msg);
