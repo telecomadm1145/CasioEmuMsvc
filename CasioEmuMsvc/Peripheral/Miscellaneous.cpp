@@ -26,13 +26,13 @@ namespace casioemu
 		switch (emulator.hardware_id)
 		{
 		case HW_ES_PLUS:
-			n_byte = 5;
+			n_byte = 4;
 			break;
 		case HW_CLASSWIZ:
-			n_byte = 11;
+			n_byte = _countof(addr);
 			break;
 		case HW_CLASSWIZ_II:
-			n_byte = 11;
+			n_byte = _countof(addr);
 			break;
 		default:
 			PANIC("Unknown hardware_id\n");

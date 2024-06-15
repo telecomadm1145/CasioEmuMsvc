@@ -91,7 +91,7 @@ void gui_loop() {
 	injector->Show();
 	membp->Show();
 	ww->Show();
-	vw->Draw();
+	//vw->Draw();
 	if (kl)
 		kl->Draw();
 	amv->Draw();

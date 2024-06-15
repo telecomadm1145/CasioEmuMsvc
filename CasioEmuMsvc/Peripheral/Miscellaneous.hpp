@@ -12,8 +12,8 @@ namespace casioemu {
 		uint8_t data_F0D0, data_F0D1, data_F0D2;
 
 		static constexpr uint16_t addr[] = {
-			0xF00A, 0xF018, 0xF033, 0xF034, 0xF041, // both HW_ES_PLUS, HW_CLASSWIZ and HW_CLASSWIZ_II
-			/*0xF035, 0xF036, 0xF039, */ 0xF03D, 0xF224, 0xF028, 0xF310, // HW_CLASSWIZ and HW_CLASSWIZ_II
+			0xF00A, 0xF018, 0xF033, /*0xF034,*/ 0xF041, // both HW_ES_PLUS, HW_CLASSWIZ and HW_CLASSWIZ_II
+			0xF035, 0xF036, /* 0xF039,*/ 0xF03D, 0xF224, 0xF028, 0xF310, // HW_CLASSWIZ and HW_CLASSWIZ_II
 		};
 		static constexpr int N_BYTE = sizeof(addr) / sizeof(addr[0]);
 		MMURegion region [N_BYTE];
