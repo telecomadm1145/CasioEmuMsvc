@@ -89,10 +89,35 @@ namespace cwii {
 			if (numbersign == -1) {
 				base = "-" + base;
 			}
+
 			auto exps = HexExp(exp, expsign);
+
 			if (exps != "0")
 				return trimEnd(base) + "x10^" + exps;
+
 			return trimEnd(base);
+			//base[0] = base[1];
+			//base[1] = '.';
+			//if (numbersign == -1) {
+			//	base = "-" + base;
+			//}
+			//auto exps = HexExp(exp, expsign);
+			//int exponent = std::stoi(exps);
+			//int num_n = exponent - trimEnd(base.substr(2)).size();
+			//std::string result;
+			//if (num_n >= -4 && num_n < 8) {
+			//	// Small decimal
+			//	result = trimEnd(base) + "e" + (exponent >= 0 ? "+" : "") + std::to_string(exponent);
+			//}
+			//else if (num_n >= 8) {
+			//	// Scientific notation
+			//	result = trimStart(trimEnd(base)) + "e" + exps;
+			//}
+			//else {
+			//	// Integer
+			//	result = trimEnd(base).substr(0, 1) + trimStart(trimEnd(base).substr(2));
+			//}
+			//return (numbersign == -1 ? "-" : "") + result;
 		}
 		case 0x2: {
 			auto ind = base.find_first_of('A');
@@ -207,7 +232,7 @@ namespace cwii {
 		}
 	}
 	inline static std::unordered_map<int, std::string> ModeNames = []() {
-		std::unordered_map<int,std::string> a{};
+		std::unordered_map<int, std::string> a{};
 		a[0] = "Reset 68";
 		a[0x06] = "Matrix";
 		a[0x07] = "Vector";
@@ -215,6 +240,7 @@ namespace cwii {
 		a[0x0E] = "Algorithm";
 		a[0x4F] = "Math Box";
 		a[0x88] = "Table";
+		a[0x89] = "Verify";
 		a[0xC1] = "Calculate";
 		a[0xC4] = "Complex";
 		a[0x02] = "Base-N";

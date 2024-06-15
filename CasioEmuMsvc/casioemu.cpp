@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
 		std::thread console_input_thread([&] {
 			auto input = std::string();
 			while (1) {
-				getline(std::cin,input);
+				getline(std::cin, input);
 				if (input.empty())
 					continue;
 
@@ -95,7 +95,7 @@ int main(int argc, char* argv[]) {
 					return;
 				}
 			}
-			});
+		});
 
 		bool guiCreated = false;
 		std::thread t1([&]() {
@@ -111,6 +111,7 @@ int main(int argc, char* argv[]) {
 					switch (event.window.event) {
 					case SDL_WINDOWEVENT_CLOSE:
 						emulator.Shutdown();
+						std::exit(0);
 						break;
 					case SDL_WINDOWEVENT_RESIZED:
 						ImGui_ImplSDL2_ProcessEvent(&event);
@@ -121,7 +122,7 @@ int main(int argc, char* argv[]) {
 					break;
 				}
 			}
-			});
+		});
 		t1.detach();
 
 		while (emulator.Running()) {
@@ -149,6 +150,7 @@ int main(int argc, char* argv[]) {
 				switch (event.window.event) {
 				case SDL_WINDOWEVENT_CLOSE:
 					emulator.Shutdown();
+					std::exit(0);
 					break;
 				case SDL_WINDOWEVENT_RESIZED:
 					// if (!argv_map.count("resizable"))

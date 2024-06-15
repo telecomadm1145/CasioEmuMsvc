@@ -245,6 +245,9 @@
     <ClInclude Include="Gui\AppMemoryView.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Models.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

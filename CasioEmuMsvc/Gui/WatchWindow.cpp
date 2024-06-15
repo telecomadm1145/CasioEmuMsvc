@@ -63,9 +63,10 @@ void WatchWindow::ShowRX() {
 			, label);
 		ImGui::SameLine();
 		sprintf(id, "##sfr%d", i);
-		ImGui::SetNextItemWidth(char_width * width + 2);
-		ImGui::InputText(id, (char*)ptr, width + 1
-			, ImGuiInputTextFlags_CharsHexadecimal);
+		ImGui::SetNextItemWidth(char_width * width + 5);
+		ImGui::Text(ptr);
+		/* ImGui::InputText(id, (char*)ptr, width + 1
+			, ImGuiInputTextFlags_CharsHexadecimal);*/
 		});
 	show_sfr(reg_pc, "PC: ", 1);
 	ImGui::SameLine();
@@ -104,13 +105,14 @@ void WatchWindow::Show() {
 	ImGui::InputTextMultiline("##as", (char*)s.c_str(), s.size(), ImVec2(ImGui::GetWindowWidth(), 0), ImGuiInputTextFlags_ReadOnly);
 	ImGui::EndChild();
 	ImGui::BeginChild("##reg_trace", ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * 4), false, ImGuiWindowFlags_AlwaysHorizontalScrollbar);
-	if (!isbreaked) {
-		ImGui::TextColored(ImVec4(255, 255, 0, 255), "寄存器请在断点状态下查看");
-		PrepareRX();
-	}
-	else {
+	//if (!isbreaked) {
+	//	ImGui::TextColored(ImVec4(255, 255, 0, 255), "寄存器请在断点状态下查看");
+	//	PrepareRX();
+	//}
+	//else {
+	PrepareRX();
 		ShowRX();
-	}
+	//}
 
 
 	ImGui::EndChild();

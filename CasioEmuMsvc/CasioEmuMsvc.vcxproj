@@ -208,6 +208,7 @@
     <ClInclude Include="Gui\WatchWindow.hpp" />
     <ClInclude Include="Gui\KeyLog.h" />
     <ClInclude Include="Logger.hpp" />
+    <ClInclude Include="Models.h" />
     <ClInclude Include="Peripheral\BatteryBackedRAM.hpp" />
     <ClInclude Include="Peripheral\BCDCalc.hpp" />
     <ClInclude Include="Peripheral\Keyboard.hpp" />

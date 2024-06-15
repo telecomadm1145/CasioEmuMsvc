@@ -409,7 +409,7 @@ struct MemoryEditor {
 		size_t start{};
 		size_t length{};
 		ImColor color{};
-		std::optional<std::string> desc{};
+		const char* desc{};
 	};
 	using OptionalMarkedSpans = std::optional<std::vector<MarkedSpan>>;
 	std::optional<std::string> SpanDescription;
@@ -424,11 +424,11 @@ struct MemoryEditor {
 		for (auto& span : marked_spans.value()) {
 			auto abs_editing_pos = DataEditingAddr + base_display_addr;
 			if (abs_editing_pos >= span.start && abs_editing_pos <= span.start + span.length - 1 &&
-				span.desc.has_value()) {
+				span.desc) {
 				if (!desc_to_show.has_value()) {
 					desc_to_show = std::vector<std::string>();
 				}
-				desc_to_show.value().push_back(span.desc.value());
+				desc_to_show.value().push_back(span.desc);
 			}
 		}
 		if (!desc_to_show.has_value()) {
