@@ -5,6 +5,7 @@
 #include <string>
 #include <codecvt>
 #include <thread>
+#include "../config.hpp"
 char m_keylog_buffer[4096]{ 0 };
 int m_keylog_i = 0;
 bool m_keylog_enabled = false;

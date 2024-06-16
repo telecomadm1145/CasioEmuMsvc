@@ -266,12 +266,17 @@ namespace casioemu {
 		return offset & 0x0FFFFF;
 	}
 
+	std::vector<MMURegion*> MMU::GetRegions() {
+		return regions;
+	}
+
 	void MMU::RegisterRegion(MMURegion* region) {
 		for (size_t ix = region->base; ix != region->base + region->size; ++ix) {
 			if (segment_dispatch[ix >> 16][ix & 0xFFFF].region)
 				PANIC("MMU region overlap at %06zX\n", ix);
 			segment_dispatch[ix >> 16][ix & 0xFFFF].region = region;
 		}
+		regions.push_back(region);
 	}
 
 	void MMU::UnregisterRegion(MMURegion* region) {
@@ -280,5 +285,6 @@ namespace casioemu {
 				PANIC("MMU region double-hole at %06zX\n", ix);
 			segment_dispatch[ix >> 16][ix & 0xFFFF].region = nullptr;
 		}
+		regions.erase(std::find(regions.begin(),regions.end(),region));
 	}
 }

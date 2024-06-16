@@ -1,4 +1,6 @@
 ﻿#pragma once
+#include <vector>
+#include "Gui/hex.hpp"
 #include "Data/HardwareId.hpp"
 namespace casioemu {
 	inline constexpr size_t GetRamBaseAddr(HardwareId hid) {
@@ -326,8 +328,8 @@ namespace casioemu {
 				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 6, 0xA, SColor, "F 虚数部分" },
 				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 7, 0xA, SColor, "x 虚数部分" },
 				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 8, 0xA, SColor, "y 虚数部分" },
-				// MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 9, 0xA, SColor, "PreAns 虚数部分" },
-				// MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 10, 0xA, SColor, "z 虚数部分" },
+				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 9, 0xA, SColor, "PreAns 虚数部分" },
+				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 10, 0xA, SColor, "z 虚数部分" },
 				MemoryEditor::MarkedSpan{ 0xD784, 200, SColor, "f(x)" },
 				MemoryEditor::MarkedSpan{ 0xD84C, 200, SColor, "g(x)" },
 				MemoryEditor::MarkedSpan{ 0xDBD0, 0x10, SColor, " 内存完整性(Magic string) " },
@@ -338,8 +340,45 @@ namespace casioemu {
 			};
 #else
 			return {
-				MemoryEditor::MarkedSpan{ 0xF800, 0x800, SColor, " Screen buffer " },
-				MemoryEditor::MarkedSpan{ 0xE254, 0xF000 - 0xE254, SColor, " Stack " },
+				MemoryEditor::MarkedSpan{ 0xD16C, 0xA, SColor, "Ans 1st result" },
+				MemoryEditor::MarkedSpan{ 0xD176, 0xA, SColor, "Ans 2nd result" },
+				MemoryEditor::MarkedSpan{ 0xD180, 200, SColor, " Input area " },
+				MemoryEditor::MarkedSpan{ 0xD180 + 200, 200, SColor, "Buffer area" },
+				MemoryEditor::MarkedSpan{ 0xD310, 0x8, SColor, "Random seed" },
+				MemoryEditor::MarkedSpan{ 0xD318, 0x2, SColor, "Unstable bytes" },
+				MemoryEditor::MarkedSpan{ 0xD324 + 0xA * -1, 0xA, SColor, "M" },
+				MemoryEditor::MarkedSpan{ 0xD324 + 0xA * 0, 0xA, SColor, "Ans" },
+				MemoryEditor::MarkedSpan{ 0xD324 + 0xA * 1, 0xA, SColor, "A" },
+				MemoryEditor::MarkedSpan{ 0xD324 + 0xA * 2, 0xA, SColor, "B" },
+				MemoryEditor::MarkedSpan{ 0xD324 + 0xA * 3, 0xA, SColor, "C" },
+				MemoryEditor::MarkedSpan{ 0xD324 + 0xA * 4, 0xA, SColor, "D" },
+				MemoryEditor::MarkedSpan{ 0xD324 + 0xA * 5, 0xA, SColor, "E" },
+				MemoryEditor::MarkedSpan{ 0xD324 + 0xA * 6, 0xA, SColor, "F" },
+				MemoryEditor::MarkedSpan{ 0xD324 + 0xA * 7, 0xA, SColor, "x" },
+				MemoryEditor::MarkedSpan{ 0xD324 + 0xA * 8, 0xA, SColor, "y" },
+				MemoryEditor::MarkedSpan{ 0xD324 + 0xA * 9, 0xA, SColor, "PreAns" },
+				MemoryEditor::MarkedSpan{ 0xD324 + 0xA * 10, 0xA, SColor, "z" },
+				MemoryEditor::MarkedSpan{ 0xD392, 400, SColor, "History" },
+				MemoryEditor::MarkedSpan{ 0xD522, 200, SColor, "Result area/Analysis area" },
+				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * -1, 0xA, SColor, "M Imaginary part" },
+				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 0, 0xA, SColor, "Ans Imaginary part" },
+				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 1, 0xA, SColor, "A Imaginary part" },
+				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 2, 0xA, SColor, "B Imaginary part" },
+				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 3, 0xA, SColor, "C Imaginary part" },
+				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 4, 0xA, SColor, "D Imaginary part" },
+				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 5, 0xA, SColor, "E Imaginary part" },
+				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 6, 0xA, SColor, "F Imaginary part" },
+				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 7, 0xA, SColor, "x Imaginary part" },
+				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 8, 0xA, SColor, "y Imaginary part" },
+				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 9, 0xA, SColor, "PreAns Imaginary part" },
+				MemoryEditor::MarkedSpan{ 0xD61C + 0xA * 10, 0xA, SColor, "z Imaginary part" },
+				MemoryEditor::MarkedSpan{ 0xD784, 200, SColor, "f(x)" },
+				MemoryEditor::MarkedSpan{ 0xD84C, 200, SColor, "g(x)" },
+				MemoryEditor::MarkedSpan{ 0xDBD0, 0x10, SColor, " Memory Integrity (Magic string) " },
+				MemoryEditor::MarkedSpan{ 0xDBE0, 0xDDD3 - 0xDBE0, SColor, " MathI Garbage " },
+				MemoryEditor::MarkedSpan{ 0xDDD3, 0x800, SColor, " Screen Buffer 2 " },
+				MemoryEditor::MarkedSpan{ 0xE5D3, 0xF000 - 0xE5D3, SColor, " Stack " },
+				MemoryEditor::MarkedSpan{ 0xF800, 0x800, SColor, " Screen Buffer " },
 			};
 #endif
 		}
@@ -426,5 +465,100 @@ namespace casioemu {
 			return {};
 		}
 #undef SColor
+	}
+	inline constexpr size_t GetInputAreaOffset(HardwareId hid) {
+		return hid == HW_ES_PLUS ? 0x8154 : hid == HW_CLASSWIZ ? 0xD180
+															   : 0x9268;
+	}
+	inline constexpr size_t GetInputAreaSize(HardwareId hid) {
+		return hid == HW_ES_PLUS ? 100 : 200;
+	}
+	inline constexpr size_t GetBufferAreaOffset(HardwareId hid) {
+		return GetInputAreaOffset(hid) + GetInputAreaOffset(hid);
+	}
+	inline constexpr size_t GetModeOffset(HardwareId hid) {
+		return hid == HW_ES_PLUS ? 0x80F9 : hid == HW_CLASSWIZ ? 0xD111
+															   : 0x91A1;
+	}
+	inline constexpr size_t GetHistoryOffset(HardwareId hid) {
+		return hid == HW_ES_PLUS ? 0x829E : hid == HW_CLASSWIZ ? 0xD392
+															   : 0x9268 + 400;
+	}
+	inline constexpr size_t GetAppOffset(HardwareId hid) {
+		return hid == HW_ES_PLUS ? 0x829E : hid == HW_CLASSWIZ ? 0xD392
+															   : 0xBA68;
+	}
+	class Variable {
+	public:
+		size_t RealPartOffset;
+		const char* Name;
+	};
+	inline size_t GetVariableSize(HardwareId hid) {
+		return hid == HW_CLASSWIZ_II ? 0xE : 0xA;
+	}
+	inline size_t GetReImOffset(HardwareId hid) {
+		if (hid == HW_ES_PLUS) {
+			return static_cast<size_t>(0x8408) - 0x8226;
+		}
+		else if (hid == HW_CLASSWIZ) {
+			return static_cast<size_t>(0xD61C) - 0xD324;
+		}
+		else if (hid == HW_CLASSWIZ_II) {
+			return static_cast<size_t>(0xE) * 11;
+		}
+		else {
+			PANIC("Unknown hardware id %d", hid);
+		}
+	}
+	inline std::vector<Variable> GetVariableOffsets(HardwareId hid) {
+		if (hid == HW_ES_PLUS) {
+			return std::initializer_list<Variable>{
+				{ 0x8226, "M" },
+				{ 0x8226 + 10, "Ans" },
+				{ 0x8226 + 10 * 2, "A" },
+				{ 0x8226 + 10 * 3, "B" },
+				{ 0x8226 + 10 * 4, "C" },
+				{ 0x8226 + 10 * 5, "D" },
+				{ 0x8226 + 10 * 6, "E" },
+				{ 0x8226 + 10 * 7, "F" },
+				{ 0x8226 + 10 * 8, "X" },
+				{ 0x8226 + 10 * 9, "Y" },
+			};
+		}
+		else if (hid == HW_CLASSWIZ) {
+			return std::initializer_list<Variable>{
+				{ 0xD324 + 0xA * -1, "M" },
+				{ 0xD324 + 0xA * 0, "Ans" },
+				{ 0xD324 + 0xA * 1, "A" },
+				{ 0xD324 + 0xA * 2, "B" },
+				{ 0xD324 + 0xA * 3, "C" },
+				{ 0xD324 + 0xA * 4, "D" },
+				{ 0xD324 + 0xA * 5, "E" },
+				{ 0xD324 + 0xA * 6, "F" },
+				{ 0xD324 + 0xA * 7, "x" },
+				{ 0xD324 + 0xA * 8, "y" },
+				{ 0xD324 + 0xA * 9, "PreAns" },
+				{ 0xD324 + 0xA * 10, "z" },
+
+			};
+		}
+		else if (hid == HW_CLASSWIZ_II) {
+			return std::initializer_list<Variable>{
+				{ 0x965E, "Ans" },
+				{ 0x966C, "A" },
+				{ 0x967A, "B" },
+				{ 0x9688, "C" },
+				{ 0x9696, "D" },
+				{ 0x96A4, "E" },
+				{ 0x96B2, "F" },
+				{ 0x96C0, "x" },
+				{ 0x96CE, "y" },
+				{ 0x96DC, "z" },
+				{ 0x96EA, "PreAns" }
+			};
+		}
+		else {
+			PANIC("HardwareId");
+		}
 	}
 }

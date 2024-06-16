@@ -55,6 +55,8 @@
 #include <string>
 #include <vector>
 
+#include "../config.hpp"
+
 #ifdef _MSC_VER
 #define _PRISizeT "I"
 #define ImSnprintf _snprintf
@@ -410,6 +412,9 @@ struct MemoryEditor {
 		size_t length{};
 		ImColor color{};
 		const char* desc{};
+		bool operator<(const MarkedSpan& b) {
+			return start < b.start;
+		}
 	};
 	using OptionalMarkedSpans = std::optional<std::vector<MarkedSpan>>;
 	std::optional<std::string> SpanDescription;

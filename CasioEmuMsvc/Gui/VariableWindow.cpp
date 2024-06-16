@@ -3,6 +3,7 @@
 #include "imgui/imgui.h"
 #include <string>
 #include "ui.hpp"
+#include "../Models.h"
 std::string to_hex(unsigned int num) {
 	std::string hex_digits = "0123456789ABCDEF";
 	std::string result;
@@ -30,9 +31,8 @@ void VariableWindow::Draw() {
 		"Variable Window"
 #endif
 	);
-	std::string vars[] = { "Ans", "A", "B", "C", "D", "E", "F", "x", "y", "z", "PreAns" };
-	char* base_addr = n_ram_buffer - 0x9000 + 0x965E;
-	int ptr = 0x965E;
+	char* base_addr = n_ram_buffer - casioemu::GetRamBaseAddr(m_emu->hardware_id);
+	auto vars = casioemu::GetVariableOffsets(m_emu->hardware_id);
 	static bool showaddr = false;
 	static bool showhex = false;
 	static bool showimg_auto = true;
@@ -52,7 +52,7 @@ void VariableWindow::Draw() {
 		"Real part"
 #endif
 	);
-	bool is_in_im = (*(n_ram_buffer - 0x9000 + 0x91A1) & 0xFF) == 0xC4;
+	bool is_in_im = (*(base_addr + casioemu::GetModeOffset(m_emu->hardware_id)) & 0xFF) == 0xC4;
 	bool s_im = showimg_f ? 1 : (showimg_auto ? is_in_im : 0);
 	if (s_im) {
 		ImGui::SameLine(320);
@@ -65,16 +65,16 @@ void VariableWindow::Draw() {
 		);
 	}
 	for (const auto& v : vars) {
-		if (is_in_im && v == "PreAns")
+		if (is_in_im && !strcmp(v.Name, "PreAns"))
 			continue;
 		std::string s;
-		ImGui::Text(v.c_str());
+		ImGui::Text(v.Name);
 		ImGui::SameLine(90);
-		s = cwii::StringizeCwiiNumber(base_addr);
+		s = cwii::StringizeCwiiNumber(base_addr + v.RealPartOffset);
 		ImGui::Text(s.c_str());
 		if (s_im) {
 			ImGui::SameLine(320);
-			s = cwii::StringizeCwiiNumber(base_addr + 0xE * 11);
+			s = cwii::StringizeCwiiNumber(base_addr + v.RealPartOffset + casioemu::GetReImOffset(m_emu->hardware_id));
 			ImGui::Text(s.c_str());
 		}
 		if (showhex) {
@@ -86,11 +86,11 @@ void VariableWindow::Draw() {
 #endif
 			);
 			ImGui::SameLine(90);
-			s = cwii::HexizeString(base_addr, 0xE);
+			s = cwii::HexizeString(base_addr + v.RealPartOffset, casioemu::GetVariableSize(m_emu->hardware_id));
 			ImGui::Text(s.c_str());
 			if (s_im) {
 				ImGui::SameLine(320);
-				s = cwii::HexizeString(base_addr + 0xE * 11, 0xE);
+				s = cwii::HexizeString(base_addr + v.RealPartOffset + casioemu::GetReImOffset(m_emu->hardware_id), casioemu::GetVariableSize(m_emu->hardware_id));
 				ImGui::Text(s.c_str());
 			}
 		}
@@ -103,31 +103,31 @@ void VariableWindow::Draw() {
 #endif
 			);
 			ImGui::SameLine(90);
-			s = "0x" + to_hex(ptr);
+			s = to_hex(v.RealPartOffset);
 			ImGui::Text(s.c_str());
 			if (s_im) {
 				ImGui::SameLine(320);
-				s = "0x" + to_hex(ptr + 0xE * 11);
+				s = to_hex(v.RealPartOffset + casioemu::GetReImOffset(m_emu->hardware_id));
 				ImGui::Text(s.c_str());
 			}
 		}
-		base_addr += 0xE;
-		ptr += 0xE;
 	}
-	ImGui::Text("Theta");
-	ImGui::SameLine(90);
-	auto a = cwii::StringizeCwiiNumber(n_ram_buffer + 0xBDEC - 0x9000);
-	ImGui::Text(a.c_str());
-	if (showaddr) {
-		ImGui::Text(
-#if LANGUAGE == 2
-			"地址"
-#else
-			"Address"
-#endif
-		);
+	if (m_emu->hardware_id == casioemu::HW_CLASSWIZ_II) {
+		ImGui::Text("Theta");
 		ImGui::SameLine(90);
-		ImGui::Text("0xBDEC");
+		auto a = cwii::StringizeCwiiNumber(n_ram_buffer + 0xBDEC - 0x9000);
+		ImGui::Text(a.c_str());
+		if (showaddr) {
+			ImGui::Text(
+#if LANGUAGE == 2
+				"地址"
+#else
+				"Address"
+#endif
+			);
+			ImGui::SameLine(90);
+			ImGui::Text("0xBDEC");
+		}
 	}
 	ImGui::Checkbox(
 #if LANGUAGE == 2

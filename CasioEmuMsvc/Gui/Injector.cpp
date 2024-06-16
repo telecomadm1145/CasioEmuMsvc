@@ -51,12 +51,13 @@ void Injector::Show() {
 
 	static float scale = -1.0f;
 	static int range = 64;
-	static char strbuf[1024] = { 0 };
+	static char strbuf[65536] = { 0 };
 	static char buf[10] = { 0 };
 	static char buf2[10] = { 0 };
 	static MemoryEditor editor;
 	static const char* info_msg;
 	auto inputbase = m_emu->hardware_id == casioemu::HardwareId::HW_CLASSWIZ_II ? 0x9268 : 0xD180;
+	char* base_addr = n_ram_buffer - casioemu::GetRamBaseAddr(m_emu->hardware_id);
 	ImGui::BeginChild(
 #if LANGUAGE == 2
 		"输入内容"
@@ -84,6 +85,34 @@ void Injector::Show() {
 		&range, 64, 1024);
 	// ImGuiIO& io = ImGui::GetIO();
 	// ImGui::SliderFloat("缩放", &io.FontGlobalScale, 0.5, 2);
+	//	if (ImGui::Button(
+	// #if LANGUAGE == 2
+	//			"计算模式数学输入"
+	// #else
+	//			"Math IO with Calc Mode"
+	// #endif
+	//			)) {
+	//		*(base_addr + 0x91A1) = 0xc1;
+	//		*(base_addr + 0x91AE) = 0x01;
+	// #if LANGUAGE == 2
+	//		info_msg = "模式已修改";
+	// #else
+	//		info_msg = "Mode changed";
+	// #endif
+	//		ImGui::OpenPopup("info");
+	//	}
+	if (ImGui::Button(
+#if LANGUAGE == 2
+			"加载数据到输入区"
+#else
+			"Load to input area"
+#endif
+			)) {
+		memcpy(base_addr + inputbase, data_buf, range);
+		info_msg = "字符串已加载";
+		ImGui::OpenPopup("info");
+	}
+	ImGui::Separator();
 	ImGui::Text(
 #if LANGUAGE == 2
 		"an前数字"
@@ -95,23 +124,7 @@ void Injector::Show() {
 	ImGui::InputText(
 		"##off",
 		buf, 9);
-	char* base_addr = n_ram_buffer - casioemu::GetRamBaseAddr(m_emu->hardware_id);
-	if (ImGui::Button(
-#if LANGUAGE == 2
-			"计算模式数学输入"
-#else
-			"Math IO with Calc Mode"
-#endif
-			)) {
-		*(base_addr + 0x91A1) = 0xc1;
-		*(base_addr + 0x91AE) = 0x01;
-#if LANGUAGE == 2
-		info_msg = "模式已修改";
-#else
-		info_msg = "Mode changed";
-#endif
-		ImGui::OpenPopup("info");
-	}
+	ImGui::SameLine();
 	if (ImGui::Button(
 #if LANGUAGE == 2
 			"输入 an"
@@ -137,17 +150,7 @@ void Injector::Show() {
 #endif
 		ImGui::OpenPopup("info");
 	}
-	if (ImGui::Button(
-#if LANGUAGE == 2
-			"加载数据到输入区"
-#else
-			"Load to input area"
-#endif
-			)) {
-		memcpy(base_addr + inputbase, data_buf, range);
-		info_msg = "字符串已加载";
-		ImGui::OpenPopup("info");
-	}
+	ImGui::Separator();
 	// if (ImGui::Button("加载 Rop 二进制文件")) {
 	//	auto f = OpenFile();
 	//	std::ifstream ifs2(f, std::ios::in | std::ios::binary);
@@ -177,14 +180,21 @@ void Injector::Show() {
 	//	}
 	// }
 	ImGui::SetNextItemWidth(60);
-	ImGui::InputText("Inject addr", buf2, 10);
-	//ImGui::SameLine();
+	ImGui::InputText(
+#if LANGUAGE == 2
+		"注入地址"
+#else
+		"Inject addr"
+#endif
+		,
+		buf2, 10);
+	// ImGui::SameLine();
 	ImGui::InputTextMultiline(
 		"## hex",
 		strbuf, IM_ARRAYSIZE(strbuf) - 1);
 	if (ImGui::Button(
 #if LANGUAGE == 2
-			"加载Hex字符串"
+			"注入"
 #else
 			"Inject hex"
 #endif
@@ -246,7 +256,20 @@ void Injector::Show() {
 		}
 		ImGui::EndPopup();
 	}
-
+	ImGui::Separator();
+	static int cps = -1;
+	if (cps == -1) {
+		cps = m_emu->GetCyclesPerSecond();
+	}
+	if (ImGui::SliderInt(
+#if LANGUAGE == 2
+			"每秒周期数"
+#else
+			"Cycles per second"
+#endif
+		, &cps, 1, 4*1024 * 1024, "%d CPS")) {
+		m_emu->SetCyclesPerSecond(cps);
+	}
 
 	ImGui::End();
 }

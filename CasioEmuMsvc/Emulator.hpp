@@ -116,6 +116,9 @@ namespace casioemu
 		void WindowResize(int width, int height);
 		void ExecuteCommand(std::string command);
 		unsigned int GetCyclesPerSecond();
+		void SetCyclesPerSecond(unsigned int cps);
+		//void SetCyclesPerSecond(unsigned int cps, unsigned int timer_interval);
+		//void SetCyclesPerSecond(unsigned int cps);
 		void SetClockSpeed(float speed);
 		bool GetPaused();
 		void SetPaused(bool paused);

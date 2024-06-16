@@ -1,6 +1,8 @@
 ﻿#pragma once
 #include <string>
 #include <unordered_map>
+#include "../Models.h"
+#include "../Gui/Ui.hpp"
 namespace cwii {
 	inline std::string trim(const std::string& str) {
 		size_t first = str.find_first_not_of('0');
@@ -8,6 +10,14 @@ namespace cwii {
 			return "";
 
 		size_t last = str.find_last_not_of('0');
+		return str.substr(first, (last - first + 1));
+	}
+	inline std::string trim_space(const std::string& str) {
+		size_t first = str.find_first_not_of(' ');
+		if (first == std::string::npos)
+			return "";
+
+		size_t last = str.find_last_not_of(' ');
 		return str.substr(first, (last - first + 1));
 	}
 	inline std::string trimEnd(const std::string& str) {
@@ -73,14 +83,15 @@ namespace cwii {
 		return 1;
 	}
 	inline std::string StringizeCwiiNumber(const char* p) {
+		auto sz = casioemu::GetVariableSize(m_emu->hardware_id);
 		auto type = (p[0] >> 4) & 0xF;
-		auto exp = p[12];
-		auto sign = p[13]; // 0xE == 14
+		auto exp = p[sz - 2];
+		auto sign = p[sz - 1]; // 0xE == 14
 		auto numbersign = 1;
 		auto expsign = 1;
 		if (!ConvertSign(sign, expsign, numbersign))
 			0;
-		auto base = HexizeString(p, 12);
+		auto base = HexizeString(p, sz - 2);
 		switch (type) {
 		case 0x0:
 		case 0x4: {
@@ -96,28 +107,28 @@ namespace cwii {
 				return trimEnd(base) + "x10^" + exps;
 
 			return trimEnd(base);
-			//base[0] = base[1];
-			//base[1] = '.';
-			//if (numbersign == -1) {
+			// base[0] = base[1];
+			// base[1] = '.';
+			// if (numbersign == -1) {
 			//	base = "-" + base;
-			//}
-			//auto exps = HexExp(exp, expsign);
-			//int exponent = std::stoi(exps);
-			//int num_n = exponent - trimEnd(base.substr(2)).size();
-			//std::string result;
-			//if (num_n >= -4 && num_n < 8) {
+			// }
+			// auto exps = HexExp(exp, expsign);
+			// int exponent = std::stoi(exps);
+			// int num_n = exponent - trimEnd(base.substr(2)).size();
+			// std::string result;
+			// if (num_n >= -4 && num_n < 8) {
 			//	// Small decimal
 			//	result = trimEnd(base) + "e" + (exponent >= 0 ? "+" : "") + std::to_string(exponent);
-			//}
-			//else if (num_n >= 8) {
+			// }
+			// else if (num_n >= 8) {
 			//	// Scientific notation
 			//	result = trimStart(trimEnd(base)) + "e" + exps;
-			//}
-			//else {
+			// }
+			// else {
 			//	// Integer
 			//	result = trimEnd(base).substr(0, 1) + trimStart(trimEnd(base).substr(2));
-			//}
-			//return (numbersign == -1 ? "-" : "") + result;
+			// }
+			// return (numbersign == -1 ? "-" : "") + result;
 		}
 		case 0x2: {
 			auto ind = base.find_first_of('A');

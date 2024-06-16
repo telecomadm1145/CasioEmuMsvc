@@ -4,19 +4,20 @@
 #include "ui.hpp"
 
 #include "CwiiHelp.h"
+#include "../Models.h"
 
 #define SColor \
 	i++ % 2 ? ImColor{ 40, 120, 40, 255 } : ImColor { 40, 40, 120, 255 }
 
 AppMemoryView::AppMemoryView() {
 	mem_edit.ReadFn = [](const ImU8* data, size_t off) -> ImU8 {
-		return me_mmu->ReadData(off + 0xBA68);
+		return me_mmu->ReadData(off + casioemu::GetAppOffset(m_emu->hardware_id));
 	};
 	mem_edit.WriteFn = [](ImU8* data, size_t off, ImU8 d) {
-		return me_mmu->WriteData(off + 0xBA68, d);
+		return me_mmu->WriteData(off + casioemu::GetAppOffset(m_emu->hardware_id), d);
 	};
 }
-std::array<std::pair<int, std::string>, 15> items = {
+std::array<std::pair<int, std::string>, 16> items = {
 	std::make_pair(0, "Reset 68"),
 	std::make_pair(0x06, "Matrix"),
 	std::make_pair(0x07, "Vector"),
@@ -24,6 +25,7 @@ std::array<std::pair<int, std::string>, 15> items = {
 	std::make_pair(0x0E, "Algorithm"),
 	std::make_pair(0x4F, "Math Box"),
 	std::make_pair(0x88, "Table"),
+	std::make_pair(0x89, "Verify"),
 	std::make_pair(0xC1, "Calculate"),
 	std::make_pair(0xC4, "Complex"),
 	std::make_pair(0x02, "Base-N"),
@@ -36,7 +38,7 @@ std::array<std::pair<int, std::string>, 15> items = {
 
 int current_item = 0;
 std::string FindCurrentMode() {
-	int current_mode_id = n_ram_buffer[0x01A1] & 0xFF;
+	int current_mode_id = n_ram_buffer[casioemu::GetModeOffset(m_emu->hardware_id) - casioemu::GetRamBaseAddr(m_emu->hardware_id)] & 0xFF;
 	for (const auto& item : items) {
 		if (item.first == current_mode_id) {
 			return item.second;
@@ -59,8 +61,8 @@ void ShowCombo() {
 #endif
 			,
 			&current_item, item_names.data(), item_names.size())) {
-		n_ram_buffer[0x01A1] = items[current_item].first;
-		n_ram_buffer[0x01A2] = 0;
+		n_ram_buffer[casioemu::GetModeOffset(m_emu->hardware_id) - casioemu::GetRamBaseAddr(m_emu->hardware_id)] = items[current_item].first;
+		n_ram_buffer[casioemu::GetModeOffset(m_emu->hardware_id) - casioemu::GetRamBaseAddr(m_emu->hardware_id) + 1] = 0;
 		//// 处理选择更改
 		// int selected_id = items[current_item].first;
 		// const char* selected_name = items[current_item].second.c_str();
@@ -80,12 +82,12 @@ void AppMemoryView::Draw() {
 	auto s = FindCurrentMode();
 	ImGui::Text(s.c_str());
 	ImGui::SameLine();
-	s = cwii::HexizeString(&n_ram_buffer[0x01A1], 2);
+	s = cwii::HexizeString(&n_ram_buffer[casioemu::GetModeOffset(m_emu->hardware_id) - casioemu::GetRamBaseAddr(m_emu->hardware_id)], 2);
 	ImGui::Text(s.c_str());
 	ShowCombo();
 	ImGui::BeginChild("##hexview");
 	if (me_mmu != nullptr) {
-		mem_edit.DrawContents(0, 3000, 0xBA68, spans);
+		mem_edit.DrawContents(0, 3000, casioemu::GetAppOffset(m_emu->hardware_id), spans);
 	}
 	ImGui::EndChild();
 	ImGui::End();

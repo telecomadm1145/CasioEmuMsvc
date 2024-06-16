@@ -8,7 +8,7 @@
 #include "../Chipset/MMU.hpp"
 #include "../Emulator.hpp"
 #include "../Chipset/Chipset.hpp"
-
+#include "../Gui/ScreenController.h"
 #include <vector>
 
 namespace casioemu {
@@ -384,8 +384,8 @@ namespace casioemu {
 		region_offset.Setup(0xF039, 1, "Screen/DSPOFST", this, DefaultRead<uint8_t, 0x3F, &Screen::screen_offset>,
 			SetRequireFrameWrite<uint8_t, 0x3F, &Screen::screen_offset>, emulator);
 
-		region_refresh_rate.Setup(0xF034, 1, "Screen/RefreshRate", this, DefaultRead<uint8_t, 0xFF, &Screen::screen_refresh_rate>,
-			SetRequireFrameWrite<uint8_t, 0xFF, &Screen::screen_refresh_rate>, emulator);
+		region_refresh_rate.Setup(0xF034, 1, "Screen/RefreshRate", this, DefaultRead<uint8_t, 0x3F, &Screen::screen_refresh_rate>,
+			SetRequireFrameWrite<uint8_t, 0x3F, &Screen::screen_refresh_rate>, emulator);
 	}
 
 	template <HardwareId hardware_id>
@@ -396,27 +396,46 @@ namespace casioemu {
 	}
 	inline void update_screen_scan_alpha(float* screen_scan_alpha, float t, float screen_refresh_rate) {
 		// auto t_mod = fmodf(t,screen_refresh_rate);
-		float position = fmodf(t * screen_refresh_rate / 5.0f, 64);
-		for (size_t i = 0; i < 64; i++) {
-			screen_scan_alpha[(i + int(floor(position))) % 64] = std::min(std::max(0.0f, 2.0f - i / 16.0f), 1.0f);
+		if (screen_refresh_rate < screen_flashing_threshold) { // thd
+			for (size_t i = 0; i < 64; i++) {
+				screen_scan_alpha[i] = 1;
+			}
+			return;
 		}
-		screen_scan_alpha[int(floor(position))] = 2.0f;
+		float position = fmodf(t * pow(screen_refresh_rate, -0.8) * 5, 64);
+		for (size_t i = 0; i < 64; i++) {
+			screen_scan_alpha[(i + int(floor(position))) % 64] = screen_flashing_brightness_coeff - i / 64. * screen_flashing_brightness_coeff;
+		}
 	}
 	template <HardwareId hardware_id>
 	void Screen<hardware_id>::Frame() {
 
-		if (screen_refresh_rate == 0)
-			require_frame = false;
-		else {
-			update_screen_scan_alpha(screen_scan_alpha, SDL_GetTicks64(), screen_refresh_rate);
-		}
+		// if (screen_refresh_rate == 0)
+		//	require_frame = false;
+		// else {
+		update_screen_scan_alpha(screen_scan_alpha, SDL_GetTicks64(), screen_refresh_rate);
+		//}
 		int ink_alpha_on = 20 + screen_contrast * 16;
 		if (ink_alpha_on > 255)
 			ink_alpha_on = 255;
 		int ink_alpha_off = (screen_contrast - 8) * 5;
 		if (ink_alpha_off < 0)
 			ink_alpha_off = 0;
-
+		float ratio = 0;
+		if (enable_screen_fading) {
+			if (screen_fading_blending_coefficient <= 0.01) {
+				if (emulator.hardware_id == HW_CLASSWIZ_II) {
+					screen_fading_blending_coefficient = 0.9;
+				}
+				else if (emulator.hardware_id == HW_CLASSWIZ) {
+					screen_fading_blending_coefficient = 0.85;
+				}
+				else {
+					screen_fading_blending_coefficient = 0.5;
+				}
+			}
+			ratio = screen_fading_blending_coefficient;
+		}
 		bool enable_status, enable_dotmatrix, clear_dots;
 
 		switch (screen_mode) {
@@ -457,9 +476,8 @@ namespace casioemu {
 						ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.333;
 					if (screen_buffer1[off] & sprite_bitmap[ix].mask)
 						ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.667;
-					/* if (screen_refresh_rate != 0)
-						ink_alpha *= screen_scan_alpha[0];*/
-					const float ratio = 0.9;
+					if (screen_refresh_rate != 0)
+						ink_alpha *= screen_scan_alpha[0];
 					screen_ink_alpha[x] = screen_ink_alpha[x] * ratio + ink_alpha * (1 - ratio);
 					SDL_SetTextureAlphaMod(interface_texture, Uint8(std::clamp((int)screen_ink_alpha[x], 0, 255)));
 					x++;
@@ -474,9 +492,8 @@ namespace casioemu {
 						ink_alpha = ink_alpha_on;
 					else
 						ink_alpha = ink_alpha_off;
-					/* if (screen_refresh_rate != 0)
-						ink_alpha *= screen_scan_alpha[0];*/
-					const float ratio = 0.85;
+					if (screen_refresh_rate != 0)
+						ink_alpha *= screen_scan_alpha[0];
 					screen_ink_alpha[x] = screen_ink_alpha[x] * ratio + ink_alpha * (1 - ratio);
 					SDL_SetTextureAlphaMod(interface_texture, Uint8(std::clamp((int)screen_ink_alpha[x], 0, 255)));
 					x++;
@@ -504,10 +521,10 @@ namespace casioemu {
 			SDL_Rect dest = Screen<hardware_id>::sprite_info[SPR_PIXEL].dest;
 			int ink_alpha = ink_alpha_off;
 			if (emulator.hardware_id == HW_CLASSWIZ_II) {
-				for (int iy2 = 1; iy2 != N_ROW; ++iy2) {
+				for (int iy2 = 1; iy2 != (N_ROW + 1); ++iy2) {
 					int iy = (iy2 + screen_offset) % (N_ROW + 1);
 					dest.x = sprite_info[SPR_PIXEL].dest.x;
-					dest.y = sprite_info[SPR_PIXEL].dest.y + iy2 * sprite_info[SPR_PIXEL].src.h;
+					dest.y = sprite_info[SPR_PIXEL].dest.y + (iy2 - 1) * sprite_info[SPR_PIXEL].src.h;
 					int x = 0;
 					for (int ix = 0; ix != ROW_SIZE_DISP; ++ix) {
 						for (uint8_t mask = 0x80; mask; mask >>= 1, dest.x += sprite_info[SPR_PIXEL].src.w) {
@@ -516,11 +533,10 @@ namespace casioemu {
 								ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.333;
 							if (!clear_dots && screen_buffer1[iy * ROW_SIZE + ix] & mask)
 								ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.667;
-							/* if (screen_refresh_rate != 0)
-								ink_alpha *= screen_scan_alpha[0];*/
-							const float ratio = 0.9;
-							screen_ink_alpha[x + iy * 192] = screen_ink_alpha[x + iy * 192] * ratio + ink_alpha * (1 - ratio);
-							SDL_SetTextureAlphaMod(interface_texture, Uint8(std::clamp((int)screen_ink_alpha[x + iy * 192], 0, 255)));
+							if (screen_refresh_rate != 0)
+								ink_alpha *= screen_scan_alpha[iy];
+							screen_ink_alpha[x + iy2 * 192] = screen_ink_alpha[x + iy2 * 192] * ratio + ink_alpha * (1 - ratio);
+							SDL_SetTextureAlphaMod(interface_texture, Uint8(std::clamp((int)screen_ink_alpha[x + iy2 * 192], 0, 255)));
 							x++;
 							SDL_RenderCopy(renderer, interface_texture, &sprite_info[SPR_PIXEL].src, &dest);
 						}
@@ -528,10 +544,10 @@ namespace casioemu {
 				}
 			}
 			else {
-				for (int iy2 = 1; iy2 != N_ROW; ++iy2) {
+				for (int iy2 = 1; iy2 != (N_ROW + 1); ++iy2) {
 					int iy = (iy2 + screen_offset) % (N_ROW + 1);
 					dest.x = sprite_info[SPR_PIXEL].dest.x;
-					dest.y = sprite_info[SPR_PIXEL].dest.y + iy2 * sprite_info[SPR_PIXEL].src.h;
+					dest.y = sprite_info[SPR_PIXEL].dest.y + (iy2 - 1) * sprite_info[SPR_PIXEL].src.h;
 					int x = 0;
 					for (int ix = 0; ix != ROW_SIZE_DISP; ++ix) {
 						for (uint8_t mask = 0x80; mask; mask >>= 1, dest.x += sprite_info[SPR_PIXEL].src.w) {
@@ -539,11 +555,10 @@ namespace casioemu {
 								ink_alpha = ink_alpha_on;
 							else
 								ink_alpha = ink_alpha_off;
-							/* if (screen_refresh_rate != 0)
-								ink_alpha *= screen_scan_alpha[0];*/
-							const float ratio = 0.85;
-							screen_ink_alpha[x + iy * 192] = screen_ink_alpha[x + iy * 192] * ratio + ink_alpha * (1 - ratio);
-							SDL_SetTextureAlphaMod(interface_texture, Uint8(std::clamp((int)screen_ink_alpha[x + iy * 192], 0, 255)));
+							if (screen_refresh_rate != 0)
+								ink_alpha *= screen_scan_alpha[iy];
+							screen_ink_alpha[x + iy2 * 192] = screen_ink_alpha[x + iy2 * 192] * ratio + ink_alpha * (1 - ratio);
+							SDL_SetTextureAlphaMod(interface_texture, Uint8(std::clamp((int)screen_ink_alpha[x + iy2 * 192], 0, 255)));
 							x++;
 							SDL_RenderCopy(renderer, interface_texture, &sprite_info[SPR_PIXEL].src, &dest);
 						}
@@ -554,13 +569,11 @@ namespace casioemu {
 		else {
 			if (emulator.hardware_id == HW_CLASSWIZ_II) {
 				for (size_t i = 192; i < 64 * 192; i++) {
-					const float ratio = 0.9;
 					screen_ink_alpha[i] *= ratio;
 				}
 			}
 			else {
 				for (size_t i = 192; i < 64 * 192; i++) {
-					const float ratio = 0.85;
 					screen_ink_alpha[i] *= ratio;
 				}
 			}

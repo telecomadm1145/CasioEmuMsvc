@@ -10,6 +10,8 @@
 namespace casioemu
 {
 	void BCDCalc::Initialise() {
+		if (emulator.hardware_id != HW_CLASSWIZ_II)
+			return;
 		F400_write = false;
 		F402_write = false;
 		F404_write = false;

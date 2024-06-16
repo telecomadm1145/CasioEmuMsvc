@@ -418,7 +418,7 @@ namespace casioemu
 					has_input = keyboard_in_emu = button.ki_bit;
 					keyboard_out_emu = button.ko_bit;
 					emu_ki_readcount = emu_ko_readcount = 0;
-					emulator.chipset.EmuTimerSkipped = true;
+					// emulator.chipset.EmuTimerSkipped = true;
 				}
 				else
 				{

@@ -14,6 +14,9 @@
 #include "../Peripheral/Screen.hpp"
 #include "VariableWindow.h"
 #include "AppMemoryView.h"
+#include "ScreenController.h"
+#include "LabelViewer.h"
+#include "RopDbg.h"
 #include "KeyLog.h"
 #include "../models.h"
 #include <filesystem>
@@ -27,6 +30,9 @@ Injector* injector;
 MemBreakPoint* membp;
 AppMemoryView* amv;
 WatchWindow* ww;
+ScreenController* sc;
+LabelViewer* lv;
+RopDbg* rd;
 SDL_Renderer* renderer;
 VariableWindow* vw;
 KeyLog* kl;
@@ -91,11 +97,13 @@ void gui_loop() {
 	injector->Show();
 	membp->Show();
 	ww->Show();
-	//vw->Draw();
+	vw->Draw();
 	if (kl)
 		kl->Draw();
 	amv->Draw();
-
+	sc->Draw();
+	lv->Draw();
+	rd->Draw();
 	// Rendering
 	ImGui::Render();
 	SDL_RenderSetScale(renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
@@ -162,6 +170,9 @@ int test_gui(bool* guiCreated) {
 	ww = new WatchWindow();
 	vw = new VariableWindow();
 	amv = new AppMemoryView();
+	sc = new ScreenController();
+	lv = new LabelViewer();
+	rd = new RopDbg();
 	return 0;
 	// ImGui_ImplSDL2_InitForSDLRenderer(renderer);
 }

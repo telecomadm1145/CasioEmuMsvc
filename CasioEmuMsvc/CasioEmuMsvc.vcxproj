@@ -154,7 +154,6 @@
     <ClCompile Include="Data\ModelInfo.cpp" />
     <ClCompile Include="Emulator.cpp" />
     <ClCompile Include="Gui\CodeViewer.cpp" />
-    <ClCompile Include="Gui\Command.cpp" />
     <ClCompile Include="Gui\imgui\imgui.cpp" />
     <ClCompile Include="Gui\imgui\imgui_draw.cpp" />
     <ClCompile Include="Gui\imgui\imgui_impl_sdl2.cpp" />
@@ -162,7 +161,11 @@
     <ClCompile Include="Gui\imgui\imgui_tables.cpp" />
     <ClCompile Include="Gui\imgui\imgui_widgets.cpp" />
     <ClCompile Include="Gui\Injector.cpp" />
+    <ClCompile Include="Gui\LabelViewer.cpp" />
     <ClCompile Include="Gui\MemBreakPoint.cpp" />
+    <ClCompile Include="Gui\RopDbg.cpp" />
+    <ClCompile Include="Gui\ScreenController.cpp" />
+    <ClCompile Include="Gui\Ui.cpp" />
     <ClCompile Include="Gui\WatchWindow.cpp" />
     <ClCompile Include="Gui\KeyLog.cpp" />
     <ClCompile Include="Logger.cpp" />
@@ -203,7 +206,10 @@
     <ClInclude Include="Gui\imgui\imstb_textedit.h" />
     <ClInclude Include="Gui\imgui\imstb_truetype.h" />
     <ClInclude Include="Gui\Injector.hpp" />
+    <ClInclude Include="Gui\LabelViewer.h" />
     <ClInclude Include="Gui\MemBreakPoint.hpp" />
+    <ClInclude Include="Gui\RopDbg.h" />
+    <ClInclude Include="Gui\ScreenController.h" />
     <ClInclude Include="Gui\ui.hpp" />
     <ClInclude Include="Gui\WatchWindow.hpp" />
     <ClInclude Include="Gui\KeyLog.h" />

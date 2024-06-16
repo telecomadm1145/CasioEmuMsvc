@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace casioemu
 {
@@ -27,7 +28,7 @@ namespace casioemu
 			int on_read, on_write;
 		};
 		MemoryByte **segment_dispatch;
-
+		std::vector<MMURegion*> regions;
 	public:
 		MMU(Emulator &emulator);
 		~MMU();
@@ -38,6 +39,8 @@ namespace casioemu
 		void WriteData(size_t offset, uint8_t data, bool softwareWrite = true);
 		size_t getRealOffset(size_t offset);
 
+
+		std::vector<MMURegion*> GetRegions();
 		void RegisterRegion(MMURegion *region);
 		void UnregisterRegion(MMURegion *region);
 	};

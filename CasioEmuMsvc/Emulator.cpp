@@ -480,6 +480,10 @@ namespace casioemu
 		return cycles.cycles_per_second;
 	}
 
+	void Emulator::SetCyclesPerSecond(unsigned int cps) {
+		cycles.Setup(cps, timer_interval);
+	}
+
 	void Emulator::SetClockSpeed(float speed) {
 		cycles.Setup((unsigned int)(cycles_per_second * speed), timer_interval);
 	}

@@ -123,6 +123,18 @@
     <ClCompile Include="Gui\AppMemoryView.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Gui\RopDbg.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\ScreenController.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\Ui.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\LabelViewer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Config.hpp">
@@ -246,6 +258,15 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Models.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\RopDbg.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\ScreenController.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\LabelViewer.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
