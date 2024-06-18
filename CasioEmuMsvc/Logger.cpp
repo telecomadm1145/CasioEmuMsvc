@@ -11,8 +11,9 @@ namespace casioemu
 		{
 			va_list args;
 			va_start(args, format);
-			vprintf(format, args);
+			printf(format, args);
 			va_end(args);
+			
 		}
 	}
 }

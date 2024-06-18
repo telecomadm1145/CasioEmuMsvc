@@ -67,6 +67,7 @@ namespace casioemu
 		CPU &cpu;
 		MMU &mmu;
 		std::vector<unsigned char> rom_data;
+		std::vector<unsigned char> flash_data;
 
 		InterruptSource* MaskableInterrupts;
 		size_t EffectiveMICount;

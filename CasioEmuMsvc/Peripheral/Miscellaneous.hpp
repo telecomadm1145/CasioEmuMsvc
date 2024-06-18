@@ -6,7 +6,7 @@
 
 namespace casioemu {
 	class Miscellaneous : public Peripheral {
-		MMURegion region_dsr, region_F048, region_F220, region_F0D0, region_F0D1, region_F0D2;
+		MMURegion region_dsr, region_F046, region_F048, region_F220, region_F0D0, region_F0D1, region_F0D2, region_10_0000;
 		uint64_t data_F048;
 		uint32_t data_F220;
 		uint8_t data_F0D0, data_F0D1, data_F0D2;

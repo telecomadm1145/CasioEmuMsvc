@@ -38,7 +38,7 @@ namespace casioemu {
 
 		MMURegion region_buffer, region_buffer1, region_contrast, region_mode, region_range, region_select, region_offset, region_refresh_rate;
 		uint8_t *screen_buffer, *screen_buffer1, screen_contrast, screen_mode, screen_range, screen_select, screen_offset, screen_refresh_rate;
-
+		uint8_t unk_f034;
 		float screen_scan_alpha[64]{};
 		float position = 0;
 
@@ -381,11 +381,17 @@ namespace casioemu {
 		region_contrast.Setup(0xF032, 1, "Screen/Contrast", this, DefaultRead<uint8_t, 0x3F, &Screen::screen_contrast>,
 			SetRequireFrameWrite<uint8_t, 0x3F, &Screen::screen_contrast>, emulator);
 
-		region_offset.Setup(0xF039, 1, "Screen/DSPOFST", this, DefaultRead<uint8_t, 0x3F, &Screen::screen_offset>,
-			SetRequireFrameWrite<uint8_t, 0x3F, &Screen::screen_offset>, emulator);
+		if (emulator.hardware_id == HardwareId::HW_ES_PLUS) {
+			region_refresh_rate.Setup(0xF034, 1, "Screen/Unknown_F034", this, DefaultRead<uint8_t, 0b11, &Screen::unk_f034>,
+				SetRequireFrameWrite<uint8_t, 0b11, &Screen::unk_f034>, emulator);
+		}
+		else {
+			region_offset.Setup(0xF039, 1, "Screen/DSPOFST", this, DefaultRead<uint8_t, 0x3F, &Screen::screen_offset>,
+				SetRequireFrameWrite<uint8_t, 0x3F, &Screen::screen_offset>, emulator);
 
-		region_refresh_rate.Setup(0xF034, 1, "Screen/RefreshRate", this, DefaultRead<uint8_t, 0x3F, &Screen::screen_refresh_rate>,
-			SetRequireFrameWrite<uint8_t, 0x3F, &Screen::screen_refresh_rate>, emulator);
+			region_refresh_rate.Setup(0xF034, 1, "Screen/RefreshRate", this, DefaultRead<uint8_t, 0x3F, &Screen::screen_refresh_rate>,
+				SetRequireFrameWrite<uint8_t, 0x3F, &Screen::screen_refresh_rate>, emulator);
+		}
 	}
 
 	template <HardwareId hardware_id>
@@ -425,10 +431,10 @@ namespace casioemu {
 		if (enable_screen_fading) {
 			if (screen_fading_blending_coefficient <= 0.01) {
 				if (emulator.hardware_id == HW_CLASSWIZ_II) {
-					screen_fading_blending_coefficient = 0.9;
+					screen_fading_blending_coefficient = 0.86;
 				}
 				else if (emulator.hardware_id == HW_CLASSWIZ) {
-					screen_fading_blending_coefficient = 0.85;
+					screen_fading_blending_coefficient = 0.82;
 				}
 				else {
 					screen_fading_blending_coefficient = 0.5;
@@ -627,6 +633,7 @@ namespace casioemu {
 
 	Peripheral* CreateScreen(Emulator& emulator) {
 		switch (emulator.hardware_id) {
+		case HW_5800P:
 		case HW_ES_PLUS:
 			return m_screen = new Screen<HW_ES_PLUS>(emulator);
 

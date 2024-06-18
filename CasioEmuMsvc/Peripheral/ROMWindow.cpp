@@ -78,6 +78,11 @@ namespace casioemu
 			}
 			
 			break;
+		case HW_5800P:
+			regions.reset(new MMURegion[2]);
+			SetupROMRegion(regions[0], 0x00000, 0x8000, 0x00000, strict_memory, emulator);
+			SetupROMRegion(regions[1], 0x10000, 0x10000, 0x10000, strict_memory, emulator);
+			//SetupROMRegion(regions[2], 0x80000, 0x10000, 0x00000, strict_memory, emulator);
 		}
 	}
 

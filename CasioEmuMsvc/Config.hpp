@@ -20,5 +20,5 @@
 // 1 - English
 // 2 - Chinese
 
-//#define LANGUAGE 1
-#define LANGUAGE 2
+#define LANGUAGE 1
+//#define LANGUAGE 2

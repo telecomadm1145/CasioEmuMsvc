@@ -27,11 +27,12 @@ namespace casioemu
 		LoadModelDefition();
 
 		int hardware_id = GetModelInfo("hardware_id");
-		if (hardware_id != HW_ES_PLUS && hardware_id != HW_CLASSWIZ && hardware_id != HW_CLASSWIZ_II)
+		if (hardware_id != HW_ES_PLUS && hardware_id != HW_CLASSWIZ && hardware_id != HW_CLASSWIZ_II && hardware_id != HW_5800P)
 			PANIC("Unknown hardware id %d\n", hardware_id);
 		this->hardware_id = (HardwareId)hardware_id;
 
-		cycles_per_second = hardware_id == HW_ES_PLUS ? 128 * 1024 : hardware_id == HW_CLASSWIZ ? 1024 * 1024 : 2048 * 1024;
+		cycles_per_second = hardware_id == HW_ES_PLUS ? 128 * 1024 : (hardware_id == HW_CLASSWIZ || hardware_id == HW_5800P) ? 1024 * 1024
+																														   : 2048 * 1024;
 		timer_interval = 20;
 
 		cycles.Setup(cycles_per_second, timer_interval);

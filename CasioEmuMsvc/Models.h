@@ -5,10 +5,12 @@
 namespace casioemu {
 	inline constexpr size_t GetRamBaseAddr(HardwareId hid) {
 		return hid == HW_ES_PLUS ? 0x8000 : hid == HW_CLASSWIZ ? 0xD000
+										: hid == HW_5800P	   ? 0x8000
 															   : 0x9000;
 	}
 	inline constexpr size_t GetRamSize(HardwareId hid) {
 		return hid == HW_ES_PLUS ? 0x0E00 : hid == HW_CLASSWIZ ? 0x2000
+										: hid == HW_5800P	   ? 0xf000 - 0x8000
 															   : 0x6000;
 	}
 	inline std::vector<MemoryEditor::MarkedSpan> GetCommonMemLabels(HardwareId hid) {
@@ -73,7 +75,6 @@ namespace casioemu {
 				MemoryEditor::MarkedSpan{ 0x91C6, 0x1, SColor, " 表格光标列位置" },
 				MemoryEditor::MarkedSpan{ 0x91C7, 0x1, SColor, " 光标大小(?) " },
 				MemoryEditor::MarkedSpan{ 0x91D0, 0x1, SColor, " 滚动Y轴 " },
-
 				MemoryEditor::MarkedSpan{ 0x91E0, 0x2, SColor, " 上一次的KI和KO " },
 				MemoryEditor::MarkedSpan{ 0x91E3, 0x1, SColor, " 对比度 " },
 				MemoryEditor::MarkedSpan{ 0x91E5, 0x1, SColor, " 光标字符位置 " },
@@ -409,7 +410,7 @@ namespace casioemu {
 				MemoryEditor::MarkedSpan{ 0x8107, 0x1, SColor, " 分数类型 " },
 				MemoryEditor::MarkedSpan{ 0x8108, 0x1, SColor, " 复数类型 " },
 				MemoryEditor::MarkedSpan{ 0x8109, 0x1, SColor, " 频数 " },
-				MemoryEditor::MarkedSpan{ 0x810A, 0x1, SColor, " 10的幂的类型 " },
+				MemoryEditor::MarkedSpan{ 0x810A, 0x1, SColor, " 循环小数 " },
 				MemoryEditor::MarkedSpan{ 0x810B, 0x1, SColor, " 自动化简 " },
 				MemoryEditor::MarkedSpan{ 0x810C, 0x1, SColor, " 小数输出开关 " },
 				MemoryEditor::MarkedSpan{ 0x810E, 0x1, SColor, " 对比度 " },
@@ -479,7 +480,7 @@ namespace casioemu {
 				MemoryEditor::MarkedSpan{ 0x8107, 0x1, SColor, "Fraction Type" },
 				MemoryEditor::MarkedSpan{ 0x8108, 0x1, SColor, "Complex Number Type" },
 				MemoryEditor::MarkedSpan{ 0x8109, 0x1, SColor, "Frequency" },
-				MemoryEditor::MarkedSpan{ 0x810A, 0x1, SColor, "10's Power Type" },
+				MemoryEditor::MarkedSpan{ 0x810A, 0x1, SColor, "Recur decimal" },
 				MemoryEditor::MarkedSpan{ 0x810B, 0x1, SColor, "Automatic Simplification" },
 				MemoryEditor::MarkedSpan{ 0x810C, 0x1, SColor, "Decimal Output Switch" },
 				MemoryEditor::MarkedSpan{ 0x810E, 0x1, SColor, "Contrast" },
@@ -561,6 +562,9 @@ namespace casioemu {
 		return hid == HW_CLASSWIZ_II ? 0xE : 0xA;
 	}
 	inline size_t GetReImOffset(HardwareId hid) {
+		if (hid == HW_5800P) {
+			return {};
+		}
 		if (hid == HW_ES_PLUS) {
 			return static_cast<size_t>(0x8408) - 0x8226;
 		}
@@ -575,6 +579,9 @@ namespace casioemu {
 		}
 	}
 	inline std::vector<Variable> GetVariableOffsets(HardwareId hid) {
+		if (hid == HW_5800P) {
+			return {};
+		}
 		if (hid == HW_ES_PLUS) {
 			return std::initializer_list<Variable>{
 				{ 0x8226, "M" },

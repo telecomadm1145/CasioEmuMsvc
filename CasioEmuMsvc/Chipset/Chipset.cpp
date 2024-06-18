@@ -153,6 +153,14 @@ namespace casioemu
 			PANIC("std::ifstream failed: %s\n", std::strerror(errno));
 		rom_data = std::vector<unsigned char>((std::istreambuf_iterator<char>(rom_handle)), std::istreambuf_iterator<char>());
 
+		if (emulator.hardware_id == HW_5800P)
+		{
+			std::ifstream flash_handle(emulator.GetModelFilePath(emulator.GetModelInfo("flash_path")), std::ifstream::binary);
+			if (flash_handle.fail())
+				PANIC("std::ifstream failed: %s\n", std::strerror(errno));
+			flash_data = std::vector<unsigned char>((std::istreambuf_iterator<char>(flash_handle)), std::istreambuf_iterator<char>());
+		}
+
 		for (auto &peripheral : peripherals)
 			peripheral->Initialise();
 
@@ -185,6 +193,8 @@ namespace casioemu
 			Reset();
 			return;
 		}
+
+		__debugbreak();
 
 		if (interrupts_active[INT_BREAK])
 			return;

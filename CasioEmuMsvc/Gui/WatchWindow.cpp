@@ -89,11 +89,7 @@ void WatchWindow::Show() {
 		"Watch Window"
 #endif
 	);
-	// ImGui::BeginChild("##stack_trace", ImVec2(0, ImGui::GetWindowHeight() / 4));
 	casioemu::Chipset& chipset = m_emu->chipset;
-	// std::string s = chipset.cpu.GetBacktrace();
-	// ImGui::InputTextMultiline("##as", (char*)s.c_str(), s.size(), ImVec2(ImGui::GetWindowWidth(), 0), ImGuiInputTextFlags_ReadOnly);
-	// ImGui::EndChild();
 	ImGui::BeginChild("##reg_trace", ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * 4), false, 0);
 	// if (!isbreaked) {
 	//	ImGui::TextColored(ImVec4(255, 255, 0, 255), "寄存器请在断点状态下查看");
@@ -108,6 +104,10 @@ void WatchWindow::Show() {
 	ImGui::EndChild();
 	ImGui::Separator();
 	static int range = 64;
+	ImGui::BeginChild("##stack_trace", ImVec2(0, ImGui::GetWindowHeight() / 4));
+	std::string s = chipset.cpu.GetBacktrace();
+	ImGui::InputTextMultiline("##as", (char*)s.c_str(), s.size(), ImVec2(ImGui::GetWindowWidth(), 0), ImGuiInputTextFlags_ReadOnly);
+	ImGui::EndChild();
 	ImGui::BeginChild("##stack_view");
 	ImGui::Text(
 #if LANGUAGE == 2

@@ -92,6 +92,44 @@ void gui_loop() {
 			,
 			0, 0x10000 - casioemu::GetRamBaseAddr(m_emu->hardware_id), casioemu::GetRamBaseAddr(m_emu->hardware_id), spans);
 	}
+	static MemoryEditor mem_edit_2;
+	if (n_ram_buffer != nullptr && me_mmu != nullptr) {
+		int i = 0;
+		mem_edit_2.ReadFn = [](const ImU8* data, size_t off) -> ImU8 {
+			return me_mmu->ReadData(off);
+		};
+		mem_edit_2.WriteFn = [](ImU8* data, size_t off, ImU8 d) {
+			return me_mmu->WriteData(off, d);
+		};
+		mem_edit_2.DrawWindow(
+#if LANGUAGE == 2
+			"内存编辑器(2)"
+#else
+			"Hex editor(2)"
+#endif
+			,
+			0, 0xfffff, 0, {});
+	}
+	if (m_emu->hardware_id == casioemu::HW_5800P) {
+		static MemoryEditor mem_edit_3;
+		if (n_ram_buffer != nullptr && me_mmu != nullptr) {
+			int i = 0;
+			mem_edit_3.ReadFn = [](const ImU8* data, size_t off) -> ImU8 {
+				return me_mmu->ReadData(off + 0x40000);
+			};
+			mem_edit_3.WriteFn = [](ImU8* data, size_t off, ImU8 d) {
+				return me_mmu->WriteData(off + 0x40000, d);
+			};
+			mem_edit_3.DrawWindow(
+#if LANGUAGE == 2
+				"内存编辑器(fx5800p)"
+#else
+				"Hex editor(fx5800p)"
+#endif
+				,
+				0, 0x8000, 0x40000, {});
+		}
+	}
 	if (code_viewer)
 		code_viewer->DrawWindow();
 	injector->Show();
@@ -103,7 +141,7 @@ void gui_loop() {
 	amv->Draw();
 	sc->Draw();
 	lv->Draw();
-	rd->Draw();
+	//rd->Draw();
 	// Rendering
 	ImGui::Render();
 	SDL_RenderSetScale(renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);

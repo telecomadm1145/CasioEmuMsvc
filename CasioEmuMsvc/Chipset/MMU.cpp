@@ -138,12 +138,17 @@ namespace casioemu {
 		if (offset & 1)
 			PANIC("offset has LSB set\n");
 
+		//printf("%X\n", offset);
+
 		size_t segment_index = offset >> 16;
 		size_t segment_offset = offset & 0xFFFF;
 
 		if (!segment_index)
 			return (((uint16_t)emulator.chipset.rom_data[segment_offset + 1]) << 8) | emulator.chipset.rom_data[segment_offset];
-
+		if (emulator.hardware_id == HW_5800P && segment_index > 7) {
+			auto off = (segment_index & 7) << 16;
+			return (((uint16_t)emulator.chipset.flash_data[off + segment_offset + 1]) << 8) | emulator.chipset.flash_data[off + segment_offset];
+		}
 		MemoryByte* segment = segment_dispatch[segment_index];
 		if (!segment) {
 			emulator.HandleMemoryError();
@@ -186,13 +191,20 @@ namespace casioemu {
 			}
 		}
 
+		if (emulator.hardware_id == HW_5800P) {
+			// Battery level detect
+			if (offset == 0x100000) {
+				return 0xff;
+			}
+		}
+
 		size_t segment_index = offset >> 16;
 		size_t segment_offset = offset & 0xFFFF;
 
 		MemoryByte* segment = segment_dispatch[segment_index];
 		if (!segment) {
-			//logger::Info("read from offset %04zX of unmapped segment %02zX\n", segment_offset, segment_index);
-			//emulator.HandleMemoryError();
+			// logger::Info("read from offset %04zX of unmapped segment %02zX\n", segment_offset, segment_index);
+			// emulator.HandleMemoryError();
 			return 0;
 		}
 
@@ -208,8 +220,8 @@ namespace casioemu {
 		}
 		membp->TryTrigBp(offset, false);
 		if (!region) {
-			//logger::Info("read from unmapped offset %04zX of segment %02zX\n", segment_offset, segment_index);
-			//emulator.HandleMemoryError();
+			// logger::Info("read from unmapped offset %04zX of segment %02zX\n", segment_offset, segment_index);
+			// emulator.HandleMemoryError();
 			return 0;
 		}
 
@@ -225,8 +237,8 @@ namespace casioemu {
 
 		MemoryByte* segment = segment_dispatch[segment_index];
 		if (!segment) {
-			//logger::Info("write to offset %04zX of unmapped segment %02zX (%02zX)\n", segment_offset, segment_index, data);
-			//emulator.HandleMemoryError();
+			// logger::Info("write to offset %04zX of unmapped segment %02zX (%02zX)\n", segment_offset, segment_index, data);
+			// emulator.HandleMemoryError();
 			return;
 		}
 
@@ -242,8 +254,8 @@ namespace casioemu {
 		}
 		membp->TryTrigBp(offset, true);
 		if (!region) {
-			//logger::Info("write to unmapped offset %04zX of segment %02zX (%02zX)\n", segment_offset, segment_index, data);
-			//emulator.HandleMemoryError();
+			// logger::Info("write to unmapped offset %04zX of segment %02zX (%02zX)\n", segment_offset, segment_index, data);
+			// emulator.HandleMemoryError();
 			return;
 		}
 		region->write(region, offset, data);
@@ -285,6 +297,6 @@ namespace casioemu {
 				PANIC("MMU region double-hole at %06zX\n", ix);
 			segment_dispatch[ix >> 16][ix & 0xFFFF].region = nullptr;
 		}
-		regions.erase(std::find(regions.begin(),regions.end(),region));
+		regions.erase(std::find(regions.begin(), regions.end(), region));
 	}
 }

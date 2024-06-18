@@ -270,6 +270,11 @@ void Injector::Show() {
 		, &cps, 1, 4*1024 * 1024, "%d CPS")) {
 		m_emu->SetCyclesPerSecond(cps);
 	}
-
+	static char buf4[445];
+	ImGui::InputText("##cps_in",buf4,445);
+	ImGui::SameLine();
+	if (ImGui::Button("设置")) {
+		m_emu->SetCyclesPerSecond(std::stoi(buf4));
+	}
 	ImGui::End();
 }
