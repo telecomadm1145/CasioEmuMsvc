@@ -134,7 +134,6 @@ int test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 			 new VariableWindow(),
 			 new HwController(),
 			 new LabelViewer(),
-			 new CasioData(),
 			 new WatchWindow(),
 			 CreateCallAnalysisWindow(),
 			 code_viewer = new CodeViewer(),
