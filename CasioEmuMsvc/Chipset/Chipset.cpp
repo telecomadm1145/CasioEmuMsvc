@@ -29,11 +29,11 @@
 #include "Uart.h"
 #include "WatchdogTimer.hpp"
 #include <ML620Ports.h>
+#include <Spi.h>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <fstream>
-#include <Spi.h>
 
 #include "Peripheral/SD/FakeSdCard.h"
 
@@ -492,8 +492,9 @@ namespace casioemu {
 			if (emulator.hardware_id == HW_CLASSWIZ)
 				peripherals.push_front(CreateFlash(emulator));
 		}
-
-		new FakeSdCard(QueryInterface<ISpiProvider>());
+		auto spi = QueryInterface<ISpiProvider>();
+		if (spi)
+			new FakeSdCard(spi);
 	}
 
 	void Chipset::DestructPeripherals() {
