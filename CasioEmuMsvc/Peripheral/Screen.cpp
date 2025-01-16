@@ -144,6 +144,9 @@ namespace casioemu {
 			std::thread thd([&]() {
 				while (1) {
 					tick();
+#ifdef  __ANDROID__
+                    SDL_Delay(10);
+#endif
 				}
 			});
 			thd.detach();
@@ -207,6 +210,10 @@ namespace casioemu {
 
 				return;
 			}
+
+#ifdef  __ANDROID__
+            ratio = 1 - 8e-2;
+#endif
 
 			if (screen_refresh_rate < screen_flashing_threshold && !enable_screen_fading)
 				;
@@ -987,6 +994,9 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		std::time_t t = std::time(nullptr);
 		std::tm tm = *std::localtime(&t);
 		std::ostringstream filename;
+#ifdef __ANDROID__
+        filename << "/storage/emulated/0/Pictures/";
+#endif
 		filename << "screenshot-"
 				 << std::put_time(&tm, "%Y-%m-%d-%H-%M-%S-") << std::rand() % 1000
 				 << ".png"; // Unique filename with timestamp and random number
@@ -1023,7 +1033,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			// Copy the renderer to the surface
 			if (SDL_RenderReadPixels(renderer, &captureRect, SDL_PIXELFORMAT_RGBA32, screenSurface->pixels, screenSurface->pitch) == 0) {
 				// Save the surface as a PNG file using SDL_image
-				if (IMG_SavePNG(screenSurface, filename.str().c_str()) != 0) {
+                auto str = filename.str();
+				if (IMG_SavePNG(screenSurface, str.c_str()) != 0) {
 					SDL_Log("Error saving screenshot: %s", IMG_GetError());
 				}
 			}
