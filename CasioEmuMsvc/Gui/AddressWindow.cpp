@@ -1,4 +1,4 @@
-#include "AddressWindow.h"
+﻿#include "AddressWindow.h"
 #include <Hooks.h>
 
 struct AddressInfo {

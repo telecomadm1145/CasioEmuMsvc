@@ -193,12 +193,26 @@ namespace casioemu {
 		{&CPU::OP_DEC_EA     ,                         0, 0xFE3F, {{0,      0,  0}, {0,      0,  0}}},
 		{&CPU::OP_RT         ,                         0, 0xFE1F, {{0,      0,  0}, {0,      0,  0}}},
 		{&CPU::OP_RTI        ,                         0, 0xFE0F, {{0,      0,  0}, {0,      0,  0}}},
-		{&CPU::OP_RTI        ,                         0, 0xFE7F, {{0,      0,  0}, {0,      0,  0}}}, // TODO: verify this
 		{&CPU::OP_NOP        ,                         0, 0xFE8F, {{0,      0,  0}, {0,      0,  0}}},
 		{&CPU::OP_DSR        ,               H_DS       , 0xFE9F, {{0,      0,  0}, {0,      0,  0}}},
 		{&CPU::OP_DSR        ,               H_DS | H_DW, 0xE300, {{0, 0x00FF,  0}, {0,      0,  0}}},
-		{&CPU::OP_DSR        ,               H_DS | H_DW, 0x900F, {{1, 0x000F,  4}, {0,      0,  0}}}
+		{&CPU::OP_DSR        ,               H_DS | H_DW, 0x900F, {{1, 0x000F,  4}, {0,      0,  0}}},
+
+		// * Undocumented Instructions
+		{&CPU::OP_RTICE      ,                         0, 0xFE6F, {{0,      0,  0}, {0,      0,  0}}}, // RTICE
+		{&CPU::OP_RTICE      ,                         0, 0xFE7F, {{0,      0,  0}, {0,      0,  0}}}, // RTICEPSW 
+		{&CPU::OP_ICESWI     ,                         0, 0xFEFF, {{0,      0,  0}, {0,      0,  0}}}, // ICESWI
+		{&CPU::OP_NOP        ,                         0, 0xFE4F, {{0,      0,  0}, {0,      0,  0}}}, // NOP
+		{&CPU::OP_NOP        ,                         0, 0xFE5F, {{0,      0,  0}, {0,      0,  0}}}, // NOP
+		{&CPU::OP_NOP        ,                         0, 0xFE8F, {{0,      0,  0}, {0,      0,  0}}}, // NOP
+		{&CPU::OP_NOP        ,                         0, 0xFEAF, {{0,      0,  0}, {0,      0,  0}}}, // NOP
+		{&CPU::OP_NOP        ,                         0, 0xFEBF, {{0,      0,  0}, {0,      0,  0}}}, // NOP
+		{&CPU::OP_NOP        ,                         0, 0xFEDF, {{0,      0,  0}, {0,      0,  0}}}, // NOP
+		{&CPU::OP_NOP        ,                         0, 0xFEEF, {{0,      0,  0}, {0,      0,  0}}}, // NOP
+
 	};
+
+	// clang-format on
 
 	CPU::RegisterRecord CPU::register_record_sources[] = {
 		{    "r", 16, 0, nullptr,    (RegisterStubArrayPointer)&CPU::reg_r},

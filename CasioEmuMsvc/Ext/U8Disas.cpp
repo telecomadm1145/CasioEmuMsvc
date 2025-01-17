@@ -47,7 +47,7 @@ inline void LABEL_LABEL(auto x) {
 
 void decode(std::ostream& out, uint8_t*& buf, uint32_t pc) {
 	static const char* cond[16] = {"GE ", "LT ", "GT ", "LE ", "GES", "LTS", "GTS", "LES",
-		"NE ", "EQ ", "NV ", "OV ", "PS ", "NS ", "   ", ""};
+		"NE ", "EQ ", "NV ", "OV ", "PS ", "NS ", "   ", "NOP"};
 
 	// Handles vector table
 	if (pc <= 0xFE) {

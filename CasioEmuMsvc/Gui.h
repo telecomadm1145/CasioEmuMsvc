@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <filesystem>
 #include <imgui.h>
 inline const ImWchar* GetKanji() {

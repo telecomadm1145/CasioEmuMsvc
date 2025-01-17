@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 /*
 	The ROM package implement for the emulator
 	Copyright (C) 2024 telecomadm1145

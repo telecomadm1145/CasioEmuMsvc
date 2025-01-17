@@ -20,6 +20,7 @@
 #include <SDL.h>
 #include "AddressWindow.h"
 #include <filesystem>
+#include <Assemblier.h>
 
 char* n_ram_buffer = 0;
 casioemu::MMU* me_mmu = 0;
@@ -141,7 +142,8 @@ int test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 			 code_viewer = new CodeViewer(),
 			 injector = new Injector(),
 			 membp = new MemBreakPoint(),
-			 CreateAddressWindow()})
+			 CreateAddressWindow(),
+			 MakeAssemblierUI()})
 		windows.push_back(item);
 	for (auto item : GetEditors())
 		windows.push_back(item);

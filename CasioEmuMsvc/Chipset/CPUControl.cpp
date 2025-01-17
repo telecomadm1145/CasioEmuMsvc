@@ -198,6 +198,13 @@ namespace casioemu {
 		emulator.chipset.Break();
 	}
 
+	void CPU::OP_ICESWI() {
+		std::cout << "Software breakpoint hit!(0xFEFF)\n";
+		emulator.chipset.RaiseEmulator();
+	}
+	void CPU::OP_RTICE() {
+		OP_RTI();
+	}
 	// * Branch Instructions
 	void CPU::OP_B() {
 		if (impl_hint & H_TI) {

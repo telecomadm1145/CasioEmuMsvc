@@ -266,5 +266,8 @@ namespace casioemu {
 		void OP_RTI();
 		void OP_NOP();
 		void OP_DSR();
+		// * Undocumented Instructions
+		void OP_ICESWI();
+		void OP_RTICE();
 	};
 } // namespace casioemu

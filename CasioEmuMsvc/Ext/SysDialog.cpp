@@ -1,4 +1,4 @@
-#include "SysDialog.h"
+﻿#include "SysDialog.h"
 
 #ifdef _WIN32
 #include <ShlObj.h>
