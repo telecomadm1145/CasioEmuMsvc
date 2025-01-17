@@ -56,13 +56,7 @@ namespace casioemu {
 		data_F024 = 0;
 
 		region_interval.Setup(
-			0xF020, 2, "Timer/TM0D", &data_interval, MMURegion::DefaultRead<uint16_t>, [](MMURegion* region, size_t offset, uint8_t data) {
-				uint16_t* value = (uint16_t*)(region->userdata);
-				*value &= ~(((uint16_t)0xFF) << ((offset - region->base) * 8));
-				*value |= ((uint16_t)data) << ((offset - region->base) * 8);
-				// if (!*value)
-				// 	*value = 1;
-			},
+			0xF020, 2, "Timer/TM0D", &data_interval, MMURegion::DefaultRead<uint16_t>, MMURegion::DefaultWrite<uint16_t>,
 			emulator);
 
 		region_counter.Setup(
@@ -113,11 +107,10 @@ namespace casioemu {
 	}
 
 	void Timer::Tick() {
+        auto v = data_interval;
+        if (!v) v = 1;
 		if (clock_type == CLOCK_EMUCLK) {
-			if (!data_interval) {
-				ext_to_int_counter = 0;
-			}
-			else if (++ext_to_int_counter >= (data_interval * TimerFreqDiv) / 32678.0 / 0.025 * 2) {
+            if (++ext_to_int_counter >= (v * TimerFreqDiv) / 32678.0 / 0.025 * 2) {
 				ext_to_int_counter = 0;
 				emulator.chipset.MaskableInterrupts[TM0INT].TryRaise();
 			}
@@ -126,10 +119,7 @@ namespace casioemu {
 		if (data_control) {
 			if (++ext_to_int_counter >= TimerFreqDiv) {
 				ext_to_int_counter = 0;
-				if (!data_interval) {
-					data_counter = 0;
-				}
-				else if (++data_counter >= data_interval) {
+                if (++data_counter >= v) {
 					data_counter = 0;
 					emulator.chipset.MaskableInterrupts[TM0INT].TryRaise();
 				}
