@@ -49,11 +49,13 @@ void gui_loop() {
 	for (auto win : windows) {
 		win->Render();
 	}
+#ifndef __ANDROID__
 	ImGui::Begin("Debug");
 	if (ImGui::Button("Crash")) {
-		throw new std::exception("Intentional crash.");
+		throw 0;
 	}
 	ImGui::End();
+#endif
 
 #ifdef __ANDROID__
 	ImGui::SetNextWindowBgAlpha(0.0f); // 设置透明背景

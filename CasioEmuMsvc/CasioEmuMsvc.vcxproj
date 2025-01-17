@@ -304,6 +304,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Assemblier\NzScript.cpp" />
+    <ClCompile Include="Assemblier\U8Ass.cpp" />
     <ClCompile Include="Gui\AddressWindow.cpp" />
     <ClCompile Include="casioemu.cpp" />
     <ClCompile Include="Chipset\Chipset.cpp" />
@@ -320,6 +322,7 @@
     <ClCompile Include="Emulator.cpp" />
     <ClCompile Include="Ext\SysDialog.cpp" />
     <ClCompile Include="Gui\5800FileSystem.cpp" />
+    <ClCompile Include="Gui\Assemblier.cpp" />
     <ClCompile Include="Gui\CallAnalysis.cpp" />
     <ClCompile Include="Gui\Editors.cpp" />
     <ClCompile Include="Gui\Hooks.cpp" />
@@ -367,6 +370,9 @@
     <ClCompile Include="Ext\vibration.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Assemblier\U8AssAst.h" />
+    <ClInclude Include="Assemblier\U8Emitter.h" />
+    <ClInclude Include="Assemblier\U8AssLexer.h" />
     <ClInclude Include="Gui\AddressWindow.h" />
     <ClInclude Include="Binary.h" />
     <ClInclude Include="Dcl\ChipsetInfo.h" />

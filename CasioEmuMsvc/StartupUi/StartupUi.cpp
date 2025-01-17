@@ -342,11 +342,11 @@ namespace casioemu {
 			else {
 				printf("[StartupUI][Warn] \"rom.db\" not found. Names may be inaccurate!\n");
 			}
-			std::filesystem::create_directory("models");
 			Reload();
 		}
 		void Reload() {
 			loading = true;
+            std::filesystem::create_directory("models");
 			std::thread thd([&]() {
 				models.clear();
 				for (auto& dir : std::filesystem::directory_iterator("models")) {

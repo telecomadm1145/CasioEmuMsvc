@@ -198,6 +198,15 @@
     <ClCompile Include="Gui\AddressWindow.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Gui\Assemblier.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Assemblier\U8Ass.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Assemblier\NzScript.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Config.hpp">
@@ -426,6 +435,15 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Gui\AddressWindow.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Assemblier\U8AssAst.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Assemblier\U8Emitter.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Assemblier\U8AssLexer.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
