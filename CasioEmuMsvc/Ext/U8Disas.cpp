@@ -564,9 +564,9 @@ void decode(std::ostream& out, uint8_t*& buf, uint32_t pc) {
 	if ((buf[0] & 0b11111111) == 0b11001110 && (buf[1] & 0b11110000) == 0b11110000) {
 		int l = buf[1] >> 3 & 0b1, e = buf[1] >> 2 & 0b1, p = buf[1] >> 1 & 0b1, a = buf[1] & 0b1;
 		out << "PUSH    "
-			<< (l ? "LR " : "")
-			<< (e ? "EPSW " : "")
 			<< (p ? "ELR " : "")
+			<< (e ? "EPSW " : "")
+			<< (l ? "LR " : "")
 			<< (a ? "EA " : "");
 		buf += 2;
 		return;
@@ -598,10 +598,10 @@ void decode(std::ostream& out, uint8_t*& buf, uint32_t pc) {
 	if ((buf[0] & 0b11111111) == 0b10001110 && (buf[1] & 0b11110000) == 0b11110000) {
 		int l = buf[1] >> 3 & 0b1, e = buf[1] >> 2 & 0b1, p = buf[1] >> 1 & 0b1, a = buf[1] & 0b1;
 		out << "POP     "
+			<< (a ? "EA " : "")
 			<< (l ? "LR " : "")
 			<< (e ? "PSW " : "")
-			<< (p ? "PC " : "")
-			<< (a ? "EA " : "");
+			<< (p ? "PC " : "");
 		if (p) {
 			// in this case, we dont hope the controlflow gets extended, lets just define a funciton at next instruction
 			LABEL_FUNCTION(pc + 2);
