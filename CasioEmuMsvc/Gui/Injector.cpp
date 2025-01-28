@@ -30,22 +30,6 @@ void Injector::RenderCore() {
 		ImVec2(0, ImGui::GetWindowHeight() * 0.4));
 	editor.DrawContents(data_buf, range);
 	ImGui::EndChild();
-	 if (ImGui::Button("Ui.DarkMode"_lc)) {
-		ImGui::StyleColorsDark();
-	 }
-	 ImGui::SameLine();
-	 if (ImGui::Button("Ui.LightMode"_lc)) {
-		ImGui::StyleColorsLight();
-	 }
-	 static char lang_input[30]{};
-	 ImGui::InputText("##language_input", lang_input,30);
-	 if (ImGui::Button("Ui.ChangeLang"_lc)) {
-		 g_local.ChangeLanguage(lang_input);
-		 RebuildFont_Requested = true;
-	 }
-	 ImGui::TextUnformatted("Ui.CurrentLang"_lc);
-	 ImGui::SameLine();
-	 ImGui::TextUnformatted("Localization.LanguageName"_lc);
 	 ImGui::SliderInt("Rop.InputSize"_lc,
 		&range, 64, 1024);
 	// ImGuiIO& io = ImGui::GetIO();

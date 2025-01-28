@@ -388,6 +388,8 @@
     <ClInclude Include="Ext\SysDialog.h" />
     <ClInclude Include="Gui\Assemblier.h" />
     <ClInclude Include="Gui\Localization.h" />
+    <ClInclude Include="Gui\PopUpDisplay.h" />
+    <ClInclude Include="Gui\Theme.h" />
     <ClInclude Include="Peripheral\SD\FakeSdCard.h" />
     <ClInclude Include="Gui\5800FileSystem.h" />
     <ClInclude Include="Gui\CallAnalysis.h" />

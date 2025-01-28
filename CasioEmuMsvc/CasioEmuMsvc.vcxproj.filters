@@ -452,6 +452,12 @@
     <ClInclude Include="Gui\Localization.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Gui\Theme.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\PopUpDisplay.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

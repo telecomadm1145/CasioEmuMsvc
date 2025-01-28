@@ -15,6 +15,9 @@ void HwController::RenderCore() {
 	if (ImGui::Button("ScreenshotBtn"_lc)) {
 		m_emu->screenshot_requested.store(true);
 	}
+	if (ImGui::Button("PopUpScreenBtn"_lc)) {
+		m_emu->mirroring_requested.store(true);
+	}
 	ImGui::SliderInt("HwController.Value1"_lc,&screen_flashing_threshold, 0, 0x3F);
 	ImGui::SliderFloat("HwController.Value2"_lc,
 		&screen_flashing_brightness_coeff, 1, 8);

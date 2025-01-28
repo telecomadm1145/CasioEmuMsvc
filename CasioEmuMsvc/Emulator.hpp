@@ -48,6 +48,7 @@ namespace casioemu
 		bool pause_on_mem_error;
 
 		std::atomic<bool> screenshot_requested{};
+		std::atomic<bool> mirroring_requested{};
 
 		std::thread *tick_thread;
 

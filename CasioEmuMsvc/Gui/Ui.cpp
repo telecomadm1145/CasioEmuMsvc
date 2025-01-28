@@ -1,5 +1,6 @@
 ﻿#include "Ui.hpp"
 #include "5800FileSystem.h"
+#include "AddressWindow.h"
 #include "CallAnalysis.h"
 #include "CasioData.h"
 #include "Chipset/Chipset.hpp"
@@ -11,16 +12,16 @@
 #include "LabelFile.h"
 #include "LabelViewer.h"
 #include "MemBreakPoint.hpp"
+#include "Theme.h"
 #include "VariableWindow.h"
 #include "WatchWindow.hpp"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_sdl2.h"
 #include "imgui/imgui_impl_sdlrenderer2.h"
+#include <Assemblier.h>
 #include <Gui.h>
 #include <SDL.h>
-#include "AddressWindow.h"
 #include <filesystem>
-#include <Assemblier.h>
 
 char* n_ram_buffer = 0;
 casioemu::MMU* me_mmu = 0;
@@ -114,7 +115,7 @@ int test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
-    RebuildFont();
+	RebuildFont();
 	SetupDefaultTheme();
 	io.WantCaptureKeyboard = true;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
@@ -134,16 +135,17 @@ int test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 	}
 
 	for (auto item : std::initializer_list<UIWindow*>{
-            new VariableWindow(),
-            new HwController(),
-            new LabelViewer(),
-            new WatchWindow(),
-            CreateCallAnalysisWindow(),
+			 new VariableWindow(),
+			 new HwController(),
+			 new LabelViewer(),
+			 new WatchWindow(),
+			 CreateCallAnalysisWindow(),
 			 code_viewer = new CodeViewer(),
 			 injector = new Injector(),
 			 membp = new MemBreakPoint(),
-            CreateAddressWindow(),
-            MakeAssemblerUI()})
+			 CreateAddressWindow(),
+			 MakeAssemblerUI(),
+			 MakeThemeWindow()})
 		windows.push_back(item);
 	for (auto item : GetEditors())
 		windows.push_back(item);

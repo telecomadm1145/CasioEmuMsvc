@@ -42,6 +42,7 @@ using namespace casioemu;
 
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
+	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE);
 	timeBeginPeriod(1);
 	SetConsoleCP(65001); // Set to UTF8
 	SetConsoleOutputCP(65001);
@@ -278,7 +279,17 @@ int main(int argc, char* argv[]) {
 			SDL_RenderPresent(emulator.renderer);
 #endif
 			if (RebuildFont_Requested) {
-				RebuildFont();
+				RebuildFont(RebuildFont_Scale);
+				if (RebuildFont_Scale != 0) {
+					ImGuiStyle igs = ImGuiStyle::ImGuiStyle();
+					ImGui::StyleColorsDark(&igs);
+					ImGuiStyle& style = igs;
+					style.WindowRounding = 4.0f;
+					style.Colors[ImGuiCol_WindowBg].w = 0.9f;
+					style.FrameRounding = 4.0f;
+					style.ScaleAllSizes(RebuildFont_Scale);
+					ImGui::GetStyle() = igs;
+				}
 				ImGui_ImplSDLRenderer2_DestroyDeviceObjects();
 				RebuildFont_Requested = 0;
 			}

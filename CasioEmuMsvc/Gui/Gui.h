@@ -48,6 +48,7 @@ inline std::string GetCJKFontPath() {
 	return "";
 }
 extern int RebuildFont_Requested;
+extern float RebuildFont_Scale;
 inline void RebuildFont(float scale = 0.0f) {
 	auto& io = ImGui::GetIO();
 	ImFontConfig config = ImFontConfig();

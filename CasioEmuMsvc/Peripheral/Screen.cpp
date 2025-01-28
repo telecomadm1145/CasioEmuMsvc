@@ -27,6 +27,7 @@
 #include "ML620Ports.h"
 #include "ModelInfo.h"
 #include "Models.h"
+#include "PopUpDisplay.h"
 #include "Ui.hpp"
 #include <algorithm> // for std::generate
 #include <array>
@@ -90,7 +91,7 @@ namespace casioemu {
 
 		// 归一化
 		for (size_t i = 0; i < 64; i++) {
-			screen_scan_alpha[(i + n) % 64] = std::pow(exp_values[i] / normalization_factor * 80.,0.2);
+			screen_scan_alpha[(i + n) % 64] = std::pow(exp_values[i] / normalization_factor * 80., 0.2);
 		}
 
 		return n;
@@ -144,8 +145,8 @@ namespace casioemu {
 			std::thread thd([&]() {
 				while (1) {
 					tick();
-#ifdef  __ANDROID__
-                    SDL_Delay(10);
+#ifdef __ANDROID__
+					SDL_Delay(10);
 #endif
 				}
 			});
@@ -211,8 +212,8 @@ namespace casioemu {
 				return;
 			}
 
-#ifdef  __ANDROID__
-            ratio = 0.80;
+#ifdef __ANDROID__
+			ratio = 0.80;
 #endif
 
 			if (screen_refresh_rate < screen_flashing_threshold && !enable_screen_fading)
@@ -995,7 +996,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		std::tm tm = *std::localtime(&t);
 		std::ostringstream filename;
 #ifdef __ANDROID__
-        filename << "/storage/emulated/0/Pictures/";
+		filename << "/storage/emulated/0/Pictures/";
 #endif
 		filename << "screenshot-"
 				 << std::put_time(&tm, "%Y-%m-%d-%H-%M-%S-") << std::rand() % 1000
@@ -1033,7 +1034,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			// Copy the renderer to the surface
 			if (SDL_RenderReadPixels(renderer, &captureRect, SDL_PIXELFORMAT_RGBA32, screenSurface->pixels, screenSurface->pitch) == 0) {
 				// Save the surface as a PNG file using SDL_image
-                auto str = filename.str();
+				auto str = filename.str();
 				if (IMG_SavePNG(screenSurface, str.c_str()) != 0) {
 					SDL_Log("Error saving screenshot: %s", IMG_GetError());
 				}
@@ -1049,6 +1050,77 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		SDL_Log("Saved screenshot!");
 	}
 
+	void UpdatePreview(SDL_Renderer* renderer, ScreenMirror* sm, const std::vector<SDL_Rect>& spriteRects, const std::vector<SDL_Rect>& pixelRects) {
+
+		// Calculate the bounding box of the rendering area from both sprite and pixel rectangles
+		int minX = INT_MAX, minY = INT_MAX, maxX = INT_MIN, maxY = INT_MIN;
+
+		// Traverse all sprite rectangles
+		for (const auto& rect : spriteRects) {
+			minX = std::min(minX, rect.x);
+			minY = std::min(minY, rect.y);
+			maxX = std::max(maxX, rect.x + rect.w);
+			maxY = std::max(maxY, rect.y + rect.h);
+		}
+
+		// Traverse all pixel rectangles (representing the screen pixels)
+		for (const auto& rect : pixelRects) {
+			minX = std::min(minX, rect.x);
+			minY = std::min(minY, rect.y);
+			maxX = std::max(maxX, rect.x + rect.w);
+			maxY = std::max(maxY, rect.y + rect.h);
+		}
+
+		// Calculate the width and height of the capture area
+		int captureWidth = maxX - minX;
+		int captureHeight = maxY - minY;
+
+		// Create a surface to capture the screen content
+		SDL_Surface* screenSurface = SDL_CreateRGBSurface(0, captureWidth, captureHeight, 32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
+		if (screenSurface != nullptr) {
+			// Define the area to capture
+			SDL_Rect captureRect = {minX, minY, captureWidth, captureHeight};
+
+			// Copy the renderer to the surface
+			if (SDL_RenderReadPixels(renderer, &captureRect, SDL_PIXELFORMAT_RGBA32, screenSurface->pixels, screenSurface->pitch) == 0) {
+				sm->update(screenSurface->pixels, screenSurface->pitch);
+			}
+			else {
+				SDL_Log("Error capturing screen pixels: %s", SDL_GetError());
+			}
+			SDL_FreeSurface(screenSurface); // Free the surface after use
+		}
+		else {
+			SDL_Log("Error creating surface: %s", SDL_GetError());
+		}
+	}
+
+	std::pair<int,int> GetSize(const std::vector<SDL_Rect>& spriteRects, const std::vector<SDL_Rect>& pixelRects) {
+
+		// Calculate the bounding box of the rendering area from both sprite and pixel rectangles
+		int minX = INT_MAX, minY = INT_MAX, maxX = INT_MIN, maxY = INT_MIN;
+
+		// Traverse all sprite rectangles
+		for (const auto& rect : spriteRects) {
+			minX = std::min(minX, rect.x);
+			minY = std::min(minY, rect.y);
+			maxX = std::max(maxX, rect.x + rect.w);
+			maxY = std::max(maxY, rect.y + rect.h);
+		}
+
+		// Traverse all pixel rectangles (representing the screen pixels)
+		for (const auto& rect : pixelRects) {
+			minX = std::min(minX, rect.x);
+			minY = std::min(minY, rect.y);
+			maxX = std::max(maxX, rect.x + rect.w);
+			maxY = std::max(maxY, rect.y + rect.h);
+		}
+
+		// Calculate the width and height of the capture area
+		int captureWidth = maxX - minX;
+		int captureHeight = maxY - minY;
+		return {captureWidth, captureHeight};
+	}
 	// Function to collect all sprite and pixel rectangles
 	template <HardwareId hardware_id>
 	void Screen<hardware_id>::Frame() {
@@ -1108,6 +1180,17 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			// Capture the region using both sprite and pixel rectangles
 			CaptureScreenshot(renderer, spriteRects, pixelRects);
 			emulator.screenshot_requested.store(false);
+		}
+		static ScreenMirror* mirror = nullptr;
+		if (emulator.mirroring_requested.load()) {
+			auto p = GetSize(spriteRects, pixelRects);
+			auto sm = new ScreenMirror(p.first,p.second);
+			sm->create();
+			mirror = sm;
+			emulator.mirroring_requested.store(false);
+		}
+		if (mirror) {
+			UpdatePreview(renderer, mirror, spriteRects, pixelRects);
 		}
 	}
 
