@@ -30,13 +30,6 @@
 #define PANIC(...) 0;
 #endif
 
-// Languages:
-// 1 - English
-// 2 - Chinese
-
-#define LANGUAGE 1
-// #define LANGUAGE 2
-
 #define LOCK(x) \
 	std::lock_guard<std::mutex> lock_##x{x};
 

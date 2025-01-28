@@ -465,6 +465,9 @@
     <None Include="locales\vn.lc">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+	  <None Include="roms.db">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
     <None Include="packages.config" />
     <None Include="Peripheral\SD\HowToCreateASDCard.md" />
   </ItemGroup>
