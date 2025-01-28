@@ -15,6 +15,8 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <Localization.h>
+#include <Gui.h>
 void Injector::RenderCore() {
 	static int range = 64;
 	static char strbuf[65536] = {0};
@@ -24,30 +26,27 @@ void Injector::RenderCore() {
 	static const char* info_msg;
 	auto inputbase = m_emu->hardware_id == casioemu::HardwareId::HW_CLASSWIZ_II ? 0x9268 : 0xD180;
 	char* base_addr = n_ram_buffer - casioemu::GetRamBaseAddr(m_emu->hardware_id);
-	ImGui::BeginChild(
-#if LANGUAGE == 2
-		"输入内容"
-#else
-		"Input"
-#endif
-		,
+	ImGui::BeginChild("Rop.Input"_lc,
 		ImVec2(0, ImGui::GetWindowHeight() * 0.4));
 	editor.DrawContents(data_buf, range);
 	ImGui::EndChild();
-	// if (ImGui::Button("暗色")) {
-	//	ImGui::StyleColorsDark();
-	// }
-	// ImGui::SameLine();
-	// if (ImGui::Button("亮色")) {
-	//	ImGui::StyleColorsLight();
-	// }
-	ImGui::SliderInt(
-#if LANGUAGE == 2
-		"输入内容大小"
-#else
-		"Input Size"
-#endif
-		,
+	 if (ImGui::Button("Ui.DarkMode"_lc)) {
+		ImGui::StyleColorsDark();
+	 }
+	 ImGui::SameLine();
+	 if (ImGui::Button("Ui.LightMode"_lc)) {
+		ImGui::StyleColorsLight();
+	 }
+	 static char lang_input[30]{};
+	 ImGui::InputText("##language_input", lang_input,30);
+	 if (ImGui::Button("Ui.ChangeLang"_lc)) {
+		 g_local.ChangeLanguage(lang_input);
+		 RebuildFont_Requested = true;
+	 }
+	 ImGui::TextUnformatted("Ui.CurrentLang"_lc);
+	 ImGui::SameLine();
+	 ImGui::TextUnformatted("Localization.LanguageName"_lc);
+	 ImGui::SliderInt("Rop.InputSize"_lc,
 		&range, 64, 1024);
 	// ImGuiIO& io = ImGui::GetIO();
 	// ImGui::SliderFloat("缩放", &io.FontGlobalScale, 0.5, 2);
@@ -67,37 +66,19 @@ void Injector::RenderCore() {
 	// #endif
 	//		ImGui::OpenPopup("info");
 	//	}
-	if (ImGui::Button(
-#if LANGUAGE == 2
-			"加载数据到输入区"
-#else
-			"Load to input area"
-#endif
-			)) {
+	 if (ImGui::Button("Rop.LoadToInputArea"_lc)) {
 		memcpy(base_addr + inputbase, data_buf, range);
-		info_msg = "字符串已加载";
+		info_msg = "Rop.LoadedTip"_lc;
 		ImGui::OpenPopup("info");
 	}
 	ImGui::Separator();
-	ImGui::Text(
-#if LANGUAGE == 2
-		"an前数字"
-#else
-		"x an"
-#endif
-	);
+	ImGui::Text("Rop.XAnMode"_lc);
 	ImGui::SameLine();
 	ImGui::InputText(
 		"##off",
 		buf, 9);
 	ImGui::SameLine();
-	if (ImGui::Button(
-#if LANGUAGE == 2
-			"输入 an"
-#else
-			"Input \"an\""
-#endif
-			)) {
+	if (ImGui::Button("Rop.InputAn"_lc)) {
 		int off = atoi(buf);
 		if (off > 100) {
 			memset(base_addr + inputbase, 0x31, 100);
@@ -109,11 +90,7 @@ void Injector::RenderCore() {
 		}
 		*(base_addr + inputbase + off) = 0xfd;
 		*(base_addr + inputbase + off + 1) = 0x20;
-#if LANGUAGE == 2
-		info_msg = "\"an\" 已输入";
-#else
-		info_msg = "\"an\" Inputed";
-#endif
+		info_msg = "Rop.AnInputed"_lc;
 		ImGui::OpenPopup("info");
 	}
 	ImGui::Separator();
@@ -146,30 +123,14 @@ void Injector::RenderCore() {
 	//	}
 	// }
 	ImGui::SetNextItemWidth(60);
-	ImGui::InputText(
-#if LANGUAGE == 2
-		"注入地址"
-#else
-		"Inject addr"
-#endif
-		,
+	ImGui::InputText("Rop.InjectAddr"_lc,
 		buf2, 10);
 	// ImGui::SameLine();
 	ImGui::InputTextMultiline(
 		"## hex",
 		strbuf, IM_ARRAYSIZE(strbuf) - 1);
-	if (ImGui::Button(
-#if LANGUAGE == 2
-			"注入"
-#else
-			"Inject hex"
-#endif
-			)) {
-#if LANGUAGE == 2
-		info_msg = "已加载";
-#else
-		info_msg = "Loaded";
-#endif
+	if (ImGui::Button("Rop.InjectHex"_lc)) {
+		info_msg = "Rop.LoadedTip"_lc;
 		auto plc = strtol(buf2, 0, 16);
 		auto valid_hex = [](char c) {
 			if (c >= '0' && c <= '9')
@@ -211,13 +172,7 @@ void Injector::RenderCore() {
 
 	if (ImGui::BeginPopupModal("info", 0, ImGuiWindowFlags_AlwaysAutoResize)) {
 		ImGui::TextUnformatted(info_msg);
-		if (ImGui::Button(
-#if LANGUAGE == 2
-				"好的"
-#else
-				"Ok"
-#endif
-				)) {
+		if (ImGui::Button("Button.Positive"_lc)) {
 			ImGui::CloseCurrentPopup();
 		}
 		ImGui::EndPopup();

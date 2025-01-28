@@ -114,7 +114,7 @@ int test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
-	SetupDefaultFont();
+    RebuildFont();
 	SetupDefaultTheme();
 	io.WantCaptureKeyboard = true;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
@@ -134,16 +134,16 @@ int test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 	}
 
 	for (auto item : std::initializer_list<UIWindow*>{
-			 new VariableWindow(),
-			 new HwController(),
-			 new LabelViewer(),
-			 new WatchWindow(),
-			 CreateCallAnalysisWindow(),
+            new VariableWindow(),
+            new HwController(),
+            new LabelViewer(),
+            new WatchWindow(),
+            CreateCallAnalysisWindow(),
 			 code_viewer = new CodeViewer(),
 			 injector = new Injector(),
 			 membp = new MemBreakPoint(),
-			 CreateAddressWindow(),
-			 MakeAssemblierUI()})
+            CreateAddressWindow(),
+            MakeAssemblerUI()})
 		windows.push_back(item);
 	for (auto item : GetEditors())
 		windows.push_back(item);

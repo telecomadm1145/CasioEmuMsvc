@@ -20,6 +20,7 @@
 #include <string>
 #include <thread>
 #include <unordered_set>
+#include <Localization.h>
 casioemu::Emulator* m_emu = nullptr;
 
 uint32_t pc_cache = 0;
@@ -304,13 +305,7 @@ void CodeViewer::RenderCore() {
 	int w = ImGui::CalcTextSize("F").x;
 	if (!is_loaded) {
 		ImGui::SetCursorPos(ImVec2(w * 2, h * 5));
-		ImGui::Text(
-#if LANGUAGE == 2
-			"请稍等，正在加载..."
-#else
-			"Waiting for disassembler..."
-#endif
-		);
+		ImGui::Text("CodeViewer.Loading"_lc);
 		return;
 	}
 	ImVec2 sz;
@@ -343,13 +338,7 @@ void CodeViewer::RenderCore() {
 	ImGui::EndChild();
 	ImGui::SameLine();
 	ImGui::Separator();
-	ImGui::Text(
-#if LANGUAGE == 2
-		"转到地址:"
-#else
-		"Goto:"
-#endif
-	);
+	ImGui::Text("CodeViewer.Goto"_lc);
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(ImGui::CalcTextSize("000000").x);
 	ImGui::InputText("##input", adrbuf, 8);
@@ -359,17 +348,17 @@ void CodeViewer::RenderCore() {
 	}
 	ImGui::SameLine();
 	if (m_emu->GetPaused()) {
-		if (ImGui::Button("Step")) {
+		if (ImGui::Button("CodeViewer.Step"_lc)) {
 			stepping = true;
 			m_emu->SetPaused(false);
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Trace")) {
+		if (ImGui::Button("CodeViewer.Trace"_lc)) {
 			tracing = true;
 			m_emu->SetPaused(false);
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Jump out")) {
+		if (ImGui::Button("CodeViewer.JumpOut"_lc)) {
 			auto stk = m_emu->chipset.cpu.stack.get();
 			if (!stk->empty()) {
 				if (!stk->back().is_jump) {
@@ -384,13 +373,13 @@ void CodeViewer::RenderCore() {
 			}
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Continue")) {
+		if (ImGui::Button("CodeViewer.Continue"_lc)) {
 			m_emu->SetPaused(false);
 		}
 		ImGui::SameLine();
 	}
 	else {
-		if (ImGui::Button("Pause")) {
+		if (ImGui::Button("CodeViewer.Pause"_lc)) {
 			trace_bp = false;
 			stepping = false;
 			m_emu->SetPaused(true);
@@ -398,7 +387,7 @@ void CodeViewer::RenderCore() {
 		}
 		ImGui::SameLine();
 	}
-	if (ImGui::Button("Jump to PC")) {
+	if (ImGui::Button("CodeViewer.GotoPC"_lc)) {
 		JumpTo(pc_cache);
 	}
 }

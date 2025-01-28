@@ -323,8 +323,11 @@
     <ClCompile Include="Gui\Assemblier.cpp" />
     <ClCompile Include="Gui\CallAnalysis.cpp" />
     <ClCompile Include="Gui\Editors.cpp" />
+    <ClCompile Include="Gui\Gui.cpp" />
     <ClCompile Include="Gui\Hooks.cpp" />
     <ClCompile Include="Gui\imgui\imgui_demo.cpp" />
+    <ClCompile Include="Gui\Localization.cpp" />
+    <ClCompile Include="Gui\Theme.cpp" />
     <ClCompile Include="Peripheral\ML620Ports.cpp" />
     <ClCompile Include="Peripheral\ROMWindow.cpp" />
     <ClCompile Include="Peripheral\Uart.cpp" />
@@ -369,6 +372,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Assemblier\U8Emitter.h" />
+    <ClInclude Include="Ext\3rd_licenses.h" />
     <ClInclude Include="Gui\AddressWindow.h" />
     <ClInclude Include="Binary.h" />
     <ClInclude Include="Dcl\ChipsetInfo.h" />
@@ -383,6 +387,7 @@
     <ClInclude Include="Ext\RomPackage.h" />
     <ClInclude Include="Ext\SysDialog.h" />
     <ClInclude Include="Gui\Assemblier.h" />
+    <ClInclude Include="Gui\Localization.h" />
     <ClInclude Include="Peripheral\SD\FakeSdCard.h" />
     <ClInclude Include="Gui\5800FileSystem.h" />
     <ClInclude Include="Gui\CallAnalysis.h" />
@@ -445,10 +450,19 @@
     <ClInclude Include="Ext\U8Disas.h" />
     <ClInclude Include="Peripheral\VoltageLevelSupervisor.h" />
     <ClInclude Include="Ext\vibration.h" />
-    <ClInclude Include="Gui.h" />
+    <ClInclude Include="Gui\Gui.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".clang-format" />
+    <None Include="locales\en_US.lc">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="locales\zh_CN.lc">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="locales\vn.lc">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="packages.config" />
     <None Include="Peripheral\SD\HowToCreateASDCard.md" />
   </ItemGroup>

@@ -1,6 +1,6 @@
 ﻿#include "AddressWindow.h"
 #include <Hooks.h>
-
+#include <Localization.h>
 struct AddressInfo {
 	uint32_t address;
 	uint8_t value;
@@ -10,12 +10,12 @@ struct AddressInfo {
 
 class AddressWindow : public UIWindow {
 public:
-	AddressWindow() : UIWindow("Address Manager") {
+	AddressWindow() : UIWindow("Addrs") {
 		SetupHooks();
 	}
 
 	void RenderCore() override {
-		ImGui::Text("Manage Addresses");
+		ImGui::Text("AddressWindow.Header"_lc);
 		ImGui::Separator();
 
 		RenderAddressTable();
@@ -30,9 +30,9 @@ private:
 
 	void RenderAddressTable() {
 		if (ImGui::BeginTable("Addresses", 3, pretty_table)) {
-			ImGui::TableSetupColumn("Address");
-			ImGui::TableSetupColumn("Value");
-			ImGui::TableSetupColumn("Lock");
+			ImGui::TableSetupColumn("AddressWindow.Address"_lc);
+			ImGui::TableSetupColumn("AddressWindow.Value"_lc);
+			ImGui::TableSetupColumn("AddressWindow.Fixed"_lc);
 			ImGui::TableHeadersRow();
 
 			for (size_t i = 0; i < addresses.size(); ++i) {
@@ -65,12 +65,12 @@ private:
 	}
 
 	void RenderAddAddressControls() {
-		ImGui::Text("Add New Address");
+		ImGui::Text("AddressWindow.Add"_lc);
 
 		ImGui::InputScalar("Address", ImGuiDataType_U32, &newAddress, 0, 0, "%x");
 		// ImGui::InputScalar("Value", ImGuiDataType_U8, &newValue);
 
-		if (ImGui::Button("Add Address")) {
+		if (ImGui::Button("AddressWindow.AddBtn"_lc)) {
 			if (newAddress) {
 				addresses.emplace_back(newAddress, 0, false);
 				// UpdateMemoryValue(*newAddress, *newValue);

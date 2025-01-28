@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <stdlib.h>
+#include <Localization.h>
 
 MemBreakPoint* membp_cv = 0;
 
@@ -28,45 +29,21 @@ void MemBreakPoint::DrawContent() {
 			ImGui::PopID();
 			if (ImGui::BeginPopupContextItem()) {
 				selected = i;
-				ImGui::Text(
-#if LANGUAGE == 2
-					"请选择断点模式:"
-#else
-					"Choose breakpoint type:"
-#endif
-				);
-				if (ImGui::Button(
-#if LANGUAGE == 2
-						"查找是什么访问了这个地址"
-#else
-						"Find who accessed this address"
-#endif
-						)) {
+				ImGui::Text("MemBP.BPType"_lc);
+				if (ImGui::Button("HexEditors.ContextMenu.MonitorRead"_lc)) {
 					target_addr = i;
 					data.enableWrite = 0;
 					data.records.clear();
 					ImGui::CloseCurrentPopup();
 				}
-				if (ImGui::Button(
-#if LANGUAGE == 2
-						"查找是什么写入了这个地址"
-#else
-						"Find who writed this address"
-#endif
-						)) {
+				if (ImGui::Button("HexEditors.ContextMenu.MonitorWrite"_lc)) {
 					data.enableWrite = true;
 					target_addr = i;
 					data.records.clear();
 					ImGui::CloseCurrentPopup();
 				}
 				ImGui::Separator();
-				if (ImGui::Button(
-#if LANGUAGE == 2
-						"删除此地址"
-#else
-						"Delete"
-#endif
-						)) {
+				if (ImGui::Button("MemBP.Delete"_lc)) {
 					data.records.clear();
 					if (target_addr == i) {
 						target_addr = -1;
@@ -82,34 +59,16 @@ void MemBreakPoint::DrawContent() {
 
 void MemBreakPoint::DrawFindContent() {
 	if (target_addr == -1) {
-		ImGui::TextColored(ImVec4(255, 255, 0, 255),
-#if LANGUAGE == 2
-			"未设置任何断点，请添加地址->右键地址->选择模式"
-#else
-			"No breakpoints.Please add a breakpoint."
-#endif
-		);
+		ImGui::TextColored(ImVec4(255, 255, 0, 255), "MemBP.NoBPHint"_lc);
 		return;
 	}
 	int write = break_point_hash[target_addr].enableWrite;
 	static ImGuiTableFlags flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable;
-	ImGui::Text(
-#if LANGUAGE == 2
-		"正在监听地址:%04x"
-#else
-		"Monitoring:%04x"
-#endif
-		,
+	ImGui::Text("MemBP.MonitoringHint"_lc,
 		break_point_hash[target_addr].addr);
 	ImGui::SameLine();
 	static const char* fx = "";
-	if (ImGui::Button(
-#if LANGUAGE == 2
-			"清除记录"
-#else
-			"Clear records"
-#endif
-			)) {
+	if (ImGui::Button("MemBP.ClearRec"_lc)) {
 		break_point_hash[target_addr].records.clear();
 	}
 	if (ImGui::BeginTable("##outputtable", 2, flags)) {
@@ -198,22 +157,10 @@ void MemBreakPoint::RenderCore() {
 		"##addressin",
 		buf, 10, ImGuiInputTextFlags_CharsHexadecimal);
 	ImGui::SameLine();
-	if (ImGui::Button(
-#if LANGUAGE == 2
-			"添加地址"
-#else
-			"Add"
-#endif
-			)) {
+	if (ImGui::Button("MemBP.AddAddr"_lc)) {
 		break_point_hash.push_back({.addr = (uint32_t)strtol(buf, nullptr, 16)});
 	}
-	ImGui::Checkbox(
-#if LANGUAGE == 2
-		"在Code中显示"
-#else
-		"Break on op"
-#endif
-		,
+	ImGui::Checkbox("MemBP.BreakWhenHit"_lc,
 		&break_on_cv);
 	if (!break_on_cv) {
 		ImGui::BeginChild("##findoutput");

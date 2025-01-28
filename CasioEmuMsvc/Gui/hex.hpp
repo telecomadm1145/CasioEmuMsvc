@@ -56,6 +56,7 @@
 #include <vector>
 
 #include "Config.hpp"
+#include "Localization.h"
 
 #ifdef _MSC_VER
 #define _PRISizeT "I"
@@ -790,35 +791,34 @@ struct MemoryEditor {
 		ImGui::Text("Spans");
 		ImGui::Text("%s", desc_string.c_str());
 	}
-#if LANGUAGE == 2
 	void DrawOptionsLine(const Sizes& s, void* mem_data, size_t mem_size, size_t base_display_addr) {
 		IM_UNUSED(mem_data);
 		ImGuiStyle& style = ImGui::GetStyle();
-		const char* format_range = OptUpperCaseHex ? "范围 %0*" _PRISizeT "X..%0*" _PRISizeT "X" : "范围 %0*" _PRISizeT "x..%0*" _PRISizeT "x";
+		const char* format_range = OptUpperCaseHex ? "%s %0*" _PRISizeT "X..%0*" _PRISizeT "X" : "%s %0*" _PRISizeT "x..%0*" _PRISizeT "x";
 
 		// Options menu
-		if (ImGui::Button("选项"))
+		if (ImGui::Button("HexEditor.Options"_lc))
 			ImGui::OpenPopup("context");
 		if (ImGui::BeginPopup("context")) {
 			ImGui::SetNextItemWidth(s.GlyphWidth * 7 + style.FramePadding.x * 2.0f);
-			if (ImGui::DragInt("##cols", &Cols, 0.2f, 4, 128, "%d 列")) {
+			if (ImGui::DragInt("##cols", &Cols, 0.2f, 4, 32, "HexEditor.ContextMenu.NCols"_lc)) {
 				ContentsWidthChanged = true;
 				if (Cols < 1)
 					Cols = 1;
 			}
-			ImGui::Checkbox("显示数据预览", &OptShowDataPreview);
-			ImGui::Checkbox("混合显示ASCII和十六进制", &OptShowHexII);
-			if (ImGui::Checkbox("显示 ASCII 字符", &OptShowAscii)) {
+			ImGui::Checkbox("HexEditor.ContextMenu.ShowDataPreview"_lc, &OptShowDataPreview);
+			ImGui::Checkbox("HexEditor.ContextMenu.ShowHexII"_lc, &OptShowHexII);
+			if (ImGui::Checkbox("HexEditor.ContextMenu.ShowAscii"_lc, &OptShowAscii)) {
 				ContentsWidthChanged = true;
 			}
-			ImGui::Checkbox("淡化零", &OptGreyOutZeroes);
-			ImGui::Checkbox("大写十六进制数位", &OptUpperCaseHex);
+			ImGui::Checkbox("HexEditor.ContextMenu.GreyOutZeros"_lc, &OptGreyOutZeroes);
+			ImGui::Checkbox("HexEditor.ContextMenu.UppercaseHex"_lc, &OptUpperCaseHex);
 
 			ImGui::EndPopup();
 		}
 
 		ImGui::SameLine();
-		ImGui::Text(format_range, s.AddrDigitsCount, base_display_addr, s.AddrDigitsCount, base_display_addr + mem_size - 1);
+		ImGui::Text(format_range, "HexEditor.Range"_lc, s.AddrDigitsCount, base_display_addr, s.AddrDigitsCount, base_display_addr + mem_size - 1);
 		ImGui::SameLine();
 		ImGui::SetNextItemWidth((s.AddrDigitsCount + 1) * s.GlyphWidth + style.FramePadding.x * 2.0f);
 		if (ImGui::InputText("##addr", AddrInputBuf, IM_ARRAYSIZE(AddrInputBuf), ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
@@ -846,96 +846,7 @@ struct MemoryEditor {
 		ImU8* mem_data = (ImU8*)mem_data_void;
 		ImGuiStyle& style = ImGui::GetStyle();
 		ImGui::AlignTextToFramePadding();
-		ImGui::Text("作为…预览:");
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth((s.GlyphWidth * 10.0f) + style.FramePadding.x * 2.0f + style.ItemInnerSpacing.x);
-		if (ImGui::BeginCombo("##combo_type", DataTypeGetDesc(PreviewDataType), ImGuiComboFlags_HeightLargest)) {
-			for (int n = 0; n < ImGuiDataType_COUNT; n++)
-				if (ImGui::Selectable(DataTypeGetDesc((ImGuiDataType)n), PreviewDataType == n))
-					PreviewDataType = (ImGuiDataType)n;
-			ImGui::EndCombo();
-		}
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth((s.GlyphWidth * 6.0f) + style.FramePadding.x * 2.0f + style.ItemInnerSpacing.x);
-		ImGui::Combo("##combo_endianess", &PreviewEndianess, "小端\0大端\0\0");
-
-		char buf[128] = "";
-		float x = s.GlyphWidth * 6.0f;
-		bool has_value = DataPreviewAddr != (size_t)-1;
-		if (has_value)
-			DrawPreviewData(DataPreviewAddr, mem_data, mem_size, PreviewDataType, DataFormat_Dec, buf, (size_t)IM_ARRAYSIZE(buf));
-		ImGui::Text("Dec");
-		ImGui::SameLine(x);
-		ImGui::TextUnformatted(has_value ? buf : "N/A");
-		if (has_value)
-			DrawPreviewData(DataPreviewAddr, mem_data, mem_size, PreviewDataType, DataFormat_Hex, buf, (size_t)IM_ARRAYSIZE(buf));
-		ImGui::Text("Hex");
-		ImGui::SameLine(x);
-		ImGui::TextUnformatted(has_value ? buf : "N/A");
-		if (has_value)
-			DrawPreviewData(DataPreviewAddr, mem_data, mem_size, PreviewDataType, DataFormat_Bin, buf, (size_t)IM_ARRAYSIZE(buf));
-		buf[IM_ARRAYSIZE(buf) - 1] = 0;
-		ImGui::Text("Bin");
-		ImGui::SameLine(x);
-		ImGui::TextUnformatted(has_value ? buf : "N/A");
-	}
-#else
-	void DrawOptionsLine(const Sizes& s, void* mem_data, size_t mem_size, size_t base_display_addr) {
-		IM_UNUSED(mem_data);
-		ImGuiStyle& style = ImGui::GetStyle();
-		const char* format_range = OptUpperCaseHex ? "Range %0*" _PRISizeT "X..%0*" _PRISizeT "X" : "Range %0*" _PRISizeT "x..%0*" _PRISizeT "x";
-
-		// Options menu
-		if (ImGui::Button("Options"))
-			ImGui::OpenPopup("context");
-		if (ImGui::BeginPopup("context")) {
-			ImGui::SetNextItemWidth(s.GlyphWidth * 7 + style.FramePadding.x * 2.0f);
-			if (ImGui::DragInt("##cols", &Cols, 0.2f, 4, 32, "%d cols")) {
-				ContentsWidthChanged = true;
-				if (Cols < 1)
-					Cols = 1;
-			}
-			ImGui::Checkbox("Show Data Preview", &OptShowDataPreview);
-			ImGui::Checkbox("Show HexII", &OptShowHexII);
-			if (ImGui::Checkbox("Show Ascii", &OptShowAscii)) {
-				ContentsWidthChanged = true;
-			}
-			ImGui::Checkbox("Grey out zeroes", &OptGreyOutZeroes);
-			ImGui::Checkbox("Uppercase Hex", &OptUpperCaseHex);
-
-			ImGui::EndPopup();
-		}
-
-		ImGui::SameLine();
-		ImGui::Text(format_range, s.AddrDigitsCount, base_display_addr, s.AddrDigitsCount, base_display_addr + mem_size - 1);
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth((s.AddrDigitsCount + 1) * s.GlyphWidth + style.FramePadding.x * 2.0f);
-		if (ImGui::InputText("##addr", AddrInputBuf, IM_ARRAYSIZE(AddrInputBuf), ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
-			size_t goto_addr;
-			if (sscanf(AddrInputBuf, "%" _PRISizeT "X", &goto_addr) == 1) {
-				GotoAddr = goto_addr - base_display_addr;
-				HighlightMin = HighlightMax = (size_t)-1;
-			}
-		}
-
-		if (GotoAddr != (size_t)-1) {
-			if (GotoAddr < mem_size) {
-				ImGui::BeginChild("##scrolling");
-				ImGui::SetScrollFromPosY(ImGui::GetCursorStartPos().y + (GotoAddr / Cols) * ImGui::GetTextLineHeight());
-				ImGui::EndChild();
-				DataEditingAddr = DataPreviewAddr = GotoAddr;
-				DataEditingTakeFocus = true;
-			}
-			GotoAddr = (size_t)-1;
-		}
-	}
-
-	void DrawPreviewLine(const Sizes& s, void* mem_data_void, size_t mem_size, size_t base_display_addr) {
-		IM_UNUSED(base_display_addr);
-		ImU8* mem_data = (ImU8*)mem_data_void;
-		ImGuiStyle& style = ImGui::GetStyle();
-		ImGui::AlignTextToFramePadding();
-		ImGui::Text("Preview as:");
+		ImGui::Text("HexEditor.PreviewAs"_lc);
 		ImGui::SameLine();
 		ImGui::SetNextItemWidth((s.GlyphWidth * 10.0f) + style.FramePadding.x * 2.0f + style.ItemInnerSpacing.x);
 		if (ImGui::BeginCombo("##combo_type", DataTypeGetDesc(PreviewDataType), ImGuiComboFlags_HeightLargest)) {
@@ -968,7 +879,6 @@ struct MemoryEditor {
 		ImGui::SameLine(x);
 		ImGui::TextUnformatted(has_value ? buf : "N/A");
 	}
-#endif
 	// Utilities for Data Preview
 	const char* DataTypeGetDesc(ImGuiDataType data_type) const {
 		const char* descs[] = {"Int8", "Uint8", "Int16", "Uint16", "Int32", "Uint32", "Int64", "Uint64", "Float", "Double"};

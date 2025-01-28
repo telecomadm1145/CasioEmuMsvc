@@ -1,8 +1,8 @@
 ﻿#include "VariableWindow.h"
 #include "CwiiHelp.h"
 #include "Models.h"
-#include "imgui/imgui.h"
 #include "Ui.hpp"
+#include "imgui/imgui.h"
 #include <string>
 std::string to_hex(unsigned int num) {
 	std::string hex_digits = "0123456789ABCDEF";
@@ -30,32 +30,14 @@ void VariableWindow::RenderCore() {
 	static bool showhex = false;
 	static bool showimg_auto = true;
 	static bool showimg_f = false;
-	ImGui::Text(
-#if LANGUAGE == 2
-		"变量"
-#else
-		"Variable"
-#endif
-	);
+	ImGui::Text("VarWindow.Variable"_lc);
 	ImGui::SameLine(90);
-	ImGui::Text(
-#if LANGUAGE == 2
-		"实部"
-#else
-		"Real part"
-#endif
-	);
+	ImGui::Text("VarWindow.ReP"_lc);
 	bool is_in_im = (*(base_addr + casioemu::GetModeOffset(m_emu->hardware_id)) & 0xFF) == 0xC4;
 	bool s_im = showimg_f ? 1 : (showimg_auto ? is_in_im : 0);
 	if (s_im) {
 		ImGui::SameLine(320);
-		ImGui::Text(
-#if LANGUAGE == 2
-			"虚部"
-#else
-			"Imaginary Part"
-#endif
-		);
+		ImGui::Text("VarWindow.ImP"_lc);
 	}
 	for (const auto& v : vars) {
 		if (is_in_im && !strcmp(v.Name, "PreAns"))
@@ -71,13 +53,7 @@ void VariableWindow::RenderCore() {
 			ImGui::TextUnformatted(s.c_str());
 		}
 		if (showhex) {
-			ImGui::TextUnformatted(
-#if LANGUAGE == 2
-				"十六进制"
-#else
-				"Hex"
-#endif
-			);
+			ImGui::TextUnformatted("VarWindow.Hex"_lc);
 			ImGui::SameLine(90);
 			s = cwii::HexizeString(base_addr + v.RealPartOffset, casioemu::GetVariableSize(m_emu->hardware_id));
 			ImGui::TextUnformatted(s.c_str());
@@ -88,13 +64,7 @@ void VariableWindow::RenderCore() {
 			}
 		}
 		if (showaddr) {
-			ImGui::TextUnformatted(
-#if LANGUAGE == 2
-				"地址"
-#else
-				"Address"
-#endif
-			);
+			ImGui::TextUnformatted("VarWindow.Addr"_lc);
 			ImGui::SameLine(90);
 			s = to_hex(v.RealPartOffset);
 			ImGui::TextUnformatted(s.c_str());
@@ -111,47 +81,17 @@ void VariableWindow::RenderCore() {
 		auto a = cwii::StringizeCwiiNumber(n_ram_buffer + 0xBDEC - 0x9000);
 		ImGui::TextUnformatted(a.c_str());
 		if (showaddr) {
-			ImGui::TextUnformatted(
-#if LANGUAGE == 2
-				"地址"
-#else
-				"Address"
-#endif
-			);
+			ImGui::TextUnformatted("VarWindow.Addr"_lc);
 			ImGui::SameLine(90);
 			ImGui::TextUnformatted("0xBDEC");
 		}
 	}
-	ImGui::Checkbox(
-#if LANGUAGE == 2
-		"显示地址"
-#else
-		"Show address"
-#endif
-		,
+	ImGui::Checkbox("VarWindow.ShowAddrOpt"_lc,
 		&showaddr);
-	ImGui::Checkbox(
-#if LANGUAGE == 2
-		"显示十六进制"
-#else
-		"Show hex"
-#endif
-		,
+	ImGui::Checkbox("VarWindow.ShowHexOpt"_lc,
 		&showhex);
-	ImGui::Checkbox(
-#if LANGUAGE == 2
-		"复数模式显示虚部"
-#else
-		"Show ImP in cmplx"
-#endif
-		,
+	ImGui::Checkbox("VarWindow.ShowImPWhenComplex"_lc,
 		&showimg_auto);
-	ImGui::Checkbox(
-#if LANGUAGE == 2
-		"总是显示虚部"
-#else
-		"Always show ImP"
-#endif
-		,
+	ImGui::Checkbox("VarWindow.AlwaysShowImP"_lc,
 		&showimg_f);
 }

@@ -146,13 +146,7 @@ void WatchWindow::RenderCore() {
 	using casioemu::Chipset::RM_HALT;
 	using casioemu::Chipset::RM_RUN;
 	using casioemu::Chipset::RM_STOP;
-	ImGui::Text(
-#if LANGUAGE == 2
-		"核心状态: %s"
-#else
-		"Core status: %s"
-#endif
-		,
+	ImGui::Text("WatchWindow.CoreStatus"_lc,
 		rm == RM_RUN ? "Run" : (rm == RM_STOP ? "Stop" : (rm == RM_HALT ? "Halt" : "?")));
 	// ImGui::Text("Psw");
 	// for (size_t i = 0; i < 8; i++) {
@@ -181,14 +175,14 @@ void WatchWindow::RenderCore() {
 	PrepareRX();
 	if (!m_emu->GetPaused()) {
 		ShowRX();
-		if (ImGui::Button("Pause")) {
+		if (ImGui::Button("WatchWindow.Pause"_lc)) {
 			m_emu->SetPaused(1);
 		}
 	}
 	else {
 		ModRX();
 		UpdateRX();
-		if (ImGui::Button("Continue")) {
+		if (ImGui::Button("WatchWindow.Continue"_lc)) {
 			m_emu->SetPaused(0);
 		}
 	}
@@ -198,7 +192,7 @@ void WatchWindow::RenderCore() {
 	static int range = 64;
 	ImGui::BeginChild("##stack_trace", ImVec2(0, ImGui::GetWindowHeight() / 2));
 	if (ImGui::BeginTable("##Stack_trace", 6, pretty_table)) {
-		ImGui::TableSetupColumn("Function", ImGuiTableColumnFlags_WidthStretch, 1);
+		ImGui::TableSetupColumn("WatchWindow.Function"_lc, ImGuiTableColumnFlags_WidthStretch, 1);
 		ImGui::TableSetupColumn("PC", ImGuiTableColumnFlags_WidthFixed, 60);
 		ImGui::TableSetupColumn("SP", ImGuiTableColumnFlags_WidthFixed, 40);
 		ImGui::TableSetupColumn("ER0", ImGuiTableColumnFlags_WidthFixed, 40);
@@ -233,7 +227,7 @@ void WatchWindow::RenderCore() {
 			ImGui::TableNextColumn();
 			if (frame.lr_pushed) {
 				if (frame.lr == 0xffffff) {
-					ImGui::TextUnformatted("LR destroyed.");
+					ImGui::TextUnformatted("WatchWindow.LrDestroyed"_lc);
 				}
 				else {
 					ImGui::TextUnformatted(lookup_symbol(frame.lr).c_str());
@@ -244,13 +238,7 @@ void WatchWindow::RenderCore() {
 	}
 	ImGui::EndChild();
 	ImGui::BeginChild("##stack_view");
-	ImGui::Text(
-#if LANGUAGE == 2
-		"设置堆栈范围"
-#else
-		"Set stack range"
-#endif
-	);
+	ImGui::Text("WatchWindow.StackMemViewRange"_lc);
 	ImGui::SameLine();
 	ImGui::SliderInt("##range", &range, 64, 2048);
 	uint16_t offset = chipset.cpu.reg_sp & 0xffff;

@@ -1,6 +1,7 @@
 ﻿#include "BatteryBackedRAM.hpp"
 #include "Chipset.hpp"
 #include "Ui.hpp"
+#include "Localization.h"
 class Fx5800FileSystem : public UIWindow {
 public:
 	Fx5800FileSystem() : UIWindow("Files") {
@@ -60,7 +61,7 @@ public:
 		if (fin.size() > 1) {
 			fin.resize(fin.size() - 1);
 		}
-		if (ImGui::Button("Back")) {
+		if (ImGui::Button("5800FS.Back"_lc)) {
 			if (pathes.size())
 				pathes.resize(pathes.size() - 1);
 		}
@@ -68,8 +69,8 @@ public:
 		ImGui::TextUnformatted(fin.c_str());
 		ImGui::Text("%06X", curptr);
 		if (ImGui::BeginTable("", 2, pretty_table)) {
-			ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch, 1);
-			ImGui::TableSetupColumn("Length", ImGuiTableColumnFlags_WidthFixed, 80);
+			ImGui::TableSetupColumn("5800FS.Name"_lc, ImGuiTableColumnFlags_WidthStretch, 1);
+			ImGui::TableSetupColumn("5800FS.Length"_lc, ImGuiTableColumnFlags_WidthFixed, 80);
 			ImGui::TableHeadersRow();
 			auto d = Dir();
 			for (auto& a : d) {

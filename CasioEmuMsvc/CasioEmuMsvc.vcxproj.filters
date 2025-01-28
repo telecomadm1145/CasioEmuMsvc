@@ -201,6 +201,15 @@
     <ClCompile Include="Gui\Assemblier.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Gui\Localization.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\Gui.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\Theme.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Config.hpp">
@@ -419,7 +428,7 @@
     <ClInclude Include="Ext\vibration.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="Gui.h">
+    <ClInclude Include="Gui\Gui.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Peripheral\Spi.h">
@@ -437,11 +446,20 @@
     <ClInclude Include="Gui\Assemblier.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Ext\3rd_licenses.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\Localization.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
     <None Include=".clang-format" />
     <None Include="Peripheral\SD\HowToCreateASDCard.md" />
+    <None Include="locales\en_US.lc" />
+    <None Include="locales\zh_CN.lc" />
+    <None Include="locales\vn.lc" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="icon.ico">

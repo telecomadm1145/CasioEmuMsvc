@@ -213,16 +213,16 @@ namespace u8 {
 		// * Conditional Relative Branch Instructions
 		// {"b"         ,   H_BCC                      , 0xC000, {{16, 0x0F00,  0}, {0,      0xFF,  0}}}, // Please assembly these commands in hardcoded way
 		// * Sign Extension Instruction
-		//{"extbw"      ,        H_EXTBW                 , 0x810F}, // Please assembly these commands in hardcoded way
+		// {"extbw"      ,        H_EXTBW                 , 0x810F}, // Please assembly these commands in hardcoded way
 		// * Software Interrupt Instructions
 		{"swi"        ,                         0, 0xE500, {{0, 0x00FF,  0}}},
 		{"brk"        ,                         0, 0xFFFF},
 		{"iceswi",0,0xfeff},
 		// * Branch Instructions
-		//{"b"          ,        H_TI              , 0xF000, {{0, 0x000F,  8}}}, // Please assembly these commands in hardcoded way
-		//{"b"          ,                         0, 0xF002, {{2, 0x000E,  4}}},
-		//{"bl"         ,        H_TI              , 0xF001, {{0, 0x000F,  8}}},
-		//{"bl"         ,                         0, 0xF003, {{2, 0x000E,  4}}},
+		// {"b"          ,        H_TI              , 0xF000, {{0, 0x000F,  8}}}, // Please assembly these commands in hardcoded way
+		// {"b"          ,                         0, 0xF002, {{2, 0x000E,  4}}},
+		// {"bl"         ,        H_TI              , 0xF001, {{0, 0x000F,  8}}},
+		// {"bl"         ,                         0, 0xF003, {{2, 0x000E,  4}}},
 		// * Multiplication and Division Instructions
 		{"mul"        , H_WB                     , 0xF004, {{2, 0x000E,  8}, {1, 0x000F,  4}}},
 		{"div"        , H_WB                     , 0xF009, {{2, 0x000E,  8}, {1, 0x000F,  4}}},
@@ -355,6 +355,9 @@ namespace u8 {
 	public:
 		std::vector<char> Bytes;
 		struct Operand {
+            Operand(){
+
+            }
 			enum OperandType {
 				None,
 				Reg,
@@ -363,7 +366,7 @@ namespace u8 {
 				Imm,
 				DSR,
 				Address,
-			} type{};
+			} type = OperandType::None;
 			int offset{};
 			int size{};
 		};

@@ -6,6 +6,7 @@
 #include "Ui.hpp"
 #include "hex.hpp"
 #include "MemBreakPoint.hpp"
+#include "Localization.h"
 float ram_edit_ov[0x100000]{};
 struct HexEditor : public UIWindow, public MemoryEditor {
 	void* data{};
@@ -30,10 +31,10 @@ struct HexEditor : public UIWindow, public MemoryEditor {
 		}
 		if (ImGui::BeginPopup("ContextMenu")) {
 			ImGui::Text("%x", (unsigned int)popup_p);
-			if (ImGui::MenuItem("Find out what wrote to this addr")) {
+			if (ImGui::MenuItem("HexEditors.ContextMenu.MonitorWrite"_lc)) {
 				SetMemBp(popup_p, true);
 			}
-			if (ImGui::MenuItem("Find out what read this addr")) {
+			if (ImGui::MenuItem("HexEditors.ContextMenu.MonitorRead"_lc)) {
 				SetMemBp(popup_p, false);
 			}
 			ImGui::EndPopup();
@@ -65,10 +66,10 @@ struct SpansHexEditor : public UIWindow, public MemoryEditor {
 		}
 		if (ImGui::BeginPopup("ContextMenu")) {
 			ImGui::Text("%x", (unsigned int)popup_p);
-			if (ImGui::MenuItem("Find out what wrote to this addr")) {
+			if (ImGui::MenuItem("HexEditors.ContextMenu.MonitorWrite"_lc)) {
 				SetMemBp(popup_p, true);
 			}
-			if (ImGui::MenuItem("Find out what read this addr")) {
+			if (ImGui::MenuItem("HexEditors.ContextMenu.MonitorRead"_lc)) {
 				SetMemBp(popup_p, false);
 			}
 			ImGui::EndPopup();
