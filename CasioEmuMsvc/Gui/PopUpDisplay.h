@@ -125,6 +125,9 @@ public:
 		SDL_UpdateTexture(mirrorTexture, nullptr, pixels, pitch);
 		SDL_SetRenderDrawColor(mirrorRenderer, 0, 0, 0, 255);
 		SDL_RenderClear(mirrorRenderer);
+		int windowWidth = 0, windowHeight = 0;
+		SDL_GetWindowSize(mirrorWindow, &windowWidth, &windowHeight);
+		updateDisplayRect(windowWidth, windowHeight);
 		SDL_RenderCopy(mirrorRenderer, mirrorTexture, nullptr, &displayRect);
 		SDL_RenderPresent(mirrorRenderer);
 	}
