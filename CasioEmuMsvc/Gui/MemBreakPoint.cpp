@@ -29,7 +29,8 @@ void MemBreakPoint::DrawContent() {
 			ImGui::PopID();
 			if (ImGui::BeginPopupContextItem()) {
 				selected = i;
-				ImGui::Text("MemBP.BPType"_lc);
+
+                ImGui::Text("%s", "MemBP.BPType"_lc);
 				if (ImGui::Button("HexEditors.ContextMenu.MonitorRead"_lc)) {
 					target_addr = i;
 					data.enableWrite = 0;
@@ -59,7 +60,7 @@ void MemBreakPoint::DrawContent() {
 
 void MemBreakPoint::DrawFindContent() {
 	if (target_addr == -1) {
-		ImGui::TextColored(ImVec4(255, 255, 0, 255), "MemBP.NoBPHint"_lc);
+		ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", "MemBP.NoBPHint"_lc);
 		return;
 	}
 	int write = break_point_hash[target_addr].enableWrite;

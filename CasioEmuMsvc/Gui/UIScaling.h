@@ -1,4 +1,3 @@
-// UIScaling.h
 #pragma once
 #include <imgui.h>
 #include <algorithm>
@@ -9,12 +8,32 @@ namespace UI {
     struct Scaling {
         static float fontScale;
         static float padding;
-        static float buttonHeight;
+        static float buttonHeight; 
         static float minColumnWidth;
         static float labelWidth;
         static float windowWidth;
         static float windowHeight;
         static float aspectRatio;
+        
+        static float GetDensityDpi() {
+            SDL_DisplayMode displayMode;
+            float densityDpi = 160.0f; // Default fallback
+            
+            if (SDL_GetCurrentDisplayMode(0, &displayMode) == 0) {
+                float diagonalPixels = sqrt(pow(displayMode.w, 2) + pow(displayMode.h, 2));
+                float physicalWidth, physicalHeight;
+                if (SDL_GetDisplayDPI(0, &densityDpi, &physicalWidth, &physicalHeight) != 0) {
+                    // If SDL_GetDisplayDPI fails, estimate based on resolution
+                    if (displayMode.h <= 480) densityDpi = 120.0f;       // ldpi
+                    else if (displayMode.h <= 800) densityDpi = 160.0f;  // mdpi
+                    else if (displayMode.h <= 1280) densityDpi = 240.0f; // hdpi
+                    else if (displayMode.h <= 1920) densityDpi = 320.0f; // xhdpi
+                    else if (displayMode.h <= 2560) densityDpi = 480.0f; // xxhdpi
+                    else densityDpi = 640.0f;                            // xxxhdpi
+                }
+            }
+            return densityDpi;
+        }
         
         static void UpdateUIScale() {
             ImGuiIO& io = ImGui::GetIO();
@@ -22,66 +41,82 @@ namespace UI {
             windowHeight = io.DisplaySize.y;
             aspectRatio = windowWidth / windowHeight;
             
-            // Tính density scale cho Android
-            int displayDensity = 1;
-            SDL_DisplayMode displayMode;
-            if (SDL_GetCurrentDisplayMode(0, &displayMode) == 0) {
-                float diagonalPixels = sqrt(pow(displayMode.w, 2) + pow(displayMode.h, 2));
-                // Điều chỉnh density dựa trên kích thước màn hình
-                if (diagonalPixels > 2500) {
-                    displayDensity = 4; // Ultra HD
-                } else if (diagonalPixels > 2000) {
-                    displayDensity = 3; // xxxhdpi
-                } else if (diagonalPixels > 1500) {
-                    displayDensity = 2; // xxhdpi
-                } else {
-                    displayDensity = 1; // xhdpi và thấp hơn
-                }
+            // Calculate base scale considering both resolution and density
+            float densityDpi = GetDensityDpi();
+            float densityScale = densityDpi / 160.0f; // Using mdpi as baseline
+            
+            // Calculate base scale based on screen resolution
+            float baseScale = std::min(windowWidth / 1920.0f, windowHeight / 1080.0f);
+            
+            // Adjust scale based on screen size category
+            float screenSizeAdjustment = 1.0f;
+            float diagonalPixels = sqrt(pow(windowWidth, 2) + pow(windowHeight, 2));
+            float diagonalInches = diagonalPixels / densityDpi;
+            
+            if (diagonalInches <= 4.0f) {
+                screenSizeAdjustment = 0.85f;        // Very small phones
+            } else if (diagonalInches <= 5.0f) {
+                screenSizeAdjustment = 0.9f;         // Small phones
+            } else if (diagonalInches <= 6.0f) {
+                screenSizeAdjustment = 1.0f;         // Standard phones
+            } else if (diagonalInches <= 7.0f) {
+                screenSizeAdjustment = 1.1f;         // Large phones
+            } else if (diagonalInches <= 10.0f) {
+                screenSizeAdjustment = 1.2f;         // Tablets
+            } else {
+                screenSizeAdjustment = 1.3f;         // Large tablets
             }
 
-            // Tính toán scale riêng cho chiều rộng và chiều cao
-            float widthScale = windowWidth / 1920.0f;
-            float heightScale = windowHeight / 1080.0f;
+            // Calculate final font scale
+            fontScale = baseScale * screenSizeAdjustment * sqrt(densityScale);
             
-            // Sử dụng scale nhỏ hơn để đảm bảo UI không bị quá to
-            fontScale = std::min(widthScale, heightScale) * displayDensity;
+            // More aggressive clamping for Android
+            fontScale = std::clamp(fontScale, 0.7f, 1.6f);
+            
+            // Update global font scale with minimum readable size
+            io.FontGlobalScale = std::max(fontScale, 0.85f);
 
-            // Giới hạn scale
-            fontScale = std::clamp(fontScale, 0.8f, 2.5f);
+            // Adjust touch-friendly sizes
+            float touchScale = std::max(fontScale, 1.0f); // Ensure minimum touch target size
+            padding = 10.0f * touchScale;
+            buttonHeight = 36.0f * touchScale;  // Increased for better touch targets
+            minColumnWidth = 60.0f * fontScale;
+            labelWidth = 90.0f * fontScale;
 
-            // Điều chỉnh global font scale
-            io.FontGlobalScale = fontScale;
-
-            // Tính các thông số UI với tỉ lệ màn hình
-            padding = std::max(8.0f * fontScale, 6.0f);
-            buttonHeight = std::max(40.0f * fontScale, 35.0f);
-            minColumnWidth = std::max(60.0f * fontScale * aspectRatio, 50.0f);
-            labelWidth = std::max(100.0f * fontScale * aspectRatio, 80.0f);
-
-            // Cập nhật style ImGui
+            // Update ImGui style
             ImGuiStyle& style = ImGui::GetStyle();
+            
+            // Increase padding for touch interfaces
             style.WindowPadding = ImVec2(padding, padding);
-            style.FramePadding = ImVec2(padding * 0.8f, padding * 0.8f);
-            style.ItemSpacing = ImVec2(padding * aspectRatio, padding);
-            style.ItemInnerSpacing = ImVec2(padding * aspectRatio, padding);
-            style.TouchExtraPadding = ImVec2(padding * 0.4f, padding * 0.4f);
+            style.FramePadding = ImVec2(padding * 0.7f, padding * 0.7f);
+            style.ItemSpacing = ImVec2(padding * 0.8f, padding * 0.8f);
+            style.ItemInnerSpacing = ImVec2(padding * 0.5f, padding * 0.5f);
+            style.TouchExtraPadding = ImVec2(padding * 0.6f, padding * 0.6f);
             
-            // Điều chỉnh các thành phần UI
-            style.WindowRounding = 4.0f * fontScale;
-            style.ScrollbarSize = std::max(20.0f * fontScale, 15.0f);
-            style.GrabMinSize = std::max(30.0f * fontScale, 25.0f);
+            // Adjust sizes for touch interaction
+            style.ScrollbarSize = 18.0f * touchScale;
+            style.GrabMinSize = 24.0f * touchScale;
             style.WindowTitleAlign = ImVec2(0.5f, 0.5f);
-            style.MouseCursorScale = 1.5f * fontScale;
-            style.TabRounding = 4.0f * fontScale;
-            style.FrameRounding = 4.0f * fontScale;
-            style.ScrollbarRounding = 4.0f * fontScale;
-            style.GrabRounding = 4.0f * fontScale;
+            style.MouseCursorScale = 1.0f * touchScale;
             
-            // Điều chỉnh khoảng cách cho màn hình rộng
-            if (aspectRatio > 1.5f) {
+            // Rounded corners for modern Android look
+            float rounding = 6.0f * std::min(touchScale, 1.2f);
+            style.WindowRounding = rounding;
+            style.ChildRounding = rounding;
+            style.FrameRounding = rounding;
+            style.ScrollbarRounding = rounding;
+            style.GrabRounding = rounding;
+            style.TabRounding = rounding;
+            style.PopupRounding = rounding;
+            
+            // Adjust spacing for wide screens
+            if (aspectRatio > 1.8f) {  // More aggressive for ultra-wide
                 style.ItemSpacing.x *= 1.2f;
                 style.WindowPadding.x *= 1.2f;
             }
+            
+            // Ensure minimum touch target size
+            style.FramePadding.y = std::max(buttonHeight * 0.15f, 8.0f);
         }
     };
 }

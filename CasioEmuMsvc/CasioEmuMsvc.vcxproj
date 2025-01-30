@@ -462,7 +462,7 @@
     <None Include="locales\zh_CN.lc">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="locales\vn.lc">
+    <None Include="locales\vi_VN.lc">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
 	  <None Include="roms.db">

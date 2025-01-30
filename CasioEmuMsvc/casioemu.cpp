@@ -281,7 +281,7 @@ int main(int argc, char* argv[]) {
 			if (RebuildFont_Requested) {
 				RebuildFont(RebuildFont_Scale);
 				if (RebuildFont_Scale != 0) {
-					ImGuiStyle igs = ImGuiStyle::ImGuiStyle();
+					ImGuiStyle igs = ImGuiStyle();
 					ImGui::StyleColorsDark(&igs);
 					ImGuiStyle& style = igs;
 					style.WindowRounding = 4.0f;

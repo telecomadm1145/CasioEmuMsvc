@@ -465,7 +465,7 @@
     <None Include="Peripheral\SD\HowToCreateASDCard.md" />
     <None Include="locales\en_US.lc" />
     <None Include="locales\zh_CN.lc" />
-    <None Include="locales\vn.lc" />
+    <None Include="locales\vi_VN.lc" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="icon.ico">

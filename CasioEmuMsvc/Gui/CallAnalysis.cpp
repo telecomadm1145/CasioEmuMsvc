@@ -155,7 +155,7 @@ struct CallAnalysis : public UIWindow {
 				funcs.clear();
 			}
 			ImGui::Separator();
-			ImGui::Text("CallAnalysis.Filters"_lc);
+			ImGui::Text("%s", "CallAnalysis.Filters"_lc);
 			ImGui::Checkbox("CallAnalysis.CalleeFilter"_lc,
 				&check_callee);
 			ImGui::SameLine();
