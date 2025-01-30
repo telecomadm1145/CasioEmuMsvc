@@ -30,7 +30,7 @@ void MemBreakPoint::DrawContent() {
 			if (ImGui::BeginPopupContextItem()) {
 				selected = i;
 
-                ImGui::Text("%s", "MemBP.BPType"_lc);
+                ImGui::TextUnformatted("MemBP.BPType"_lc);
 				if (ImGui::Button("HexEditors.ContextMenu.MonitorRead"_lc)) {
 					target_addr = i;
 					data.enableWrite = 0;

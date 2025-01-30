@@ -238,7 +238,7 @@ void WatchWindow::RenderCore() {
 	}
 	ImGui::EndChild();
 	ImGui::BeginChild("##stack_view");
-	ImGui::Text("%s", "WatchWindow.StackMemViewRange"_lc);
+	ImGui::TextUnformatted("WatchWindow.StackMemViewRange"_lc);
 	ImGui::SameLine();
 	ImGui::SliderInt("##range", &range, 64, 2048);
 	uint16_t offset = chipset.cpu.reg_sp & 0xffff;

@@ -86,7 +86,7 @@ struct CallAnalysis : public UIWindow {
 				for (auto& func : funcs) {
 					ImGui::TableNextRow();
 					ImGui::TableNextColumn();
-					ImGui::Text("%s", lookup_symbol(func.first).c_str());
+					ImGui::TextUnformatted(lookup_symbol(func.first).c_str());
 					ImGui::TableNextColumn();
 					ImGui::Text("%d", (int)func.second.size());
 					ImGui::TableNextColumn();
@@ -155,7 +155,7 @@ struct CallAnalysis : public UIWindow {
 				funcs.clear();
 			}
 			ImGui::Separator();
-			ImGui::Text("%s", "CallAnalysis.Filters"_lc);
+			ImGui::TextUnformatted("CallAnalysis.Filters"_lc);
 			ImGui::Checkbox("CallAnalysis.CalleeFilter"_lc,
 				&check_callee);
 			ImGui::SameLine();

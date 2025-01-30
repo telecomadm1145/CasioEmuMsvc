@@ -181,7 +181,7 @@ void Injector::RenderInjectorTab(InjectorData& inj, int index, bool& show_info, 
         return false;
     };
 
-    ImGui::Text("%s", "Rop.InjectAddr"_lc);
+    ImGui::TextUnformatted("Rop.InjectAddr"_lc);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(80);
     ImGui::InputText(("##addr" + std::to_string(index)).c_str(), inj.addr, 10);
@@ -252,7 +252,7 @@ void Injector::RenderCore() {
 
     if (ImGui::BeginTabBar("Rop.TabBar"_lc)) {
         if (ImGui::BeginTabItem("Rop.XAnMode"_lc)) {
-            ImGui::Text("%s", "Rop.InputSize"_lc);
+            ImGui::TextUnformatted("Rop.InputSize"_lc);
             ImGui::SameLine();
             ImGui::SetNextItemWidth(80);
             ImGui::InputText("##off", buf, 9);
@@ -336,7 +336,7 @@ void Injector::RenderCore() {
     }
 
     if (ImGui::BeginPopupModal("Rop.InfoPopup"_lc, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("%s", info_msg.c_str());
+        ImGui::TextUnformatted(info_msg.c_str());
         if (ImGui::Button("Button.Positive"_lc)) {
             show_info = false;
             ImGui::CloseCurrentPopup();

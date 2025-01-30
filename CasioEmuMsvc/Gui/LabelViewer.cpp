@@ -6,7 +6,7 @@
 #include "stringhelper.h"
 
 void LabelViewer::RenderCore() {
-	ImGui::Text("%s", "Label.GeneralHeader"_lc);
+	ImGui::TextUnformatted("Label.GeneralHeader"_lc);
 	ImGui::Separator();
 	auto labels = casioemu::GetCommonMemLabels(m_emu->hardware_id);
 	std::sort(labels.begin(), labels.end());
@@ -27,7 +27,7 @@ void LabelViewer::RenderCore() {
 		ImGui::TextUnformatted(desc.c_str());
 		ImGui::Separator();
 	}
-	ImGui::Text("%s", "Label.SfrsHeader"_lc);
+	ImGui::TextUnformatted("Label.SfrsHeader"_lc);
 	ImGui::Separator();
 	auto regs = me_mmu->GetRegions();
 	std::sort(regs.begin(), regs.end(), [](casioemu::MMURegion* a, casioemu::MMURegion* b) { return a->base < b->base; });

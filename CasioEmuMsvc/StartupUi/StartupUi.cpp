@@ -239,31 +239,31 @@ public:
 		}
 		ImGui::SetCursorPos({400, y});
 		if (ImGui::BeginChild("Model Info")) {
-			ImGui::Text("%s", "ModelEditor.Name"_lc);
+			ImGui::TextUnformatted("ModelEditor.Name"_lc);
 			if (ImGui::InputText("##name", name, 260)) {
 				mi.model_name = name;
 			}
-			ImGui::Text("%s", "ModelEditor.InterfacePath"_lc);
+			ImGui::TextUnformatted("ModelEditor.InterfacePath"_lc);
 			if (ImGui::InputText("##path1", path1, 260)) {
 				mi.interface_path = path1;
 			}
-			ImGui::Text("%s", "ModelEditor.RomPath"_lc);
+			ImGui::TextUnformatted("ModelEditor.RomPath"_lc);
 			if (ImGui::InputText("##path2", path2, 260)) {
 				mi.rom_path = path2;
 			}
-			ImGui::Text("%s", "ModelEditor.FlashDumpPath"_lc);
+			ImGui::TextUnformatted("ModelEditor.FlashDumpPath"_lc);
 			if (ImGui::InputText("##path3", path3, 260)) {
 				mi.flash_path = path3;
 			}
-			ImGui::Text("%s", "ModelEditor.CsrMask"_lc);
+			ImGui::TextUnformatted("ModelEditor.CsrMask"_lc);
 			if (ImGui::SliderInt("##a", &v, 0, 15, "0x%X")) {
 				mi.csr_mask = v;
 			}
-			ImGui::Text("%s", "ModelEditor.PdValue"_lc);
+			ImGui::TextUnformatted("ModelEditor.PdValue"_lc);
 			if (ImGui::SliderInt("##q", &k, 0, 15, "0x%X")) {
 				mi.pd_value = k;
 			}
-			ImGui::Text("%s", "ModelEditor.HardwareType"_lc);
+			ImGui::TextUnformatted("ModelEditor.HardwareType"_lc);
 			ImGui::SetNextItemWidth(80);
 			if (ImGui::BeginCombo("##cb", items[mi.hardware_id])) {
 				for (int n = 0; n < IM_ARRAYSIZE(items); n++) {
@@ -601,7 +601,7 @@ namespace casioemu {
             #endif
         
             if (ImGui::BeginPopupModal("StartupUI.EnterPassword"_lc, NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
-                ImGui::Text("%s", "StartupUI.PasswordPopupHint"_lc);
+                ImGui::TextUnformatted("StartupUI.PasswordPopupHint"_lc);
                 
                 #ifdef __ANDROID__
                 float inputWidth = ImGui::GetContentRegionAvail().x - padding * 2;
@@ -665,9 +665,9 @@ namespace casioemu {
                 return;
             }
         
-            ImGui::Text("%s", "StartupUI.ChooseModelHint"_lc);
+            ImGui::TextUnformatted("StartupUI.ChooseModelHint"_lc);
             ImGui::Separator();
-            ImGui::Text("%s", "StartupUI.RecentlyUsed"_lc);
+            ImGui::TextUnformatted("StartupUI.RecentlyUsed"_lc);
 
             if (ImGui::BeginTable("Recently", 4, pretty_table | ImGuiTableFlags_ScrollY, ImVec2(0, tableHeight))) {
                 RenderHeaders();

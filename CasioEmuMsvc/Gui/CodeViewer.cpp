@@ -305,7 +305,7 @@ void CodeViewer::RenderCore() {
 	int w = ImGui::CalcTextSize("F").x;
 	if (!is_loaded) {
 		ImGui::SetCursorPos(ImVec2(w * 2, h * 5));
-		ImGui::Text("%s", "CodeViewer.Loading"_lc);
+		ImGui::TextUnformatted("CodeViewer.Loading"_lc);
 		return;
 	}
 	ImVec2 sz;
@@ -338,7 +338,7 @@ void CodeViewer::RenderCore() {
 	ImGui::EndChild();
 	ImGui::SameLine();
 	ImGui::Separator();
-	ImGui::Text("%s", "CodeViewer.Goto"_lc);
+	ImGui::TextUnformatted("CodeViewer.Goto"_lc);
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(ImGui::CalcTextSize("000000").x);
 	ImGui::InputText("##input", adrbuf, 8);

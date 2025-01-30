@@ -30,14 +30,14 @@ void VariableWindow::RenderCore() {
 	static bool showhex = false;
 	static bool showimg_auto = true;
 	static bool showimg_f = false;
-	ImGui::Text("%s", "VarWindow.Variable"_lc);
+	ImGui::TextUnformatted("VarWindow.Variable"_lc);
 	ImGui::SameLine(90);
-	ImGui::Text("%s", "VarWindow.ReP"_lc);
+	ImGui::TextUnformatted("VarWindow.ReP"_lc);
 	bool is_in_im = (*(base_addr + casioemu::GetModeOffset(m_emu->hardware_id)) & 0xFF) == 0xC4;
 	bool s_im = showimg_f ? 1 : (showimg_auto ? is_in_im : 0);
 	if (s_im) {
 		ImGui::SameLine(320);
-		ImGui::Text("%s", "VarWindow.ImP"_lc);
+		ImGui::TextUnformatted("VarWindow.ImP"_lc);
 	}
 	for (const auto& v : vars) {
 		if (is_in_im && !strcmp(v.Name, "PreAns"))

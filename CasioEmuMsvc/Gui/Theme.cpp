@@ -9,26 +9,34 @@ struct ThemeSettings {
     bool isDarkMode = true;
     char language[30] = "";
     float scale = 1.0f;
+
+    void Write(std::ostream& stm) const {
+        Binary::Write(stm, isDarkMode);
+        stm.write(language, sizeof(language));
+        Binary::Write(stm, scale);
+    }
+
+    void Read(std::istream& stm) {
+        Binary::Read(stm, isDarkMode);
+        stm.read(language, sizeof(language));
+        Binary::Read(stm, scale);
+    }
 };
 
 static ThemeSettings g_settings;
 
 void SaveThemeSettings() {
-    std::ofstream file("./theme.txt");
+    std::ofstream file("./theme.bin", std::ios::binary);
     if (file.is_open()) {
-        file << g_settings.isDarkMode << std::endl;
-        file << g_settings.language << std::endl;
-        file << g_settings.scale << std::endl;
+        Binary::Write(file, g_settings);
         file.close();
     }
 }
 
 void LoadThemeSettings() {
-    std::ifstream file("./theme.txt");
+    std::ifstream file("./theme.bin", std::ios::binary);
     if (file.is_open()) {
-        file >> g_settings.isDarkMode;
-        file >> g_settings.language;
-        file >> g_settings.scale;
+        Binary::Read(file, g_settings);
         file.close();
 
         if (g_settings.isDarkMode) {

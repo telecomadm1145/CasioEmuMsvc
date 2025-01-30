@@ -15,7 +15,7 @@ public:
 	}
 
 	void RenderCore() override {
-		ImGui::Text("%s", "AddressWindow.Header"_lc);
+		ImGui::TextUnformatted("AddressWindow.Header"_lc);
 		ImGui::Separator();
 
 		RenderAddressTable();
@@ -65,7 +65,7 @@ private:
 	}
 
 	void RenderAddAddressControls() {
-		ImGui::Text("%s", "AddressWindow.Add"_lc);
+		ImGui::TextUnformatted("AddressWindow.Add"_lc);
 
 		ImGui::InputScalar("Address", ImGuiDataType_U32, &newAddress, 0, 0, "%x");
 		// ImGui::InputScalar("Value", ImGuiDataType_U8, &newValue);
