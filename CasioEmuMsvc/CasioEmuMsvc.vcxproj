@@ -453,6 +453,7 @@
     <ClInclude Include="Peripheral\VoltageLevelSupervisor.h" />
     <ClInclude Include="Ext\vibration.h" />
     <ClInclude Include="Gui\Gui.h" />
+    <ClInclude Include="locales\lang.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".clang-format" />

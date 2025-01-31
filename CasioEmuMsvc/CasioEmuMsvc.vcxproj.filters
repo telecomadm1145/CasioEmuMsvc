@@ -457,6 +457,8 @@
     </ClInclude>
     <ClInclude Include="Gui\PopUpDisplay.h">
       <Filter>头文件</Filter>
+    <ClInclude Include="locales\lang.h">
+      <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

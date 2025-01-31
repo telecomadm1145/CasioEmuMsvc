@@ -74,10 +74,17 @@ void gui_loop() {
         ImGuiWindowFlags_NoTitleBar | 
         ImGuiWindowFlags_NoMove);
 
-    ImGui::SetWindowPos(ImVec2(UI::Scaling::padding, UI::Scaling::padding));
-    
+    float safeAreaPadding = UI::Scaling::padding * 1.5f;
+    ImGui::SetWindowPos(ImVec2(safeAreaPadding, safeAreaPadding));
+
+    float displayWidth = ImGui::GetIO().DisplaySize.x;
+    float totalWidth = displayWidth - (safeAreaPadding * 2);
+    float spacingBetweenElements = UI::Scaling::padding * 1.2f;
+    float buttonWidth = (totalWidth - spacingBetweenElements * 2) * 0.25f;
+    float comboWidth = totalWidth - (buttonWidth * 2) - (spacingBetweenElements * 2);
+
     static UIWindow* current_filter = 0;
-    ImGui::SetNextItemWidth(UI::Scaling::labelWidth * 2);
+    ImGui::SetNextItemWidth(comboWidth);
     if (ImGui::BeginCombo("##cb", current_filter ? current_filter->name : 0)) {
         for (int n = 0; n < windows.size(); n++) {
             bool is_selected = (current_filter == windows[n]);
@@ -89,14 +96,14 @@ void gui_loop() {
         ImGui::EndCombo();
     }
 
-    ImGui::SameLine(0, UI::Scaling::padding);
-    ImVec2 buttonSize(UI::Scaling::buttonHeight * 2, UI::Scaling::buttonHeight);
+    ImGui::SameLine(0, spacingBetweenElements);
+    ImVec2 buttonSize(buttonWidth, UI::Scaling::buttonHeight * 1.2f);
     if (ImGui::Button("Open", buttonSize)) {
         if (current_filter != 0)
             current_filter->open = true;
     }
-
-    ImGui::SameLine(0, UI::Scaling::padding);
+    
+    ImGui::SameLine(0, spacingBetweenElements);
     if (ImGui::Button("Close all", buttonSize)) {
         for (auto& win : windows) {
             win->open = false;

@@ -77,7 +77,22 @@ public:
             RebuildFont_Requested = true;
             SaveThemeSettings();
         }
-
+        ImGui::SameLine();
+        if (ImGui::Button("Ui.ForceUpdateLang"_lc)) {
+            if (strlen(g_settings.language) > 0) {
+                std::string langFile = "./locales/" + std::string(g_settings.language) + ".lc";
+                if (std::filesystem::exists(langFile)) {
+                    std::filesystem::remove(langFile);
+                }
+                g_local.ChangeLanguage(g_settings.language);
+                RebuildFont_Requested = true;
+            }
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted("Ui.ForceUpdateLangDesc"_lc);
+            ImGui::EndTooltip();
+        }
         ImGui::TextUnformatted("Ui.CurrentLang"_lc);
         ImGui::SameLine();
         ImGui::TextUnformatted("Localization.LanguageName"_lc);

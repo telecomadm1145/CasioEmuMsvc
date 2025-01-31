@@ -6,14 +6,14 @@
 
 namespace UI {
     struct Scaling {
-        static float fontScale;
-        static float padding;
-        static float buttonHeight; 
-        static float minColumnWidth;
-        static float labelWidth;
-        static float windowWidth;
-        static float windowHeight;
-        static float aspectRatio;
+        inline static float fontScale;
+        inline static float padding;
+        inline static float buttonHeight; 
+        inline static float minColumnWidth;
+        inline static float labelWidth;
+        inline static float windowWidth;
+        inline static float windowHeight;
+        inline static float aspectRatio;
         
         static float GetDensityDpi() {
             SDL_DisplayMode displayMode;
@@ -54,53 +54,52 @@ namespace UI {
             float diagonalInches = diagonalPixels / densityDpi;
             
             if (diagonalInches <= 4.0f) {
-                screenSizeAdjustment = 0.85f;        // Very small phones
+                screenSizeAdjustment = 0.75f;        // Very small phones
             } else if (diagonalInches <= 5.0f) {
-                screenSizeAdjustment = 0.9f;         // Small phones
+                screenSizeAdjustment = 0.8f;         // Small phones
             } else if (diagonalInches <= 6.0f) {
-                screenSizeAdjustment = 1.0f;         // Standard phones
+                screenSizeAdjustment = 0.90f;         // Standard phones
             } else if (diagonalInches <= 7.0f) {
-                screenSizeAdjustment = 1.1f;         // Large phones
+                screenSizeAdjustment = 1.0f;         // Large phones
             } else if (diagonalInches <= 10.0f) {
-                screenSizeAdjustment = 1.2f;         // Tablets
+                screenSizeAdjustment = 1.1f;         // Tablets
             } else {
-                screenSizeAdjustment = 1.3f;         // Large tablets
+                screenSizeAdjustment = 1.2f;         // Large tablets
             }
 
             // Calculate final font scale
             fontScale = baseScale * screenSizeAdjustment * sqrt(densityScale);
             
             // More aggressive clamping for Android
-            fontScale = std::clamp(fontScale, 0.7f, 1.6f);
+            fontScale = std::clamp(fontScale, 0.5f, 1.5f);
             
             // Update global font scale with minimum readable size
-            io.FontGlobalScale = std::max(fontScale, 0.85f);
+            io.FontGlobalScale = std::max(fontScale, 0.75f);
 
             // Adjust touch-friendly sizes
             float touchScale = std::max(fontScale, 1.0f); // Ensure minimum touch target size
-            padding = 10.0f * touchScale;
-            buttonHeight = 36.0f * touchScale;  // Increased for better touch targets
-            minColumnWidth = 60.0f * fontScale;
-            labelWidth = 90.0f * fontScale;
+            padding = 9.5f * touchScale;
+            buttonHeight = 38.0f * touchScale;
+            minColumnWidth = 55.0f * fontScale;
+            labelWidth = 85.0f * fontScale;
 
             // Update ImGui style
             ImGuiStyle& style = ImGui::GetStyle();
             
-            // Increase padding for touch interfaces
+            // increase padding for touch interfaces
             style.WindowPadding = ImVec2(padding, padding);
-            style.FramePadding = ImVec2(padding * 0.7f, padding * 0.7f);
-            style.ItemSpacing = ImVec2(padding * 0.8f, padding * 0.8f);
+            style.FramePadding = ImVec2(padding * 0.8f, padding * 0.8f);
+            style.ItemSpacing = ImVec2(padding * 0.7f, padding * 0.7f);
             style.ItemInnerSpacing = ImVec2(padding * 0.5f, padding * 0.5f);
             style.TouchExtraPadding = ImVec2(padding * 0.6f, padding * 0.6f);
             
             // Adjust sizes for touch interaction
-            style.ScrollbarSize = 18.0f * touchScale;
-            style.GrabMinSize = 24.0f * touchScale;
+            style.ScrollbarSize = 24.0f * touchScale;
+            style.GrabMinSize = 30.0f * touchScale;
             style.WindowTitleAlign = ImVec2(0.5f, 0.5f);
-            style.MouseCursorScale = 1.0f * touchScale;
-            
-            // Rounded corners for modern Android look
-            float rounding = 6.0f * std::min(touchScale, 1.2f);
+            style.MouseCursorScale = 1.2f * touchScale;
+
+            float rounding = 7.5f * std::min(touchScale, 1.3f);
             style.WindowRounding = rounding;
             style.ChildRounding = rounding;
             style.FrameRounding = rounding;
@@ -111,12 +110,12 @@ namespace UI {
             
             // Adjust spacing for wide screens
             if (aspectRatio > 1.8f) {  // More aggressive for ultra-wide
-                style.ItemSpacing.x *= 1.2f;
-                style.WindowPadding.x *= 1.2f;
+                style.ItemSpacing.x *= 1.15f;
+                style.WindowPadding.x *= 1.15f;
             }
             
             // Ensure minimum touch target size
-            style.FramePadding.y = std::max(buttonHeight * 0.15f, 8.0f);
+            style.FramePadding.y = std::max(buttonHeight * 0.1f, 0.85f);
         }
     };
 }

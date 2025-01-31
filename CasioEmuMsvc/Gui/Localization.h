@@ -10,6 +10,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+#include "../locales/lang.h"
 
 class LocalizationException : public std::runtime_error {
     using std::runtime_error::runtime_error;
@@ -33,10 +34,31 @@ public:
             m_translations.clear();
             m_pluralRules.clear();
             m_currentLocale = localeName;
+            std::filesystem::path filePath = 
+                std::filesystem::path(m_basePath) / (localeName + ".lc");
 
-            LoadTranslations(localeName);
+            if (std::filesystem::exists(filePath)) {
+                LoadTranslationsFromFile(filePath);
+            }
+            else {
+                if (!std::filesystem::exists(m_basePath)) {
+                    std::filesystem::create_directory(m_basePath);
+                }
+
+                auto it = DefaultLocales::defaultLocales.find(localeName);
+                if (it != DefaultLocales::defaultLocales.end()) {
+                    LoadTranslationsFromString(it->second);
+                    std::ofstream outFile(filePath);
+                    outFile << it->second;
+                }
+                else {
+                    LoadTranslationsFromString(DefaultLocales::en_US);
+                    m_currentLocale = "en_US";
+                }
+            }
+
             std::fstream fs("locale.txt", std::ios::out);
-            fs << localeName;
+            fs << m_currentLocale;
             return true;
         }
         catch (const std::exception& e) {
@@ -119,15 +141,12 @@ private:
     static auto ToString(const T& value) -> decltype(value) {
         return value;
     }
-    
+
     static const char* ToString(const std::string& str) {
         return str.c_str();
     }
 
-    void LoadTranslations(const std::string& localeName) {
-        std::filesystem::path filePath = 
-            std::filesystem::path(m_basePath) / (localeName + ".lc");
-
+    void LoadTranslationsFromFile(const std::filesystem::path& filePath) {
         std::ifstream file(filePath);
         if (!file.is_open()) {
             char buffer[512];
@@ -139,6 +158,27 @@ private:
         std::string line;
         int lineNumber = 0;
         while (std::getline(file, line)) {
+            lineNumber++;
+            if (line.empty() || line[0] == '#')
+                continue;
+
+            try {
+                ProcessLine(line);
+            }
+            catch (const std::exception& e) {
+                char buffer[512];
+                snprintf(buffer, sizeof(buffer), "Error at line %d: %s", 
+                        lineNumber, e.what());
+                throw LocalizationException(buffer);
+            }
+        }
+    }
+
+    void LoadTranslationsFromString(const std::string& content) {
+        std::istringstream stream(content);
+        std::string line;
+        int lineNumber = 0;
+        while (std::getline(stream, line)) {
             lineNumber++;
             if (line.empty() || line[0] == '#')
                 continue;

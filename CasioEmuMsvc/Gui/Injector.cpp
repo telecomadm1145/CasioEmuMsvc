@@ -16,16 +16,49 @@
 #include <Gui.h>
 #include <algorithm>
 #include <sstream>
+#include <regex>
+#include <future>
+#include <thread>
+#include <chrono>
 
-void Injector::TrimString(std::string& str) {
-    str.erase(0, str.find_first_not_of(" \t\n\r"));
-    if (!str.empty()) {
-        str.erase(str.find_last_not_of(" \t\n\r") + 1);
+Injector::Injector() : UIWindow("Rop"), needsReload(false), isReloading(false) {
+    injectors.push_back(InjectorData());
+    InitCustomInjectionsFile();
+    AsyncLoadCustomInjections();
+}
+
+Injector::~Injector() {
+}
+
+std::string Injector::GetFileModifiedTime(const std::string& filepath) {
+    try {
+        auto ftime = std::filesystem::last_write_time(filepath);
+        auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
+        return std::to_string(std::chrono::system_clock::to_time_t(sctp));
+    } catch (...) {
+        return "";
     }
 }
 
+void Injector::AsyncLoadCustomInjections() {
+    std::thread([this]() {
+        BackgroundReload();
+    }).detach();
+}
+
+void Injector::TrimString(std::string& str) {
+    str.erase(0, str.find_first_not_of(" \t\n\r"));
+    str.erase(str.find_last_not_of(" \t\n\r") + 1);
+}
+
 bool Injector::IsHexString(const std::string& str) {
-    return str.find_first_not_of("0123456789abcdefABCDEFxX") == std::string::npos;
+    if (str.empty()) return false;
+    std::string processed = str;
+    if (processed.substr(0, 2) == "0x" || processed.substr(0, 2) == "0X") {
+        processed = processed.substr(2);
+    }
+    return !processed.empty() && 
+           processed.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos;
 }
 
 void Injector::InitCustomInjectionsFile() {
@@ -48,134 +81,177 @@ void Injector::InitCustomInjectionsFile() {
             throw std::runtime_error("Failed to create injection template file");
         }
         file << template_content;
-        if (!file) {
-            throw std::runtime_error("Failed to write injection template content");
-        }
         file.close();
     } catch (const std::exception& e) {
-        // TODO: Add proper logging
+        // Handle error
+    }
+}
+
+void Injector::BackgroundReload() {
+    if (isReloading.exchange(true)) {
+        return; // If already reloading, return
+    }
+
+    const std::string filepath = "./hc-inj.txt";
+    std::string currentModTime = GetFileModifiedTime(filepath);
+    
+    if (currentModTime == lastModifiedTime && !needsReload) {
+        isReloading.store(false);
+        return;
+    }
+    
+    std::ifstream file(filepath);
+    if (!file.is_open()) {
+        isReloading.store(false);
+        return;
+    }
+    
+    // Read file content efficiently
+    std::string content;
+    file.seekg(0, std::ios::end);
+    content.reserve(file.tellg());
+    file.seekg(0, std::ios::beg);
+    content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    file.close();
+    
+    std::lock_guard<std::mutex> lock(injectionMutex);
+    if (ParseCustomInjections(content)) {
+        lastModifiedTime = currentModTime;
+        needsReload = false;
+    }
+    
+    isReloading.store(false);
+}
+
+void Injector::PrecomputeInjectionValues(InjectionPair& pair) {
+    std::string addr = pair.address;
+    if (addr.substr(0, 2) == "0x") {
+        addr = addr.substr(2);
+    }
+    pair.addr_value = std::stoul(addr, nullptr, 16);
+    
+    const std::string& data = pair.data;
+    pair.data_bytes.reserve(data.length() / 2);
+    
+    for (size_t i = 0; i < data.length(); i += 2) {
+        std::string byte_str = data.substr(i, 2);
+        pair.data_bytes.push_back(HexToByte(byte_str));
     }
 }
 
 bool Injector::ParseCustomInjections(const std::string& content) {
-    customInjections.clear();
-
-    if (content.empty()) {
-        return true;
-    }
-    
+    std::vector<CustomInjection> newInjections;
     std::istringstream stream(content);
     std::string line;
     CustomInjection currentInj;
     bool inInjection = false;
     
+    static const std::regex name_pattern(R"((\w+)\s*=\s*\{)", std::regex::optimize);
+    static const std::regex pair_pattern(R"(^\s*(0x[0-9a-fA-F]+|[0-9a-fA-F]+)\s*=\s*\"([0-9a-fA-F]+)\")", std::regex::optimize);
+    
     while (std::getline(stream, line)) {
-        TrimString(line);
+        if (line.empty() || line[0] == '#') continue;
         
-        if (line.empty() || line[0] == '#') {
-            continue;
-        }
-        
-        if (line.find('=') != std::string::npos && line.find('{') != std::string::npos) {
-            if (inInjection) continue;
-            
-            inInjection = true;
+        std::smatch matches;
+        if (std::regex_search(line, matches, name_pattern)) {
+            if (inInjection && !currentInj.pairs.empty()) {
+                newInjections.push_back(std::move(currentInj));
+            }
             currentInj = CustomInjection();
-            currentInj.name = line.substr(0, line.find('='));
-            TrimString(currentInj.name);
+            currentInj.name = matches[1].str();
+            inInjection = true;
             continue;
         }
         
-        if (line.find('}') != std::string::npos) {
-            if (inInjection) {
-                inInjection = false;
-                if (!currentInj.pairs.empty()) {
-                    customInjections.push_back(currentInj);
-                }
+        if (line == "}") {
+            if (inInjection && !currentInj.pairs.empty()) {
+                newInjections.push_back(std::move(currentInj));
             }
+            inInjection = false;
             continue;
         }
         
-        if (inInjection && line.find('=') != std::string::npos) {
-            size_t equalPos = line.find('=');
-            std::string addr = line.substr(0, equalPos);
-            std::string data = line.substr(equalPos + 1);
+        if (inInjection && std::regex_search(line, matches, pair_pattern)) {
+            InjectionPair pair;
+            pair.address = matches[1].str();
+            pair.data = matches[2].str();
             
-            TrimString(addr);
-            TrimString(data);
-            
-            // Remove quotes and comma
-            data.erase(std::remove(data.begin(), data.end(), '"'), data.end());
-            data.erase(std::remove(data.begin(), data.end(), ','), data.end());
-            TrimString(data);
-            
-            if (IsHexString(addr) && !data.empty()) {
-                InjectionPair pair;
-                pair.address = addr;
-                pair.data = data;
-                currentInj.pairs.push_back(pair);
+            if (IsHexString(pair.address) && IsHexString(pair.data)) {
+                PrecomputeInjectionValues(pair);
+                currentInj.pairs.push_back(std::move(pair));
             }
         }
-    }    
+    }
+    
+    if (inInjection && !currentInj.pairs.empty()) {
+        newInjections.push_back(std::move(currentInj));
+    }
+    
+    customInjections = std::move(newInjections);
     return true;
 }
 
-void Injector::LoadCustomInjections() {
-    std::ifstream file("./hc-inj.txt");
-    if (file.is_open()) {
-        std::string content((std::istreambuf_iterator<char>(file)),
-                          std::istreambuf_iterator<char>());
-        file.close();
-        ParseCustomInjections(content);
-    }
+bool Injector::ValidateHexPair(const std::string& hex) {
+    if (hex.length() % 2 != 0) return false;
+    return IsHexString(hex);
 }
 
-void Injector::ApplyInjection(const CustomInjection& inj, bool& show_info, std::string& info_msg) {
-    bool success = true;
-    
-    for (const auto& pair : inj.pairs) {
-        try {
-            auto plc = strtol(pair.address.c_str(), nullptr, 16);
-            const auto& data = pair.data;
-            
-            for (size_t i = 0; i < data.length(); i += 2) {
-                if (i + 1 >= data.length()) break;
-                
-                char hex[3] = {data[i], data[i + 1], '\0'};
-                uint8_t byte = strtoul(hex, nullptr, 16);
-                me_mmu->WriteData(plc + (i/2), byte);
+uint8_t Injector::HexToByte(const std::string& hex) {
+    return static_cast<uint8_t>(std::stoul(hex, nullptr, 16));
+}
+
+bool Injector::ApplyInjection(const CustomInjection& inj, bool& show_info, std::string& info_msg) {
+    try {
+        for (const auto& pair : inj.pairs) {
+            for (size_t i = 0; i < pair.data_bytes.size(); ++i) {
+                me_mmu->WriteData(pair.addr_value + i, pair.data_bytes[i]);
             }
-        } catch (...) {
-            success = false;
-            break;
         }
-    }
-    
-    char buf[256];
-    if (success) {
+        
+        char buf[256];
         snprintf(buf, sizeof(buf), "Rop.CustomInjectApplied"_lc, inj.name.c_str());
-    } else {
+        info_msg = buf;
+        show_info = true;
+        return true;
+    } catch (const std::exception& e) {
+        char buf[256];
         snprintf(buf, sizeof(buf), "Rop.CustomInjectError"_lc, inj.name.c_str());
+        info_msg = buf;
+        show_info = true;
+        return false;
     }
-    info_msg = buf;
-    show_info = true;
 }
 
 void Injector::RenderCustomInjectTab(bool& show_info, std::string& info_msg) {
     if (ImGui::Button("Rop.ReloadCustomInjects"_lc)) {
-        LoadCustomInjections();
-        info_msg = "Rop.CustomInjectReloaded"_l;
-        show_info = true;
+        if (!isReloading.load()) {
+            needsReload = true;
+            std::thread([this]() {
+                BackgroundReload();
+            }).detach();
+            info_msg = "Rop.CustomInjectReloading"_l;
+            show_info = true;
+        }
+    }
+    
+    if (isReloading.load()) {
+        ImGui::SameLine();
+        ImGui::TextUnformatted("Rop.Loading"_lc);
     }
     
     ImGui::Separator();
     
     for (const auto& inj : customInjections) {
         if (ImGui::CollapsingHeader(inj.name.c_str())) {
+            ImGui::Text("%s:", "Rop.Address"_lc);
             for (const auto& pair : inj.pairs) {
-                ImGui::Text("%s: %s", "Rop.Address"_lc, pair.address.c_str());
-                ImGui::SameLine();
-                ImGui::Text("%s: %s", "Rop.Data"_lc, pair.data.c_str());
+                std::string displayAddr = pair.address;
+                if (displayAddr.substr(0, 2) == "0x" || displayAddr.substr(0, 2) == "0X") {
+                    displayAddr = "0x" + displayAddr.substr(2);
+                } else {
+                    displayAddr = "0x" + displayAddr;
+                }
+                ImGui::BulletText("%s", displayAddr.c_str());
             }
             
             if (ImGui::Button((inj.name + "##inject").c_str())) {
@@ -189,9 +265,9 @@ void Injector::RenderCustomInjectTab(bool& show_info, std::string& info_msg) {
 
 void Injector::RenderInjectorTab(InjectorData& inj, int index, bool& show_info, std::string& info_msg) {
     auto valid_hex = [](char c) {
-        if (c >= '0' && c <= '9') return true;
-        if ((c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) return true;
-        return false;
+        return (c >= '0' && c <= '9') || 
+               (c >= 'a' && c <= 'f') || 
+               (c >= 'A' && c <= 'F');
     };
 
     ImGui::TextUnformatted("Rop.InjectAddr"_lc);
