@@ -261,8 +261,8 @@ namespace casioemu {
 		SetupOpcodeDispatch();
 		SetupRegisterProxies();
 
-		impl_csr_mask = emulator.modeldef.csr_mask;
-		real_hardware = emulator.modeldef.real_hardware;
+		impl_csr_mask = emulator.ModelDefinition.csr_mask;
+		real_hardware = emulator.ModelDefinition.real_hardware;
 
 		// Only tested on fx-991cnx
 		dsr_mask = emulator.hardware_id == HW_CLASSWIZ ? 0x1F : 0xFF;

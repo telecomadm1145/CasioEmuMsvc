@@ -42,7 +42,7 @@ namespace casioemu
 		SDL_Texture *interface_texture;
 		unsigned int cycles_per_second;
 		unsigned int timer_interval;
-		bool running, paused;
+		bool running, Paused;
 		unsigned int last_frame_tick_count;
 		std::string model_path;
 		bool pause_on_mem_error;
@@ -65,9 +65,9 @@ namespace casioemu
 		void RunStartupScript();
 
 	public:
-		ModelInfo modeldef{};
+		ModelInfo ModelDefinition{};
 		SDL_Window *window;
-		Emulator(std::map<std::string, std::string> &argv_map, bool paused = false);
+		Emulator(std::map<std::string, std::string> &argv_map, bool Paused = false);
 		~Emulator();
 
 		FairRecursiveMutex access_mx;

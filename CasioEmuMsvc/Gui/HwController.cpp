@@ -48,7 +48,7 @@ void HwController::RenderCore() {
 		m_emu->cycles.Setup((Uint64)1 << cps, m_emu->cycles.timer_interval);
 	}
 	ImGui::Text("%.6f MHz", (double)m_emu->cycles.cycles_per_second / 1024 / 1024);
-	static int pd = m_emu->modeldef.pd_value;
+	static int pd = m_emu->ModelDefinition.pd_value;
 	static bool pdx[8];
 
 	// 初始化 pdx 数组，基于 pd 的初始值
@@ -78,7 +78,7 @@ void HwController::RenderCore() {
 				pd |= (1 << i);
 			}
 		}
-		m_emu->modeldef.pd_value = pd;
+		m_emu->ModelDefinition.pd_value = pd;
 	}
 
 	static int irq = 0;

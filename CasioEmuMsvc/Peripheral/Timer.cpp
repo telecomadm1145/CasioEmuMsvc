@@ -40,7 +40,7 @@ namespace casioemu {
 		cycles_per_second = emulator.GetCyclesPerSecond();
 
 		TimerFreqDiv = 1;
-		if (emulator.modeldef.real_hardware) {
+		if (emulator.ModelDefinition.real_hardware) {
 			clock_type = CLOCK_LSCLK;
 		}
 		else {
@@ -75,7 +75,7 @@ namespace casioemu {
 				Timer* timer = (Timer*)region->userdata;
 				timer->data_F024 = data & 0x0F;
 				timer->TimerFreqDiv = std::pow(2, data & 0x07);
-				if (timer->emulator.modeldef.real_hardware) {
+				if (timer->emulator.ModelDefinition.real_hardware) {
 					if (data & 0x08)
 						timer->clock_type = CLOCK_HSCLK;
 					else

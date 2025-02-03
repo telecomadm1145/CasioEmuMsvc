@@ -64,7 +64,7 @@ namespace casioemu {
 																															  : segments_classwiz_ii)
 			mmu.GenerateSegmentDispatch(segment_index);
 
-		real_hardware = emulator.modeldef.real_hardware;
+		real_hardware = emulator.ModelDefinition.real_hardware;
 
 		ConstructPeripherals();
 	}
@@ -507,13 +507,13 @@ namespace casioemu {
 	}
 
 	void Chipset::SetupInternals() {
-		std::ifstream rom_handle(emulator.GetModelFilePath(emulator.modeldef.rom_path), std::ifstream::binary);
+		std::ifstream rom_handle(emulator.GetModelFilePath(emulator.ModelDefinition.rom_path), std::ifstream::binary);
 		if (rom_handle.fail())
 			PANIC("std::ifstream failed: %s\n", std::strerror(errno));
 		rom_data = std::vector<unsigned char>((std::istreambuf_iterator<char>(rom_handle)), std::istreambuf_iterator<char>());
 
 		if (emulator.hardware_id == HW_FX_5800P) {
-			std::ifstream flash_handle(emulator.GetModelFilePath(emulator.modeldef.flash_path), std::ifstream::binary);
+			std::ifstream flash_handle(emulator.GetModelFilePath(emulator.ModelDefinition.flash_path), std::ifstream::binary);
 			if (flash_handle.fail())
 				PANIC("std::ifstream failed: %s\n", std::strerror(errno));
 			flash_data = std::vector<unsigned char>((std::istreambuf_iterator<char>(flash_handle)), std::istreambuf_iterator<char>());
@@ -661,8 +661,8 @@ namespace casioemu {
 	}
 
 	void Chipset::RaiseSoftware(size_t index) {
-		if (emulator.modeldef.hardware_id == HW_TI) {
-			if ((tiDiagMode || !emulator.modeldef.real_hardware) && index == 0x02) {
+		if (emulator.ModelDefinition.hardware_id == HW_TI) {
+			if ((tiDiagMode || !emulator.ModelDefinition.real_hardware) && index == 0x02) {
 				int dl = 500;
 				while (dl > 0 && tiKey == 0) {
 					SDL_Delay(24);
@@ -673,7 +673,7 @@ namespace casioemu {
 				tiKey = 0;
 				return;
 			}
-			if (!emulator.modeldef.real_hardware) {
+			if (!emulator.ModelDefinition.real_hardware) {
 				emulator.chipset.cpu.reg_r[1] = 0;
 				emulator.chipset.cpu.reg_r[0] = 0;
 				return;

@@ -420,6 +420,7 @@
     <ClInclude Include="Ext\Memory.h" />
     <ClInclude Include="Peripheral\ML620Ports.h" />
     <ClInclude Include="Peripheral\Uart.h" />
+    <ClInclude Include="Plugin\PluginApi.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Peripheral\Spi.h" />
     <ClInclude Include="stringhelper.h" />
@@ -465,9 +466,9 @@
     <None Include="locales\vn.lc">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-	  <None Include="roms.db">
-		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-	  </None>
+    <None Include="roms.db">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="packages.config" />
     <None Include="Peripheral\SD\HowToCreateASDCard.md" />
   </ItemGroup>

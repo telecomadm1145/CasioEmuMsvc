@@ -48,7 +48,7 @@ namespace casioemu {
 	};
 
 	void BatteryBackedRAM::Initialise() {
-		bool real_hardware = emulator.modeldef.real_hardware;
+		bool real_hardware = emulator.ModelDefinition.real_hardware;
 		ram_size = GetRamSize(emulator.hardware_id) + (real_hardware ? 0 : 0x100);
 
 		ram_buffer = new uint8_t[ram_size];

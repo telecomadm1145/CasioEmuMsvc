@@ -32,7 +32,7 @@ namespace casioemu {
 
 	void MMU::SetupInternals() {
 		me_mmu = this;
-		real_hardware = emulator.modeldef.real_hardware;
+		real_hardware = emulator.ModelDefinition.real_hardware;
 	}
 
 	inline uint16_t le_read(uint8_t& a) {

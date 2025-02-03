@@ -183,7 +183,7 @@ namespace casioemu {
 				float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);
 				ink_alpha_on = std::clamp(ink_alpha_on, 0.0f, 255.0f);
 				uint8_t* screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xE708;
-				if (emulator.modeldef.real_hardware) {
+				if (emulator.ModelDefinition.real_hardware) {
 					screen_buffer = this->screen_buffer;
 				}
 				for (int ix = 0; ix < 192; ++ix) {
@@ -198,7 +198,7 @@ namespace casioemu {
 					}
 				}
 				screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xe5d4;
-				if (emulator.modeldef.real_hardware) {
+				if (emulator.ModelDefinition.real_hardware) {
 					screen_buffer = this->screen_buffer + 8 * 192;
 				}
 				int x = 0;
@@ -596,9 +596,9 @@ namespace casioemu {
 			interface_texture = emulator.GetInterfaceTexture();
 			sprite_info.resize(SPR_MAX);
 			for (int ix = 0; ix != SPR_MAX; ++ix)
-				sprite_info[ix] = emulator.modeldef.sprites[sprite_bitmap[ix].name];
+				sprite_info[ix] = emulator.ModelDefinition.sprites[sprite_bitmap[ix].name];
 
-			ink_colour = emulator.modeldef.ink_color;
+			ink_colour = emulator.ModelDefinition.ink_color;
 			if constexpr (hardware_id == HW_TI) {
 				screen_buffer = new uint8_t[192 * 9];
 				// TODO: remove this
@@ -775,7 +775,7 @@ namespace casioemu {
 						}
 					},
 					emulator);
-				if (!emulator.modeldef.real_hardware) {
+				if (!emulator.ModelDefinition.real_hardware) {
 					// region_buffer.Setup(
 					//	0xF800, (N_ROW + 1) * ROW_SIZE, "Screen/Buffer", this,
 					//	[](MMURegion* region, size_t offset) {
@@ -953,7 +953,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			region_buffer.Kill();
 		}
 		else {
-			if (!emulator.modeldef.real_hardware) {
+			if (!emulator.ModelDefinition.real_hardware) {
 				region_buffer.Kill();
 				region_buffer1.Kill();
 			}
@@ -1130,7 +1130,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		// Get the renderer output size if not already available
 		SDL_GetRendererOutputSize(renderer, &screenWidth, &screenHeight);
 
-		if (!emulator.modeldef.enable_new_screen) {
+		if (!emulator.ModelDefinition.enable_new_screen) {
 			SDL_SetTextureColorMod(interface_texture, ink_colour.r, ink_colour.g, ink_colour.b);
 		}
 

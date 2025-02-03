@@ -77,7 +77,9 @@ namespace casioemu {
 		 * calculator emulator provided by Casio, which has different keyboard input
 		 * interface.
 		 */
-		real_hardware = emulator.modeldef.real_hardware;
+		real_hardware = emulator.ModelDefinition.real_hardware;
+
+		real_hardware = false;
 
 		clock_type = CLOCK_UNDEFINED;
 		if (emulator.hardware_id == HW_TI) {
@@ -104,7 +106,7 @@ namespace casioemu {
 			keyboard->RecalculateKI(); }, emulator);
 
 		region_input_filter.Setup(0xF042, 1, "Keyboard/InputFilter", &input_filter, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
-		if (emulator.hardware_id == HW_FX_5800P || emulator.modeldef.legacy_ko) {
+		if (emulator.hardware_id == HW_FX_5800P || emulator.ModelDefinition.legacy_ko) {
 			region_ko.Setup(
 				0xF044, 1, "Keyboard/KO", this,
 				[](MMURegion* region, size_t offset) {
@@ -157,7 +159,7 @@ namespace casioemu {
 				emulator);
 		}
 		if (!real_hardware) {
-			keyboard_pd_emu = emulator.modeldef.pd_value;
+			keyboard_pd_emu = emulator.ModelDefinition.pd_value;
 			keyboard_ready_emu = 1;
 			emu_ki_readcount = 0;
 			emu_ko_readcount = 0;
@@ -166,7 +168,7 @@ namespace casioemu {
 			size_t rse = 0x8E00;
 			size_t ki = 0x8E01;
 			size_t ko = 0x8E02;
-			if (emulator.modeldef.is_sample_rom) {
+			if (emulator.ModelDefinition.is_sample_rom) {
 				rse += 7;
 				ki += 4;
 				ko += 6;
@@ -217,17 +219,17 @@ namespace casioemu {
 				MMURegion::IgnoreWrite, emulator);
 		}
 		if (emulator.hardware_id == HW_CLASSWIZ_II) {
-			region_pd_emu.Setup(0xF058, 1, "Keyboard/PdValue", &emulator.modeldef.pd_value, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
+			region_pd_emu.Setup(0xF058, 1, "Keyboard/PdValue", &emulator.ModelDefinition.pd_value, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
 		}
 		else if (emulator.hardware_id == HW_ES_PLUS || emulator.hardware_id == HW_CLASSWIZ) {
-			region_pd_emu.Setup(0xF050, 1, "Keyboard/PdValue", &emulator.modeldef.pd_value, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
+			region_pd_emu.Setup(0xF050, 1, "Keyboard/PdValue", &emulator.ModelDefinition.pd_value, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
 		}
 
 	init_kbd: {
 		for (auto& button : buttons)
 			button = {};
 
-		for (auto& btn : emulator.modeldef.buttons) {
+		for (auto& btn : emulator.ModelDefinition.buttons) {
 			auto button_name = btn.keyname.c_str();
 
 			SDL_Keycode button_key;
@@ -335,7 +337,7 @@ namespace casioemu {
 	}
 
 	void Keyboard::Tick() {
-		if (emulator.modeldef.hardware_id == HW_TI) {
+		if (emulator.ModelDefinition.hardware_id == HW_TI) {
 			return;
 		}
 		if (factory_test) {
@@ -622,7 +624,7 @@ namespace casioemu {
 			pp->SetPortInput(4, keyboard_in, 0xff);
 			return;
 		}
-		if (emulator.hardware_id == HW_FX_5800P || emulator.modeldef.legacy_ko) { // TODO: label this as legacy ko?
+		if (emulator.hardware_id == HW_FX_5800P || emulator.ModelDefinition.legacy_ko) { // TODO: label this as legacy ko?
 			keyboard_in = 0xFF;
 			for (auto& button : buttons)
 				if (button.type == Button::BT_BUTTON && button.pressed && button.ko_bit & keyboard_out)

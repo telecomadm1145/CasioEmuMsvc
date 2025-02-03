@@ -13,7 +13,7 @@
 #include <string>
 
 namespace casioemu {
-	Emulator::Emulator(std::map<std::string, std::string>& _argv_map, bool _paused) : paused(_paused), argv_map(_argv_map), chipset(*new Chipset(*this)) {
+	Emulator::Emulator(std::map<std::string, std::string>& _argv_map, bool _paused) : Paused(_paused), argv_map(_argv_map), chipset(*new Chipset(*this)) {
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
 		running = true;
@@ -21,12 +21,12 @@ namespace casioemu {
 
 		LoadModelDefition();
 
-		int hardware_id = modeldef.hardware_id;
+		int hardware_id = ModelDefinition.hardware_id;
 		if (hardware_id < HW_MIN || hardware_id > HW_MAX)
 			PANIC("Unknown hardware id %d\n", hardware_id);
 		this->hardware_id = (HardwareId)hardware_id;
 
-		if (modeldef.real_hardware) {
+		if (ModelDefinition.real_hardware) {
 			cycles_per_second = hardware_id == HW_ES_PLUS ? 128 * 1024 * 2 : hardware_id == HW_CLASSWIZ ? 1024 * 1024 * 2
 																										: 2048 * 1024 * 2;
 		}
@@ -41,7 +41,7 @@ namespace casioemu {
 		BatteryVoltage = 1.5;
 		SolarPanelVoltage = 1.5;
 
-		interface_background = modeldef.sprites["rsd_interface"];
+		interface_background = ModelDefinition.sprites["rsd_interface"];
 		if (interface_background.dest.x != 0 || interface_background.dest.y != 0)
 			PANIC("rsd_interface must have dest x and y coordinate zero\n");
 
@@ -72,7 +72,7 @@ namespace casioemu {
 		}
 		SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
 		window = SDL_CreateWindow(
-			std::string(modeldef.model_name).c_str(),
+			std::string(ModelDefinition.model_name).c_str(),
 			SDL_WINDOWPOS_UNDEFINED,
 			SDL_WINDOWPOS_UNDEFINED,
 			width, height,
@@ -83,14 +83,14 @@ namespace casioemu {
 		if (!renderer)
 			PANIC("SDL_CreateRenderer failed: %s\n", SDL_GetError());
 
-		interface_surface = IMG_Load(GetModelFilePath(modeldef.interface_path).c_str());
+		interface_surface = IMG_Load(GetModelFilePath(ModelDefinition.interface_path).c_str());
 		if (!interface_surface)
 			PANIC("IMG_Load failed: %s\n", IMG_GetError());
 		interface_texture = SDL_CreateTextureFromSurface(renderer, interface_surface);
 
 		SetupInternals();
 		cycles.Reset();
-		if (modeldef.real_hardware) {
+		if (ModelDefinition.real_hardware) {
 			tick_thread = new std::thread([this] {
 				auto iteration_end = std::chrono::steady_clock::now();
 				while (1) {
@@ -105,7 +105,7 @@ namespace casioemu {
 					auto now = std::chrono::steady_clock::now();
 					if (iteration_end > now)
 						std::this_thread::sleep_until(iteration_end);
-					else // in case the computer is not fast enough or paused
+					else // in case the computer is not fast enough or Paused
 						iteration_end = now;
 				}
 			});
@@ -116,7 +116,7 @@ namespace casioemu {
 					{
 						if (!Running())
 							break;
-						if (!paused)
+						if (!Paused)
 							Tick();
 					}
 				}
@@ -135,7 +135,7 @@ namespace casioemu {
 
 		chipset.Reset();
 
-		if (argv_map.find("paused") != argv_map.end())
+		if (argv_map.find("Paused") != argv_map.end())
 			SetPaused(true);
 
 		pause_on_mem_error = argv_map.find("pause_on_mem_error") != argv_map.end();
@@ -157,7 +157,7 @@ namespace casioemu {
 
 	void Emulator::HandleMemoryError() {
 		if (pause_on_mem_error) {
-			logger::Info("execution paused due to memory error\n");
+			logger::Info("execution Paused due to memory error\n");
 			SetPaused(true);
 		}
 	}
@@ -211,7 +211,7 @@ namespace casioemu {
 		std::ifstream ifs(GetModelFilePath("config.bin"), std::ios::in | std::ios::binary);
 		if (!ifs.good())
 			PANIC("Failed to open config.bin");
-		modeldef.Read(ifs);
+		ModelDefinition.Read(ifs);
 	}
 
 	std::string Emulator::GetModelFilePath(std::string relative_path) {
@@ -228,7 +228,7 @@ namespace casioemu {
 
 		Uint64 cycles_to_emulate = cycles.GetDelta();
 		for (Uint64 ix = 0; ix != cycles_to_emulate; ++ix)
-			if (!paused)
+			if (!Paused)
 				Tick();
 	}
 
@@ -283,7 +283,7 @@ namespace casioemu {
 	}
 
 	bool Emulator::GetPaused() {
-		return paused;
+		return Paused;
 	}
 
 	void Emulator::Shutdown() {
@@ -296,7 +296,7 @@ namespace casioemu {
 	}
 
 	void Emulator::SetPaused(bool _paused) {
-		paused = _paused;
+		Paused = _paused;
 	}
 
 	void Emulator::Cycles::Setup(Uint64 _cycles_per_second, unsigned int _timer_interval) {

@@ -458,6 +458,9 @@
     <ClInclude Include="Gui\PopUpDisplay.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Plugin\PluginApi.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -466,6 +469,7 @@
     <None Include="locales\en_US.lc" />
     <None Include="locales\zh_CN.lc" />
     <None Include="locales\vn.lc" />
+    <None Include="roms.db" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="icon.ico">

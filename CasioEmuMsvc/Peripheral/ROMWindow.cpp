@@ -77,7 +77,7 @@ namespace casioemu {
 			SetupROMRegion(regions[3], 0x30000, 0x10000, 0x30000, strict_memory, emulator);
 			SetupROMRegion(regions[4], 0x40000, 0x10000, 0x40000, strict_memory, emulator);
 			SetupROMRegion(regions[5], 0x50000, 0x10000, 0x50000, strict_memory, emulator);
-			if (emulator.modeldef.real_hardware) {
+			if (emulator.ModelDefinition.real_hardware) {
 				SetupROMRegion(regions[7], 0x70000, 0x2000, 0x5E000, strict_memory, emulator);
 				SetupROMRegion(regions[8], 0x80000, 0x10000, 0x00000, strict_memory, emulator);
 				SetupROMRegion(regions[9], 0x90000, 0x10000, 0x10000, strict_memory, emulator);

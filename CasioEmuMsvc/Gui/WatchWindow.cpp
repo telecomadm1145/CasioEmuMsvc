@@ -170,7 +170,7 @@ void WatchWindow::RenderCore() {
 	//			pd |= (1 << i);
 	//		}
 	//	}
-	//	m_emu->modeldef.pd_value = pd;
+	//	m_emu->ModelDefinition.pd_value = pd;
 	// }
 	PrepareRX();
 	if (!m_emu->GetPaused()) {
