@@ -998,7 +998,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
                         region_buffer.Kill();
                 }
                 else {
-                        if (!emulator.modeldef.real_hardware) {
+                        if (!emulator.ModelDefinition.real_hardware) {
                                 region_buffer.Kill();
                                 region_buffer1.Kill();
                         }
