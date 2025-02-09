@@ -1,6 +1,7 @@
 ﻿#include "Ui.hpp"
 #include "5800FileSystem.h"
 #include "AddressWindow.h"
+#include "BitmapViewer.h"
 #include "CallAnalysis.h"
 #include "CasioData.h"
 #include "Chipset/Chipset.hpp"
@@ -145,7 +146,8 @@ int test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 			 membp = new MemBreakPoint(),
 			 CreateAddressWindow(),
 			 MakeAssemblerUI(),
-			 MakeThemeWindow()})
+			 MakeThemeWindow(),
+			 CreateBitmapViewer()})
 		windows.push_back(item);
 	for (auto item : GetEditors())
 		windows.push_back(item);

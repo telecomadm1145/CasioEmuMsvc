@@ -144,3 +144,8 @@ Rop.InjectHex=注入十六进制
 
 HexEditor.Options=选项
 HexEditor.Range=范围
+
+BitmapViewer.Address=地址
+BitmapViewer.Width=宽度
+BitmapViewer.PixelSize=像素大小
+BitmapViewer.BitOffset=位偏移

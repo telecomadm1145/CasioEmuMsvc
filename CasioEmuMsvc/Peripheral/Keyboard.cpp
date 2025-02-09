@@ -79,8 +79,6 @@ namespace casioemu {
 		 */
 		real_hardware = emulator.ModelDefinition.real_hardware;
 
-		real_hardware = false;
-
 		clock_type = CLOCK_UNDEFINED;
 		if (emulator.hardware_id == HW_TI) {
 			auto pp = emulator.chipset.QueryInterface<IPortProvider>();
