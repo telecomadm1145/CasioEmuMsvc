@@ -846,7 +846,8 @@ struct MemoryEditor {
 		ImU8* mem_data = (ImU8*)mem_data_void;
 		ImGuiStyle& style = ImGui::GetStyle();
 		ImGui::AlignTextToFramePadding();
-		ImGui::Text("HexEditor.PreviewAs"_lc);
+        ImGui::Text("%s", "HexEditor.PreviewAs"_lc);
+
 		ImGui::SameLine();
 		ImGui::SetNextItemWidth((s.GlyphWidth * 10.0f) + style.FramePadding.x * 2.0f + style.ItemInnerSpacing.x);
 		if (ImGui::BeginCombo("##combo_type", DataTypeGetDesc(PreviewDataType), ImGuiComboFlags_HeightLargest)) {

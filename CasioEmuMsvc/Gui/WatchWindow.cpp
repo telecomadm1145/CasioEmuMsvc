@@ -146,8 +146,8 @@ void WatchWindow::RenderCore() {
 	using casioemu::Chipset::RM_HALT;
 	using casioemu::Chipset::RM_RUN;
 	using casioemu::Chipset::RM_STOP;
-	ImGui::Text("WatchWindow.CoreStatus"_lc,
-		rm == RM_RUN ? "Run" : (rm == RM_STOP ? "Stop" : (rm == RM_HALT ? "Halt" : "?")));
+    ImGui::TextUnformatted(("WatchWindow.CoreStatus"_l + ": " + 
+        (rm == RM_RUN ? "Run" : (rm == RM_STOP ? "Stop" : (rm == RM_HALT ? "Halt" : "?")))).c_str());
 	// ImGui::Text("Psw");
 	// for (size_t i = 0; i < 8; i++) {
 	//	ImGui::SameLine(i * 25. + 50.);
@@ -238,7 +238,7 @@ void WatchWindow::RenderCore() {
 	}
 	ImGui::EndChild();
 	ImGui::BeginChild("##stack_view");
-	ImGui::Text("WatchWindow.StackMemViewRange"_lc);
+	ImGui::TextUnformatted("WatchWindow.StackMemViewRange"_lc);
 	ImGui::SameLine();
 	ImGui::SliderInt("##range", &range, 64, 2048);
 	uint16_t offset = chipset.cpu.reg_sp & 0xffff;
