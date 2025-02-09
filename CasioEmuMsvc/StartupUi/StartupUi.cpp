@@ -6,13 +6,13 @@
 #include "Gui/imgui/imgui_impl_sdl2.h"
 #include "Gui/imgui/imgui_impl_sdlrenderer2.h"
 #include "Localization.h"
+#include <SDL.h>
 #include "ModelInfo.h"
 #include "RomPackage.h"
 #include "Romu.h"
 #include "SysDialog.h"
 #include "Ui.hpp"
 #include <Gui.h>
-#include <SDL.h>
 #include <SDL_image.h>
 #include <array>
 #include <filesystem>

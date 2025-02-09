@@ -37,6 +37,7 @@
 
 #include "StartupUi/StartupUi.h"
 #include <Gui.h>
+#include <Plugin/PluginMan.h>
 
 using namespace casioemu;
 
@@ -124,6 +125,7 @@ int main(int argc, char* argv[]) {
 
 	SDL_ShowWindow(emulator.window);
 
+
 	struct TouchState {
 		bool touching = false;
 		float startX = 0.0f;
@@ -161,6 +163,8 @@ int main(int argc, char* argv[]) {
 	static Uint32 lastTapTime = 0;
 	static float lastTapX = 0;
 	static float lastTapY = 0;
+
+	LoadPlugins();
 
 	while (emulator.Running()) {
 		SDL_Event event{};

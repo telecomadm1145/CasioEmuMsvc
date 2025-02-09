@@ -22,14 +22,16 @@ public:
 		// —— 1. 上部控制区域：地址输入及各个滑块
 		auto startY = ImGui::GetCursorPosY();
 		ImGui::InputText("BitmapViewer.Address"_lc, bufaddr, sizeof(bufaddr));
+		// 从输入框获取起始地址（十六进制）
+		uint32_t addr = static_cast<uint32_t>(strtol(bufaddr, nullptr, 16));
+		addr = addr & 0xfffff;
+		if (ImGui::InputInt("BitmapViewer.Address_2"_lc, (int*)&addr)) {
+			sprintf(bufaddr, "%08X", addr);
+		}
 		ImGui::SliderInt("BitmapViewer.Width"_lc, &width, 1, 256);
 		ImGui::SliderInt("BitmapViewer.PixelSize"_lc, &size, 1, 256);
 		ImGui::SliderInt("BitmapViewer.BitOffset"_lc, &bitOffset, 0, 7);
 		ImGui::Dummy(ImVec2{0, 20});
-
-		// 从输入框获取起始地址（十六进制）
-		uint32_t addr = static_cast<uint32_t>(strtol(bufaddr, nullptr, 16));
-		addr = addr & 0xfffff;
 
 		// 可用区域高度决定显示多少行
 		float availHeight = ImGui::GetContentRegionAvail().y;
@@ -184,6 +186,41 @@ public:
 					newBitOffset %= 8;
 				}
 				// 如果 bitOffset 小于 0，则向高位借位
+				else if (newBitOffset < 0) {
+					int borrow = (-newBitOffset + 7) / 8;
+					newAddr = newAddr > borrow ? newAddr - borrow : 0;
+					newBitOffset += borrow * 8;
+				}
+				addr = newAddr;
+				bitOffset = newBitOffset;
+				sprintf(bufaddr, "%08X", addr);
+			}
+		}
+		// —— 4. 添加键盘滚动处理（上下箭头，PageUp，PageDown）
+		// 仅当窗口拥有焦点且未捕获文本输入时响应
+		if (ImGui::IsWindowFocused()) {
+			int rowDelta = 0;
+			if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))
+				rowDelta = -1;
+			else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow))
+				rowDelta = 1;
+			else if (ImGui::IsKeyPressed(ImGuiKey_PageUp))
+				rowDelta = -rows;
+			else if (ImGui::IsKeyPressed(ImGuiKey_PageDown))
+				rowDelta = rows;
+
+			if (rowDelta != 0) {
+				int bitDelta = width * rowDelta;
+				int byteDelta = bitDelta / 8;
+				int bitRemainder = bitDelta % 8;
+
+				int newAddr = addr + byteDelta;
+				int newBitOffset = bitOffset + bitRemainder;
+				if (newBitOffset > 7) {
+					int carry = newBitOffset / 8;
+					newAddr += carry;
+					newBitOffset %= 8;
+				}
 				else if (newBitOffset < 0) {
 					int borrow = (-newBitOffset + 7) / 8;
 					newAddr = newAddr > borrow ? newAddr - borrow : 0;

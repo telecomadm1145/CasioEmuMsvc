@@ -333,6 +333,8 @@
     <ClCompile Include="Peripheral\ROMWindow.cpp" />
     <ClCompile Include="Peripheral\Uart.cpp" />
     <ClCompile Include="Peripheral\Spi.cpp" />
+    <ClCompile Include="Plugin\PluginApi_Impl.cpp" />
+    <ClCompile Include="Plugin\PluginMan.cpp" />
     <ClCompile Include="StartupUi\StartupUi.cpp" />
     <ClCompile Include="Gui\CasioData.cpp" />
     <ClCompile Include="Gui\CodeViewer.cpp" />
@@ -423,6 +425,7 @@
     <ClInclude Include="Peripheral\ML620Ports.h" />
     <ClInclude Include="Peripheral\Uart.h" />
     <ClInclude Include="Plugin\PluginApi.h" />
+    <ClInclude Include="Plugin\PluginMan.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Peripheral\Spi.h" />
     <ClInclude Include="stringhelper.h" />

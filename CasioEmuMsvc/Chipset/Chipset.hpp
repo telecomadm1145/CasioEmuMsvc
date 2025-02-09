@@ -74,9 +74,8 @@ namespace casioemu {
 
 		bool real_hardware;
 
-		void* QueryInterface(const char* name);
-
 	public:
+		void* QueryInterface(const char* name);
 		Chipset(Emulator& emulator);
 		void Setup(); // must be called after emulator.hardware_id is initialized
 		~Chipset();

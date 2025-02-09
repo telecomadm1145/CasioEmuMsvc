@@ -2,6 +2,7 @@
 #include "ModelInfo.h"
 #include <cstdint>
 #include <functional>
+#include <thread>
 #include <imgui.h>
 #ifdef _NO_FUND_API
 #include "Hooks.h"
@@ -94,7 +95,7 @@ public:
 	UIWindow(const char* name) : name(name) {}
 	const char* name{};
 	bool open = true;
-	ImVec2 inital_size{800, 800};
+	ImVec2 inital_size{ 800, 800 };
 	ImGuiWindowFlags flags{};
 	virtual void Render() {
 		if (!open)
@@ -134,11 +135,7 @@ public:
 	/// <summary>
 	/// Check if the STL is the same.
 	/// </summary>
-	virtual void AssertFundamentalSTL(size_t a, size_t b, size_t c, size_t d) {
-		if (a != sizeof(std::string) || b != sizeof(std::vector<int>) || c != sizeof(std::map<int, int>) || d != sizeof(std::mutex)) {
-			PANIC("STL size mismatch.");
-		}
-	}
+	virtual void AssertFundamentalSTL(size_t a, size_t b, size_t c, size_t d) = 0;
 	[[nodiscard]] virtual void* QueryInterface(const char* name) = 0;
 	template <class T>
 	[[nodiscard]] T* QueryInterface() {

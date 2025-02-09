@@ -1,8 +1,7 @@
-﻿#include "Emulator.hpp"
-
+﻿#include <SDL.h>
+#include "Emulator.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Logger.hpp"
-
 #include "ModelInfo.h"
 #include <cassert>
 #include <chrono>
@@ -250,9 +249,10 @@ namespace casioemu {
 		SDL_RenderClear(renderer);
 		SDL_SetTextureColorMod(interface_texture, 255, 255, 255);
 		SDL_SetTextureAlphaMod(interface_texture, 255);
-		SDL_RenderCopy(renderer, interface_texture, &interface_background.src, nullptr);
+		SDL_Rect tmp = interface_background.src;
+		SDL_RenderCopy(renderer, interface_texture, &tmp, nullptr);
 		chipset.Frame();
-
+		
 		// resize and copy `tx` to screen
 		SDL_SetRenderTarget(renderer, nullptr);
 		int w, h;

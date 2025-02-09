@@ -144,7 +144,7 @@ namespace casioemu {
 		};
 		ConcurrentObject<std::vector<StackFrame>> stack;
 #endif
-	private:
+	public:
 		uint16_t Fetch();
 
 		enum OpcodeHint {

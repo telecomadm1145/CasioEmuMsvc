@@ -1196,7 +1196,9 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
                 for (int ix = 1; ix != SPR_MAX; ++ix) {
                         SDL_SetTextureAlphaMod(interface_texture, Uint8(std::clamp((int)screen_ink_alpha[x], 0, 255)));
                         x++;
-                        SDL_RenderCopy(renderer, interface_texture, &sprite_info[ix].src, &sprite_info[ix].dest);
+						SDL_Rect tmp1 = sprite_info[ix].src;
+						SDL_Rect tmp2 = sprite_info[ix].dest;
+                        SDL_RenderCopy(renderer, interface_texture, &tmp1, &tmp2);
                         // Store the sprite rectangle for later
                         spriteRects.push_back(sprite_info[ix].dest);
                 }
@@ -1222,7 +1224,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
                                                 SDL_SetTextureAlphaMod(interface_texture, Uint8(std::clamp((int)screen_ink_alpha[x + iy2 * 192], 0, 255)));
                                         }
                                         x++;
-                                        SDL_RenderCopy(renderer, interface_texture, &sprite_info[SPR_PIXEL].src, &dest);
+										SDL_Rect tmp1 = sprite_info[SPR_PIXEL].src;
+                                        SDL_RenderCopy(renderer, interface_texture, &tmp1, &dest);
                                         // Store the pixel rectangle for later
                                         pixelRects.push_back(dest);
                                 }
