@@ -86,6 +86,14 @@ void HwController::RenderCore() {
 	if (ImGui::Button("HwController.Interrupt"_lc)) {
 		m_emu->chipset.RaiseMaskable(irq);
 	}
+	if (ImGui::Button("HwController.HotReload"_lc)) {
+		m_emu->SetPaused(true);
+		auto lg = std::lock_guard(m_emu->access_mx);
+		std::ifstream rom_handle(m_emu->GetModelFilePath(m_emu->ModelDefinition.rom_path), std::ifstream::binary);
+		if (rom_handle.fail())
+			PANIC("std::ifstream failed: %s\n", std::strerror(errno));
+		m_emu->chipset.rom_data = std::vector<unsigned char>((std::istreambuf_iterator<char>(rom_handle)), std::istreambuf_iterator<char>());
+	}
 	//	static char buf4[40];
 	//	ImGui::InputText("##cps_in", buf4, 40);
 	//	ImGui::SameLine();
