@@ -141,50 +141,193 @@ void Injector::PrecomputeInjectionValues(InjectionPair& pair) {
 
 bool Injector::ParseCustomInjections(const std::string& content) {
     std::vector<CustomInjection> newInjections;
+
+    std::string cleanContent;
     std::istringstream stream(content);
     std::string line;
-    CustomInjection currentInj;
-    bool inInjection = false;
-    
-    static const std::regex name_pattern(R"((\w+)\s*=\s*\{)", std::regex::optimize);
-    static const std::regex pair_pattern(R"(^\s*(0x[0-9a-fA-F]+|[0-9a-fA-F]+)\s*=\s*\"([0-9a-fA-F]+)\")", std::regex::optimize);
     
     while (std::getline(stream, line)) {
-        if (line.empty() || line[0] == '#') continue;
-        
-        std::smatch matches;
-        if (std::regex_search(line, matches, name_pattern)) {
-            if (inInjection && !currentInj.pairs.empty()) {
-                newInjections.push_back(std::move(currentInj));
-            }
-            currentInj = CustomInjection();
-            currentInj.name = matches[1].str();
-            inInjection = true;
-            continue;
+        // Remove comments
+        size_t commentPos = line.find('#');
+        if (commentPos != std::string::npos) {
+            line.erase(commentPos);
         }
         
-        if (line == "}") {
-            if (inInjection && !currentInj.pairs.empty()) {
-                newInjections.push_back(std::move(currentInj));
-            }
-            inInjection = false;
-            continue;
-        }
+        // Trim whitespace
+        TrimString(line);
         
-        if (inInjection && std::regex_search(line, matches, pair_pattern)) {
-            InjectionPair pair;
-            pair.address = matches[1].str();
-            pair.data = matches[2].str();
-            
-            if (IsHexString(pair.address) && IsHexString(pair.data)) {
-                PrecomputeInjectionValues(pair);
-                currentInj.pairs.push_back(std::move(pair));
-            }
+        if (!line.empty()) {
+            cleanContent += line + " ";
         }
     }
+
+    size_t pos = 0;
     
-    if (inInjection && !currentInj.pairs.empty()) {
-        newInjections.push_back(std::move(currentInj));
+    while (pos < cleanContent.length()) {
+        // Skip whitespace
+        while (pos < cleanContent.length() && std::isspace(cleanContent[pos])) {
+            ++pos;
+        }
+        
+        if (pos >= cleanContent.length()) break;
+        
+        // Parse injection name
+        size_t nameStart = pos;
+        while (pos < cleanContent.length() && 
+               (std::isalnum(cleanContent[pos]) || cleanContent[pos] == '_')) {
+            ++pos;
+        }
+        
+        if (pos == nameStart) {
+            // No valid name found, skip this character
+            ++pos;
+            continue;
+        }
+        
+        std::string name = cleanContent.substr(nameStart, pos - nameStart);
+        
+        // Move to equals sign
+        while (pos < cleanContent.length() && cleanContent[pos] != '=') {
+            if (!std::isspace(cleanContent[pos])) {
+                break;
+            }
+            ++pos;
+        }
+        
+        if (pos >= cleanContent.length() || cleanContent[pos] != '=') {
+            continue; // No equals sign found
+        }
+        
+        ++pos; // Skip equals sign
+        
+        // Move to opening brace
+        while (pos < cleanContent.length() && cleanContent[pos] != '{') {
+            if (!std::isspace(cleanContent[pos])) {
+                break;
+            }
+            ++pos;
+        }
+        
+        if (pos >= cleanContent.length() || cleanContent[pos] != '{') {
+            continue; // No opening brace found
+        }
+        
+        ++pos; // Skip opening brace
+        
+        // Extract block content (until matching closing brace)
+        size_t blockStart = pos;
+        int braceLevel = 1;
+        
+        while (pos < cleanContent.length() && braceLevel > 0) {
+            if (cleanContent[pos] == '{') {
+                ++braceLevel;
+            } else if (cleanContent[pos] == '}') {
+                --braceLevel;
+            }
+            ++pos;
+        }
+        
+        if (braceLevel != 0) {
+            continue; // Mismatched braces
+        }
+        
+        std::string blockContent = cleanContent.substr(blockStart, pos - blockStart - 1);
+        
+        // Now parse key-value pairs within the block
+        CustomInjection inj;
+        inj.name = name;
+        
+        size_t pairPos = 0;
+        while (pairPos < blockContent.length()) {
+            // Skip whitespace and commas
+            while (pairPos < blockContent.length() && 
+                   (std::isspace(blockContent[pairPos]) || blockContent[pairPos] == ',')) {
+                ++pairPos;
+            }
+            
+            if (pairPos >= blockContent.length()) break;
+            
+            // Parse address (key)
+            size_t addrStart = pairPos;
+            
+            // Check for "0x" prefix
+            bool hasPrefix = (pairPos + 1 < blockContent.length() && 
+                             blockContent[pairPos] == '0' && 
+                             (blockContent[pairPos+1] == 'x' || blockContent[pairPos+1] == 'X'));
+            
+            if (hasPrefix) {
+                pairPos += 2; // Skip "0x"
+            }
+            
+            // Parse remaining hex digits of address
+            bool validAddr = false;
+            while (pairPos < blockContent.length() && std::isxdigit(blockContent[pairPos])) {
+                validAddr = true;
+                ++pairPos;
+            }
+            
+            if (!validAddr) {
+                // No valid address, skip
+                ++pairPos;
+                continue;
+            }
+            
+            std::string address = blockContent.substr(addrStart, pairPos - addrStart);
+            
+            // Move to equals sign
+            while (pairPos < blockContent.length() && blockContent[pairPos] != '=') {
+                if (!std::isspace(blockContent[pairPos])) {
+                    break;
+                }
+                ++pairPos;
+            }
+            
+            if (pairPos >= blockContent.length() || blockContent[pairPos] != '=') {
+                continue; // No equals sign found
+            }
+            
+            ++pairPos; // Skip equals sign
+            
+            // Move to opening quote
+            while (pairPos < blockContent.length() && blockContent[pairPos] != '"') {
+                if (!std::isspace(blockContent[pairPos])) {
+                    break;
+                }
+                ++pairPos;
+            }
+            
+            if (pairPos >= blockContent.length() || blockContent[pairPos] != '"') {
+                continue; // No opening quote found
+            }
+            
+            ++pairPos; // Skip opening quote
+            
+            // Parse data (everything until closing quote)
+            size_t dataStart = pairPos;
+            while (pairPos < blockContent.length() && blockContent[pairPos] != '"') {
+                ++pairPos;
+            }
+            
+            if (pairPos >= blockContent.length()) {
+                continue; // No closing quote found
+            }
+            
+            std::string data = blockContent.substr(dataStart, pairPos - dataStart);
+            ++pairPos; // Skip closing quote
+            
+            // Create and add injection pair
+            if (IsHexString(address) && IsHexString(data)) {
+                InjectionPair pair;
+                pair.address = address;
+                pair.data = data;
+                PrecomputeInjectionValues(pair);
+                inj.pairs.push_back(std::move(pair));
+            }
+        }
+        
+        if (!inj.pairs.empty()) {
+            newInjections.push_back(std::move(inj));
+        }
     }
     
     customInjections = std::move(newInjections);
