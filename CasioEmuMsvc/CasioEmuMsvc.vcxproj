@@ -350,6 +350,7 @@
     <ClCompile Include="Gui\HwController.cpp" />
     <ClCompile Include="Gui\Ui.cpp" />
     <ClCompile Include="Gui\WatchWindow.cpp" />
+    <ClCompile Include="Gui\FileDialog.cpp" />
     <ClCompile Include="Ext\Logger.cpp" />
     <ClCompile Include="Gui\VariableWindow.cpp" />
     <ClCompile Include="Peripheral\5800Flash.cpp" />
@@ -421,6 +422,7 @@
     <ClInclude Include="Gui\LabelViewer.h" />
     <ClInclude Include="Gui\MemBreakPoint.hpp" />
     <ClInclude Include="Gui\HwController.h" />
+    <ClInclude Include="Gui\FileDialog.h" />
     <ClInclude Include="Ext\Memory.h" />
     <ClInclude Include="Peripheral\ML620Ports.h" />
     <ClInclude Include="Peripheral\Uart.h" />
