@@ -1,10 +1,12 @@
-# Translated by hieuxyz(edit)
+# Vietnamese (Viet Nam) resources for CasioEmuMsvc
+# Dịch bởi hieuxyz(update/edit)
 Localization.LanguageName=Tiếng Việt
 Localization.Lang.en_US=Tiếng Anh (Hoa Kỳ)
 Localization.Lang.vi_VN=Tiếng Việt (Việt Nam)
 Localization.Lang.zh_Hans=Tiếng Trung (Giản thể)
 Localization.EnableCJK=0
 Localization.CJKPreference=CN
+
 StartupUI.Title=Khởi động
 StartupUI.ImportRomPackage=Nhập...
 StartupUI.EnterPassword=Nhập mật khẩu
@@ -32,6 +34,7 @@ StartupUI.EmulatorRom=Giả lập
 CopyrightWatermark.Dismiss=Bỏ qua
 CopyrightWatermark.Licenses=Giấy phép
 CopyrightWatermark.VisitOfficialRepo=Truy cập repo chính thức
+
 ModelEditor.Name=Tên
 ModelEditor.InterfacePath=Đường dẫn Interface(giao diện máy)
 ModelEditor.RomPath=Đường dẫn file ROM
@@ -47,6 +50,7 @@ ModelEditor.InkColor=Màu chữ màn hình
 Button.Save=Lưu
 ModelEditor.KeyName=Tên phím
 ModelEditor.KIKO=Giá trị KIKO
+
 HexEditors.ContextMenu.MonitorWrite=Tìm nguồn đã ghi vào địa chỉ này
 HexEditors.ContextMenu.MonitorRead=Tìm nguồn đã đọc từ địa chỉ này
 HexEditor.ContextMenu.ShowDataPreview=Hiện xem trước dữ liệu
@@ -56,15 +60,18 @@ HexEditor.ContextMenu.GreyOutZeros=Làm xám số 0
 HexEditor.ContextMenu.UppercaseHex=Hex chữ hoa
 HexEditor.ContextMenu.NCols=%d cột
 HexEditor.PreviewAs=Xem trước dưới dạng:
+
 5800FS.Name=Tên
 5800FS.Length=Độ dài
 5800FS.Back=Quay lại
+
 AddressWindow.Header=Quản lý địa chỉ
 AddressWindow.Address=Địa chỉ
 AddressWindow.Value=Giá trị
 AddressWindow.Fixed=Khóa
 AddressWindow.Add=Thêm địa chỉ mới
 AddressWindow.AddBtn=Thêm địa chỉ
+
 CallAnalysis.Stop=Dừng
 CallAnalysis.Clear=Xóa
 CallAnalysis.Function=Hàm
@@ -76,6 +83,7 @@ CallAnalysis.StartRec=Bắt đầu ghi
 CallAnalysis.Filters=Bộ lọc:
 CallAnalysis.CalleeFilter=Được gọi:
 CallAnalysis.CallerFilter=Người gọi:
+
 CodeViewer.Loading=Đang đợi disassembler...
 CodeViewer.Goto=Đến:
 CodeViewer.Step=Bước
@@ -84,12 +92,15 @@ CodeViewer.JumpOut=Nhảy ra
 CodeViewer.Continue=Tiếp tục
 CodeViewer.Pause=Tạm dừng
 CodeViewer.GotoPC=Nhảy đến PC
+
 ScreenshotBtn=Chụp màn hình
+
 HwController.Value1=Ngưỡng nháy màn hình
 HwController.Value2=Hệ số độ sáng nháy màn hình
 HwController.ScreenBufferSelect=Chọn buffer màn hình
 HwController.CPS=Chu kỳ mỗi giây
 HwController.Interrupt=Kích hoạt ngắt
+
 MemBP.BPType=Chọn loại điểm dừng:
 MemBP.Delete=Xóa
 MemBP.NoBPHint=Không có điểm dừng. Vui lòng thêm điểm dừng.
@@ -97,6 +108,7 @@ MemBP.MonitoringHint=Đang giám sát: 0x%06x
 MemBP.ClearRec=Xóa bản ghi
 MemBP.AddAddr=Thêm
 MemBP.BreakWhenHit=Dừng khi chạm điểm dừng
+
 WatchWindow.CoreStatus=Trạng thái nhân(lõi)
 WatchWindow.Pause=Tạm dừng
 WatchWindow.Continue=Tiếp tục
@@ -112,11 +124,11 @@ VarWindow.ShowAddrOpt=Hiện địa chỉ
 VarWindow.ShowHexOpt=Hiện dạng hex(thập lục phân)
 VarWindow.ShowImPWhenComplex=Hiện phần ảo ở chế độ phức
 VarWindow.AlwaysShowImP=Luôn hiện phần ảo
+
 Label.Copy=Sao chép
 Label.SfrsHeader=SFR trong model này:
 Label.GeneralHeader=Có sẵn trong model này:
-Rop.Input=Đầu vào
-Rop.InputSize=Nhập
+
 Ui.CurrentLang=Ngôn ngữ hiện tại:
 Ui.ChangeLang=Đổi ngôn ngữ
 Ui.DarkMode=Chế độ tối
@@ -125,6 +137,11 @@ Ui.Scale=Giá trị tỉ lệ
 Ui.ApplyScale=Áp dụng cài đặt
 Ui.ForceUpdateLang=Bắt buộc cập nhật ngôn ngữ
 Ui.ForceUpdateLangDesc=Tải lại ngôn ngữ mặc định (thường dùng để cập nhật lại file ngôn ngữ nếu có bản cập nhật cho android)
+Ui.Browse=Duyệt
+Ui.InjectionFilePath=Đường dẫn file custom inj
+
+Rop.Input=Đầu vào
+Rop.InputSize=Nhập
 Rop.LoadToInputArea=Load vào vùng input
 Rop.LoadedTip=Load thành công
 Rop.XAnMode=Chế độ X "an"
@@ -145,11 +162,26 @@ Rop.RemoveInjector=Remove
 Rop.InfoPopup=Thông tin
 Rop.CustomInject=Injections tùy chỉnh
 Rop.ReloadCustomInjects=Tải lại Injections tùy chỉnh
+Rop.CurrentInjectFile =File inj(ct) hiện tại
 #Rop.CustomInjectReloaded=Tải lại thành công
 Rop.CustomInjectApplied=Injection tùy chỉnh '%s' áp dụng thành công
 Rop.CustomInjectError=Lỗi khi áp dụng injection '%s'
 Rop.Address=Địa chỉ
 Rop.Loading=Đang tải
 Rop.CustomInjectReloading=Đang tải lại
+Rop.AutoReload=Tự động reload
+
 HexEditor.Options=Tùy chọn
 HexEditor.Range=Phạm vi
+
+BitmapViewer.Address=Địa chỉ
+BitmapViewer.Address_2=Địa chỉ(Số nguyên)
+BitmapViewer.Width=Chiều rộng
+BitmapViewer.PixelSize=Kích thước pixel
+BitmapViewer.BitOffset=Độ lệch bit
+
+Files.CurrentPath=Đường dẫn hiện tại
+Files.Back=Quay lại
+Files.Save=Lưu
+Files.Open=Mở
+Files.Cancel=Hủy

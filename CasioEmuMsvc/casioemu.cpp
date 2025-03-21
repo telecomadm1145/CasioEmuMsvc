@@ -164,7 +164,9 @@ int main(int argc, char* argv[]) {
 	static float lastTapX = 0;
 	static float lastTapY = 0;
 
-	LoadPlugins();
+#ifdef _WIN32
+    LoadPlugins();
+#endif
 
 	while (emulator.Running()) {
 		SDL_Event event{};

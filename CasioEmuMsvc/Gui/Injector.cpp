@@ -20,9 +20,11 @@
 #include <future>
 #include <thread>
 #include <chrono>
+#include "Theme.h"
 
 Injector::Injector() : UIWindow("Rop"), needsReload(false), isReloading(false) {
     injectors.push_back(InjectorData());
+    injectionFilePath = GetThemeSettings().injectionFilePath;
     InitCustomInjectionsFile();
     AsyncLoadCustomInjections();
 }
@@ -47,8 +49,15 @@ void Injector::AsyncLoadCustomInjections() {
 }
 
 void Injector::TrimString(std::string& str) {
-    str.erase(0, str.find_first_not_of(" \t\n\r"));
-    str.erase(str.find_last_not_of(" \t\n\r") + 1);
+    // Trim from start
+    str.erase(str.begin(), std::find_if(str.begin(), str.end(), [](unsigned char ch) {
+        return !std::isspace(ch);
+    }));
+    
+    // Trim from end
+    str.erase(std::find_if(str.rbegin(), str.rend(), [](unsigned char ch) {
+        return !std::isspace(ch);
+    }).base(), str.end());
 }
 
 bool Injector::IsHexString(const std::string& str) {
@@ -62,7 +71,7 @@ bool Injector::IsHexString(const std::string& str) {
 }
 
 void Injector::InitCustomInjectionsFile() {
-    const std::filesystem::path filepath = "./hc-inj.txt";
+    const std::filesystem::path filepath = injectionFilePath;
     
     if (std::filesystem::exists(filepath)) {
         return;
@@ -91,22 +100,20 @@ void Injector::BackgroundReload() {
     if (isReloading.exchange(true)) {
         return; // If already reloading, return
     }
-
-    const std::string filepath = "./hc-inj.txt";
-    std::string currentModTime = GetFileModifiedTime(filepath);
+    
+    std::string currentModTime = GetFileModifiedTime(injectionFilePath);
     
     if (currentModTime == lastModifiedTime && !needsReload) {
         isReloading.store(false);
         return;
     }
     
-    std::ifstream file(filepath);
+    std::ifstream file(injectionFilePath);
     if (!file.is_open()) {
         isReloading.store(false);
         return;
     }
     
-    // Read file content efficiently
     std::string content;
     file.seekg(0, std::ios::end);
     content.reserve(file.tellg());
@@ -124,212 +131,216 @@ void Injector::BackgroundReload() {
 }
 
 void Injector::PrecomputeInjectionValues(InjectionPair& pair) {
+    // Process address
     std::string addr = pair.address;
-    if (addr.substr(0, 2) == "0x") {
+    if (addr.substr(0, 2) == "0x" || addr.substr(0, 2) == "0X") {
         addr = addr.substr(2);
     }
     pair.addr_value = std::stoul(addr, nullptr, 16);
     
-    const std::string& data = pair.data;
-    pair.data_bytes.reserve(data.length() / 2);
+    // Process data - remove all whitespace
+    std::string cleaned_data = pair.data;
+    cleaned_data.erase(
+        std::remove_if(cleaned_data.begin(), cleaned_data.end(), 
+            [](char c) { return std::isspace(c); }), 
+        cleaned_data.end()
+    );
     
-    for (size_t i = 0; i < data.length(); i += 2) {
-        std::string byte_str = data.substr(i, 2);
-        pair.data_bytes.push_back(HexToByte(byte_str));
+    pair.data_bytes.clear();
+    pair.data_bytes.reserve(cleaned_data.length() / 2);
+    
+    for (size_t i = 0; i + 1 < cleaned_data.length(); i += 2) {
+        std::string byte_str = cleaned_data.substr(i, 2);
+        if (IsHexString(byte_str)) {
+            pair.data_bytes.push_back(HexToByte(byte_str));
+        }
     }
 }
 
 bool Injector::ParseCustomInjections(const std::string& content) {
     std::vector<CustomInjection> newInjections;
 
-    std::string cleanContent;
-    std::istringstream stream(content);
-    std::string line;
+    // State machine for robust parsing
+    enum class ParseState {
+        NAME,           // Looking for name
+        EQUALS,         // Looking for equals sign after name
+        OPEN_BRACE,     // Looking for opening brace
+        KEY,            // Looking for address
+        KEY_EQUALS,     // Looking for equals sign after address
+        VALUE_START,    // Looking for quote
+        VALUE,          // Reading value data
+        AFTER_VALUE,    // Looking for comma or close brace
+    };
+
+    // First pass: preprocess to handle comments and normalize content
+    std::string preprocessed;
+    bool in_comment = false;
     
-    while (std::getline(stream, line)) {
-        // Remove comments
-        size_t commentPos = line.find('#');
-        if (commentPos != std::string::npos) {
-            line.erase(commentPos);
-        }
+    for (size_t i = 0; i < content.length(); ++i) {
+        char c = content[i];
         
-        // Trim whitespace
-        TrimString(line);
-        
-        if (!line.empty()) {
-            cleanContent += line + " ";
+        if (c == '#') {
+            in_comment = true;
+        } else if (c == '\n') {
+            in_comment = false;
+            preprocessed += ' '; // Convert newlines to spaces
+        } else if (!in_comment) {
+            preprocessed += c;
         }
     }
 
-    size_t pos = 0;
+    // Second pass: parse with state machine
+    ParseState state = ParseState::NAME;
+    std::string current_name;
+    std::string current_address;
+    std::string current_value;
+    CustomInjection current_injection;
+    bool in_quotes = false;
+    int brace_level = 0;
     
-    while (pos < cleanContent.length()) {
-        // Skip whitespace
-        while (pos < cleanContent.length() && std::isspace(cleanContent[pos])) {
-            ++pos;
-        }
+    for (size_t i = 0; i < preprocessed.length(); ++i) {
+        char c = preprocessed[i];
         
-        if (pos >= cleanContent.length()) break;
-        
-        // Parse injection name
-        size_t nameStart = pos;
-        while (pos < cleanContent.length() && 
-               (std::isalnum(cleanContent[pos]) || cleanContent[pos] == '_')) {
-            ++pos;
-        }
-        
-        if (pos == nameStart) {
-            // No valid name found, skip this character
-            ++pos;
-            continue;
-        }
-        
-        std::string name = cleanContent.substr(nameStart, pos - nameStart);
-        
-        // Move to equals sign
-        while (pos < cleanContent.length() && cleanContent[pos] != '=') {
-            if (!std::isspace(cleanContent[pos])) {
-                break;
-            }
-            ++pos;
-        }
-        
-        if (pos >= cleanContent.length() || cleanContent[pos] != '=') {
-            continue; // No equals sign found
-        }
-        
-        ++pos; // Skip equals sign
-        
-        // Move to opening brace
-        while (pos < cleanContent.length() && cleanContent[pos] != '{') {
-            if (!std::isspace(cleanContent[pos])) {
-                break;
-            }
-            ++pos;
-        }
-        
-        if (pos >= cleanContent.length() || cleanContent[pos] != '{') {
-            continue; // No opening brace found
-        }
-        
-        ++pos; // Skip opening brace
-        
-        // Extract block content (until matching closing brace)
-        size_t blockStart = pos;
-        int braceLevel = 1;
-        
-        while (pos < cleanContent.length() && braceLevel > 0) {
-            if (cleanContent[pos] == '{') {
-                ++braceLevel;
-            } else if (cleanContent[pos] == '}') {
-                --braceLevel;
-            }
-            ++pos;
-        }
-        
-        if (braceLevel != 0) {
-            continue; // Mismatched braces
-        }
-        
-        std::string blockContent = cleanContent.substr(blockStart, pos - blockStart - 1);
-        
-        // Now parse key-value pairs within the block
-        CustomInjection inj;
-        inj.name = name;
-        
-        size_t pairPos = 0;
-        while (pairPos < blockContent.length()) {
-            // Skip whitespace and commas
-            while (pairPos < blockContent.length() && 
-                   (std::isspace(blockContent[pairPos]) || blockContent[pairPos] == ',')) {
-                ++pairPos;
-            }
-            
-            if (pairPos >= blockContent.length()) break;
-            
-            // Parse address (key)
-            size_t addrStart = pairPos;
-            
-            // Check for "0x" prefix
-            bool hasPrefix = (pairPos + 1 < blockContent.length() && 
-                             blockContent[pairPos] == '0' && 
-                             (blockContent[pairPos+1] == 'x' || blockContent[pairPos+1] == 'X'));
-            
-            if (hasPrefix) {
-                pairPos += 2; // Skip "0x"
-            }
-            
-            // Parse remaining hex digits of address
-            bool validAddr = false;
-            while (pairPos < blockContent.length() && std::isxdigit(blockContent[pairPos])) {
-                validAddr = true;
-                ++pairPos;
-            }
-            
-            if (!validAddr) {
-                // No valid address, skip
-                ++pairPos;
-                continue;
-            }
-            
-            std::string address = blockContent.substr(addrStart, pairPos - addrStart);
-            
-            // Move to equals sign
-            while (pairPos < blockContent.length() && blockContent[pairPos] != '=') {
-                if (!std::isspace(blockContent[pairPos])) {
-                    break;
+        switch (state) {
+            case ParseState::NAME:
+                if (std::isalnum(c) || c == '_') {
+                    current_name += c;
+                } else if (c == '=' && !current_name.empty()) {
+                    TrimString(current_name);
+                    state = ParseState::EQUALS;
+                } else if (!std::isspace(c)) {
+                    // Invalid character, reset
+                    current_name.clear();
                 }
-                ++pairPos;
-            }
-            
-            if (pairPos >= blockContent.length() || blockContent[pairPos] != '=') {
-                continue; // No equals sign found
-            }
-            
-            ++pairPos; // Skip equals sign
-            
-            // Move to opening quote
-            while (pairPos < blockContent.length() && blockContent[pairPos] != '"') {
-                if (!std::isspace(blockContent[pairPos])) {
-                    break;
+                break;
+                
+            case ParseState::EQUALS:
+                if (c == '{') {
+                    current_injection = CustomInjection();
+                    current_injection.name = current_name;
+                    current_name.clear();
+                    brace_level = 1;
+                    state = ParseState::KEY;
+                } else if (!std::isspace(c) && c != '=') {
+                    // Unexpected character
+                    state = ParseState::NAME;
+                    current_name.clear();
                 }
-                ++pairPos;
-            }
-            
-            if (pairPos >= blockContent.length() || blockContent[pairPos] != '"') {
-                continue; // No opening quote found
-            }
-            
-            ++pairPos; // Skip opening quote
-            
-            // Parse data (everything until closing quote)
-            size_t dataStart = pairPos;
-            while (pairPos < blockContent.length() && blockContent[pairPos] != '"') {
-                ++pairPos;
-            }
-            
-            if (pairPos >= blockContent.length()) {
-                continue; // No closing quote found
-            }
-            
-            std::string data = blockContent.substr(dataStart, pairPos - dataStart);
-            ++pairPos; // Skip closing quote
-            
-            // Create and add injection pair
-            if (IsHexString(address) && IsHexString(data)) {
-                InjectionPair pair;
-                pair.address = address;
-                pair.data = data;
-                PrecomputeInjectionValues(pair);
-                inj.pairs.push_back(std::move(pair));
-            }
-        }
-        
-        if (!inj.pairs.empty()) {
-            newInjections.push_back(std::move(inj));
+                break;
+                
+            case ParseState::OPEN_BRACE:
+                if (c == '{') {
+                    current_injection = CustomInjection();
+                    current_injection.name = current_name;
+                    current_name.clear();
+                    brace_level = 1;
+                    state = ParseState::KEY;
+                } else if (!std::isspace(c)) {
+                    // Unexpected character
+                    state = ParseState::NAME;
+                    current_name.clear();
+                }
+                break;
+                
+            case ParseState::KEY:
+                if (std::isxdigit(c) || c == 'x' || c == 'X' || c == '0') {
+                    current_address += c;
+                } else if (c == '=' && !current_address.empty()) {
+                    TrimString(current_address);
+                    state = ParseState::VALUE_START;
+                } else if (c == '}' && brace_level == 1) {
+                    // End of block
+                    if (!current_injection.pairs.empty()) {
+                        newInjections.push_back(std::move(current_injection));
+                    }
+                    brace_level = 0;
+                    state = ParseState::NAME;
+                } else if (!std::isspace(c)) {
+                    // Reset on unexpected char
+                    current_address.clear();
+                }
+                break;
+                
+            case ParseState::VALUE_START:
+                if (c == '"') {
+                    in_quotes = true;
+                    current_value.clear();
+                    state = ParseState::VALUE;
+                } else if (!std::isspace(c)) {
+                    // Reset on unexpected char
+                    state = ParseState::KEY;
+                    current_address.clear();
+                }
+                break;
+                
+            case ParseState::VALUE:
+                if (c == '"' && in_quotes) {
+                    in_quotes = false;
+                    // Process the pair
+                    if (IsHexString(current_address)) {
+                        InjectionPair pair;
+                        pair.address = current_address;
+                        pair.data = current_value;
+                        
+                        try {
+                            PrecomputeInjectionValues(pair);
+                            if (!pair.data_bytes.empty()) {
+                                current_injection.pairs.push_back(std::move(pair));
+                            }
+                        } catch (...) {
+                            // Invalid hex, skip
+                        }
+                    }
+                    
+                    current_address.clear();
+                    current_value.clear();
+                    state = ParseState::AFTER_VALUE;
+                } else if (in_quotes) {
+                    // Accept any character inside quotes
+                    current_value += c;
+                }
+                break;
+                
+            case ParseState::AFTER_VALUE:
+                if (c == ',') {
+                    state = ParseState::KEY;
+                } else if (c == '}' && brace_level == 1) {
+                    if (!current_injection.pairs.empty()) {
+                        newInjections.push_back(std::move(current_injection));
+                    }
+                    brace_level = 0;
+                    state = ParseState::NAME;
+                } else if (c == '{') {
+                    brace_level++;
+                } else if (c == '}') {
+                    brace_level--;
+                    if (brace_level == 0) {
+                        if (!current_injection.pairs.empty()) {
+                            newInjections.push_back(std::move(current_injection));
+                        }
+                        state = ParseState::NAME;
+                    }
+                }
+                break;
+                
+            case ParseState::KEY_EQUALS:
+                if (c == '=') {
+                    state = ParseState::VALUE_START;
+                } else if (!std::isspace(c)) {
+                    state = ParseState::KEY;
+                    current_address.clear();
+                }
+                break;
         }
     }
     
+    // Handle case where file ends in a valid state
+    if (state == ParseState::AFTER_VALUE && brace_level == 1) {
+        if (!current_injection.pairs.empty()) {
+            newInjections.push_back(std::move(current_injection));
+        }
+    }
+
     customInjections = std::move(newInjections);
     return true;
 }
@@ -366,8 +377,22 @@ bool Injector::ApplyInjection(const CustomInjection& inj, bool& show_info, std::
 }
 
 void Injector::RenderCustomInjectTab(bool& show_info, std::string& info_msg) {
+    ImGui::TextUnformatted(("Rop.CurrentInjectFile"_l + ": " + injectionFilePath).c_str());
+
+    static bool autoCheckFileChanges = true;
+    if (ImGui::Checkbox("Rop.AutoReload"_lc, &autoCheckFileChanges)) {
+        if (autoCheckFileChanges) {
+            needsReload = true;
+        }
+    }
+    
+    ImGui::SameLine();
     if (ImGui::Button("Rop.ReloadCustomInjects"_lc)) {
         if (!isReloading.load()) {
+            std::string currentFilePath = GetThemeSettings().injectionFilePath;
+            if (currentFilePath != injectionFilePath) {
+                injectionFilePath = currentFilePath;
+            }
             needsReload = true;
             std::thread([this]() {
                 BackgroundReload();
@@ -389,9 +414,7 @@ void Injector::RenderCustomInjectTab(bool& show_info, std::string& info_msg) {
             ImGui::Text("%s:", "Rop.Address"_lc);
             for (const auto& pair : inj.pairs) {
                 std::string displayAddr = pair.address;
-                if (displayAddr.substr(0, 2) == "0x" || displayAddr.substr(0, 2) == "0X") {
-                    displayAddr = "0x" + displayAddr.substr(2);
-                } else {
+                if (displayAddr.substr(0, 2) != "0x" && displayAddr.substr(0, 2) != "0X") {
                     displayAddr = "0x" + displayAddr;
                 }
                 ImGui::BulletText("%s", displayAddr.c_str());
@@ -402,6 +425,16 @@ void Injector::RenderCustomInjectTab(bool& show_info, std::string& info_msg) {
             }
             
             ImGui::Separator();
+        }
+    }
+    
+    if (autoCheckFileChanges && !isReloading.load()) {
+        std::string currentModTime = GetFileModifiedTime(injectionFilePath);
+        if (currentModTime != lastModifiedTime) {
+            needsReload = true;
+            std::thread([this]() {
+                BackgroundReload();
+            }).detach();
         }
     }
 }
@@ -481,6 +514,18 @@ void Injector::RenderCore() {
     static std::string info_msg;
     auto inputbase = m_emu->hardware_id == casioemu::HardwareId::HW_CLASSWIZ_II ? 0x9268 : 0xD180;
     char* base_addr = n_ram_buffer - casioemu::GetRamBaseAddr(m_emu->hardware_id);
+
+    // Check if injection file path has changed in settings
+    std::string currentFilePath = GetThemeSettings().injectionFilePath;
+    if (currentFilePath != injectionFilePath) {
+        injectionFilePath = currentFilePath;
+        needsReload = true;
+        if (!isReloading.load()) {
+            std::thread([this]() {
+                BackgroundReload();
+            }).detach();
+        }
+    }
 
     if (ImGui::BeginTabBar("Rop.TabBar"_lc)) {
         if (ImGui::BeginTabItem("Rop.XAnMode"_lc)) {

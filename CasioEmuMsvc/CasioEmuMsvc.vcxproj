@@ -328,7 +328,7 @@
     <ClCompile Include="Gui\imgui\imgui_demo.cpp" />
     <ClCompile Include="Gui\Localization.cpp" />
     <ClCompile Include="Gui\Theme.cpp" />
-    <ClCompile Include="Peripheral\BitmapViewer.cpp" />
+    <ClCompile Include="Gui\BitmapViewer.cpp" />
     <ClCompile Include="Peripheral\ML620Ports.cpp" />
     <ClCompile Include="Peripheral\ROMWindow.cpp" />
     <ClCompile Include="Peripheral\Uart.cpp" />
@@ -393,7 +393,7 @@
     <ClInclude Include="Gui\Localization.h" />
     <ClInclude Include="Gui\PopUpDisplay.h" />
     <ClInclude Include="Gui\Theme.h" />
-    <ClInclude Include="Peripheral\BitmapViewer.h" />
+    <ClInclude Include="Gui\BitmapViewer.h" />
     <ClInclude Include="Peripheral\SD\FakeSdCard.h" />
     <ClInclude Include="Gui\5800FileSystem.h" />
     <ClInclude Include="Gui\CallAnalysis.h" />
