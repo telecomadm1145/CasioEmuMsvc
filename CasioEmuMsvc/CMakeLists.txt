@@ -4,6 +4,7 @@ project(MY_APP)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fms-extensions")
 # set(CMAKE_CXX_EXTENSIONS OFF)
 
 include_directories(#${CMAKE_SOURCE_DIR}/SDL_image/include

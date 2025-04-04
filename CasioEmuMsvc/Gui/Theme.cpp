@@ -4,24 +4,7 @@
 #include "Theme.h"
 #include <fstream>
 #include <string>
-
-struct ThemeSettings {
-    bool isDarkMode = true;
-    char language[30] = "";
-    float scale = 1.0f;
-
-    void Write(std::ostream& stm) const {
-        Binary::Write(stm, isDarkMode);
-        stm.write(language, sizeof(language));
-        Binary::Write(stm, scale);
-    }
-
-    void Read(std::istream& stm) {
-        Binary::Read(stm, isDarkMode);
-        stm.read(language, sizeof(language));
-        Binary::Read(stm, scale);
-    }
-};
+#include "FileDialog.hpp"
 
 static ThemeSettings g_settings;
 
@@ -52,10 +35,19 @@ void LoadThemeSettings() {
     }
 }
 
+const ThemeSettings& GetThemeSettings() {
+    return g_settings;
+}
+
 class ThemeWindow : public UIWindow {
+private:
+    bool showFileDialog;
+    char tempInjectionFilePath[256];
+    
 public:
-    ThemeWindow() : UIWindow("Theme") {
+    ThemeWindow() : UIWindow("Theme"), showFileDialog(false) {
         LoadThemeSettings();
+        strncpy(tempInjectionFilePath, g_settings.injectionFilePath, sizeof(tempInjectionFilePath));
     }
 
     void RenderCore() override {
@@ -102,6 +94,29 @@ public:
         }
         if (ImGui::Button("Ui.ApplyScale"_lc)) {
             RebuildFont_Requested = true;
+            SaveThemeSettings();
+        }
+        
+        ImGui::Separator();
+
+        ImGui::TextUnformatted("Ui.InjectionFilePath"_lc);
+        
+        ImGui::InputText("##injection_file_path", tempInjectionFilePath, sizeof(tempInjectionFilePath));
+        
+        ImGui::SameLine();
+        if (ImGui::Button("Ui.Browse"_lc)) {
+            showFileDialog = true;
+        }
+
+        if (showFileDialog) {
+            if (FileDialog::ShowFileOpenDialog("Select Injection File", "Text Files (*.txt){.txt},All Files (*.*){.*}", 
+                                              tempInjectionFilePath, sizeof(tempInjectionFilePath))) {
+                showFileDialog = false;
+            }
+        }
+        
+        if (ImGui::Button("Button.Positive"_lc)) {
+            strncpy(g_settings.injectionFilePath, tempInjectionFilePath, sizeof(g_settings.injectionFilePath));
             SaveThemeSettings();
         }
     }

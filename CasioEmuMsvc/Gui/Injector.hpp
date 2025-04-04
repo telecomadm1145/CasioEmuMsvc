@@ -34,8 +34,7 @@ private:
     bool needsReload;
     std::atomic<bool> isReloading;
     std::string lastModifiedTime;
-    
-    // Cache for parsed hex values
+    std::string injectionFilePath;
     std::unordered_map<std::string, uint32_t> addressCache;
     std::unordered_map<std::string, std::vector<uint8_t>> dataCache;
     

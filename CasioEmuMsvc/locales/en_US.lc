@@ -5,6 +5,7 @@ Localization.Lang.vi_VN=Vietnamese (VietNam)
 Localization.Lang.zh_Hans=Chinese (Simplified)
 Localization.EnableCJK=0
 Localization.CJKPreference=CN
+
 StartupUI.Title=Startup
 StartupUI.ImportRomPackage=Import...
 StartupUI.EnterPassword=Enter Password
@@ -32,6 +33,7 @@ StartupUI.EmulatorRom=Emulator
 CopyrightWatermark.Dismiss=Dismiss
 CopyrightWatermark.Licenses=Licenses
 CopyrightWatermark.VisitOfficialRepo=Visit official repository
+
 ModelEditor.Name=Name
 ModelEditor.InterfacePath=Interface texture path
 ModelEditor.RomPath=Rom path
@@ -47,6 +49,7 @@ ModelEditor.InkColor=Screen foreground color
 Button.Save=Save
 ModelEditor.KeyName=Key name
 ModelEditor.KIKO=KIKO value
+
 HexEditors.ContextMenu.MonitorWrite=Find out what wrote to this addr
 HexEditors.ContextMenu.MonitorRead=Find out what read from this addr
 HexEditor.ContextMenu.ShowDataPreview=Show Data Preview
@@ -56,15 +59,18 @@ HexEditor.ContextMenu.GreyOutZeros=Grey out zeroes
 HexEditor.ContextMenu.UppercaseHex=Uppercase hex
 HexEditor.ContextMenu.NCols=%d cols
 HexEditor.PreviewAs=Preview as:
+
 5800FS.Name=Name
 5800FS.Length=Length
 5800FS.Back=Back
+
 AddressWindow.Header=Manage Addresses
 AddressWindow.Address=Address
 AddressWindow.Value=Value
 AddressWindow.Fixed=Lock
 AddressWindow.Add=Add New Address
 AddressWindow.AddBtn=Add Address
+
 CallAnalysis.Stop=Stop
 CallAnalysis.Clear=Clear
 CallAnalysis.Function=Function
@@ -76,6 +82,7 @@ CallAnalysis.StartRec=Start recording
 CallAnalysis.Filters=Filters:
 CallAnalysis.CalleeFilter=Callee:
 CallAnalysis.CallerFilter=Caller:
+
 CodeViewer.Loading=Waiting for disassembler...
 CodeViewer.Goto=Goto:
 CodeViewer.Step=Step
@@ -84,7 +91,9 @@ CodeViewer.JumpOut=Jump out
 CodeViewer.Continue=Continue
 CodeViewer.Pause=Pause
 CodeViewer.GotoPC=Jump to PC
+
 ScreenshotBtn=Screenshot
+
 HwController.Value1=Screen flashing threshold
 HwController.Value2=Screen flashing brightness coeff
 # …¡∆¡ƒ£ƒ‚„–÷µ
@@ -94,6 +103,7 @@ HwController.Value2=Screen flashing brightness coeff
 HwController.ScreenBufferSelect=Screen buffer select
 HwController.CPS=Cycles per second
 HwController.Interrupt=Raise an interrupt
+
 MemBP.BPType=Choose breakpoint type:
 MemBP.Delete=Delete
 MemBP.NoBPHint=No breakpoints. Please add a breakpoint.
@@ -101,12 +111,14 @@ MemBP.MonitoringHint=Monitoring: 0x%06x
 MemBP.ClearRec=Clear records
 MemBP.AddAddr=Add
 MemBP.BreakWhenHit=Break when hit bp
+
 WatchWindow.CoreStatus=Core status
 WatchWindow.Pause=Pause
 WatchWindow.Continue=Continue
 WatchWindow.Function=Function
 WatchWindow.LrDestroyed=LR destroyed
 WatchWindow.StackMemViewRange=Stack memory view range
+
 VarWindow.Variable=Variable
 VarWindow.ReP=Real part
 VarWindow.ImP=Imaginary part
@@ -116,11 +128,11 @@ VarWindow.ShowAddrOpt=Show address
 VarWindow.ShowHexOpt=Show hex
 VarWindow.ShowImPWhenComplex=Show imaginary part in cmplx mode
 VarWindow.AlwaysShowImP=Always show imaginary part
+
 Label.Copy=Copy
 Label.SfrsHeader=SFRs in this model:
 Label.GeneralHeader=Available in this model:
-Rop.Input=Input
-Rop.InputSize=Input size
+
 Ui.CurrentLang=Current langauge:
 Ui.ChangeLang=Change language
 Ui.DarkMode=Dark mode
@@ -129,6 +141,11 @@ Ui.Scale=Scale value
 Ui.ApplyScale=Apply Setting
 Ui.ForceUpdateLang=Force Update Language
 Ui.ForceUpdateLangDesc=Reload default language (usually used to update language files if there is an update for android)
+Ui.Browse=Browse
+Ui.InjectionFilePath=Injection File Path
+
+Rop.Input=Input
+Rop.InputSize=Input size
 Rop.LoadToInputArea=Load to input area
 Rop.LoadedTip=Loaded
 Rop.XAnMode=X "an" mode
@@ -150,10 +167,25 @@ Rop.InfoPopup=Information
 Rop.CustomInject=Custom Injections
 Rop.ReloadCustomInjects=Reload Custom Injections
 #Rop.CustomInjectReloaded=Custom injections reloaded
+Rop.CurrentInjectFile =Current Inject File
 Rop.CustomInjectApplied=Custom injection '%s' applied successfully
 Rop.CustomInjectError=Error applying injection '%s'
 Rop.Address=Address
 Rop.Loading=Loading
 Rop.CustomInjectReloading=Reloading
+Rop.AutoReload=Auto reload
+
 HexEditor.Options=Options
 HexEditor.Range=Range
+
+BitmapViewer.Address=Address
+BitmapViewer.Address_2=Address(Int)
+BitmapViewer.Width=Width
+BitmapViewer.PixelSize=Pixel size
+BitmapViewer.BitOffset=Bit offset
+
+Files.CurrentPath=Current Path
+Files.Back=Back
+Files.Save=Save
+Files.Open=Open
+Files.Cancel=Cancel

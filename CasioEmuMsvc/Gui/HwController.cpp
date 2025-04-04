@@ -1,7 +1,7 @@
 ﻿#include "HwController.h"
-#include "..\Config.hpp"
+#include "../Config.hpp"
 #include "Ui.hpp"
-#include "imgui\imgui.h"
+#include "imgui/imgui.h"
 #include "Chipset.hpp"
 #include "Localization.h"
 int screen_flashing_threshold = 20;
