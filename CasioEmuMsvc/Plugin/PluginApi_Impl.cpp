@@ -80,8 +80,12 @@ class PluginApi_Impl : public PluginApi {
 		RunStatus GetStatus() override {
 			return RunStatus(m_emu->chipset.run_mode);
 		}
-
-		// 通过 IChipset 继承
+		void* GetRom() {
+			return m_emu->chipset.rom_data.data();
+		}
+		size_t GetRomSize() {
+			return m_emu->chipset.rom_data.size();
+		}
 	} chipset_impl;
 	class Hooks_Impl : public Hooks {
 		// 通过 Hooks 继承
@@ -150,24 +154,8 @@ class PluginApi_Impl : public PluginApi {
 				});
 		}
 	} hooks_impl;
-	// 通过 PluginApi 继承
-	//IEmulator* GetEmulator() override {
-	//	return &emu_impl;
-	//}
-	//ICPU* GetCpu() override {
-	//	return &cpu_impl;
-	//}
-	//IMMU* GetMmu() override {
-	//	return &mmu_impl;
-	//}
-	//IChipset* GetChipset() override {
-	//	return &chipset_impl;
-	//}
-	//Hooks* GetHooks() override {
-	//	return &hooks_impl;
-	//}
 	int GetVersion() override {
-		return 0;
+		return 1;
 	}
 	void AddWindow(UIWindow* wnd) override {
 		windows.push_back(wnd);

@@ -24,7 +24,7 @@ public:
 	ISpiProvider* spi;
 
 	FakeSdCard(ISpiProvider* spi) : spi(spi), state(State::WaitingCommand) {
-		if (std::filesystem::exists("sdcard.img")) {
+		if (!std::filesystem::exists("sdcard.img")) {
 			imageData.resize(0);
 			std::cout << "[FakeSdCard][Warn] No sdcard.img, disabling...\n";
 		}

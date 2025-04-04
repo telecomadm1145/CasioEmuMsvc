@@ -92,7 +92,12 @@ void HwController::RenderCore() {
 		std::ifstream rom_handle(m_emu->GetModelFilePath(m_emu->ModelDefinition.rom_path), std::ifstream::binary);
 		if (rom_handle.fail())
 			PANIC("std::ifstream failed: %s\n", std::strerror(errno));
-		m_emu->chipset.rom_data = std::vector<unsigned char>((std::istreambuf_iterator<char>(rom_handle)), std::istreambuf_iterator<char>());
+		auto dat = std::vector<unsigned char>((std::istreambuf_iterator<char>(rom_handle)), std::istreambuf_iterator<char>());
+		for (size_t i = 0; i <std::min(dat.size(),m_emu->chipset.rom_data.size()); i++) {
+			m_emu->chipset.rom_data[i] = dat[i];
+		}
+		m_emu->chipset.Reset();
+		m_emu->SetPaused(false);
 	}
 	//	static char buf4[40];
 	//	ImGui::InputText("##cps_in", buf4, 40);

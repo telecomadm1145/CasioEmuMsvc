@@ -22,7 +22,7 @@
 #include <chrono>
 
 Injector::Injector() : UIWindow("Rop"), needsReload(false), isReloading(false) {
-    injectors.push_back(InjectorData());
+	injectors.emplace_back();
     InitCustomInjectionsFile();
     AsyncLoadCustomInjections();
 }
@@ -269,20 +269,20 @@ void Injector::RenderInjectorTab(InjectorData& inj, int index, bool& show_info, 
                (c >= 'a' && c <= 'f') || 
                (c >= 'A' && c <= 'F');
     };
-
+	ImGui::PushID(index);
     ImGui::TextUnformatted("Rop.InjectAddr"_lc);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(80);
-    ImGui::InputText(("##addr" + std::to_string(index)).c_str(), inj.addr, 10);
+    ImGui::InputText("##addr", inj.addr, 10);
 
-    if (ImGui::Button(("Rop.Paste"_l + "##" + std::to_string(index)).c_str())) {
+    if (ImGui::Button("Rop.Paste"_lc)) {
         if (ImGui::GetClipboardText() != nullptr) {
             strncpy(inj.data, ImGui::GetClipboardText(), sizeof(inj.data) - 1);
             inj.data[sizeof(inj.data) - 1] = '\0';
         }
     }
     ImGui::SameLine();
-    if (ImGui::Button(("Rop.Clear"_l + "##" + std::to_string(index)).c_str())) {
+    if (ImGui::Button("Rop.Clear"_lc)) {
         memset(inj.data, 0, sizeof(inj.data));
     }
 
@@ -294,7 +294,7 @@ void Injector::RenderInjectorTab(InjectorData& inj, int index, bool& show_info, 
         ImVec2(-1, ImGui::GetTextLineHeight() * 8)
     );
 
-    if (ImGui::Button(("Rop.Inject"_l + "##" + std::to_string(index)).c_str())) {
+    if (ImGui::Button("Rop.Inject"_lc)) {
         auto plc = strtol(inj.addr, 0, 16);
         size_t i = 0, j = 0;
         char hex_buf[3];
@@ -328,6 +328,7 @@ void Injector::RenderInjectorTab(InjectorData& inj, int index, bool& show_info, 
         info_msg = "Rop.Injected"_l;
         show_info = true;
     }
+	ImGui::PopID();
 }
 
 void Injector::RenderCore() {
@@ -368,7 +369,7 @@ void Injector::RenderCore() {
 
         if (ImGui::BeginTabItem("Rop.InjectHex"_lc)) {
             if (ImGui::Button("Rop.AddInjector"_lc)) {
-                injectors.push_back(InjectorData());
+				injectors.emplace_back();
             }
 
             ImGui::SetNextItemWidth(ImGui::GetWindowWidth() * 1.4f);
@@ -378,7 +379,7 @@ void Injector::RenderCore() {
                 std::string header = "Rop.InjectorNum"_l + " " + std::to_string(i + 1);
                 
                 if (injectors.size() > 1) {
-                    if (ImGui::Button(("Rop.RemoveInjector"_l + "##" + std::to_string(i)).c_str())) {
+                    if (ImGui::Button("Rop.RemoveInjector"_lc)) {
                         injectors.erase(injectors.begin() + i);
                         ImGui::PopID();
                         break;

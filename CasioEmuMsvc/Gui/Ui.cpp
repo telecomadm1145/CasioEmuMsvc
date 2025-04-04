@@ -152,6 +152,7 @@ int test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
         return 0;
     }
 
+
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
