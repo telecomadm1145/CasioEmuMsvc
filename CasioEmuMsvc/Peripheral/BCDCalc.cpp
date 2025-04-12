@@ -1,6 +1,7 @@
 ﻿#include "BCDCalc.hpp"
 
 #include "Chipset/Chipset.hpp"
+#include "Chipset/CPU.hpp"
 #include "Chipset/MMU.hpp"
 #include "Chipset/MMURegion.hpp"
 #include "Emulator.hpp"
@@ -9,19 +10,43 @@
 
 namespace casioemu {
 	class BCDCalc : public Peripheral {
-		MMURegion region_bcdcontrol, region_F402, region_F404, region_F405, region_F410, region_F414, region_F415, region_param1, region_param2, region_temp1, region_temp2;
+		MMURegion region_BCDCMD, region_BCDCON, region_BCDMCN, region_BCDMCR, region_BCDFLG, region_BCDLLZ, region_BCDMLZ,
+			region_BCDREGA, region_BCDREGB, region_BCDREGC, region_BCDREGD;
 
-		uint8_t data_F400, data_F402, data_F404, data_F405, data_F410, data_F414, data_F415;
+		uint8_t data_BCDCMD, data_BCDCON, data_BCDMCN, data_BCDLLZ, data_BCDMLZ;
+		uint8_t BCDREG[4][12];
 
-		uint8_t data_datas[0x20 * 4]{};
+		uint8_t BCDMCN;
+		bool C_flag, Z_flag, macro_running;
 
-		bool F400_write;
-		bool F402_write;
-		bool F404_write;
-		bool F405_write;
+		uint8_t BCDCMD_req, BCDMCR_req;
+		bool BCDCMD_pend, BCDMCR_pend;
 
-		uint8_t data_operator, data_type_1, data_type_2, param1, param2, param3, param4, data_F404_copy,
-			data_mode, data_repeat_flag, data_a, data_b, data_c, data_d, data_F402_copy, data_F405_copy;
+		uint16_t* current_pgm;
+		uint8_t pgm_counter;
+
+		uint16_t mul_pgm[32] = {0x21B7, 0x21B6, 0x211A, 0x211A, 0x21A1, 0x86D0, 0x1F91, 0x2F91, 0x2F91, 0x2F91, 0x2F91, 0x2F91, 0x2F91, 0x2F91, 0x2F91, 0x2F91,
+			0x1F91, 0x1F91, 0x1F91, 0x1F91, 0x1F91, 0x1F91, 0x1F1D, 0x161D, 0x212D, 0x1F19, 0x1619, 0x1719, 0x1819, 0x1919, 0x1A19, 0xE500};
+		uint16_t div_pgm[32] = {0xBC00, 0xBC00, 0xBC00, 0xBC00, 0xBC00, 0xBC00, 0xBC00, 0xBC00, 0xBC00, 0xBC00, 0x7029, 0x7329, 0x4929, 0x681D, 0x671D, 0x061D,
+			0x621D, 0x611D, 0x001D, 0x651D, 0x641D, 0x031D, 0x21B7, 0x21B6, 0x2116, 0x2116, 0x21B1, 0x22A0, 0x2181, 0x0A80, 0xFC00, 0xFC00};
+		uint16_t divsn_pgm[32] = {0xBC00, 0xBC00, 0xBC00, 0xBC00, 0xBC00, 0xBC00, 0xBC00, 0xBC00, 0xBC00, 0xBC00, 0x7029, 0x7329, 0x4929, 0x681D, 0x671D, 0x061D,
+			0x621D, 0x611D, 0x001D, 0x651D, 0x641D, 0x031D, 0x21B7, 0x21B6, 0x2116, 0x2116, 0x21CD, 0x0A8C, 0x21C1, 0x0A80, 0xFC00, 0xFC00};
+		uint16_t sft_pgm[32] = {0xC180, 0xC284, 0xC488, 0xC88C, 0xC181, 0xC285, 0xC489, 0xC88D, 0xC182, 0xC286, 0xC48A, 0xC88E, 0xC183, 0xC287, 0xC48B, 0xC88F,
+			0xC190, 0xC294, 0xC498, 0xC89C, 0xC191, 0xC295, 0xC499, 0xC89D, 0xC192, 0xC296, 0xC49A, 0xC89E, 0xC193, 0xC297, 0xC49B, 0xC89F};
+
+		uint16_t* pgm_ptr[16] = {nullptr, nullptr, mul_pgm, mul_pgm, div_pgm, div_pgm, divsn_pgm, divsn_pgm,
+			sft_pgm, sft_pgm, sft_pgm, sft_pgm, sft_pgm, sft_pgm, sft_pgm, sft_pgm};
+		uint8_t pgm_entry[16] = {0x00, 0x00, 0x00, 0x05, 0x16, 0x1C, 0x16, 0x1C, 0x00, 0x04, 0x08, 0x0C, 0x10, 0x14, 0x18, 0x1C};
+
+		static uint8_t ReadReg(MMURegion* region, size_t offset) {
+			offset -= region->base;
+			return ((uint8_t*)region->userdata)[offset];
+		}
+
+		static void WriteReg(MMURegion* region, size_t offset, uint8_t data) {
+			offset -= region->base;
+			((uint8_t*)region->userdata)[offset] = data;
+		}
 
 	public:
 		using Peripheral::Peripheral;
@@ -30,1099 +55,295 @@ namespace casioemu {
 		void Reset();
 		void Tick();
 
-		uint16_t CalcAddr(uint8_t base, uint8_t offset) {
-			if (offset > 12) {
-#ifdef DBG
-				std::cout << "???\n";
-#endif
-				return 999;
-			}
-			return base * 0x20 + offset;
-		}
-
-		uint8_t Read(uint16_t d) {
-			if (d == 999)
-				return 0;
-			return data_datas[d];
-		}
-		void Write(uint16_t d, uint8_t v) {
-			if (d != 999)
-				data_datas[d] = v;
-		}
-
-		void GenerateParams();
-		void F405control();
-		void ShiftLeft(int param);
-		void ShiftRight(int param);
-		void DataOperate();
+		void RunCommand(uint8_t);
+		void StartMacro(uint8_t);
+		void ShiftLeft(uint8_t, uint8_t, bool);
+		void ShiftRight(uint8_t, uint8_t, bool);
 	};
 	void BCDCalc::Initialise() {
-		if (emulator.hardware_id != HW_CLASSWIZ_II)
-			return;
-		F400_write = false;
-		F402_write = false;
-		F404_write = false;
-		F405_write = false;
+		clock_type = CLOCK_HSCLK;
 
-		region_bcdcontrol.Setup(
-			0xF400, 1, "BCDCalc/control", this,
-			[](MMURegion* region, size_t offset) {
-				BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
-				return bcdcalc->data_F400;
-			},
-			[](MMURegion* region, size_t, uint8_t data) {
-				BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
-				bcdcalc->data_F400 = data;
-				bcdcalc->F400_write = true;
-			},
-			emulator);
+		Reset();
 
-		region_param1.Setup(
-			0xF480, 12, "BCDCalc/param1", data_datas, [](MMURegion* region, size_t offset) { return ((uint8_t*)region->userdata)[offset - region->base]; }, [](MMURegion* region, size_t offset, uint8_t data) { ((uint8_t*)region->userdata)[offset - region->base] = data; }, emulator);
-		region_param2.Setup(
-			0xF4A0, 12, "BCDCalc/param2", data_datas + 0x20, [](MMURegion* region, size_t offset) { return ((uint8_t*)region->userdata)[offset - region->base]; }, [](MMURegion* region, size_t offset, uint8_t data) { ((uint8_t*)region->userdata)[offset - region->base] = data; }, emulator);
-		region_temp1.Setup(
-			0xF4C0, 12, "BCDCalc/temp1", data_datas + 0x20 * 2, [](MMURegion* region, size_t offset) { return ((uint8_t*)region->userdata)[offset - region->base]; }, [](MMURegion* region, size_t offset, uint8_t data) { ((uint8_t*)region->userdata)[offset - region->base] = data; }, emulator);
-		region_temp2.Setup(
-			0xF4E0, 12, "BCDCalc/temp2", data_datas + 0x20 * 3, [](MMURegion* region, size_t offset) { return ((uint8_t*)region->userdata)[offset - region->base]; }, [](MMURegion* region, size_t offset, uint8_t data) { ((uint8_t*)region->userdata)[offset - region->base] = data; }, emulator);
-
-		region_F410.Setup(0xF410, 1, "BCDCalc/F410", &data_F410, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
-		region_F414.Setup(0xF414, 1, "BCDCalc/F414", &data_F414, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
-		region_F415.Setup(0xF415, 1, "BCDCalc/F415", &data_F415, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
-
-		region_F402.Setup(
-			0xF402, 1, "BCDCalc/F402", this, [](MMURegion* region, size_t offset) {
-			BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
-			return bcdcalc->data_F402; }, [](MMURegion* region, size_t, uint8_t data) {
-			BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
-			bcdcalc->data_F402 = data;
-			bcdcalc->F402_write = true; }, emulator);
-		region_F404.Setup(
-			0xF404, 1, "BCDCalc/F404", this, [](MMURegion* region, size_t offset) {
-		 	BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
-		 	return bcdcalc->data_F404; }, [](MMURegion* region, size_t, uint8_t data) {
-		 	BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
-		 	bcdcalc->data_F404 = data;
-		 	bcdcalc->F404_write = true; }, emulator);
-		region_F405.Setup(
-			0xF405, 1, "BCDCalc/F405", this, [](MMURegion* region, size_t offset) {
-		 	BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
-		 	return bcdcalc->data_F405; }, [](MMURegion* region, size_t, uint8_t data) {
-		 	BCDCalc* bcdcalc = (BCDCalc*)region->userdata;
-		 	bcdcalc->data_F405 = data;
-		 	bcdcalc->F405_write = true; }, emulator);
-	}
-
-	void BCDCalc::GenerateParams() {
-		data_operator = (data_F400 >> 4) & 0x0F;
-		data_type_2 = (data_F400 >> 2) & 0x03;
-		data_type_1 = data_F400 & 0x03;
-		if (data_operator == 0) {
-			param1 = 0;
-			param2 = 1;
-		}
-		else {
-			param1 = 1;
-		}
-		return;
-	}
-
-	void BCDCalc::F405control() {
-		if (data_mode == 0xFF && param1 == 0) {
-			if (data_c) {
-				data_mode = (Read(CalcAddr(0, 0)) & 0x0F) + 0x20;
-				data_type_1 = 0;
-				data_type_2 = 0;
-				data_operator = 0x0D;
-				param1 = 1;
-				param4 = 0;
-				data_F405_copy = 0;
-			}
-			else if (data_b) {
-				data_mode = 0x18;
-				data_type_1 = 1;
-				data_type_2 = 0;
-				data_operator = 0x08;
-				param1 = 1;
-				param4 = 0;
-				data_F405_copy = 0;
-			}
-			else if (data_a) {
-				data_mode = 0x18;
-				data_type_1 = 1;
-				data_type_2 = 0;
-				data_operator = 0x0C;
-				param1 = 1;
-				param4 = 0;
-				data_F405_copy = 0;
+		region_BCDCMD.Setup(0xF400, 1, "BCD/BCDCMD", this, [](MMURegion* region, size_t) { return ((BCDCalc*)region->userdata)->data_BCDCMD; }, [](MMURegion* region, size_t, uint8_t data) {
+			BCDCalc* bcd = (BCDCalc*)region->userdata;
+			bcd->BCDCMD_req = data;
+			if (!bcd->macro_running) {
+				bcd->RunCommand(data);
 			}
 			else {
-				switch (((data_F405_copy >> 1) & 0x0F) - 1) {
-				case 0:
-					if (data_F405_copy & 0x01) {
-						data_mode = (Read(CalcAddr(0, 0)) & 0x0F) + 0x20;
-						data_type_1 = 0;
-						data_type_2 = 0;
-						data_operator = 0x0D;
-						data_c = 1;
-						param1 = 1;
-						param4 = 0;
-						data_F405_copy = 0;
-					}
-					else {
-						data_mode = 0x18;
-						data_type_1 = 0x03;
-						data_type_2 = 0x01;
-						data_operator = 0x0B;
-						data_c = 1;
-						param1 = 1;
-						param4 = 0;
-						data_F405_copy = 0;
-					}
-					break;
-				case 1:
-					if (data_F405_copy & 0x01) {
-						data_mode = 0x18;
-						data_type_1 = 1;
-						data_type_2 = 0;
-						data_operator = 0x08;
-						data_b = 1;
-						param1 = 1;
-						param4 = 0;
-						data_F405_copy = 0;
-					}
-					else {
-						data_mode = 0x10;
-						data_type_1 = 0x03;
-						data_type_2 = 0x01;
-						data_operator = 0x0B;
-						data_b = 1;
-						param1 = 1;
-						param4 = 0;
-						data_F405_copy = 0;
-					}
-					break;
-				case 2:
-					if (data_F405_copy & 0x01) {
-						data_mode = 0x18;
-						data_type_1 = 1;
-						data_type_2 = 0;
-						data_operator = 0x0C;
-						data_a = 1;
-						param1 = 1;
-						param4 = 0;
-						data_F405_copy = 0;
-					}
-					else {
-						data_mode = 0x20;
-						data_type_1 = 0x03;
-						data_type_2 = 0x01;
-						data_operator = 0x0B;
-						data_a = 1;
-						param1 = 1;
-						param4 = 0;
-						data_F405_copy = 0;
-					}
-					break;
-				case 3:
-				case 4:
-				case 5:
-				case 6:
-					data_F404_copy += 1;
-					if (data_F404_copy < 2) {
-						data_type_2 = 0;
-					}
-					else if (data_F404_copy < 4) {
-						data_type_2 = 1;
-					}
-					else if (data_F404_copy < 8) {
-						data_type_2 = 2;
-					}
-					else {
-						data_type_2 = 3;
-					}
-					if ((data_F405_copy & 0x0C) == 8) {
-						data_operator = 0x08;
-					}
-					else {
-						data_operator = 0x09;
-					}
-					data_mode = 0;
-					data_type_1 = data_F405_copy & 0x03;
-					data_F404_copy += 0xFF << data_type_2;
-					if (data_F404_copy) {
-						data_d = 1;
-					}
-					else {
-						data_d = 0;
-						data_mode = 0x3F;
-					}
-					param1 = 1;
-					param4 = 0;
-					data_F405_copy = 0;
-					break;
-				default:
-					data_type_1 = 0;
-					data_type_2 = 0;
-					data_operator = 0;
-					data_a = 1;
-					param1 = 1;
-					param4 = 0;
-					data_F405_copy = 0;
-					break;
-				}
-			}
-		}
-		else {
-			if (((data_a | data_b | data_c | data_d) != 0) && param1 == 0) {
-				if (data_c != 0) {
-					switch (data_mode - 0x18) {
-					case 0:
-						data_mode = 0x19;
-						data_type_1 = 0x02;
-						data_type_2 = 0x01;
-						data_operator = 0x0B;
-						break;
-					case 1:
-						data_mode = 0x1A;
-						data_type_1 = 0x02;
-						data_type_2 = 0x02;
-						data_operator = 0x01;
-						break;
-					case 2:
-						data_mode = 0x1B;
-						data_type_1 = 0x02;
-						data_type_2 = 0x02;
-						data_operator = 0x01;
-						break;
-					case 3:
-						data_mode = 0x1C;
-						data_type_1 = 0x01;
-						data_type_2 = 0x00;
-						data_operator = 0x0A;
-						break;
-					case 4:
-						data_mode = (Read(CalcAddr(0, 0)) & 0x0F) + 0x20;
-						data_type_1 = 0x00;
-						data_type_2 = 0x00;
-						data_operator = 0x0D;
-						break;
-					case 8:
-						data_mode = 0x3F;
-						data_type_1 = 0x01;
-						data_type_2 = 0x00;
-						data_operator = 0x09;
-						break;
-					case 9:
-					case 10:
-					case 11:
-					case 12:
-					case 13:
-					case 14:
-					case 15:
-					case 16:
-					case 17:
-						data_mode += 0x10;
-						data_type_1 = 0x01;
-						data_type_2 = 0x00;
-						data_operator = 0x09;
-						break;
-					case 25:
-						data_mode = 0x3F;
-						data_type_1 = 0x01;
-						data_type_2 = 0x03;
-						data_operator = 0x01;
-						break;
-					case 26:
-						data_mode = 0x31;
-						data_type_1 = 0x01;
-						data_type_2 = 0x03;
-						data_operator = 0x01;
-						break;
-					case 27:
-						data_mode = 0x34;
-						data_type_1 = 0x01;
-						data_type_2 = 0x03;
-						data_operator = 0x02;
-						break;
-					case 28:
-						data_mode = 0x3F;
-						data_type_1 = 0x01;
-						data_type_2 = 0x02;
-						data_operator = 0x01;
-						break;
-					case 29:
-						data_mode = 0x31;
-						data_type_1 = 0x01;
-						data_type_2 = 0x02;
-						data_operator = 0x01;
-						break;
-					case 30:
-						data_mode = 0x32;
-						data_type_1 = 0x01;
-						data_type_2 = 0x02;
-						data_operator = 0x01;
-						break;
-					case 31:
-						data_mode = 0x33;
-						data_type_1 = 0x01;
-						data_type_2 = 0x02;
-						data_operator = 0x01;
-						break;
-					case 32:
-						data_mode = 0x34;
-						data_type_1 = 0x01;
-						data_type_2 = 0x02;
-						data_operator = 0x01;
-						break;
-					case 33:
-						data_mode = 0x35;
-						data_type_1 = 0x01;
-						data_type_2 = 0x02;
-						data_operator = 0x01;
-						break;
-					default:
-						data_mode = 0x3F;
-						data_type_1 = 0x00;
-						data_type_2 = 0x00;
-						data_operator = 0x00;
-						if (data_F404_copy) {
-							data_c = 1;
-						}
-						else {
-							data_c = 0;
-						}
-						break;
-					}
-					if (data_mode == 0x3F && data_F404_copy) {
-						data_F404_copy -= 1;
-						data_mode = 0xFF;
-					}
-				}
-				else if (data_b == 0 && data_a == 0) {
-					if (data_F404_copy < 2) {
-						data_type_2 = 0;
-					}
-					else if (data_F404_copy < 4) {
-						data_type_2 = 1;
-					}
-					else if (data_F404_copy < 8) {
-						data_type_2 = 2;
-					}
-					else {
-						data_type_2 = 3;
-					}
-					data_mode = 0;
-					param1 = 1;
-					data_F404_copy += 0xFF << data_type_2;
-					if (!data_F404_copy) {
-						data_d = 0;
-						data_mode = 0x3F;
-					}
-				}
-				else {
-					uint8_t flag = data_F410 >> 7;
-					uint8_t data_mode_backup = data_mode;
-					switch (data_mode) {
-					case 0:
-					case 3:
-					case 6:
-						data_mode = 0x3F;
-						data_type_1 = 0x00;
-						data_type_2 = 0x00;
-						data_operator = 0x00;
-						break;
-					case 1:
-						if (flag) {
-							data_mode = 0x3F;
-							data_type_1 = 0x00;
-							data_type_2 = 0x00;
-							data_operator = 0x00;
-						}
-						else {
-							data_mode = 0x00;
-							data_type_1 = 0x01;
-							data_type_2 = 0x03;
-							data_operator = 0x01;
-						}
-						break;
-					case 2:
-						if (flag) {
-							data_mode = 0x3F;
-							data_type_1 = 0x00;
-							data_type_2 = 0x00;
-							data_operator = 0x00;
-						}
-						else {
-							data_mode = 0x01;
-							data_type_1 = 0x01;
-							data_type_2 = 0x03;
-							data_operator = 0x01;
-						}
-						break;
-					case 4:
-						if (flag) {
-							data_mode = 0x3F;
-							data_type_1 = 0x00;
-							data_type_2 = 0x00;
-							data_operator = 0x00;
-						}
-						else {
-							data_mode = 0x03;
-							data_type_1 = 0x01;
-							data_type_2 = 0x03;
-							data_operator = 0x01;
-						}
-						break;
-					case 5:
-						if (flag) {
-							data_mode = 0x3F;
-							data_type_1 = 0x00;
-							data_type_2 = 0x00;
-							data_operator = 0x00;
-						}
-						else {
-							data_mode = 0x04;
-							data_type_1 = 0x01;
-							data_type_2 = 0x03;
-							data_operator = 0x01;
-						}
-						break;
-					case 7:
-						if (flag) {
-							data_mode = 0x3F;
-							data_type_1 = 0x00;
-							data_type_2 = 0x00;
-							data_operator = 0x00;
-						}
-						else {
-							data_mode = 0x06;
-							data_type_1 = 0x01;
-							data_type_2 = 0x03;
-							data_operator = 0x01;
-						}
-						break;
-					case 8:
-						if (flag) {
-							data_mode = 0x3F;
-							data_type_1 = 0x00;
-							data_type_2 = 0x00;
-							data_operator = 0x00;
-						}
-						else {
-							data_mode = 0x07;
-							data_type_1 = 0x01;
-							data_type_2 = 0x03;
-							data_operator = 0x01;
-						}
-						break;
-					case 9:
-						if (flag) {
-							data_mode = 0x08;
-							data_type_1 = 0x01;
-							data_type_2 = 0x03;
-							data_operator = 0x01;
-						}
-						else {
-							data_mode = 0x3F;
-							data_type_1 = 0x00;
-							data_type_2 = 0x00;
-							data_operator = 0x00;
-						}
-						break;
-					case 16:
-						data_mode = 0x11;
-						data_type_1 = 0x02;
-						data_type_2 = 0x01;
-						data_operator = 0x0B;
-						break;
-					case 17:
-						data_mode = 0x12;
-						data_type_1 = 0x02;
-						data_type_2 = 0x01;
-						data_operator = 0x01;
-						break;
-					case 18:
-						data_mode = 0x13;
-						data_type_1 = 0x02;
-						data_type_2 = 0x01;
-						data_operator = 0x01;
-						break;
-					case 19:
-						data_mode = 0x14;
-						data_type_1 = 0x01;
-						data_type_2 = 0x00;
-						data_operator = 0x0B;
-						break;
-					case 20:
-						data_mode = 0x18;
-						data_type_1 = 0x00;
-						data_type_2 = 0x00;
-						data_operator = 0x0A;
-						break;
-					case 24:
-						data_mode = 0x19;
-						data_type_1 = 0x00;
-						data_type_2 = 0x00;
-						data_operator = 0x0B;
-						break;
-					case 25:
-						data_mode = 0x1A;
-						data_type_1 = 0x01;
-						data_type_2 = 0x02;
-						data_operator = 0x02;
-						break;
-					case 26:
-						if (flag) {
-							data_mode = 0x02;
-							data_type_1 = 0x01;
-							data_type_2 = 0x03;
-							data_operator = 0x01;
-						}
-						else {
-							data_mode = 0x1B;
-							data_type_1 = 0x01;
-							data_type_2 = 0x02;
-							data_operator = 0x02;
-						}
-						break;
-					case 27:
-						if (flag) {
-							data_mode = 0x05;
-							data_type_1 = 0x01;
-							data_type_2 = 0x03;
-							data_operator = 0x01;
-						}
-						else {
-							data_mode = 0x09;
-							data_type_1 = 0x01;
-							data_type_2 = 0x02;
-							data_operator = 0x02;
-						}
-						break;
-					case 32:
-						data_mode = 0x21;
-						data_type_1 = 0x02;
-						data_type_2 = 0x01;
-						data_operator = 0x0B;
-						break;
-					case 33:
-						data_mode = 0x22;
-						data_type_1 = 0x02;
-						data_type_2 = 0x01;
-						data_operator = 0x01;
-						break;
-					case 34:
-						data_mode = 0x23;
-						data_type_1 = 0x02;
-						data_type_2 = 0x01;
-						data_operator = 0x01;
-						break;
-					case 35:
-						data_mode = 0x24;
-						data_type_1 = 0x01;
-						data_type_2 = 0x03;
-						data_operator = 0x0C;
-						break;
-					case 36:
-						data_mode = 0x19;
-						data_type_1 = 0x00;
-						data_type_2 = 0x03;
-						data_operator = 0x08;
-						break;
-					default:
-						break;
-					}
-					if (data_mode == 0x3F) {
-						uint8_t data_tmp = Read(CalcAddr(0, 0));
-						Write(CalcAddr(0, 0), ((data_tmp ^ data_mode_backup) & 0x0F) ^ data_tmp);
-						if (data_F404_copy) {
-							data_F404_copy--;
-							if (data_b) {
-								data_mode = 0x18;
-								data_type_1 = 0x01;
-								data_type_2 = 0x00;
-								data_operator = 0x08;
-							}
-							else if (data_a) {
-								data_mode = 0x18;
-								data_type_1 = 0x01;
-								data_type_2 = 0x00;
-								data_operator = 0x0C;
-							}
-						}
-						else {
-							data_a = 0;
-							data_b = 0;
-						}
-					}
-				}
-				if ((data_a | data_b | data_c) != 0) {
-					param1 = 1;
-					if ((data_operator | data_type_1 | data_type_2) == 0)
-						param1 = 0;
-				}
-				param4 = 0;
-			}
-		}
-		if ((data_a | data_b | data_c | data_d) != 0) {
-			data_F405 = (data_F405 & 0x7F) | 0x80;
-		}
-		else {
-			data_F405 = data_F405 & 0x7F;
-		}
-	}
+				bcd->emulator.chipset.cpu.cpu_run_stat = false;
+				bcd->BCDCMD_pend = true;
+			} }, emulator);
 
-	void BCDCalc::ShiftLeft(int param) {
-		if (data_type_2 > 3)
-			return;
-		if (data_type_2 == 0) {
-			for (uint8_t offset = 0; offset < 0x0B; offset++) {
-				uint16_t addr = CalcAddr(data_type_1, 0x0B - offset);
-				uint8_t val1 = Read((size_t)addr);
-				uint8_t val2 = Read((size_t)(addr - 1));
-				Write((size_t)addr, (val1 << 4) | (val2 >> 4));
-			}
-			uint16_t addr = CalcAddr((data_type_1 + 3) & 0x03, 0x0B);
-			uint8_t val2 = Read((size_t)addr);
-			addr = CalcAddr(data_type_1, 0);
-			uint8_t val1 = Read((size_t)addr);
-			if (param == 0) {
-				val2 = 0;
-			}
-			Write((size_t)addr, (val1 << 4) | (val2 >> 4));
-		}
-		else if (data_type_2 == 1) {
-			for (uint8_t offset = 0; offset < 0x0B; offset++) {
-				uint16_t addr = CalcAddr(data_type_1, 0x0B - offset);
-				uint8_t val = Read((size_t)(addr - 1));
-				Write((size_t)addr, val);
-			}
-			uint16_t addr = CalcAddr((data_type_1 + 3) & 0x03, 0x0B);
-			uint8_t val = Read((size_t)addr);
-			if (param == 0) {
-				val = 0;
-			}
-			addr = CalcAddr(data_type_1, 0);
-			Write((size_t)addr, val);
-		}
-		else if (data_type_2 == 2) {
-			for (uint8_t offset = 0; offset < 0x0A; offset++) {
-				uint16_t addr = CalcAddr(data_type_1, 0x09 - offset);
-				uint8_t val = Read((size_t)addr);
-				Write((size_t)(addr + 2), val);
-			}
-			for (int i = 0; i < 2; i++) {
-				uint16_t addr = CalcAddr((data_type_1 + 3) & 0x03, i + 0x0A);
-				uint8_t val = Read((size_t)addr);
-				if (param == 0) {
-					val = 0;
-				}
-				addr = CalcAddr(data_type_1, i);
-				Write((size_t)addr, val);
-			}
-		}
-		else if (data_type_2 == 3) {
-			for (uint8_t offset = 0; offset < 0x08; offset++) {
-				uint16_t addr = CalcAddr(data_type_1, 0x07 - offset);
-				uint8_t val = Read((size_t)addr);
-				Write((size_t)(addr + 4), val);
-			}
-			for (int i = 0; i < 4; i++) {
-				uint16_t addr = CalcAddr((data_type_1 + 3) & 0x03, i + 0x08);
-				uint8_t val = Read((size_t)addr);
-				if (param == 0) {
-					val = 0;
-				}
-				addr = CalcAddr(data_type_1, i);
-				Write((size_t)addr, val);
-			}
-		}
-	}
+		region_BCDCON.Setup(0xF402, 1, "BCD/BCDCON", &data_BCDCON, MMURegion::DefaultRead<uint8_t>, [](MMURegion* region, size_t, uint8_t data) {
+			data &= 0x0F;
+			if (data < 1) data = 1;
+			if (data > 6) data = 6;
+			*(uint8_t*)region->userdata = data; }, emulator);
 
-	void BCDCalc::ShiftRight(int param) {
-		if (data_type_2 > 3)
-			return;
-		if (data_type_2 == 0) {
-			for (uint8_t offset = 0; offset < 0x0B; offset++) {
-				uint16_t addr = CalcAddr(data_type_1, offset);
-				uint8_t val1 = Read((size_t)addr);
-				uint8_t val2 = Read((size_t)(addr + 1));
-				Write((size_t)addr, (val2 << 4) | (val1 >> 4));
-			}
-			uint16_t addr = CalcAddr(data_type_1, 0x0B);
-			uint8_t val1 = Read((size_t)addr);
-			addr = CalcAddr((data_type_1 + 1) & 0x03, 0);
-			uint8_t val2 = Read((size_t)addr);
-			if (param == 0) {
-				val2 = 0;
-			}
-			addr = CalcAddr(data_type_1, 0x0B);
-			Write((size_t)addr, (val2 << 4) | (val1 >> 4));
-		}
-		else if (data_type_2 == 1) {
-			for (uint8_t offset = 0; offset < 0x0B; offset++) {
-				uint16_t addr = CalcAddr(data_type_1, offset);
-				uint8_t val = Read((size_t)(addr + 1));
-				Write((size_t)addr, val);
-			}
-			uint16_t addr = CalcAddr((data_type_1 + 1) & 0x03, 0);
-			uint8_t val = Read((size_t)addr);
-			if (param == 0) {
-				val = 0;
-			}
-			addr = CalcAddr(data_type_1, 0x0B);
-			Write((size_t)addr, val);
-		}
-		else if (data_type_2 == 2) {
-			for (uint8_t offset = 0; offset < 0x0A; offset++) {
-				uint16_t addr = CalcAddr(data_type_1, offset);
-				uint8_t val = Read((size_t)(addr + 2));
-				Write((size_t)addr, val);
-			}
-			for (int i = 0x0A; i < 0x0C; i++) {
-				uint16_t addr = CalcAddr((data_type_1 + 1) & 0x03, i - 0x0A);
-				uint8_t val = Read((size_t)addr);
-				if (param == 0) {
-					val = 0;
-				}
-				addr = CalcAddr(data_type_1, i);
-				Write((size_t)addr, val);
-			}
-		}
-		else if (data_type_2 == 3) {
-			for (uint8_t offset = 0; offset < 0x08; offset++) {
-				uint16_t addr = CalcAddr(data_type_1, offset);
-				uint8_t val = Read((size_t)(addr + 4));
-				Write((size_t)addr, val);
-			}
-			for (int i = 0x08; i < 0x0C; i++) {
-				uint16_t addr = CalcAddr((data_type_1 + 1) & 0x03, i - 0x08);
-				uint8_t val = Read((size_t)addr);
-				if (param == 0) {
-					val = 0;
-				}
-				addr = CalcAddr(data_type_1, i);
-				Write((size_t)addr, val);
-			}
-		}
-	}
+		region_BCDMCN.Setup(0xF404, 1, "BCD/BCDMCN", &data_BCDMCN, MMURegion::DefaultRead<uint8_t, 0x1F>, MMURegion::DefaultWrite<uint8_t, 0x1F>, emulator);
 
-	uint32_t Calculate(uint32_t tmp, uint32_t val1, uint32_t val2, int flag) {
-		if (flag == 1)
-			tmp ^= 0x01;
-		tmp &= 0x01;
-		uint32_t val1_tmp = val1 & 0x0F;
-		uint32_t val2_tmp = val2 & 0x0F;
-		if (flag == 1) {
-			val2_tmp = (0xFFFFFFF9 - val2_tmp) & 0x0F;
-		}
-		val2_tmp += val1_tmp;
-		val2_tmp += tmp;
-		int f = 0;
-		if (val2_tmp >= 0x0A) {
-			val2_tmp -= 0x0A;
-			f = 1;
-		}
-		val2_tmp &= 0x0F;
-		tmp = val2_tmp;
-		val1_tmp = (val1 >> 4) & 0x0F;
-		val2_tmp = (val2 >> 4) & 0x0F;
-		if (flag == 1) {
-			val2_tmp = (0xFFFFFFF9 - val2_tmp) & 0x0F;
-		}
-		val1_tmp += val2_tmp;
-		val1_tmp += f;
-		f = 0;
-		if (val1_tmp >= 0x0A) {
-			val1_tmp -= 0x0A;
-			f = 1;
-		}
-		val1_tmp = val1_tmp << 4;
-		tmp |= val1_tmp & 0xF0;
-		val1_tmp = (val1 >> 8) & 0x0F;
-		val2_tmp = (val2 >> 8) & 0x0F;
-		if (flag == 1) {
-			val2_tmp = (0xFFFFFFF9 - val2_tmp) & 0x0F;
-		}
-		val1_tmp += val2_tmp;
-		val1_tmp += f;
-		f = 0;
-		if (val1_tmp >= 0x0A) {
-			val1_tmp -= 0x0A;
-			f = 1;
-		}
-		val1_tmp = (val1_tmp << 8) & 0xF00;
-		val1 = (val1 >> 12) & 0x0F;
-		val2 = (val2 >> 12) & 0x0F;
-		tmp |= val1_tmp;
-		if (flag == 1) {
-			val2 = (0xFFFFFFF9 - val2) & 0x0F;
-		}
-		val1 += val2;
-		val1 += f;
-		f = 0;
-		if (val1 >= 0x0A) {
-			val1 -= 0x0A;
-			f = 1;
-		}
-		val1 = (val1 << 12) & 0xF000;
-		tmp |= val1;
-		if (flag == 1)
-			f ^= 0x01;
-		f = f << 0x10;
-		f += tmp;
-		return f;
-	}
-
-	void BCDCalc::DataOperate() {
-		if (param1 == 1 && param4 == 0 && data_F402_copy != 0) {
-			bool storeresults = false;
-			if (data_operator == 1 || data_operator == 2)
-				storeresults = true;
-			uint8_t offset = 0;
-			uint16_t val1, val2;
-			uint32_t tmp = 0;
-			int flag;
-			int data_F410_tmp = 1;
-			for (int i = 0; i * 2 < data_F402_copy; i++) {
-				offset = i * 4;
-				uint16_t addr1 = CalcAddr(data_type_1, offset);
-				val1 = (uint16_t)Read((size_t)(addr1 + 1)) * 0x100 + (uint16_t)Read((size_t)addr1);
-				uint16_t addr2 = CalcAddr(data_type_2, offset);
-				val2 = (uint16_t)Read((size_t)(addr2 + 1)) * 0x100 + (uint16_t)Read((size_t)addr2);
-				if (data_operator == 2) {
-					flag = 1;
-				}
-				else {
-					flag = 0;
-				}
-				uint32_t res = Calculate(tmp, (uint32_t)val1, (uint32_t)val2, flag);
-				tmp = (res >> 16) & 1;
-				if ((res & 0xFFFF) == 0 && data_F410_tmp != 0) {
-					data_F410_tmp = 1;
-				}
-				else {
-					data_F410_tmp = 0;
-				}
-				if (storeresults) {
-					uint16_t storeaddr = CalcAddr(data_type_1, offset);
-					Write((size_t)storeaddr, (uint8_t)(res & 0xFF));
-					Write((size_t)(storeaddr + 1), (uint8_t)((res >> 8) & 0xFF));
-				}
-				offset += 2;
-				addr1 = CalcAddr(data_type_1, offset);
-				addr2 = CalcAddr(data_type_2, offset);
-				val1 = (uint16_t)Read((size_t)(addr1 + 1)) * 0x100 + (uint16_t)Read((size_t)addr1);
-				val2 = (uint16_t)Read((size_t)(addr2 + 1)) * 0x100 + (uint16_t)Read((size_t)addr2);
-				res = Calculate(tmp, (uint32_t)val1, (uint32_t)val2, flag);
-				if (i * 2 + 1 != data_F402_copy) {
-					tmp = (res >> 16) & 1;
-					if ((res & 0xFFFF) == 0 && data_F410_tmp != 0) {
-						data_F410_tmp = 1;
-					}
-					else {
-						data_F410_tmp = 0;
-					}
-				}
-				data_F410 = (uint8_t)(((tmp * 2) | data_F410_tmp) << 6);
-				if (storeresults) {
-					uint16_t storeaddr = CalcAddr(data_type_1, offset);
-					if (i * 2 + 1 == data_F402_copy) {
-						Write((size_t)storeaddr, 0);
-						Write((size_t)(storeaddr + 1), 0);
-					}
-					else {
-						Write((size_t)storeaddr, (uint8_t)(res & 0xFF));
-						Write((size_t)(storeaddr + 1), (uint8_t)((res >> 8) & 0xFF));
-					}
-				}
-			}
-		}
-		if (data_operator == 1 || data_operator == 2) {
-			if (param2 == 1 || param3 == 1) {
-				param4 += 2;
-				if (param4 >= data_F402_copy)
-					param1 = 0;
-			}
-		}
-		uint8_t sign = data_operator;
-		if (param1 == 0) {
-			sign = 0;
-		}
-		else {
-			sign &= 0x0F;
-		}
-		sign -= 8;
-		switch (sign) {
-		case 0:
-			ShiftLeft(0);
-			break;
-		case 1:
-			ShiftRight(0);
-			break;
-		case 2:
-			uint16_t addr;
-			for (uint8_t offset = 1; offset < 0x0C; offset++) {
-				addr = CalcAddr(data_type_1, offset);
-				Write(addr, 0);
-			}
-			addr = CalcAddr(data_type_1, 0);
-			if (data_type_2 == 3) {
-				Write((size_t)addr, 5);
+		region_BCDMCR.Setup(0xF405, 1, "BCD/BCDMCR", this, [](MMURegion* region, size_t) { return (uint8_t)(((BCDCalc*)region->userdata)->macro_running ? 0x80 : 0); }, [](MMURegion* region, size_t, uint8_t data) {
+			BCDCalc* bcd = (BCDCalc*)region->userdata;
+			bcd->BCDMCR_req = data;
+			if (!bcd->macro_running) {
+				bcd->StartMacro(data);
 			}
 			else {
-				Write((size_t)addr, data_type_2);
-			}
-			break;
-		case 3:
-			uint8_t val;
-			for (uint8_t offset = 0; offset < 0x0C; offset++) {
-				addr = CalcAddr(data_type_2, offset);
-				val = Read((size_t)addr);
-				addr = CalcAddr(data_type_1, offset);
-				Write((size_t)addr, val);
-			}
-			break;
-		case 4:
-			ShiftLeft(1);
-			break;
-		case 5:
-			ShiftRight(1);
-			break;
-		default:
-			break;
-		}
-		uint8_t start = 0;
-		uint8_t end = 0;
-		if ((data_F400 & 0xF0) == 0 || (param3 == 1 && param2 != 1)) {
-			uint8_t offset = 0x0B;
-			bool flag = true;
-			do {
-				if (flag == false)
-					break;
-				uint16_t addr = CalcAddr(data_type_1, offset);
-				uint8_t value = Read((size_t)addr);
-				if (offset < data_F402_copy * 2) {
-					if ((value & 0xF0) != 0) {
-						flag = false;
-					}
-					else {
-						end++;
-						if ((value & 0x0F) != 0) {
-							flag = false;
-						}
-						else {
-							end++;
-						}
-					}
-				}
-				else {
-					end += 2;
-				}
-				offset--;
-			} while (offset != 0xFF);
-			offset = 0;
-			flag = true;
-			do {
-				if (flag == false)
-					break;
-				uint16_t addr = CalcAddr(data_type_1, offset);
-				uint8_t value = Read((size_t)addr);
-				if (offset < data_F402_copy * 2) {
-					if ((value & 0x0F) != 0) {
-						flag = false;
-					}
-					else {
-						start++;
-						if ((value & 0xF0) != 0) {
-							flag = false;
-						}
-						else {
-							start++;
-						}
-					}
-				}
-				else {
-					end += 2;
-				}
-				offset++;
-			} while (offset <= 0x0B);
-			data_F414 = start;
-			data_F415 = end;
-		}
-		if (data_F400 != 0 && (data_F400 & 0x08) == 0)
-			return;
-		param1 = 0;
-		data_F402_copy = 6;
-		return;
+				bcd->emulator.chipset.cpu.cpu_run_stat = false;
+				bcd->BCDMCR_pend = true;
+			} }, emulator);
+
+		region_BCDFLG.Setup(0xF410, 1, "BCD/BCDFLG", this, [](MMURegion* region, size_t) {
+			BCDCalc* bcd = (BCDCalc*)region->userdata;
+			return uint8_t((bcd->C_flag ? 0x80 : 0) | (bcd->Z_flag ? 0x40 : 0)); }, [](MMURegion* region, size_t, uint8_t data) {
+			BCDCalc* bcd = (BCDCalc*)region->userdata;
+			bcd->C_flag = (data & 0x80) != 0;
+			bcd->Z_flag = (data & 0x40) != 0; }, emulator);
+
+		region_BCDLLZ.Setup(0xF414, 1, "BCD/BCDLLZ", &data_BCDLLZ, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
+		region_BCDMLZ.Setup(0xF415, 1, "BCD/BCDMLZ", &data_BCDMLZ, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
+
+		region_BCDREGA.Setup(0xF480, 12, "BCD/BCDREGA", BCDREG[0], ReadReg, WriteReg, emulator);
+		region_BCDREGB.Setup(0xF4A0, 12, "BCD/BCDREGB", BCDREG[1], ReadReg, WriteReg, emulator);
+		region_BCDREGC.Setup(0xF4C0, 12, "BCD/BCDREGC", BCDREG[2], ReadReg, WriteReg, emulator);
+		region_BCDREGD.Setup(0xF4E0, 12, "BCD/BCDREGD", BCDREG[3], ReadReg, WriteReg, emulator);
 	}
 
 	void BCDCalc::Tick() {
-		if (F402_write) {
-			if (data_F402 == 0)
-				data_F402 = 1;
-			if (data_F402 > 6)
-				data_F402 = 6;
-			F402_write = false;
+		if (!macro_running)
 			return;
+
+	fetch:
+		uint16_t inst = current_pgm[pgm_counter];
+		uint8_t offset = (inst >> 8) & 0x1F;
+		uint8_t cond = 0;
+
+		switch (inst >> 13) {
+		case 0:
+			pgm_counter = offset;
+			break;
+		case 1:
+			pgm_counter = (pgm_counter + offset) & 0x1F;
+			break;
+		case 2:
+			pgm_counter++;
+			cond = 1;
+			break;
+		case 3:
+			pgm_counter++;
+			cond = 2;
+			break;
+		case 4:
+			pgm_counter = ((BCDREG[0][0] & 0x0F) + offset) & 0x1F;
+			break;
+		case 5:
+			BCDREG[0][0] = (BCDREG[0][0] & 0xF0) | (pgm_counter & 0x0F);
+			pgm_counter = offset;
+			if (--BCDMCN)
+				goto fetch;
+			macro_running = false;
+			break;
+		case 6:
+			BCDMCN -= offset;
+			pgm_counter &= 0xFC;
+			if (BCDMCN & 0xF8)
+				pgm_counter |= 3;
+			else if (BCDMCN & 0x04)
+				pgm_counter |= 2;
+			else if (BCDMCN & 0x02)
+				pgm_counter |= 1;
+			else if (!BCDMCN)
+				macro_running = false;
+			break;
+		case 7:
+			pgm_counter = offset;
+			if (--BCDMCN)
+				goto fetch;
+			macro_running = false;
+			break;
 		}
-		if (F404_write) {
-			data_F404 &= 0x1F;
-			F404_write = false;
-			return;
-		}
-		if (F400_write || F405_write) {
-			data_mode = 0x3F;
-			data_a = 0;
-			data_b = 0;
-			data_c = 0;
-			data_d = 0;
-			data_F404_copy = 0;
-			data_operator = 0;
-			data_type_1 = 0;
-			data_type_2 = 0;
-			param1 = 0;
-			param2 = 0;
-			param3 = 0;
-			if (data_F400 != 0xFF) {
-				GenerateParams();
-				param4 = 0;
-				data_F400 = 0xFF;
+
+		RunCommand(inst & 0xFF);
+		if (cond && ((cond & 1) ^ C_flag))
+			pgm_counter = offset;
+
+		if (!macro_running) {
+			if (BCDCMD_pend) {
+				emulator.chipset.cpu.cpu_run_stat = true;
+				BCDCMD_pend = false;
+				RunCommand(BCDCMD_req);
 			}
-			data_F402_copy = data_F402;
-			if (data_F405 & 0x7F) {
-				data_F405_copy = data_F405;
-				data_F404_copy = data_F404;
-				data_F405 = 0;
-				data_mode = 0xFF;
+			if (BCDMCR_pend) {
+				emulator.chipset.cpu.cpu_run_stat = true;
+				BCDMCR_pend = false;
+				StartMacro(BCDMCR_req);
 			}
-			do {
-				if (param1 == 0 && data_mode == 0x3F) {
-					data_repeat_flag = 0;
-				}
-				else {
-					data_repeat_flag = 1;
-				}
-				F405control();
-				param3 = param2;
-				param2 = param1;
-				DataOperate();
-			} while (data_repeat_flag == 1);
-			F400_write = false;
-			F405_write = false;
 		}
 	}
+
 	void BCDCalc::Reset() {
-		F400_write = false;
-		F402_write = false;
-		F404_write = false;
-		F405_write = false;
-		data_F400 = 0xFF;
-		data_F402 = 0;
-		data_F402_copy = 0;
-		data_F404 = 0;
-		data_F405 = 0;
+		data_BCDCMD = data_BCDMCN = data_BCDLLZ = data_BCDMLZ = 0;
+		data_BCDCON = 6;
+
+		BCDCMD_req = BCDMCR_req = 0;
+		C_flag = Z_flag = macro_running = BCDCMD_pend = BCDMCR_pend = false;
+
+		current_pgm = nullptr;
+		pgm_counter = 0;
+	}
+
+	void BCDCalc::RunCommand(uint8_t cmd) {
+		data_BCDCMD = cmd;
+		uint8_t src = (cmd >> 2) & 3, dst = cmd & 3, op = cmd >> 4;
+		bool arithmetic_mode = (op & 0x08) == 0;
+		int calc_ptr = (op >= 8 || op == 1 || op == 2) ? 0 : (op == 7 ? 2 : 6);
+		while (calc_ptr < 6) {
+			if (calc_ptr == 0) {
+				C_flag = false;
+				Z_flag = true;
+			}
+			bool carry = op == 2 ? !C_flag : C_flag;
+			uint16_t res = 0, op_src = BCDREG[src][calc_ptr << 1] | uint16_t(BCDREG[src][(calc_ptr << 1) + 1] << 8),
+					 op_dst = BCDREG[dst][calc_ptr << 1] | uint16_t(BCDREG[dst][(calc_ptr << 1) + 1] << 8);
+			for (int i = 0; i < 4; i++) {
+				uint8_t op1 = op_src & 0x0F, op2 = op_dst & 0x0F;
+				op_src >>= 4;
+				op_dst >>= 4;
+				if (op == 2)
+					op1 = (9 - op1) & 0x0F;
+				op2 += op1 + (carry ? 1 : 0);
+				if ((carry = op2 >= 10))
+					op2 -= 10;
+				res |= op2 << (i * 4);
+			}
+			if (op == 2)
+				carry = !carry;
+			if (res)
+				Z_flag = false;
+			if (arithmetic_mode) {
+				BCDREG[dst][calc_ptr << 1] = res & 0xFF;
+				BCDREG[dst][(calc_ptr << 1) + 1] = res >> 8;
+				C_flag = carry;
+				calc_ptr++;
+				if (op < 7 && calc_ptr >= data_BCDCON)
+					break;
+			}
+			else {
+				if (calc_ptr < data_BCDCON)
+					C_flag = carry;
+				if (calc_ptr++)
+					break;
+			}
+		}
+
+		if (!arithmetic_mode) {
+			switch (op & 0x07) {
+			case 0:
+				ShiftLeft(src, dst, false);
+				break;
+			case 1:
+				ShiftRight(src, dst, false);
+				break;
+			case 2:
+				memset(BCDREG[dst], 0, 12);
+				BCDREG[dst][0] = src == 3 ? 5 : src;
+				break;
+			case 3:
+				memcpy(BCDREG[dst], BCDREG[src], 12);
+				break;
+			case 4:
+				ShiftLeft(src, dst, true);
+				break;
+			case 5:
+				ShiftRight(src, dst, true);
+				break;
+			case 7:
+				memset(BCDREG[dst], 0, 12);
+				break;
+			default:
+				break;
+			}
+		}
+
+		data_BCDLLZ = 0;
+		for (int i = 0; i < 12; i++) {
+			if (i >= 2 * data_BCDCON) {
+				data_BCDLLZ += 2;
+				continue;
+			}
+			if (BCDREG[dst][i] & 0x0F)
+				break;
+			data_BCDLLZ++;
+			if (BCDREG[dst][i] >> 4)
+				break;
+			data_BCDLLZ++;
+		}
+
+		data_BCDMLZ = 24 - 4 * data_BCDCON;
+		for (int i = 2 * data_BCDCON - 1; i >= 0; i--) {
+			if (BCDREG[dst][i] >> 4)
+				break;
+			data_BCDMLZ++;
+			if (BCDREG[dst][i] & 0x0F)
+				break;
+			data_BCDMLZ++;
+		}
+	}
+
+	void BCDCalc::StartMacro(uint8_t index) {
+		BCDMCN = data_BCDMCN + 1;
+		if (index > 0x0F) {
+			current_pgm = nullptr;
+			pgm_counter = 0;
+		}
+		else {
+			current_pgm = pgm_ptr[index];
+			pgm_counter = pgm_entry[index];
+			if (index & 8) {
+				if (BCDMCN & 0xF8)
+					pgm_counter |= 3;
+				else if (BCDMCN & 0x04)
+					pgm_counter |= 2;
+				else if (BCDMCN & 0x02)
+					pgm_counter |= 1;
+			}
+		}
+		if (current_pgm != nullptr)
+			macro_running = true;
+	}
+
+	void BCDCalc::ShiftLeft(uint8_t src, uint8_t dst, bool continuous) {
+		if (!src) {
+			for (int i = 11; i > 0; i--)
+				BCDREG[dst][i] = (BCDREG[dst][i] << 4) | (BCDREG[dst][i - 1] >> 4);
+			BCDREG[dst][0] = (BCDREG[dst][0] << 4) | (continuous ? (BCDREG[(dst + 3) & 3][11] >> 4) : 0);
+		}
+		else {
+			int size = 1 << (src - 1);
+			memmove(BCDREG[dst] + size, BCDREG[dst], 12 - size);
+			if (continuous)
+				memcpy(BCDREG[dst], BCDREG[(dst + 3) & 3] + 12 - size, size);
+			else
+				memset(BCDREG[dst], 0, size);
+		}
+	}
+
+	void BCDCalc::ShiftRight(uint8_t src, uint8_t dst, bool continuous) {
+		if (!src) {
+			for (int i = 0; i < 11; i++)
+				BCDREG[dst][i] = (BCDREG[dst][i] >> 4) | (BCDREG[dst][i + 1] << 4);
+			BCDREG[dst][11] = (BCDREG[dst][11] >> 4) | (continuous ? (BCDREG[(dst + 1) & 3][0] << 4) : 0);
+		}
+		else {
+			int size = 1 << (src - 1);
+			memmove(BCDREG[dst], BCDREG[dst] + size, 12 - size);
+			if (continuous)
+				memcpy(BCDREG[dst] + 12 - size, BCDREG[(dst + 1) & 3], size);
+			else
+				memset(BCDREG[dst] + 12 - size, 0, size);
+		}
 	}
 	Peripheral* CreateBcdCalc(Emulator& emu) {
 		return new BCDCalc(emu);
