@@ -268,6 +268,7 @@ namespace casioemu {
 		dsr_mask = emulator.hardware_id == HW_CLASSWIZ ? 0x1F : 0xFF;
 
 		fetch_addition = 2;
+		cpu_run_stat = true;
 	}
 
 	void CPU::SetupOpcodeDispatch() {
@@ -339,6 +340,9 @@ namespace casioemu {
 	}
 
 	void CPU::Next() {
+		if (!cpu_run_stat)
+			return;
+
 		/**
 		 * `reg_dsr` only affects the current instruction. The old DSR is stored in
 		 * `impl_last_dsr` and is recalled every time a DSR instruction is encountered
@@ -419,6 +423,7 @@ namespace casioemu {
 		reg_dsr = 0;
 		reg_psw = 0;
 		fetch_addition = 2;
+		cpu_run_stat = true;
 #ifdef DBG
 		stack.get()->clear();
 #endif
