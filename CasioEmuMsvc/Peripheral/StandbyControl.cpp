@@ -1,5 +1,6 @@
 ﻿#include "StandbyControl.hpp"
 
+#include "Chipset/CPU.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Chipset/MMU.hpp"
 #include "Emulator.hpp"
@@ -65,6 +66,8 @@ namespace casioemu {
 					if (self->shutdown_acceptor_enabled && (data & 0xF0) == 0) {
 						self->emulator.chipset.mmu.WriteData(0xF031, 0x03, false);
 						self->emulator.chipset.Stop();
+						for (int i = 0; i < 4; i++)
+							self->emulator.chipset.mmu.WriteData(0xF010 + i, 00);
 						self->shutdown_acceptor_enabled = false;
 					}
 				},

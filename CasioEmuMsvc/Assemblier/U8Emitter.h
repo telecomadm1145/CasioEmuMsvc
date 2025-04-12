@@ -50,7 +50,14 @@ namespace u8 {
 				// 14 == ELR
 				// 15 == EPSW
 				// 16 == cc
-								// 17 == ea
+				// 17 == ea
+				// 19 == [erm]
+				// 20 == [erm+disp16]
+				// 21 == [bp+disp6]
+				// 22 == [fp+disp6]
+				// 23 == [dadr]
+				// 24 == [ea]
+				// 25 == [ea+]
 				int operand_size;
 				Opcode mask;
 				int shift;
@@ -113,23 +120,11 @@ namespace u8 {
 		{"push"       ,                         0, 0xF07E, {{8, 0x0008,  8}}},
 		{"push"       ,                         0, 0xF04E, {{1, 0x000F,  8}}},
 		{"push"       ,                         0, 0xF06E, {{4, 0x000C,  8}}},
-		// the 2nd byte mean register list,formed by these flags:
-		// EA - 1
-		// ELR - 2
-		// EPSW - 4
-		// LR - 8
-		//{"push"      ,                         H_PUSHL, 0xF0CE, {{0, 0x000F,  8}}}, // Please assembly these commands in hardcoded way
 		{"pop"        , H_WB                     , 0xF01E, {{2, 0x000E,  8}}},
 		{"pop"       , H_WB                     , 0xF03E, {{8, 0x0008,  8}}},
 		{"pop"       , H_WB                     , 0xF00E, {{1, 0x000F,  8}}},
 		{"pop"     , H_WB                     , 0xF02E, {{4, 0x000C,  8}}},
-		// the 2nd byte mean register list,formed by these flags:
-		// EA - 1
-		// PC - 2
-		// PSW - 4
-		// LR - 8
-		//{"pop"       ,                         H_POPL, 0xF08E, {{0, 0x000F,  8}}}, // Please assembly these commands in hardcoded way
-		
+
 		// Just ignore coprocessor rn
 		//// * Coprocessor Data Transfer Instructions
 		//{&CPU::OP_CR_R       ,                         0, 0xA00E, {{0, 0x000F,  8}, {0, 0x000F,  4}}},
@@ -150,44 +145,63 @@ namespace u8 {
 		//{&CPU::OP_CR_EA      ,      4 << 8 | H_IA | H_ST, 0xF0DD, {{0, 0x000C,  8}}},
 		//{&CPU::OP_CR_EA      ,      8 << 8 |        H_ST, 0xF0ED, {{0, 0x0008,  8}}},
 		//{&CPU::OP_CR_EA      ,      8 << 8 | H_IA | H_ST, 0xF0FD, {{0, 0x0008,  8}}},
+		
 
 
-		//{"l"      , 2 << 8                   , 0x9032, {{0, 0x000E,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_EA      , 2 << 8 |      H_IA       , 0x9052, {{0, 0x000E,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_R       , 2 << 8                   , 0x9002, {{0, 0x000E,  8}, {2, 0x000E,  4}}},
-		//{&CPU::OP_LS_I_R     , 2 << 8 |      H_TI       , 0xA008, {{0, 0x000E,  8}, {2, 0x000E,  4}}},
-		//{&CPU::OP_LS_BP      , 2 << 8 |                0, 0xB000, {{0, 0x000E,  8}, {0, 0x003F,  0}}},
-		//{&CPU::OP_LS_FP      , 2 << 8 |                0, 0xB040, {{0, 0x000E,  8}, {0, 0x003F,  0}}},
-		//{&CPU::OP_LS_I       , 2 << 8 |      H_TI       , 0x9012, {{0, 0x000E,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_EA      , 1 << 8                   , 0x9030, {{0, 0x000F,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_EA      , 1 << 8 |      H_IA       , 0x9050, {{0, 0x000F,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_R       , 1 << 8                   , 0x9000, {{0, 0x000F,  8}, {2, 0x000E,  4}}},
-		//{&CPU::OP_LS_I_R     , 1 << 8 |      H_TI       , 0x9008, {{0, 0x000F,  8}, {2, 0x000E,  4}}},
-		//{&CPU::OP_LS_BP      , 1 << 8 |                0, 0xD000, {{0, 0x000F,  8}, {0, 0x003F,  0}}},
-		//{&CPU::OP_LS_FP      , 1 << 8 |                0, 0xD040, {{0, 0x000F,  8}, {0, 0x003F,  0}}},
-		//{&CPU::OP_LS_I       , 1 << 8 |      H_TI       , 0x9010, {{0, 0x000F,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_EA      , 4 << 8                   , 0x9034, {{0, 0x000C,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_EA      , 4 << 8 |      H_IA       , 0x9054, {{0, 0x000C,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_EA      , 8 << 8                   , 0x9036, {{0, 0x0008,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_EA      , 8 << 8 |      H_IA       , 0x9056, {{0, 0x0008,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_EA      , 2 << 8 |             H_ST, 0x9033, {{0, 0x000E,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_EA      , 2 << 8 |      H_IA | H_ST, 0x9053, {{0, 0x000E,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_R       , 2 << 8 |             H_ST, 0x9003, {{0, 0x000E,  8}, {2, 0x000E,  4}}},
-		//{&CPU::OP_LS_I_R     , 2 << 8 |      H_TI | H_ST, 0xA009, {{0, 0x000E,  8}, {2, 0x000E,  4}}},
-		//{&CPU::OP_LS_BP      , 2 << 8 |             H_ST, 0xB080, {{0, 0x000E,  8}, {0, 0x003F,  0}}},
-		//{&CPU::OP_LS_FP      , 2 << 8 |             H_ST, 0xB0C0, {{0, 0x000E,  8}, {0, 0x003F,  0}}},
-		//{&CPU::OP_LS_I       , 2 << 8 |      H_TI | H_ST, 0x9013, {{0, 0x000E,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_EA      , 1 << 8 |             H_ST, 0x9031, {{0, 0x000F,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_EA      , 1 << 8 |      H_IA | H_ST, 0x9051, {{0, 0x000F,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_R       , 1 << 8 |             H_ST, 0x9001, {{0, 0x000F,  8}, {2, 0x000E,  4}}},
-		//{&CPU::OP_LS_I_R     , 1 << 8 |      H_TI | H_ST, 0x9009, {{0, 0x000F,  8}, {2, 0x000E,  4}}},
-		//{&CPU::OP_LS_BP      , 1 << 8 |             H_ST, 0xD080, {{0, 0x000F,  8}, {0, 0x003F,  0}}},
-		//{&CPU::OP_LS_FP      , 1 << 8 |             H_ST, 0xD0C0, {{0, 0x000F,  8}, {0, 0x003F,  0}}},
-		//{&CPU::OP_LS_I       , 1 << 8 |      H_TI | H_ST, 0x9011, {{0, 0x000F,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_EA      , 4 << 8 |             H_ST, 0x9035, {{0, 0x000C,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_EA      , 4 << 8 |      H_IA | H_ST, 0x9055, {{0, 0x000C,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_EA      , 8 << 8 |             H_ST, 0x9037, {{0, 0x0008,  8}, {0,      0,  0}}},
-		//{&CPU::OP_LS_EA      , 8 << 8 |      H_IA | H_ST, 0x9057, {{0, 0x0008,  8}, {0,      0,  0}}},
+		// L ERn,[EA]
+		{"l"      , 0                   , 0x9032, {{2, 0x000E,  8}, {24,      0,  0}}},
+		// L ERn,[EA+]
+		{"l"      , 0 |      H_IA       , 0x9052, {{2, 0x000E,  8}, {25,      0,  0}}},
+		// L ERn,[ERm]
+		{"l"       , 0                   , 0x9002, {{2, 0x000E,  8}, {19, 0x000E,  4}}},
+		// L ERn,[ERm+Disp16]
+		{"l"     , 0 |      H_TI       , 0xA008, {{2, 0x000E,  8}, {20, 0x000E,  4}}},
+		// L ERn,[BP+Disp6]
+		{"l"     , 0 |                0, 0xB000, {{2, 0x000E,  8}, {21, 0x003F,  0}}},
+		// L ERn,[FP+Disp16]
+		{"l"     , 0 |                0, 0xB040, {{2, 0x000E,  8}, {22, 0x003F,  0}}},
+		// L ERn,[Dadr]
+		{"l"     , 0 |      H_TI       , 0x9012, {{2, 0x000E,  8}, {23,      0,  0}}},
+		// L Rn,[EA]
+		{"l"     , 0                   , 0x9030, {{1, 0x000F,  8}, {24,      0,  0}}},
+		// L Rn,[EA+]
+		{"l"     , 0 |      H_IA       , 0x9050, {{1, 0x000F,  8}, {25,      0,  0}}},
+		// L Rn,[ERm]
+		{"l"     , 0                   , 0x9000, {{1, 0x000F,  8}, {19, 0x000E,  4}}},
+		// L Rn,[Erm+Disp16]
+		{"l"     , 0 |      H_TI       , 0x9008, {{1, 0x000F,  8}, {20, 0x000E,  4}}},
+		// L Rn,[BP+Disp6]
+		{"l"     , 0 |                0, 0xD000, {{1, 0x000F,  8}, {21, 0x003F,  0}}},
+		// L Rn,[FP+Disp6]
+		{"l"     , 0 |                0, 0xD040, {{1, 0x000F,  8}, {22, 0x003F,  0}}},
+		// L Rn,[Dadr]
+		{"l"     , 0 |      H_TI       , 0x9010, {{1, 0x000F,  8}, {23,      0,  0}}},
+		// L XRn,[EA]
+		{"l"     , 0                   , 0x9034, {{4, 0x000C,  8}, {24,      0,  0}}},
+		// L XRn,[EA+]
+		{"l"     , 0 |      H_IA       , 0x9054, {{4, 0x000C,  8}, {25,      0,  0}}},
+		// L QRn,[EA]
+		{"l"     , 0                   , 0x9036, {{8, 0x0008,  8}, {24,      0,  0}}},
+		// L QRn,[EA+]
+		{"l"     , 0 |      H_IA       , 0x9056, {{8, 0x0008,  8}, {25,      0,  0}}},
+		//{&CPU::OP_LS_EA      , 0 |             H_ST, 0x9033, {{0, 0x000E,  8}, {0,      0,  0}}},
+		//{&CPU::OP_LS_EA      , 0 |      H_IA | H_ST, 0x9053, {{0, 0x000E,  8}, {0,      0,  0}}},
+		//{&CPU::OP_LS_R       , 0 |             H_ST, 0x9003, {{0, 0x000E,  8}, {2, 0x000E,  4}}},
+		//{&CPU::OP_LS_I_R     , 0 |      H_TI | H_ST, 0xA009, {{0, 0x000E,  8}, {2, 0x000E,  4}}},
+		//{&CPU::OP_LS_BP      , 0 |             H_ST, 0xB080, {{0, 0x000E,  8}, {0, 0x003F,  0}}},
+		//{&CPU::OP_LS_FP      , 0 |             H_ST, 0xB0C0, {{0, 0x000E,  8}, {0, 0x003F,  0}}},
+		//{&CPU::OP_LS_I       , 0 |      H_TI | H_ST, 0x9013, {{0, 0x000E,  8}, {0,      0,  0}}},
+		//{&CPU::OP_LS_EA      , 0 |             H_ST, 0x9031, {{0, 0x000F,  8}, {0,      0,  0}}},
+		//{&CPU::OP_LS_EA      , 0 |      H_IA | H_ST, 0x9051, {{0, 0x000F,  8}, {0,      0,  0}}},
+		//{&CPU::OP_LS_R       , 0 |             H_ST, 0x9001, {{0, 0x000F,  8}, {2, 0x000E,  4}}},
+		//{&CPU::OP_LS_I_R     , 0 |      H_TI | H_ST, 0x9009, {{0, 0x000F,  8}, {2, 0x000E,  4}}},
+		//{&CPU::OP_LS_BP      , 0 |             H_ST, 0xD080, {{0, 0x000F,  8}, {0, 0x003F,  0}}},
+		//{&CPU::OP_LS_FP      , 0 |             H_ST, 0xD0C0, {{0, 0x000F,  8}, {0, 0x003F,  0}}},
+		//{&CPU::OP_LS_I       , 0 |      H_TI | H_ST, 0x9011, {{0, 0x000F,  8}, {0,      0,  0}}},
+		//{&CPU::OP_LS_EA      , 0 |             H_ST, 0x9035, {{0, 0x000C,  8}, {0,      0,  0}}},
+		//{&CPU::OP_LS_EA      , 0 |      H_IA | H_ST, 0x9055, {{0, 0x000C,  8}, {0,      0,  0}}},
+		//{&CPU::OP_LS_EA      , 0 |             H_ST, 0x9037, {{0, 0x0008,  8}, {0,      0,  0}}},
+		//{&CPU::OP_LS_EA      , 0 |      H_IA | H_ST, 0x9057, {{0, 0x0008,  8}, {0,      0,  0}}},
 		
 		// * EA Register Data Transfer Instructions
 		{"lea"        ,                         0, 0xF00A, {{2, 0x000E,  4}}},
@@ -210,19 +224,10 @@ namespace u8 {
 		{"sc"     ,                         0, 0xED80},
 		{"rc"    ,                         0, 0xEB7F},
 		{"cplc"       ,                         0, 0xFECF},
-		// * Conditional Relative Branch Instructions
-		// {"b"         ,   H_BCC                      , 0xC000, {{16, 0x0F00,  0}, {0,      0xFF,  0}}}, // Please assembly these commands in hardcoded way
-		// * Sign Extension Instruction
-		// {"extbw"      ,        H_EXTBW                 , 0x810F}, // Please assembly these commands in hardcoded way
 		// * Software Interrupt Instructions
 		{"swi"        ,                         0, 0xE500, {{0, 0x00FF,  0}}},
 		{"brk"        ,                         0, 0xFFFF},
 		{"iceswi",0,0xfeff},
-		// * Branch Instructions
-		// {"b"          ,        H_TI              , 0xF000, {{0, 0x000F,  8}}}, // Please assembly these commands in hardcoded way
-		// {"b"          ,                         0, 0xF002, {{2, 0x000E,  4}}},
-		// {"bl"         ,        H_TI              , 0xF001, {{0, 0x000F,  8}}},
-		// {"bl"         ,                         0, 0xF003, {{2, 0x000E,  4}}},
 		// * Multiplication and Division Instructions
 		{"mul"        , H_WB                     , 0xF004, {{2, 0x000E,  8}, {1, 0x000F,  4}}},
 		{"div"        , H_WB                     , 0xF009, {{2, 0x000E,  8}, {1, 0x000F,  4}}},
@@ -492,7 +497,6 @@ namespace u8 {
 						return;
 					}
 				}
-				throw std::runtime_error("TODO");
 				// 普通分支指令
 				if (tokens.size() >= 2) {
 					bool isLong = false;
@@ -558,6 +562,7 @@ namespace u8 {
 				}
 			}
 
+
 			// 处理常规指令
 			std::vector<Operand> operands;
 			Operand current_operand;
@@ -577,6 +582,26 @@ namespace u8 {
 					continue;
 				}
 
+				// op类型
+				// 0 == imm
+				// 1-8 == register
+				// 9 == sp
+				// 10 == bp
+				// 11 == fp
+				// 12 == psw
+				// 13 == ECSR
+				// 14 == ELR
+				// 15 == EPSW
+				// 16 == cc
+				// 17 == ea
+				
+				// 19 == [erm]
+				// 20 == [erm+disp16] (disp16存储到imm16)
+				// 21 == [bp+disp6]
+				// 22 == [fp+disp6]
+				// 23 == [dadr] (存储到imm16)
+				// 24 == [ea]
+				// 25 == [ea+]
 				switch (t.type) {
 				case Token::IDENTIFIER: {
 					if (t.value == "sp") {
