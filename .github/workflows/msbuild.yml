@@ -29,23 +29,23 @@ jobs:
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: nuget restore ${{env.SOLUTION_FILE_PATH}}
 
-    - name: First Build x64 (ignore errors)
+    # First build only the main project to generate the lib file that plugins need
+    - name: First Build x64 - Main Project Only
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: |
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x64 ${{env.SOLUTION_FILE_PATH}}
-        exit 0
-      
-    - name: First Build x86 (ignore errors)
+        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x64 CasioEmuMsvc\CasioEmuMsvc.vcxproj
+        
+    - name: First Build x86 - Main Project Only
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: |
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x86 ${{env.SOLUTION_FILE_PATH}}
-        exit 0
-      
-    - name: Rebuild x64
+        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x86 CasioEmuMsvc\CasioEmuMsvc.vcxproj
+    
+    # Now build the full solution
+    - name: Build Complete Solution x64
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x64 ${{env.SOLUTION_FILE_PATH}}
       
-    - name: Rebuild x86
+    - name: Build Complete Solution x86
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x86 ${{env.SOLUTION_FILE_PATH}}
       
