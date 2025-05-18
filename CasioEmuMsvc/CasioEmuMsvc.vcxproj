@@ -304,6 +304,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="JitU8\JitU8.cpp" />
     <ClCompile Include="Gui\AddressWindow.cpp" />
     <ClCompile Include="casioemu.cpp" />
     <ClCompile Include="Chipset\Chipset.cpp" />

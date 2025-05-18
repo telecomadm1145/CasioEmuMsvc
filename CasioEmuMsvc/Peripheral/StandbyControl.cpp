@@ -64,6 +64,12 @@ namespace casioemu {
 					self->F312_last = data;
 
 					if (self->shutdown_acceptor_enabled && (data & 0xF0) == 0) {
+
+						/*
+						* TODO:
+						如果当前有cpu尚未处理的中断的话，F312介导的关机会暂时挂起
+						当相应的IE/IRQ bit被清除之后才会触发关机
+						*/
 						self->emulator.chipset.mmu.WriteData(0xF031, 0x03, false);
 						self->emulator.chipset.Stop();
 						for (int i = 0; i < 4; i++)
