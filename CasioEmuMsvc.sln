@@ -4,6 +4,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.7.34202.233
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CasioEmuMsvc", "CasioEmuMsvc\CasioEmuMsvc.vcxproj", "{5347D0D2-AB7B-45C8-8588-B0D36EE0ABE3}"
+	ProjectSection(ProjectDependencies) = postProject
+		{0AAFB6C0-D204-4298-A762-1088A2BC5F45} = {0AAFB6C0-D204-4298-A762-1088A2BC5F45}
+		{616FA698-C985-4011-ABDB-31BF603499AD} = {616FA698-C985-4011-ABDB-31BF603499AD}
+		{616FA698-C985-4011-ABDB-31BF673499AD} = {616FA698-C985-4011-ABDB-31BF673499AD}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "lua_config_convert", "lua_config_convert\lua_config_convert.vcxproj", "{F2031657-B32A-4691-B8E0-0F0080BD3442}"
 EndProject
