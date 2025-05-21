@@ -1,4 +1,4 @@
-﻿/*
+/*
 
 		Screen peripheral implement.
 		Copyright (C) 2024 telecomadm1145/Xyzst/user202729/LBPHacker/hieuxyz
@@ -37,47 +37,40 @@
 #include <vector>
 
 #ifdef __ANDROID__
-#include <android/log.h>
 #include <jni.h>
+#include <android/log.h>
+#include <android/api-level.h>
 
-// Function to check storage permission
-bool checkStoragePermission() {
-	JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
-	jobject activity = (jobject)SDL_AndroidGetActivity();
-	jclass activityClass = env->GetObjectClass(activity);
-
-	// Check if we have permission
-	jmethodID checkSelfPermissionMethod = env->GetMethodID(activityClass, "checkSelfPermission", "(Ljava/lang/String;)I");
-	jstring permissionString = env->NewStringUTF("android.permission.WRITE_EXTERNAL_STORAGE");
-	jint permission = env->CallIntMethod(activity, checkSelfPermissionMethod, permissionString);
-	env->DeleteLocalRef(permissionString);
-
-	env->DeleteLocalRef(activityClass);
-	env->DeleteLocalRef(activity);
-
-	return permission == 0; // PERMISSION_GRANTED = 0
-}
-
-// Function to request storage permission
-void requestStoragePermission() {
-	JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
-	jobject activity = (jobject)SDL_AndroidGetActivity();
-	jclass activityClass = env->GetObjectClass(activity);
-
-	// Request permission
-	jmethodID requestPermissionsMethod = env->GetMethodID(activityClass, "requestPermissions", "([Ljava/lang/String;I)V");
-
-	// Create string array with one element
-	jobjectArray permissionArray = env->NewObjectArray(1,
-		env->FindClass("java/lang/String"),
-		env->NewStringUTF("android.permission.WRITE_EXTERNAL_STORAGE"));
-
-	// Request code can be any number
-	env->CallVoidMethod(activity, requestPermissionsMethod, permissionArray, 1);
-
-	env->DeleteLocalRef(permissionArray);
-	env->DeleteLocalRef(activityClass);
-	env->DeleteLocalRef(activity);
+bool saveImageToMediaStore(const void* pixels, int width, int height, int pitch, const char* filename) {
+    JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+    jobject activity = (jobject)SDL_AndroidGetActivity();
+    
+    // Create a Java direct ByteBuffer from the pixel data
+    jobject byteBuffer = env->NewDirectByteBuffer((void*)pixels, height * pitch);
+    
+    // Call the Java method to handle saving to MediaStore
+    jclass activityClass = env->GetObjectClass(activity);
+    jmethodID saveImageMethod = env->GetMethodID(activityClass, "saveImageToMediaStore", 
+        "(Ljava/nio/ByteBuffer;IIILjava/lang/String;)Z");
+    
+    // If the method doesn't exist, we need to add it to the Java side
+    if (saveImageMethod == NULL) {
+        SDL_Log("Error: saveImageToMediaStore method not found. Please add it to your Java activity.");
+        env->DeleteLocalRef(byteBuffer);
+        env->DeleteLocalRef(activityClass);
+        env->DeleteLocalRef(activity);
+        return false;
+    }
+    
+    jstring jfilename = env->NewStringUTF(filename);
+    jboolean result = env->CallBooleanMethod(activity, saveImageMethod, byteBuffer, width, height, pitch, jfilename);
+    
+    env->DeleteLocalRef(jfilename);
+    env->DeleteLocalRef(byteBuffer);
+    env->DeleteLocalRef(activityClass);
+    env->DeleteLocalRef(activity);
+    
+    return result;
 }
 #endif
 
@@ -1036,76 +1029,75 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		enabled_2 = false;
 	}
 	// Function to capture the current screen and save it as a PNG file
-	void CaptureScreenshot(SDL_Renderer* renderer, const std::vector<SDL_Rect>& spriteRects, const std::vector<SDL_Rect>& pixelRects) {
-#ifdef __ANDROID__
-		// Check permission first
-		if (!checkStoragePermission()) {
-			SDL_Log("Requesting storage permission...");
-			requestStoragePermission();
-			return; // Exit and wait for permission
-		}
-#endif
-
-		// Get current time to generate a unique filename
-		std::time_t t = std::time(nullptr);
-		std::tm tm = *std::localtime(&t);
-		std::ostringstream filename;
-#ifdef __ANDROID__
-		filename << "/storage/emulated/0/Pictures/";
-#endif
-		filename << "screenshot-"
-				 << std::put_time(&tm, "%Y-%m-%d-%H-%M-%S-") << std::rand() % 1000
-				 << ".png";
-
-		// Calculate the bounding box of the rendering area from both sprite and pixel rectangles
-		int minX = INT_MAX, minY = INT_MAX, maxX = INT_MIN, maxY = INT_MIN;
-
-		// Traverse all sprite rectangles
-		for (const auto& rect : spriteRects) {
-			minX = std::min(minX, rect.x);
-			minY = std::min(minY, rect.y);
-			maxX = std::max(maxX, rect.x + rect.w);
-			maxY = std::max(maxY, rect.y + rect.h);
-		}
-
-		// Traverse all pixel rectangles (representing the screen pixels)
-		for (const auto& rect : pixelRects) {
-			minX = std::min(minX, rect.x);
-			minY = std::min(minY, rect.y);
-			maxX = std::max(maxX, rect.x + rect.w);
-			maxY = std::max(maxY, rect.y + rect.h);
-		}
-
-		// Calculate the width and height of the capture area
-		int captureWidth = maxX - minX;
-		int captureHeight = maxY - minY;
-
-		// Create a surface to capture the screen content
-		SDL_Surface* screenSurface = SDL_CreateRGBSurface(0, captureWidth, captureHeight, 32,
-			0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
-		if (screenSurface != nullptr) {
-			// Define the area to capture
-			SDL_Rect captureRect = {minX, minY, captureWidth, captureHeight};
-
-			// Copy the renderer to the surface
-			if (SDL_RenderReadPixels(renderer, &captureRect, SDL_PIXELFORMAT_RGBA32,
-					screenSurface->pixels, screenSurface->pitch) == 0) {
-				// Save the surface as a PNG file using SDL_image
-				auto str = filename.str();
-				if (IMG_SavePNG(screenSurface, str.c_str()) != 0) {
-					SDL_Log("Error saving screenshot: %s", IMG_GetError());
-				}
-			}
-			else {
-				SDL_Log("Error capturing screen pixels: %s", SDL_GetError());
-			}
-			SDL_FreeSurface(screenSurface); // Free the surface after use
-		}
-		else {
-			SDL_Log("Error creating surface: %s", SDL_GetError());
-		}
-		SDL_Log("Saved screenshot!");
-	}
+    void CaptureScreenshot(SDL_Renderer* renderer, const std::vector<SDL_Rect>& spriteRects, const std::vector<SDL_Rect>& pixelRects) {
+        // Get current time to generate a unique filename
+        std::time_t t = std::time(nullptr);
+        std::tm tm = *std::localtime(&t);
+        std::ostringstream filename;
+        
+        filename << "screenshot-" 
+                 << std::put_time(&tm, "%Y-%m-%d-%H-%M-%S-") << std::rand() % 1000 
+                 << ".png";
+        
+        // Calculate the bounding box of the rendering area from both sprite and pixel rectangles  
+        int minX = INT_MAX, minY = INT_MAX, maxX = INT_MIN, maxY = INT_MIN;
+    
+        // Traverse all sprite rectangles
+        for (const auto& rect : spriteRects) {
+            minX = std::min(minX, rect.x);
+            minY = std::min(minY, rect.y);
+            maxX = std::max(maxX, rect.x + rect.w);
+            maxY = std::max(maxY, rect.y + rect.h);
+        }
+    
+        // Traverse all pixel rectangles (representing the screen pixels)
+        for (const auto& rect : pixelRects) {
+            minX = std::min(minX, rect.x);
+            minY = std::min(minY, rect.y);
+            maxX = std::max(maxX, rect.x + rect.w);
+            maxY = std::max(maxY, rect.y + rect.h);
+        }
+    
+        // Calculate the width and height of the capture area
+        int captureWidth = maxX - minX;
+        int captureHeight = maxY - minY;
+    
+        // Create a surface to capture the screen content
+        SDL_Surface* screenSurface = SDL_CreateRGBSurface(0, captureWidth, captureHeight, 32,
+            0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
+        
+        if (screenSurface != nullptr) {
+            // Define the area to capture
+            SDL_Rect captureRect = {minX, minY, captureWidth, captureHeight};
+    
+            // Copy the renderer to the surface
+            if (SDL_RenderReadPixels(renderer, &captureRect, SDL_PIXELFORMAT_RGBA32, 
+                screenSurface->pixels, screenSurface->pitch) == 0) {
+                
+    #ifdef __ANDROID__
+                auto str = filename.str();
+                bool success = saveImageToMediaStore(screenSurface->pixels, screenSurface->w, screenSurface->h, screenSurface->pitch, str.c_str());
+                if (!success) {
+                    SDL_Log("Error saving screenshot using MediaStore API");
+                } else {
+                    SDL_Log("Screenshot saved successfully with MediaStore API");
+                }
+    #else
+                auto str = filename.str();
+                if (IMG_SavePNG(screenSurface, str.c_str()) != 0) {
+                    SDL_Log("Error saving screenshot: %s", IMG_GetError());
+                } else {
+                    SDL_Log("Screenshot saved to %s", str.c_str());
+                }
+    #endif
+            } else {
+                SDL_Log("Error capturing screen pixels: %s", SDL_GetError());
+            }
+            SDL_FreeSurface(screenSurface); // Free the surface after use
+        } else {
+            SDL_Log("Error creating surface: %s", SDL_GetError());
+        }
+    }
 
 	void UpdatePreview(SDL_Renderer* renderer, ScreenMirror* sm, const std::vector<SDL_Rect>& spriteRects, const std::vector<SDL_Rect>& pixelRects) {
 

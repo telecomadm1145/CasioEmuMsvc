@@ -363,5 +363,9 @@ extern "C" {
             env->ReleaseStringUTFChars(uri, cUri);
         }
     }
+    
+    JNIEXPORT void JNICALL Java_com_tele_u8emulator_Game_onImportFailed(JNIEnv* env, jclass clazz) {
+        SDL_Log("Import failed");
+    }
 }
 #endif
