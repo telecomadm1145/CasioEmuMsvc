@@ -14,10 +14,9 @@ namespace casioemu {
 		MMURegion flash;
 		int flash_mode = 0;
 
-		// 定时器回调函数
 		static Uint32 SaveRamCallback(Uint32 interval, void* param) {
 			static_cast<Flash2*>(param)->SaveFlashData();
-			return interval; // 继续触发定时器
+			return interval;
 		}
 		Flash2(Emulator& emu) : casioemu::Peripheral(emu) {}
 

@@ -431,6 +431,7 @@
     <ClInclude Include="Plugin\PluginMan.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Peripheral\Spi.h" />
+    <ClInclude Include="Settings.h" />
     <ClInclude Include="stringhelper.h" />
     <ClInclude Include="Gui\Ui.hpp" />
     <ClInclude Include="Gui\WatchWindow.hpp" />

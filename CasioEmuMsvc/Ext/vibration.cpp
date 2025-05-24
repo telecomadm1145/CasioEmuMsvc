@@ -2,11 +2,14 @@
 // Created by 15874 on 2024/8/9.
 //
 #include "vibration.h"
+bool setting_DisableVibration = false;
 #ifdef __ANDROID__
 #include <SDL.h>
 #include <jni.h>
 
 void Vibration::vibrate(long milliseconds) {
+	if (setting_DisableVibration)
+		return;
     // 鑾峰彇JNI鐜
     JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
     if (env == NULL) {

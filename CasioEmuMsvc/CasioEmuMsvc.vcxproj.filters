@@ -70,6 +70,7 @@
     <ClCompile Include="Ext\vibration.cpp" />
     <ClCompile Include="Plugin\PluginMan.cpp" />
     <ClCompile Include="Plugin\PluginApi_Impl.cpp" />
+    <ClCompile Include="JitU8\JitU8.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Assemblier\U8Emitter.h" />
@@ -159,6 +160,7 @@
     <ClInclude Include="Gui\Gui.h" />
     <ClInclude Include="locales\lang.h" />
     <ClInclude Include="Plugin\PluginMan.h" />
+    <ClInclude Include="Settings.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

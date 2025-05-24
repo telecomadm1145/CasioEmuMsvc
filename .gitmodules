@@ -1,0 +1,3 @@
+[submodule "CasioEmuMsvc/asmjit"]
+	path = CasioEmuMsvc/asmjit
+	url = https://github.com/asmjit/asmjit

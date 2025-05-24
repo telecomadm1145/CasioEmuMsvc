@@ -5,6 +5,7 @@
 #include <fstream>
 #include <string>
 #include "FileDialog.hpp"
+#include <vibration.h>
 
 static ThemeSettings g_settings;
 
@@ -62,6 +63,8 @@ public:
             g_settings.isDarkMode = false;
             SaveThemeSettings();
         }
+
+        ImGui::Checkbox("Ui.DisableVibration"_lc, &setting_DisableVibration);
 
         ImGui::InputText("##language_input", g_settings.language, 30);
         if (ImGui::Button("Ui.ChangeLang"_lc)) {

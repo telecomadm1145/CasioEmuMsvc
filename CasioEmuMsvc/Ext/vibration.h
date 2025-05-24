@@ -3,6 +3,8 @@
 //
 #pragma once
 
+extern bool setting_DisableVibration;
+
 class Vibration {
 public:
     static void vibrate(long milliseconds);
