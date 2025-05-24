@@ -26,97 +26,24 @@ jobs:
       uses: microsoft/setup-msbuild@v2
 
     - name: Restore NuGet packages
-      working-directory: ${{env.GITHUB_WORKSPACE}}
       run: nuget restore ${{env.SOLUTION_FILE_PATH}}
 
-    # Build the main project first to generate the lib file that plugins need
-    - name: Build Main Project x64
+    - name: Build Solution
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: |
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x64 CasioEmuMsvc\CasioEmuMsvc.vcxproj /p:BuildProjectReferences=false
-    
-    # Check if the library file exists
-    - name: Check for library file x64
-      working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: |
-        if (Test-Path "x64\${{env.BUILD_CONFIGURATION}}\CasioEmuMsvc.lib") {
-          echo "Library file exists at expected location"
-        } else {
-          echo "Library file not found at expected location"
-          Get-ChildItem -Recurse -Filter "CasioEmuMsvc.lib" | ForEach-Object { echo "Found at: $($_.FullName)" }
-        }
+        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x64 ${{env.SOLUTION_FILE_PATH}}
+        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x86 ${{env.SOLUTION_FILE_PATH}}
 
-    # Build the main project for x86
-    - name: Build Main Project x86
-      working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: |
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x86 CasioEmuMsvc\CasioEmuMsvc.vcxproj /p:BuildProjectReferences=false
-    
-    # Check if the library file exists for x86
-    - name: Check for library file x86
-      working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: |
-        if (Test-Path "${{env.BUILD_CONFIGURATION}}\CasioEmuMsvc.lib") {
-          echo "Library file exists at expected location"
-        } else {
-          echo "Library file not found at expected location"
-          Get-ChildItem -Recurse -Filter "CasioEmuMsvc.lib" | ForEach-Object { echo "Found at: $($_.FullName)" }
-        }
-    
-    # Copy the library file to the location expected by the plugins
-    - name: Copy library files to expected locations
-      working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: |
-        $x64LibPath = Get-ChildItem -Recurse -Filter "CasioEmuMsvc.lib" | Where-Object { $_.FullName -like "*x64*${{env.BUILD_CONFIGURATION}}*" } | Select-Object -First 1
-        if ($x64LibPath) {
-          Copy-Item $x64LibPath.FullName -Destination "x64\${{env.BUILD_CONFIGURATION}}\CasioEmuMsvc.lib" -Force
-          echo "Copied x64 lib to expected location"
-        }
-        
-        $x86LibPath = Get-ChildItem -Recurse -Filter "CasioEmuMsvc.lib" | Where-Object { $_.FullName -like "*${{env.BUILD_CONFIGURATION}}*" -and $_.FullName -notlike "*x64*" } | Select-Object -First 1
-        if ($x86LibPath) {
-          Copy-Item $x86LibPath.FullName -Destination "${{env.BUILD_CONFIGURATION}}\CasioEmuMsvc.lib" -Force
-          echo "Copied x86 lib to expected location"
-        }
-    
-    # Build the plugins separately after the main project
-    - name: Build Plugins x64
-      working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: |
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x64 ExamplePlugin\ExamplePlugin.vcxproj
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x64 PythonPlugin\PythonPlugin.vcxproj
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x64 Cw2toolsPlugin\Cw2toolsPlugin.vcxproj
-    
-    - name: Build Plugins x86
-      working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: |
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x86 ExamplePlugin\ExamplePlugin.vcxproj
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x86 PythonPlugin\PythonPlugin.vcxproj
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x86 Cw2toolsPlugin\Cw2toolsPlugin.vcxproj
-    
-    # Build the remaining projects in the solution
-    - name: Build Remaining Projects x64
-      working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: |
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x64 lua_config_convert\lua_config_convert.vcxproj
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x64 RomPacker\RomPacker.vcxproj
-    
-    - name: Build Remaining Projects x86
-      working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: |
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x86 lua_config_convert\lua_config_convert.vcxproj
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x86 RomPacker\RomPacker.vcxproj
-    
     - name: Upload x86 Build Artifact
       uses: actions/upload-artifact@v4.4.0
       with:
         name: Release-x86
-        path: .\Release
+        path: Win32\${{env.BUILD_CONFIGURATION}}
         if-no-files-found: error
 
     - name: Upload x64 Build Artifact
       uses: actions/upload-artifact@v4.4.0
       with:
         name: Release-x64
-        path: .\x64\Release\
+        path: x64\${{env.BUILD_CONFIGURATION}}
         if-no-files-found: error
