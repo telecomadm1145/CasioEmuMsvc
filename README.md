@@ -11,3 +11,7 @@ With debugger and built-in disassembler.
 * Clone this repo
 
 * Build with VS or using `msbuild`
+
+# Feedback
+
+https://discord.gg/NM39VPdJTf
