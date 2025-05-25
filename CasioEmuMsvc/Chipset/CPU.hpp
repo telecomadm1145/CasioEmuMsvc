@@ -8,7 +8,7 @@ namespace casioemu {
 	class CPU {
 		Emulator& emulator;
 
-	private:
+	public:
 		struct RegisterStub {
 			size_t type_size;
 			std::string name;
