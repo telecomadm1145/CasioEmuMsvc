@@ -1,4 +1,4 @@
-/*
+﻿/*
 
 		Screen peripheral implement.
 		Copyright (C) 2024 telecomadm1145/Xyzst/user202729/LBPHacker/hieuxyz

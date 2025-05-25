@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 class ScreenMirror {
 private:
 	SDL_Window* mirrorWindow;

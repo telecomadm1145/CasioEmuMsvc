@@ -1,4 +1,4 @@
-#define _NO_FUND_API
+ï»¿#define _NO_FUND_API
 #include "PluginApi.h"
 #include <CPU.hpp>
 #include <Chipset.hpp>
@@ -22,13 +22,13 @@ class PluginApi_Impl : public PluginApi {
 		}
 	} mmu_impl;
 	class ICPU_Impl : public ICPU {
-		// Í¨¹ı ICPU ¼Ì³Ğ
+		// é€šè¿‡ ICPU ç»§æ‰¿
 		uint16_t* Register(const char* name) override {
 			return &m_emu->chipset.cpu.register_proxies[name]->raw;
 		}
 	} cpu_impl;
 	class IEmulator_Impl : public IEmulator {
-		// Í¨¹ı IEmulator ¼Ì³Ğ
+		// é€šè¿‡ IEmulator ç»§æ‰¿
 		float* SolarPanelVoltage() override {
 			return &m_emu->SolarPanelVoltage;
 		}
@@ -67,7 +67,7 @@ class PluginApi_Impl : public PluginApi {
 		}
 	} emu_impl;
 	class IChipset_Impl : public IChipset {
-		// Í¨¹ı IChipset ¼Ì³Ğ
+		// é€šè¿‡ IChipset ç»§æ‰¿
 		void RaiseInterrupt(int index) override {
 			m_emu->chipset.RaiseMaskable(index);
 		}
@@ -88,9 +88,9 @@ class PluginApi_Impl : public PluginApi {
 		}
 	} chipset_impl;
 	class Hooks_Impl : public Hooks {
-		// Í¨¹ı Hooks ¼Ì³Ğ
+		// é€šè¿‡ Hooks ç»§æ‰¿
 
-		// ×¢²áÖ¸ÁîÖ´ĞĞ hook£¬´«ÈëµÄ handler Ö»ĞèÒª´¦Àí InstructionEventArgs
+		// æ³¨å†ŒæŒ‡ä»¤æ‰§è¡Œ hookï¼Œä¼ å…¥çš„ handler åªéœ€è¦å¤„ç† InstructionEventArgs
 		void SetupOnInstructionHook(std::function<void(InstructionEventArgs&)> handler) override {
 			SetupHook(on_instruction,
 				[handler](casioemu::CPU& /*cpu*/, InstructionEventArgs& args) {
@@ -98,7 +98,7 @@ class PluginApi_Impl : public PluginApi {
 				});
 		}
 
-		// ×¢²áº¯Êıµ÷ÓÃ hook£¬´«ÈëµÄ handler Ö»ĞèÒª´¦Àí FunctionEventArgs
+		// æ³¨å†Œå‡½æ•°è°ƒç”¨ hookï¼Œä¼ å…¥çš„ handler åªéœ€è¦å¤„ç† FunctionEventArgs
 		void SetupOnCallFunctionHook(std::function<void(const FunctionEventArgs&)> handler) override {
 			SetupHook(on_call_function,
 				[handler](casioemu::CPU& /*cpu*/, const FunctionEventArgs& args) {
@@ -106,7 +106,7 @@ class PluginApi_Impl : public PluginApi {
 				});
 		}
 
-		// ×¢²áº¯Êı·µ»Ø hook£¬´«ÈëµÄ handler Ö»ĞèÒª´¦Àí FunctionEventArgs
+		// æ³¨å†Œå‡½æ•°è¿”å› hookï¼Œä¼ å…¥çš„ handler åªéœ€è¦å¤„ç† FunctionEventArgs
 		void SetupOnFunctionReturnHook(std::function<void(const FunctionEventArgs&)> handler) override {
 			SetupHook(on_function_return,
 				[handler](casioemu::CPU& /*cpu*/, const FunctionEventArgs& args) {
@@ -114,7 +114,7 @@ class PluginApi_Impl : public PluginApi {
 				});
 		}
 
-		// ×¢²áÄÚ´æ¶ÁÈ¡ hook£¬´«ÈëµÄ handler Ö»ĞèÒª´¦Àí MemoryEventArgs
+		// æ³¨å†Œå†…å­˜è¯»å– hookï¼Œä¼ å…¥çš„ handler åªéœ€è¦å¤„ç† MemoryEventArgs
 		void SetupOnMemoryReadHook(std::function<void(MemoryEventArgs&)> handler) override {
 			SetupHook(on_memory_read,
 				[handler](casioemu::MMU& /*mmu*/, MemoryEventArgs& args) {
@@ -122,7 +122,7 @@ class PluginApi_Impl : public PluginApi {
 				});
 		}
 
-		// ×¢²áÄÚ´æĞ´Èë hook£¬´«ÈëµÄ handler Ö»ĞèÒª´¦Àí MemoryEventArgs
+		// æ³¨å†Œå†…å­˜å†™å…¥ hookï¼Œä¼ å…¥çš„ handler åªéœ€è¦å¤„ç† MemoryEventArgs
 		void SetupOnMemoryWriteHook(std::function<void(MemoryEventArgs&)> handler) override {
 			SetupHook(on_memory_write,
 				[handler](casioemu::MMU& /*mmu*/, MemoryEventArgs& args) {
@@ -130,7 +130,7 @@ class PluginApi_Impl : public PluginApi {
 				});
 		}
 
-		// ×¢²áÖĞ¶Ï¶Ïµã hook£¬´«ÈëµÄ handler Ö»ĞèÒª´¦Àí InterruptEventArgs
+		// æ³¨å†Œä¸­æ–­æ–­ç‚¹ hookï¼Œä¼ å…¥çš„ handler åªéœ€è¦å¤„ç† InterruptEventArgs
 		void SetupOnBrkHook(std::function<void(InterruptEventArgs&)> handler) override {
 			SetupHook(on_brk,
 				[handler](casioemu::Chipset& /*chipset*/, InterruptEventArgs& args) {
@@ -138,7 +138,7 @@ class PluginApi_Impl : public PluginApi {
 				});
 		}
 
-		// ×¢²áÖĞ¶Ï hook£¬´«ÈëµÄ handler Ö»ĞèÒª´¦Àí InterruptEventArgs
+		// æ³¨å†Œä¸­æ–­ hookï¼Œä¼ å…¥çš„ handler åªéœ€è¦å¤„ç† InterruptEventArgs
 		void SetupOnInterruptHook(std::function<void(InterruptEventArgs&)> handler) override {
 			SetupHook(on_interrupt,
 				[handler](casioemu::Chipset& /*chipset*/, InterruptEventArgs& args) {
@@ -146,7 +146,7 @@ class PluginApi_Impl : public PluginApi {
 				});
 		}
 
-		// ×¢²á¸´Î» hook£¬´«ÈëµÄ handler ÎŞ²ÎÊı£¬µ«ÄÚ²¿ hook ½ÓÊÕ Chipset ÒıÓÃ
+		// æ³¨å†Œå¤ä½ hookï¼Œä¼ å…¥çš„ handler æ— å‚æ•°ï¼Œä½†å†…éƒ¨ hook æ¥æ”¶ Chipset å¼•ç”¨
 		void SetupOnResetHook(std::function<void()> handler) override {
 			SetupHook(on_reset,
 				[handler](casioemu::Chipset& /*chipset*/) {

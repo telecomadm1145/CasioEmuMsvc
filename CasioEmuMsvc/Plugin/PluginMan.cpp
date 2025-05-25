@@ -1,4 +1,4 @@
-#include "PluginApi.h"
+﻿#include "PluginApi.h"
 
 extern PluginApi* g_pluginapi;
 

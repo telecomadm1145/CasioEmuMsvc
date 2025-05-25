@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "ModelInfo.h"
 #include <cstdint>
 #include <functional>

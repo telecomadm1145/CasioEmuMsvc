@@ -1,4 +1,4 @@
-#include "Localization.h"
+ï»¿#include "Localization.h"
 #include "Ui.hpp"
 #include <cmath> // for std::trunc, std::fmod, round
 
@@ -6,23 +6,23 @@ class BitmapViewer : public UIWindow {
 public:
 	BitmapViewer() : UIWindow("Bitmap") {}
 
-	// ÓÃÓÚÊäÈëÄÚ´æµØÖ·µÄ×Ö·û»º³åÇø£¨ÒÔÊ®Áù½øÖÆĞÎÊ½ÊäÈë£©
+	// ç”¨äºè¾“å…¥å†…å­˜åœ°å€çš„å­—ç¬¦ç¼“å†²åŒºï¼ˆä»¥åå…­è¿›åˆ¶å½¢å¼è¾“å…¥ï¼‰
 	char bufaddr[10] = {};
-	// Ã¿ĞĞÏÔÊ¾µÄÏñËØÊı£¬Ä¬ÈÏ 16£¨¿ÉÍ¨¹ı»¬¿éµ÷Õû£©
+	// æ¯è¡Œæ˜¾ç¤ºçš„åƒç´ æ•°ï¼Œé»˜è®¤ 16ï¼ˆå¯é€šè¿‡æ»‘å—è°ƒæ•´ï¼‰
 	int width = 16;
-	// Ã¿¸öÏñËØµÄÏÔÊ¾³ß´ç£¨ÏñËØ´óĞ¡£©£¬Ä¬ÈÏ 10
+	// æ¯ä¸ªåƒç´ çš„æ˜¾ç¤ºå°ºå¯¸ï¼ˆåƒç´ å¤§å°ï¼‰ï¼Œé»˜è®¤ 10
 	int size = 10;
-	// Î»Æ«ÒÆ£¨bit offset£©£¬·¶Î§ 0¡«7£¬¾ö¶¨´Ó×Ö½ÚÄÚÄÄÒ»Î»¿ªÊ¼¶ÁÈ¡
+	// ä½åç§»ï¼ˆbit offsetï¼‰ï¼ŒèŒƒå›´ 0ï½7ï¼Œå†³å®šä»å­—èŠ‚å†…å“ªä¸€ä½å¼€å§‹è¯»å–
 	int bitOffset = 0;
 
-	// ÓÃÓÚÀÛ¼ÆÊó±ê¹öÂÖµÄ±ä»¯
+	// ç”¨äºç´¯è®¡é¼ æ ‡æ»šè½®çš„å˜åŒ–
 	double wheeldelta = 0;
 
 	void RenderCore() override {
-		// ¡ª¡ª 1. ÉÏ²¿¿ØÖÆÇøÓò£ºµØÖ·ÊäÈë¼°¸÷¸ö»¬¿é
+		// â€”â€” 1. ä¸Šéƒ¨æ§åˆ¶åŒºåŸŸï¼šåœ°å€è¾“å…¥åŠå„ä¸ªæ»‘å—
 		auto startY = ImGui::GetCursorPosY();
 		ImGui::InputText("BitmapViewer.Address"_lc, bufaddr, sizeof(bufaddr));
-		// ´ÓÊäÈë¿ò»ñÈ¡ÆğÊ¼µØÖ·£¨Ê®Áù½øÖÆ£©
+		// ä»è¾“å…¥æ¡†è·å–èµ·å§‹åœ°å€ï¼ˆåå…­è¿›åˆ¶ï¼‰
 		uint32_t addr = static_cast<uint32_t>(strtol(bufaddr, nullptr, 16));
 		addr = addr & 0xfffff;
 		if (ImGui::InputInt("BitmapViewer.Address_2"_lc, (int*)&addr)) {
@@ -33,22 +33,22 @@ public:
 		ImGui::SliderInt("BitmapViewer.BitOffset"_lc, &bitOffset, 0, 7);
 		ImGui::Dummy(ImVec2{0, 20});
 
-		// ¿ÉÓÃÇøÓò¸ß¶È¾ö¶¨ÏÔÊ¾¶àÉÙĞĞ
+		// å¯ç”¨åŒºåŸŸé«˜åº¦å†³å®šæ˜¾ç¤ºå¤šå°‘è¡Œ
 		float availHeight = ImGui::GetContentRegionAvail().y;
 		int rows = static_cast<int>(availHeight) / size;
 		int numPixels = width * rows;
 
-		// Íø¸ñÇøÓò³ß´ç
+		// ç½‘æ ¼åŒºåŸŸå°ºå¯¸
 		ImVec2 gridSize(width * size, rows * size);
 		ImGui::Dummy(gridSize);
-		// ¼ÇÂ¼ Dummy ¶ÔÓ¦µÄÇøÓò£¨ºóĞø»æÖÆ¾ù»ùÓÚ´ËÇøÓò£©
+		// è®°å½• Dummy å¯¹åº”çš„åŒºåŸŸï¼ˆåç»­ç»˜åˆ¶å‡åŸºäºæ­¤åŒºåŸŸï¼‰
 		ImVec2 startPos = ImGui::GetItemRectMin();
-		// ²¶»ñÍø¸ñÇøÓòÊÇ·ñ±»Êó±êĞüÍ££¨ÓÃÓÚÇø·ÖÓë¹ö¶¯Ìõ½»»¥£©
+		// æ•è·ç½‘æ ¼åŒºåŸŸæ˜¯å¦è¢«é¼ æ ‡æ‚¬åœï¼ˆç”¨äºåŒºåˆ†ä¸æ»šåŠ¨æ¡äº¤äº’ï¼‰
 		bool gridHovered = ImGui::IsItemHovered();
 
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
 
-		// ¡ª¡ª »æÖÆÎ»Í¼Êı¾İ£ºÒÀ´Î¶ÁÈ¡Ã¿¸öÎ»¶ÔÓ¦µÄÊı¾İ
+		// â€”â€” ç»˜åˆ¶ä½å›¾æ•°æ®ï¼šä¾æ¬¡è¯»å–æ¯ä¸ªä½å¯¹åº”çš„æ•°æ®
 		uint8_t currentByte = 0;
 		int currentByteIndex = -1;
 		for (int i = 0; i < numPixels; ++i) {
@@ -71,10 +71,10 @@ public:
 		}
 		ImVec2 endPos = ImVec2(startPos.x + gridSize.x, startPos.y + gridSize.y);
 		if (size > 3) {
-			// »æÖÆÍø¸ñÍâ¿ò
+			// ç»˜åˆ¶ç½‘æ ¼å¤–æ¡†
 			drawList->AddRect(startPos, endPos, IM_COL32(200, 200, 200, 255));
 
-			// ¡ª¡ª »æÖÆÁĞ¿Ì¶È
+			// â€”â€” ç»˜åˆ¶åˆ—åˆ»åº¦
 			for (int col = 0; col < width; ++col) {
 				float x = startPos.x + col * size;
 				const int tickLength = 5;
@@ -88,7 +88,7 @@ public:
 						IM_COL32(255, 255, 255, 255), colLabel);
 				}
 			}
-			// ¡ª¡ª »æÖÆĞĞ¿Ì¶È
+			// â€”â€” ç»˜åˆ¶è¡Œåˆ»åº¦
 			for (int row = 0; row < rows; ++row) {
 				float y = startPos.y + row * size;
 				const int tickLength = 5;
@@ -103,34 +103,34 @@ public:
 				}
 			}
 		}
-		// ¡ª¡ª 2. Ìí¼Ó¡°ĞéÄâ¹ö¶¯Ìõ¡±ÓÃÓÚ¿ìËÙÌø×ª£¨´Ë¹ö¶¯Ìõ²¢·Ç´°¿ÚµÄÊµ¼Ê¹ö¶¯Ìõ£©
+		// â€”â€” 2. æ·»åŠ â€œè™šæ‹Ÿæ»šåŠ¨æ¡â€ç”¨äºå¿«é€Ÿè·³è½¬ï¼ˆæ­¤æ»šåŠ¨æ¡å¹¶éçª—å£çš„å®é™…æ»šåŠ¨æ¡ï¼‰
 		{
-			// Ê¾ÀıÖĞÉè¶¨ÄÚ´æ·¶Î§Îª 1MB£¨¿É¸ù¾İĞèÒªµ÷Õû£©
+			// ç¤ºä¾‹ä¸­è®¾å®šå†…å­˜èŒƒå›´ä¸º 1MBï¼ˆå¯æ ¹æ®éœ€è¦è°ƒæ•´ï¼‰
 			constexpr uint32_t MEMORY_SIZE = 0x100000;
-			// ¿É¼ûÇøÓò°üº¬µÄÎ»Êı¼°×Ö½ÚÊı£¨ÏòÉÏÈ¡Õû£©
+			// å¯è§åŒºåŸŸåŒ…å«çš„ä½æ•°åŠå­—èŠ‚æ•°ï¼ˆå‘ä¸Šå–æ•´ï¼‰
 			int visibleBits = width * rows;
 			int visibleBytes = (bitOffset + visibleBits + 7) / 8;
 			uint32_t maxEffectiveAddr = (MEMORY_SIZE > (uint32_t)visibleBytes) ? MEMORY_SIZE - visibleBytes : 0;
 
-			// ÒÔ¸¡µãÊı±íÊ¾µÄ¡°ÓĞĞ§µØÖ·¡±£¬ÆäĞ¡Êı²¿·Ö±íÊ¾ bitOffset µÄ±ÈÀı
+			// ä»¥æµ®ç‚¹æ•°è¡¨ç¤ºçš„â€œæœ‰æ•ˆåœ°å€â€ï¼Œå…¶å°æ•°éƒ¨åˆ†è¡¨ç¤º bitOffset çš„æ¯”ä¾‹
 			float effectiveAddr = addr + bitOffset / 8.0f;
 
-			// ¶¨Òå¹ö¶¯ÌõµÄ¼¸ºÎÇøÓò£º·ÅÔÚÍø¸ñÓÒ²à£¬¼ä¸ô 10 ÏñËØ
+			// å®šä¹‰æ»šåŠ¨æ¡çš„å‡ ä½•åŒºåŸŸï¼šæ”¾åœ¨ç½‘æ ¼å³ä¾§ï¼Œé—´éš” 10 åƒç´ 
 			float scrollBarWidth = 16.f;
 			ImVec2 scrollBarPos = ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x - scrollBarWidth, ImGui::GetWindowPos().y + startY);
 			ImVec2 scrollBarSize = ImVec2(scrollBarWidth - 1.0f, ImGui::GetWindowSize().y - startY - 10.0f);
 
-			// »æÖÆ¹ö¶¯Ìõ±³¾°
+			// ç»˜åˆ¶æ»šåŠ¨æ¡èƒŒæ™¯
 			drawList->AddRectFilled(scrollBarPos,
 				ImVec2(scrollBarPos.x + scrollBarWidth, scrollBarPos.y + scrollBarSize.y),
 				IM_COL32(50, 50, 50, 255));
 
-			// ¼ÆËã¾ä±ú£¨»¬¿é£©µÄ¸ß¶È£ºÓë¿É¼û×Ö½ÚÊıÕ¼ÄÚ´æ·¶Î§µÄ±ÈÀıÓĞ¹Ø
+			// è®¡ç®—å¥æŸ„ï¼ˆæ»‘å—ï¼‰çš„é«˜åº¦ï¼šä¸å¯è§å­—èŠ‚æ•°å å†…å­˜èŒƒå›´çš„æ¯”ä¾‹æœ‰å…³
 			float handleHeight = (visibleBytes / (float)MEMORY_SIZE) * scrollBarSize.y;
 			if (handleHeight < 10.0f)
-				handleHeight = 10.0f; // ×îĞ¡¸ß¶È
+				handleHeight = 10.0f; // æœ€å°é«˜åº¦
 
-			// ¼ÆËã¾ä±úÔÚ¹ö¶¯ÌõÖĞµÄ´¹Ö±Î»ÖÃ
+			// è®¡ç®—å¥æŸ„åœ¨æ»šåŠ¨æ¡ä¸­çš„å‚ç›´ä½ç½®
 			float handlePosY = 0.0f;
 			if (maxEffectiveAddr > 0)
 				handlePosY = (effectiveAddr / maxEffectiveAddr) * (scrollBarSize.y - handleHeight);
@@ -139,14 +139,14 @@ public:
 			ImVec2 handleMax = ImVec2(scrollBarPos.x + scrollBarWidth, scrollBarPos.y + handlePosY + handleHeight);
 			drawList->AddRectFilled(handleMin, handleMax, IM_COL32(150, 150, 150, 255));
 
-			// ÓÃ InvisibleButton ²¶»ñÊó±êÔÚ¸ÃÇøÓòÄÚµÄµã»÷ÓëÍÏ×§ÊÂ¼ş
+			// ç”¨ InvisibleButton æ•è·é¼ æ ‡åœ¨è¯¥åŒºåŸŸå†…çš„ç‚¹å‡»ä¸æ‹–æ‹½äº‹ä»¶
 			ImGui::SetCursorScreenPos(scrollBarPos);
 			ImGui::InvisibleButton("VirtualScrollbar", scrollBarSize);
 			bool scrollbarHovered = ImGui::IsItemHovered();
 			if (ImGui::IsItemActive()) {
 				float mouseY = ImGui::GetIO().MousePos.y;
 				float newHandlePosY = mouseY - scrollBarPos.y - handleHeight / 2;
-				// ÏŞÖÆ newHandlePosY ÔÚºÏÀí·¶Î§ÄÚ
+				// é™åˆ¶ newHandlePosY åœ¨åˆç†èŒƒå›´å†…
 				if (newHandlePosY < 0.0f)
 					newHandlePosY = 0.0f;
 				if (newHandlePosY > scrollBarSize.y - handleHeight)
@@ -154,7 +154,7 @@ public:
 				float newEffectiveAddr = (scrollBarSize.y - handleHeight > 0)
 											 ? (newHandlePosY / (scrollBarSize.y - handleHeight)) * maxEffectiveAddr
 											 : 0.0f;
-				// ¸ù¾İ newEffectiveAddr »¹Ô­³öĞÂµÄ addr Óë bitOffset£¨bitOffset Îª newEffectiveAddr µÄĞ¡Êı²¿·Ö³Ë 8£©
+				// æ ¹æ® newEffectiveAddr è¿˜åŸå‡ºæ–°çš„ addr ä¸ bitOffsetï¼ˆbitOffset ä¸º newEffectiveAddr çš„å°æ•°éƒ¨åˆ†ä¹˜ 8ï¼‰
 				int newAddr = (int)newEffectiveAddr;
 				int newBitOffset = (int)round((newEffectiveAddr - newAddr) * 8.0f);
 				if (newBitOffset >= 8) {
@@ -167,7 +167,7 @@ public:
 			}
 		}
 
-		// ¡ª¡ª 3. Êó±ê¹öÂÖ¹ö¶¯£º½öµ±Êó±êĞüÍ£ÔÚÍø¸ñÇøÓò£¨ÇÒ²»ÔÚ¹ö¶¯ÌõÉÏÊ±£©ÏìÓ¦
+		// â€”â€” 3. é¼ æ ‡æ»šè½®æ»šåŠ¨ï¼šä»…å½“é¼ æ ‡æ‚¬åœåœ¨ç½‘æ ¼åŒºåŸŸï¼ˆä¸”ä¸åœ¨æ»šåŠ¨æ¡ä¸Šæ—¶ï¼‰å“åº”
 		if (gridHovered && !ImGui::IsItemActive()) {
 			wheeldelta += ImGui::GetIO().MouseWheel;
 			if (std::abs(wheeldelta) >= 1.0f) {
@@ -179,13 +179,13 @@ public:
 
 				int newAddr = addr + byteDelta;
 				int newBitOffset = bitOffset + bitRemainder;
-				// Èç¹û bitOffset ³¬³öÉÏ½ç£¬½øÎ»
+				// å¦‚æœ bitOffset è¶…å‡ºä¸Šç•Œï¼Œè¿›ä½
 				if (newBitOffset > 7) {
 					int carry = newBitOffset / 8;
 					newAddr += carry;
 					newBitOffset %= 8;
 				}
-				// Èç¹û bitOffset Ğ¡ÓÚ 0£¬ÔòÏò¸ßÎ»½èÎ»
+				// å¦‚æœ bitOffset å°äº 0ï¼Œåˆ™å‘é«˜ä½å€Ÿä½
 				else if (newBitOffset < 0) {
 					int borrow = (-newBitOffset + 7) / 8;
 					newAddr = newAddr > borrow ? newAddr - borrow : 0;
@@ -196,8 +196,8 @@ public:
 				sprintf(bufaddr, "%08X", addr);
 			}
 		}
-		// ¡ª¡ª 4. Ìí¼Ó¼üÅÌ¹ö¶¯´¦Àí£¨ÉÏÏÂ¼ıÍ·£¬PageUp£¬PageDown£©
-		// ½öµ±´°¿ÚÓµÓĞ½¹µãÇÒÎ´²¶»ñÎÄ±¾ÊäÈëÊ±ÏìÓ¦
+		// â€”â€” 4. æ·»åŠ é”®ç›˜æ»šåŠ¨å¤„ç†ï¼ˆä¸Šä¸‹ç®­å¤´ï¼ŒPageUpï¼ŒPageDownï¼‰
+		// ä»…å½“çª—å£æ‹¥æœ‰ç„¦ç‚¹ä¸”æœªæ•è·æ–‡æœ¬è¾“å…¥æ—¶å“åº”
 		if (ImGui::IsWindowFocused()) {
 			int rowDelta = 0;
 			if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))

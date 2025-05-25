@@ -1,4 +1,4 @@
-#include "Ui.hpp"
+﻿#include "Ui.hpp"
 #include <Localization.h>
 #include <Gui.h>
 #include "Theme.h"

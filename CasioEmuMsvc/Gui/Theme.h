@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <Ui.hpp>
 #include "Binary.h"
 #include <iostream>

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 constexpr auto licenses_str = R"aaaaaaaa(
 
 CasioEmuMsvc(or nx-U8 Emulator):
