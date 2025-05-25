@@ -4,26 +4,10 @@
 #include "CPU.hpp"
 #include "MMU.hpp"
 #include "asmjit/src/asmjit/asmjit.h"
-#include <map> // For jump_map
+#include <map>
 #include <optional>
 #include <unordered_map>
-#include <vector> // For worklist in potential future advanced CompileAt
-
-// Define PSW bit indices if not available from CPU.hpp. Replace with actual values.
-// These are typical but may vary for casioemu::CPU.
-// If casioemu::CPU::PSW_C, etc. are masks (e.g. 0x01, 0x04), use those directly.
-// For direct bit testing (bt instruction), indices are needed.
-// Example: if PSW_C is (1 << 0), PSW_C_BIT_IDX is 0.
-//          if PSW_Z is (1 << 2), PSW_Z_BIT_IDX is 2.
-//          if PSW_S is (1 << 3), PSW_S_BIT_IDX is 3.
-//          if PSW_OV is (1 << 4), PSW_OV_BIT_IDX is 4.
-// For this implementation, I'll use the masks directly with 'test' or 'and' if bit indices are not known.
-// The C++ OP_BC implementation implies flags are already in CPU members like `impl_flags_in`.
-// For simplicity and correctness, OP_BC JIT will call a helper or be very carefully JITed.
-
-// Let's assume these constants from casioemu::CPU are available:
-// casioemu::CPU::PSW_C, PSW_Z, PSW_S, PSW_OV (as masks)
-// casioemu::CPU::OpcodeHint::H_TI, H_WB, H_DS
+#include <vector>
 
 using namespace asmjit;
 
@@ -467,6 +451,8 @@ public:
 			// Prepare environment for CPU member function call
 			cc.mov(x86::Mem(reg_cpu, long_imm_off), Imm(imm)); // `imm` is already prepared
 			cc.mov(x86::Mem(reg_cpu, hint_off), Imm(opd->hint));
+			cc.mov(x86::Mem(reg_cpu, pc_off + reg_off), Imm(pc));
+			cc.mov(x86::Mem(reg_cpu, csr_off + reg_off), Imm(uint8_t(csr_val >> 16)));
 
 			for (size_t ix = 0; ix != 2; ++ix) {
 				if (opd->operands[ix].mask == 0 && opd->operands[ix].register_size == 0)
@@ -510,6 +496,8 @@ public:
 
 			// Call the original C++ handler function
 			x86::Gp temp_cpu_ptr = cc.newIntPtr("reg_cpu"); // Ensure reg_cpu is not clobbered if it's also an arg reg
+
+			// TODO: ???
 			cc.mov(temp_cpu_ptr, reg_cpu);
 #if defined(_WIN64)
 			cc.mov(x86::rcx, temp_cpu_ptr);
