@@ -7,6 +7,25 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fms-extensions")
 # set(CMAKE_CXX_EXTENSIONS OFF)
 
+set(ASMJIT_STATIC ON CACHE BOOL "Build AsmJit as a static library")
+set(ASMJIT_BUILD_TEST OFF CACHE BOOL "Disable AsmJit tests")
+set(ASMJIT_BUILD_EXAMPLES OFF CACHE BOOL "Disable AsmJit examples")
+
+message(STATUS "Attempting to add subdirectory: asmjit")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/asmjit/CMakeLists.txt")
+    message(STATUS "Found asmjit/CMakeLists.txt")
+    add_subdirectory(asmjit)
+    message(STATUS "Finished add_subdirectory(asmjit)")
+else()
+    message(FATAL_ERROR "Could not find asmjit/CMakeLists.txt at ${CMAKE_CURRENT_SOURCE_DIR}/asmjit")
+endif()
+
+if(TARGET asmjit::asmjit)
+    message(STATUS "Target asmjit::asmjit FOUND after add_subdirectory")
+else()
+    message(WARNING "Target asmjit::asmjit NOT FOUND after add_subdirectory")
+endif()
+
 include_directories(#${CMAKE_SOURCE_DIR}/SDL_image/include
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Ext
@@ -25,8 +44,35 @@ find_library(SDL2_image SDL2_image)
 add_library(main SHARED)
 
 # Search for all .cpp files in the CasioEmuMsvc directory 
-file(GLOB_RECURSE SOURCES ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/*.cpp)
+# file(GLOB_RECURSE SOURCES ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/*.cpp)
 
-target_sources(main PRIVATE ${SOURCES})
+# Use individual directories instead of all to avoid asmjit's file testing
+file(GLOB MAIN_SOURCES_ROOT "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/*.cpp")
+file(GLOB MAIN_SOURCES_CHIPSET "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Chipset/*.cpp")
+file(GLOB MAIN_SOURCES_CRASH "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/CrashHandler/*.cpp")
+file(GLOB MAIN_SOURCES_EXT "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Ext/*.cpp")
+file(GLOB MAIN_SOURCES_GUI "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Gui/*.cpp")
+file(GLOB MAIN_SOURCES_IMGUI "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Gui/imgui/*.cpp")
+file(GLOB MAIN_SOURCES_JIT "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/JitU8/*.cpp")
+file(GLOB MAIN_SOURCES_PERIPHERAL "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Peripheral/*.cpp")
+file(GLOB MAIN_SOURCES_PLUGIN "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Plugin/*.cpp")
+file(GLOB MAIN_SOURCES_STARTUP "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/StartupUi/*.cpp")
 
-target_link_libraries(main SDL2 SDL2_image)
+set(MAIN_SOURCES
+    ${MAIN_SOURCES_ROOT}
+    ${MAIN_SOURCES_CHIPSET}
+    ${MAIN_SOURCES_CRASH}
+    ${MAIN_SOURCES_EXT}
+    ${MAIN_SOURCES_GUI}
+    ${MAIN_SOURCES_IMGUI}
+    ${MAIN_SOURCES_JIT}
+    ${MAIN_SOURCES_PERIPHERAL}
+    ${MAIN_SOURCES_PLUGIN}
+    ${MAIN_SOURCES_STARTUP}
+)
+
+target_sources(main PRIVATE ${MAIN_SOURCES})
+
+target_compile_definitions(main PRIVATE ASMJIT_STATIC)
+
+target_link_libraries(main PRIVATE SDL2 SDL2_image asmjit::asmjit)
