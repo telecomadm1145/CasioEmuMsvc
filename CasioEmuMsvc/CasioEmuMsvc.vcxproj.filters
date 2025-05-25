@@ -46,7 +46,7 @@
     <ClCompile Include="Gui\Ui.cpp" />
     <ClCompile Include="Gui\WatchWindow.cpp" />
     <ClCompile Include="Gui\FileDialog.cpp" />
-    <ClCompile Include="Ext\Logger.cpp" />
+    <ClCompile Include="Ext\LoggerImpl.cpp" />
     <ClCompile Include="Gui\VariableWindow.cpp" />
     <ClCompile Include="Peripheral\5800Flash.cpp" />
     <ClCompile Include="Peripheral\Audio.cpp" />
