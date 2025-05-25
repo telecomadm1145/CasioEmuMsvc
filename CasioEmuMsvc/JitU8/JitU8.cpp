@@ -32,6 +32,28 @@ static const int JIT_CALL_THRESHOLD = 5;
 // Max instructions to compile in a single block
 static const size_t MAX_JIT_INSTRUCTIONS_PER_BLOCK = 128; // Reduced from 4096 for practical block sizes
 
+namespace detail {
+	// Accepts uint8/16/32/64 – the loop stops once the LSB is 1.
+	template <typename T>
+	constexpr unsigned lsb_pos(T mask) noexcept {
+		unsigned pos = 0;
+		while ((mask & T{1}) == 0 && pos < sizeof(T) * 8u) {
+			mask >>= 1;
+			++pos;
+		}
+		return pos;
+	}
+} // namespace detail
+
+// -----------------------------------------------------------------------------
+//  PSW bit positions (shift values)
+//  They are derived from the masks already defined in casioemu::CPU
+// -----------------------------------------------------------------------------
+static constexpr unsigned PSW_C_shift = detail::lsb_pos((int)casioemu::CPU::PSW_C);
+static constexpr unsigned PSW_Z_shift = detail::lsb_pos((int)casioemu::CPU::PSW_Z);
+static constexpr unsigned PSW_S_shift = detail::lsb_pos((int)casioemu::CPU::PSW_S);
+static constexpr unsigned PSW_OV_shift = detail::lsb_pos((int)casioemu::CPU::PSW_OV);
+
 class JitU8 {
 public:
 	JitRuntime rt;
@@ -293,141 +315,146 @@ public:
 				}
 			}
 			else if (opd->handler_function == &casioemu::CPU::OP_BC) {
-				// Conditional Branch: BC cond, displacement
-				// Displacement is from opd->operands[0] (usually op & 0xFF for BC)
-				// Displacement is sign-extended 8-bit value, shifted left by 1.
-				int8_t disp_s8 = static_cast<int8_t>((op >> opd->operands[0].shift) & opd->operands[0].mask);
-				int16_t branch_offset = static_cast<int16_t>(disp_s8) << 1;
+				// -----------------------------------------------------------------------------
+				//  Branch on Condition (BC  xxxx_xxxx)       – Optimised JIT emission
+				// -----------------------------------------------------------------------------
 
-				// Target PC if branch taken: (PC of instruction *after* BC + branch_offset)
-				// `pc` variable is already PC after BC and its potential immediate.
-				// For BC, there's no immediate, so `pc` = (PC of BC) + 2.
-				uint16_t target_pc_if_taken = (pc + branch_offset) & 0xFFFF;
-				size_t target_full_addr_if_taken = csr_val | target_pc_if_taken;
+				// -------------------------------------------------
+				// 1. Compute branch target -------------------------------------------------
+				int8_t disp_s8 = static_cast<int8_t>((op >> opd->operands[0].shift) &
+													 opd->operands[0].mask);
+				int16_t offset = static_cast<int16_t>(disp_s8) << 1; // sign-ext *2
+				uint16_t tgtPC = (pc + offset) & 0xFFFF;
+				size_t tgtAbs = csr_val | tgtPC;
 
-				Label lbl_branch_taken_jit;
-				if (!jump_map.count(target_full_addr_if_taken)) {
-					jump_map[target_full_addr_if_taken] = cc.newLabel();
-				}
-				lbl_branch_taken_jit = jump_map[target_full_addr_if_taken];
+				// Create / reuse label for the “taken” path
+				Label lblTaken;
+				if (!jump_map.count(tgtAbs))
+					jump_map[tgtAbs] = cc.newLabel();
+				lblTaken = jump_map[tgtAbs];
 
-				// Fallthrough label is already prepared as `fallthrough_label`
-
-				// --- Evaluate condition ---
-				// Load PSW
-				x86::Gp psw_val_reg = cc.newUInt8("psw_for_bc");
-				cc.mov(psw_val_reg, x86::Mem(reg_cpu, psw_off + reg_off));
-
-				// Condition evaluation logic (from CPU::OP_BC reference)
-				// Need actual PSW bit definitions from casioemu::CPU
-				// Assuming casioemu::CPU::PSW_C, ::PSW_Z etc are masks.
-				x86::Gp c = cc.newUInt8("c_flag");
-				x86::Gp z = cc.newUInt8("z_flag");
-				x86::Gp s = cc.newUInt8("s_flag");
-				x86::Gp ov = cc.newUInt8("ov_flag");
-
-				// Extract C: (psw & PSW_C) != 0
-				cc.mov(c, psw_val_reg);
-				cc.and_(c, casioemu::CPU::PSW_C);
-				cc.setne(c);
-				// Extract Z: (psw & PSW_Z) != 0
-				cc.mov(z, psw_val_reg);
-				cc.and_(z, casioemu::CPU::PSW_Z);
-				cc.setne(z);
-				// Extract S: (psw & PSW_S) != 0
-				cc.mov(s, psw_val_reg);
-				cc.and_(s, casioemu::CPU::PSW_S);
-				cc.setne(s);
-				// Extract OV: (psw & PSW_OV) != 0
-				cc.mov(ov, psw_val_reg);
-				cc.and_(ov, casioemu::CPU::PSW_OV);
-				cc.setne(ov);
-
-				x86::Gp le = cc.newUInt8("le_cond");
-				cc.mov(le, z);
-				cc.or_(le, c); // le = z || c
-				x86::Gp lts = cc.newUInt8("lts_cond");
-				cc.mov(lts, ov);
-				cc.xor_(lts, s); // lts = ov ^ s
-				x86::Gp les = cc.newUInt8("les_cond");
-				cc.mov(les, lts);
-				cc.or_(les, z); // les = lts || z
-
-				uint8_t cond_type = (op >> 8) & 0x000F; // Condition code from opcode
-				bool branched_unconditionally = false;
-				switch (cond_type) {
-				// For "branch if true": cmp flag, 1; je target
-				// For "branch if false": cmp flag, 0; je target
-				case 0:
-					cc.cmp(c, 0);
-					cc.je(lbl_branch_taken_jit);
-					break; // !c  (BC)
-				case 1:
-					cc.cmp(c, 1);
-					cc.je(lbl_branch_taken_jit);
-					break; //  c  (BNC)
-				case 2:
-					cc.cmp(le, 0);
-					cc.je(lbl_branch_taken_jit);
-					break; // !le (BH)
-				case 3:
-					cc.cmp(le, 1);
-					cc.je(lbl_branch_taken_jit);
-					break; //  le (BLS)
-				case 4:
-					cc.cmp(lts, 0);
-					cc.je(lbl_branch_taken_jit);
-					break; // !lts(BGE)
-				case 5:
-					cc.cmp(lts, 1);
-					cc.je(lbl_branch_taken_jit);
-					break; //  lts(BLT)
-				case 6:
-					cc.cmp(les, 0);
-					cc.je(lbl_branch_taken_jit);
-					break; // !les(BGT)
-				case 7:
-					cc.cmp(les, 1);
-					cc.je(lbl_branch_taken_jit);
-					break; //  les(BLE)
-				case 8:
-					cc.cmp(z, 0);
-					cc.je(lbl_branch_taken_jit);
-					break; // !z  (BNE)
-				case 9:
-					cc.cmp(z, 1);
-					cc.je(lbl_branch_taken_jit);
-					break; //  z  (BEQ)
-				case 10:
-					cc.cmp(ov, 0);
-					cc.je(lbl_branch_taken_jit);
-					break; // !ov (BNV)
-				case 11:
-					cc.cmp(ov, 1);
-					cc.je(lbl_branch_taken_jit);
-					break; //  ov (BV)
-				case 12:
-					cc.cmp(s, 0);
-					cc.je(lbl_branch_taken_jit);
-					break; // !s  (BPL)
-				case 13:
-					cc.cmp(s, 1);
-					cc.je(lbl_branch_taken_jit);
-					break; //  s  (BMI)
-				case 14:
-					cc.jmp(lbl_branch_taken_jit);
-					branched_unconditionally = true;
-					break; // true (BRA)
-				case 15:
-				default:
-					break; // false (no branch)
+				const uint8_t cond = (op >> 8) & 0x0F; // 0 … 15
+				// BRA (cond==14) is unconditional → fast path
+				if (cond == 14) {
+					cc.jmp(lblTaken);
+					block_terminated_by_jit = true; // block ends here
+					break;
 				}
 
-				// Fallthrough path (branch not taken)
-				if (!branched_unconditionally) { // If not BRA or other unconditional branch type
-					cc.jmp(fallthrough_label);
+				// -------------------------------------------------
+				// 2. Emit condition check -------------------------
+				//    Simple conditions use only TEST + Jcc.
+				//    Complex ones (LTS, LES) need one tiny helper.
+				// -------------------------------------------------
+
+				// Bring PSW once into an 8-bit register
+				x86::Gp psw = cc.newUInt8("psw");
+				cc.mov(psw, x86::Mem(reg_cpu, psw_off + reg_off));
+
+				/*  Condition LUT
+				 *  0  !C      (BC)
+				 *  1   C      (BNC)
+				 *  2  !LE = !(C|Z)  (BH)
+				 *  3   LE =  (C|Z)  (BLS)
+				 *  4  !LTS           (BGE)     -> needs XOR(OV,S)
+				 *  5   LTS           (BLT)
+				 *  6  !LES           (BGT)     -> needs (LTS|Z)
+				 *  7   LES           (BLE)
+				 *  8  !Z   (BNE)
+				 *  9   Z   (BEQ)
+				 * 10  !OV  (BNV)
+				 * 11   OV  (BV)
+				 * 12  !S   (BPL)
+				 * 13   S   (BMI)
+				 * 14  BRA  (handled above)
+				 * 15  false (never branch)
+				 *
+				 *  For the “simple” ones we can describe them as:
+				 *      (psw & mask) == 0  ?  JccTaken_ifZero :  JccTaken_ifNonZero
+				 */
+				struct CondInfo {
+					uint8_t mask;
+					bool branchIfNonZero;
+				};
+				static constexpr CondInfo lut[14] = {
+					{casioemu::CPU::PSW_C, false},						  // 0 !C
+					{casioemu::CPU::PSW_C, true},						  // 1  C
+					{casioemu::CPU::PSW_C | casioemu::CPU::PSW_Z, false}, // 2 !LE
+					{casioemu::CPU::PSW_C | casioemu::CPU::PSW_Z, true},  // 3  LE
+					{0, false},											  // 4 !LTS (special)
+					{0, true},											  // 5  LTS  (special)
+					{0, false},											  // 6 !LES (special)
+					{0, true},											  // 7  LES  (special)
+					{casioemu::CPU::PSW_Z, false},						  // 8 !Z
+					{casioemu::CPU::PSW_Z, true},						  // 9  Z
+					{casioemu::CPU::PSW_OV, false},						  // 10 !OV
+					{casioemu::CPU::PSW_OV, true},						  // 11  OV
+					{casioemu::CPU::PSW_S, false},						  // 12 !S
+					{casioemu::CPU::PSW_S, true}						  // 13  S
+				};
+
+				if (cond <= 13 && cond != 4 && cond != 5 && cond != 6 && cond != 7) {
+					// ---------- Simple bit/union test ------------------------------------
+					const CondInfo& ci = lut[cond];
+					cc.test(psw, ci.mask); // sets ZF
+					if (ci.branchIfNonZero)
+						cc.jnz(lblTaken); // … mask != 0
+					else
+						cc.jz(lblTaken); // … mask == 0
 				}
-				// JIT path diverges. The compiler loop `break`s because both paths are handled by JIT jumps.
+				else {
+					// ---------- Complex conditions (LTS / LES) ---------------------------
+					// LTS  = OV ^ S
+					// LES  = (OV ^ S) | Z
+					// ->  tmp = (psw & (OV|S)) ; tmp = ((tmp >> ovShift) ^ (tmp >> sShift)) & 1
+					// Using 8-bit regs keeps the sequence small.
+					x86::Gp tmp = cc.newUInt8("tmp");
+
+					switch (cond) {
+					case 4: // !LTS
+					case 5: //  LTS
+						cc.mov(tmp, psw);
+						// tmp = ((OV>>ovShift) ^ (S>>sShift)) & 1
+						cc.shr(tmp, PSW_OV_shift);		// carry OV into bit0
+						cc.mov(x86::Gp(tmp.r8()), psw); // reload psw into tmp.lo
+						cc.shr(tmp, PSW_S_shift);		// carry S into bit0
+						cc.xor_(tmp.r8(), tmp);			// OV ^ S  in bit0
+						cc.and_(tmp.r8(), 1);
+						if (cond == 5)
+							cc.jnz(lblTaken);
+						else
+							cc.jz(lblTaken);
+						break;
+
+					case 6: // !LES
+					case 7: //  LES
+						// les = lts | z
+						// Step1: compute lts into tmp
+						cc.mov(tmp, psw);
+						cc.shr(tmp, PSW_OV_shift);
+						cc.mov(x86::Gp(tmp.r8()), psw);
+						cc.shr(tmp, PSW_S_shift);
+						cc.xor_(tmp.r8(), tmp);
+						cc.and_(tmp.r8(), 1); // bit0 = lts
+
+						// Step2: OR with Z
+						cc.test(psw, casioemu::CPU::PSW_Z);
+						cc.setnz(tmp.r8()); // tmp = z ? 1 : lts
+						if (cond == 7)
+							cc.jnz(lblTaken);
+						else
+							cc.jz(lblTaken);
+						break;
+
+					default:
+						break; // should never reach here
+					}
+				}
+
+				// -------------------------------------------------
+				// 3. Fall-through path ----------------------------
+				cc.jmp(fallthrough_label);
+
 				block_terminated_by_jit = true;
 				break;
 			}
@@ -552,15 +579,6 @@ public:
 				break;
 			}
 
-			// If not a special terminating instruction and no Delay Slot hint, end JIT block.
-			//if (!(opd->hint & casioemu::CPU::OpcodeHint::H_DS)) {
-			//	cc.mov(x86::Mem(reg_cpu, pc_off + reg_off), Imm(pc)); // pc is already advanced to next instr
-			//	cc.mov(x86::Mem(reg_cpu, csr_off + reg_off), Imm(static_cast<uint8_t>(csr_val >> 16)));
-			//	cc.ret();
-			//	block_terminated_by_jit = true;
-			//	break;
-			//}
-			// Else (H_DS is set), JIT compilation continues to the next instruction.
 		} // End of directly_call_path
 		} // End of instruction compilation loop
 
