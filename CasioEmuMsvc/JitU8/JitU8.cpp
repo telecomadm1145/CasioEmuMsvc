@@ -163,7 +163,7 @@ public:
 		auto op_reg_size_off = offsetof(operand_tp, register_size);
 
 		auto long_imm_off = offsetof(casioemu::CPU, impl_long_imm);
-		// auto hint_off = offsetof(casioemu::CPU, impl_hint); // Not directly set by JIT, but used by C++
+		auto hint_off = offsetof(casioemu::CPU, impl_hint);
 
 		auto flags_changed_off = offsetof(casioemu::CPU, impl_flags_changed);
 		auto flags_in_off = offsetof(casioemu::CPU, impl_flags_in);
@@ -439,6 +439,7 @@ public:
 		directly_call_path: {
 			// Prepare environment for CPU member function call
 			cc.mov(x86::Mem(reg_cpu, long_imm_off), Imm(imm)); // `imm` is already prepared
+			cc.mov(x86::Mem(reg_cpu, hint_off), Imm(opd->hint));
 
 			for (size_t ix = 0; ix != 2; ++ix) {
 				if (opd->operands[ix].mask == 0 && opd->operands[ix].register_size == 0)
