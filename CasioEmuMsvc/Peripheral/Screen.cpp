@@ -1028,7 +1028,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		}
 		enabled_2 = false;
 	}
-	// Function to capture the current screen and save it as a PNG file
+	// Function to capture the current screen, save as PNG file and copy to clipboard
     void CaptureScreenshot(SDL_Renderer* renderer, const std::vector<SDL_Rect>& spriteRects, const std::vector<SDL_Rect>& pixelRects) {
         // Get current time to generate a unique filename
         std::time_t t = std::time(nullptr);
@@ -1075,6 +1075,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
                 screenSurface->pixels, screenSurface->pitch) == 0) {
                 
     #ifdef __ANDROID__
+                // Save to MediaStore
                 auto str = filename.str();
                 bool success = saveImageToMediaStore(screenSurface->pixels, screenSurface->w, screenSurface->h, screenSurface->pitch, str.c_str());
                 if (!success) {
@@ -1082,13 +1083,108 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
                 } else {
                     SDL_Log("Screenshot saved successfully with MediaStore API");
                 }
+                
+                // Copy to clipboard on Android using JNI
+                JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+                jobject activity = (jobject)SDL_AndroidGetActivity();
+                
+                if (env && activity) {
+                    // Create a Java direct ByteBuffer from the pixel data
+                    jobject byteBuffer = env->NewDirectByteBuffer(screenSurface->pixels, 
+                                                                 screenSurface->h * screenSurface->pitch);
+                    
+                    // Call the Java method to copy to clipboard
+                    jclass activityClass = env->GetObjectClass(activity);
+                    jmethodID copyToClipboardMethod = env->GetMethodID(activityClass, "copyImageToClipboard", 
+                        "(Ljava/nio/ByteBuffer;III)Z");
+                    
+                    if (copyToClipboardMethod != NULL) {
+                        jboolean result = env->CallBooleanMethod(activity, copyToClipboardMethod, 
+                                                               byteBuffer, screenSurface->w, 
+                                                               screenSurface->h, screenSurface->pitch);
+                        if (result) {
+                            SDL_Log("Screenshot copied to clipboard");
+                        } else {
+                            SDL_Log("Failed to copy screenshot to clipboard");
+                        }
+                    } else {
+                        SDL_Log("copyImageToClipboard method not found. Add it to your Java activity.");
+                    }
+                    
+                    env->DeleteLocalRef(byteBuffer);
+                    env->DeleteLocalRef(activityClass);
+                    env->DeleteLocalRef(activity);
+                }
     #else
+                // Save to file on Windows/Desktop
                 auto str = filename.str();
                 if (IMG_SavePNG(screenSurface, str.c_str()) != 0) {
                     SDL_Log("Error saving screenshot: %s", IMG_GetError());
                 } else {
                     SDL_Log("Screenshot saved to %s", str.c_str());
                 }
+                
+                // Copy to clipboard on Windows/Desktop
+                #ifdef _WIN32
+                // Convert SDL_Surface to Windows DIB format for clipboard
+                HDC hdcScreen = GetDC(NULL);
+                HDC hdcMem = CreateCompatibleDC(hdcScreen);
+                
+                BITMAPINFOHEADER bi;
+                ZeroMemory(&bi, sizeof(BITMAPINFOHEADER));
+                bi.biSize = sizeof(BITMAPINFOHEADER);
+                bi.biWidth = screenSurface->w;
+                bi.biHeight = -screenSurface->h; // Negative for top-down
+                bi.biPlanes = 1;
+                bi.biBitCount = 32;
+                bi.biCompression = BI_RGB;
+                
+                void* bits = NULL;
+                HBITMAP hBitmap = CreateDIBSection(hdcMem, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &bits, NULL, 0);
+                
+                if (hBitmap) {
+                    // Copy pixels from SDL surface to DIB
+                    SelectObject(hdcMem, hBitmap);
+                    
+                    // Convert RGBA to BGRA and copy to DIB
+                    uint8_t* src = (uint8_t*)screenSurface->pixels;
+                    uint8_t* dst = (uint8_t*)bits;
+                    
+                    for (int y = 0; y < screenSurface->h; y++) {
+                        for (int x = 0; x < screenSurface->w; x++) {
+                            // RGBA to BGRA
+                            dst[0] = src[2]; // B
+                            dst[1] = src[1]; // G
+                            dst[2] = src[0]; // R
+                            dst[3] = src[3]; // A
+                            
+                            src += 4;
+                            dst += 4;
+                        }
+                    }
+                    
+                    // Copy to clipboard
+                    if (OpenClipboard(NULL)) {
+                        EmptyClipboard();
+                        SetClipboardData(CF_BITMAP, hBitmap);
+                        CloseClipboard();
+                        SDL_Log("Screenshot copied to clipboard");
+                    } else {
+                        SDL_Log("Failed to open clipboard");
+                        DeleteObject(hBitmap);
+                    }
+                    
+                    DeleteDC(hdcMem);
+                } else {
+                    SDL_Log("Failed to create DIB section for clipboard");
+                }
+                
+                ReleaseDC(NULL, hdcScreen);
+                #else
+                // For other desktop platforms like Linux/macOS
+                // Use platform-specific clipboard APIs if needed
+                SDL_Log("Clipboard copy not implemented for this platform");
+                #endif
     #endif
             } else {
                 SDL_Log("Error capturing screen pixels: %s", SDL_GetError());
