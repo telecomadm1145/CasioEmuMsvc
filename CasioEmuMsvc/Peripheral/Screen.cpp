@@ -36,6 +36,11 @@
 #include <iomanip>
 #include <vector>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <wingdi.h>
+#endif
+
 #ifdef __ANDROID__
 #include <jni.h>
 #include <android/log.h>
