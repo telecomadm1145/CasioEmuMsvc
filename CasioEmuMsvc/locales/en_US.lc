@@ -143,6 +143,7 @@ Ui.ForceUpdateLang=Force Update Language
 Ui.ForceUpdateLangDesc=Reload default language (usually used to update language files if there is an update for android)
 Ui.Browse=Browse
 Ui.InjectionFilePath=Injection File Path
+Ui.DisableVibration=Disable Vibration
 
 Rop.Input=Input
 Rop.InputSize=Input size

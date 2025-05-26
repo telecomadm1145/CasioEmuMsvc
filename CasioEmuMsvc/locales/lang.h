@@ -150,6 +150,7 @@ Ui.ForceUpdateLang=Force Update Language
 Ui.ForceUpdateLangDesc=Reload default language (usually used to update language files if there is an update for android)
 Ui.Browse=Browse
 Ui.InjectionFilePath=Injection File Path
+Ui.DisableVibration=Disable Vibration
 
 Rop.Input=Input
 Rop.InputSize=Input size
@@ -340,6 +341,7 @@ Ui.ForceUpdateLang=Bắt buộc cập nhật ngôn ngữ
 Ui.ForceUpdateLangDesc=Tải lại ngôn ngữ mặc định (thường dùng để cập nhật lại file ngôn ngữ nếu có bản cập nhật cho android)
 Ui.Browse=Duyệt
 Ui.InjectionFilePath=Đường dẫn file custom inj
+Ui.DisableVibration=Tắt rung
 
 Rop.Input=Đầu vào
 Rop.InputSize=Nhập
@@ -532,6 +534,7 @@ Ui.ForceUpdateLang=强制更新语言
 Ui.ForceUpdateLangDesc=重新加载默认语言（通常用于在 android 有更新时更新语言文件）
 Ui.Browse=浏览
 Ui.InjectionFilePath=注入文件路径
+Ui.DisableVibration=禁用振动
 
 Rop.LoadToInputArea=加载到输入区
 Rop.LoadedTip=已加载

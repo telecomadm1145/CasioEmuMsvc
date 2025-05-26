@@ -141,6 +141,7 @@ Ui.ForceUpdateLang=强制更新语言
 Ui.ForceUpdateLangDesc=重新加载默认语言（通常用于在 android 有更新时更新语言文件）
 Ui.Browse=浏览
 Ui.InjectionFilePath=注入文件路径
+Ui.DisableVibration=禁用振动
 
 Rop.LoadToInputArea=加载到输入区
 Rop.LoadedTip=已加载
