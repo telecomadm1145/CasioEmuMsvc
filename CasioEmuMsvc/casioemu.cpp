@@ -125,11 +125,12 @@ int main(int argc, char* argv[]) {
 
 	SDL_ShowWindow(emulator.window);
 
-
 	struct TouchState {
 		bool touching = false;
 		float startX = 0.0f;
 		float startY = 0.0f;
+		float currentX = 0.0f;
+		float currentY = 0.0f;
 		Uint32 startTime = 0;
 		int fingerId = -1; // 用于区分多点触摸
 
@@ -215,13 +216,13 @@ int main(int argc, char* argv[]) {
 
 				// Draw horizontal line of the cross
 				SDL_RenderDrawLine(renderer,
-					touchState.startX - 10, touchState.startY,
-					touchState.startX + 10, touchState.startY);
+					touchState.currentX - 10, touchState.currentY,
+					touchState.currentX + 10, touchState.currentY);
 
 				// Draw vertical line of the cross
 				SDL_RenderDrawLine(renderer,
-					touchState.startX, touchState.startY - 10,
-					touchState.startX, touchState.startY + 10);
+					touchState.currentX, touchState.currentY - 10,
+					touchState.currentX, touchState.currentY + 10);
 			}
 
 			if (!touchState2.touching) {
@@ -230,13 +231,13 @@ int main(int argc, char* argv[]) {
 
 				// Draw horizontal line of the cross
 				SDL_RenderDrawLine(renderer,
-					touchState2.startX - 10, touchState2.startY,
-					touchState2.startX + 10, touchState2.startY);
+					touchState2.currentX - 10, touchState2.currentY,
+					touchState2.currentX + 10, touchState2.currentY);
 
 				// Draw vertical line of the cross
 				SDL_RenderDrawLine(renderer,
-					touchState2.startX, touchState2.startY - 10,
-					touchState2.startX, touchState2.startY + 10);
+					touchState2.currentX, touchState2.currentY - 10,
+					touchState2.currentX, touchState2.currentY + 10);
 			}
 			// 渲染第一个触摸轨迹
 			Uint32 current_time = SDL_GetTicks();
@@ -326,49 +327,68 @@ int main(int argc, char* argv[]) {
 				touchState.touching = true;
 				touchState.startX = event.tfinger.x * wid; // 转换为窗口坐标
 				touchState.startY = event.tfinger.y * hei;
+				touchState.currentX = touchState.startX;
+				touchState.currentY = touchState.startY;
 				touchState.startTime = SDL_GetTicks();
 				touchState.fingerId = event.tfinger.fingerId;
+				touchState.dragging = false;  // Reset dragging state
 			}
 			else if (!touchState2.touching) {
 				touchState2.touching = true;
 				touchState2.startX = event.tfinger.x * wid;
 				touchState2.startY = event.tfinger.y * hei;
+				touchState2.currentX = touchState2.startX;
+				touchState2.currentY = touchState2.startY;
 				touchState2.fingerId = event.tfinger.fingerId;
+				touchState2.dragging = false;  // Reset dragging state
 				SDL_Event wheelEvent;
 				SDL_memset(&wheelEvent, 0, sizeof(wheelEvent));
 				wheelEvent.type = SDL_MOUSEMOTION;
-				// wheelEvent.button.button = SDL_BUTTON_LEFT;
-				wheelEvent.motion.x = touchState.startX;
-				wheelEvent.motion.y = touchState.startY;
+				wheelEvent.motion.x = touchState.currentX;
+				wheelEvent.motion.y = touchState.currentY;
 				ImGui_ImplSDL2_ProcessEvent(&wheelEvent);
 			}
 			break;
 		case SDL_FINGERUP:
 			if (touchState.dragging && touchState.fingerId == event.tfinger.fingerId) {
+				float endX = event.tfinger.x * wid;
+				float endY = event.tfinger.y * hei;
+				
 				SDL_Event motionEvent;
 				SDL_memset(&motionEvent, 0, sizeof(motionEvent));
 				motionEvent.type = SDL_MOUSEBUTTONUP;
 				motionEvent.button.button = SDL_BUTTON_LEFT;
-				motionEvent.motion.x = touchState.startX;
-				motionEvent.motion.y = touchState.startY;
+				motionEvent.button.x = endX;
+				motionEvent.button.y = endY;
 				ImGui_ImplSDL2_ProcessEvent(&motionEvent);
 				touchState.dragging = false;
+
+				touchState.currentX = endX;
+				touchState.currentY = endY;
 			}
 			if (touchState2.dragging && touchState2.fingerId == event.tfinger.fingerId) {
+				float endX = event.tfinger.x * wid;
+				float endY = event.tfinger.y * hei;
+				
 				SDL_Event motionEvent;
 				SDL_memset(&motionEvent, 0, sizeof(motionEvent));
 				motionEvent.type = SDL_MOUSEBUTTONUP;
 				motionEvent.button.button = SDL_BUTTON_LEFT;
-				motionEvent.motion.x = touchState.startX;
-				motionEvent.motion.y = touchState.startY;
+				motionEvent.button.x = endX;
+				motionEvent.button.y = endY;
 				ImGui_ImplSDL2_ProcessEvent(&motionEvent);
 				touchState2.dragging = false;
+
+				touchState2.currentX = endX;
+				touchState2.currentY = endY;
 			}
 			if (touchState.touching && touchState.fingerId == event.tfinger.fingerId) {
-
 				float endX = event.tfinger.x * wid;
 				float endY = event.tfinger.y * hei;
 				Uint32 endTime = SDL_GetTicks();
+
+				touchState.currentX = endX;
+				touchState.currentY = endY;
 
 				if (endTime - touchState.startTime < LONG_PRESS_DELAY) { // 单击
 					float dist = std::hypot(endX - touchState.startX, endY - touchState.startY);
@@ -423,6 +443,11 @@ int main(int argc, char* argv[]) {
 				touchState.touching = false;
 			}
 			if (touchState2.touching && touchState2.fingerId == event.tfinger.fingerId) {
+				float endX = event.tfinger.x * wid;
+				float endY = event.tfinger.y * hei;
+				
+				touchState2.currentX = endX;
+				touchState2.currentY = endY;
 				touchState2.touching = false;
 			}
 			break;
@@ -436,64 +461,71 @@ int main(int argc, char* argv[]) {
 				float deltaX = currentX - touchState.startX;
 				float deltaY = currentY - touchState.startY;
 
+				touchState.currentX = currentX;
+				touchState.currentY = currentY;
+
 				if ((deltaX * deltaX + deltaY * deltaY) > 1.f) {
+					if (!touchState.dragging) {
+						SDL_Event motionEvent;
+						SDL_memset(&motionEvent, 0, sizeof(motionEvent));
+						motionEvent.type = SDL_MOUSEBUTTONDOWN;
+						motionEvent.button.button = SDL_BUTTON_LEFT;
+						motionEvent.button.x = currentX;
+						motionEvent.button.y = currentY;
+						ImGui_ImplSDL2_ProcessEvent(&motionEvent);
+						touchState.dragging = true;
+					}
+					
 					// 发送鼠标移动事件
 					SDL_Event motionEvent;
-					SDL_memset(&motionEvent, 0, sizeof(motionEvent));
-					motionEvent.type = SDL_MOUSEBUTTONDOWN;
-					motionEvent.button.button = SDL_BUTTON_LEFT;
-					motionEvent.motion.x = currentX;
-					motionEvent.motion.y = currentY;
-					ImGui_ImplSDL2_ProcessEvent(&motionEvent);
 					SDL_memset(&motionEvent, 0, sizeof(motionEvent));
 					motionEvent.type = SDL_MOUSEMOTION;
 					motionEvent.motion.x = currentX;
 					motionEvent.motion.y = currentY;
 					motionEvent.motion.state = SDL_BUTTON_LMASK; // 按住左键拖动
 					ImGui_ImplSDL2_ProcessEvent(&motionEvent);
-					touchState.dragging = true;
 				}
 			}
 			else if (touchState.touching && !touchState.dragging && touchState2.touching &&
 					 touchState.fingerId != touchState2.fingerId && touchState.fingerId == event.tfinger.fingerId) {
 				// 双指缩放
-				float x1 = 0.0f, y1 = 0.0f, x2 = 0.0f, y2 = 0.0f;
-				if (touchState.fingerId == event.tfinger.fingerId) {
-					y1 = event.tfinger.y * hei;
-					y2 = touchState.startY;
-				}
-				/*else if (touchState2.fingerId == event.tfinger.fingerId) {
-					x1 = touchState.startX;
-					y1 = touchState.startY;
-					x2 = event.tfinger.x * wid;
-					y2 = event.tfinger.y * hei;
-				}*/
-				float delta = (y2 - y1);
+				float currentY = event.tfinger.y * hei;
+				
+				touchState.currentX = event.tfinger.x * wid;
+				touchState.currentY = currentY;
+				
+				float delta = (touchState2.currentY - currentY);
 
 				if (std::abs(delta) > 1.0f) {
 					SDL_Event wheelEvent;
 					SDL_memset(&wheelEvent, 0, sizeof(wheelEvent));
 					wheelEvent.type = SDL_MOUSEWHEEL;
 					wheelEvent.wheel.preciseY = delta / 100;
-					wheelEvent.wheel.mouseX = touchState.startX;
-					wheelEvent.wheel.mouseY = touchState.startY;
+					wheelEvent.wheel.mouseX = touchState.currentX;
+					wheelEvent.wheel.mouseY = touchState.currentY;
 					ImGui_ImplSDL2_ProcessEvent(&wheelEvent);
-					touchState.startY = y1;
+					touchState.startY = currentY;
 				}
 			}
 		}
 			if (touchState.touching && touchState.fingerId == event.tfinger.fingerId) {
+				touchState.currentX = event.tfinger.x * wid;
+				touchState.currentY = event.tfinger.y * hei;
+				
 				trail1.samples[trail1.current_index] = {
-					event.tfinger.x * wid,
-					event.tfinger.y * hei,
+					touchState.currentX,
+					touchState.currentY,
 					SDL_GetTicks()};
 				trail1.current_index = (trail1.current_index + 1) % TRAIL_BUFFER_SIZE;
 			}
 
 			if (touchState2.touching && touchState2.fingerId == event.tfinger.fingerId) {
+				touchState2.currentX = event.tfinger.x * wid;
+				touchState2.currentY = event.tfinger.y * hei;
+				
 				trail2.samples[trail2.current_index] = {
-					event.tfinger.x * wid,
-					event.tfinger.y * hei,
+					touchState2.currentX,
+					touchState2.currentY,
 					SDL_GetTicks()};
 				trail2.current_index = (trail2.current_index + 1) % TRAIL_BUFFER_SIZE;
 			}
