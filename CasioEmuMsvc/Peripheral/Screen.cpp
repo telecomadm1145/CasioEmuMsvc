@@ -37,10 +37,11 @@
 #include <vector>
 
 #ifdef _WIN32
-// Prevent Windows macros min/max from conflicting with std::min/std::max
-#define NOMINMAX
 #include <windows.h>
 #include <wingdi.h>
+// Undefine Windows min/max macros to avoid conflicts with std::min/std::max
+#undef min
+#undef max
 #endif
 
 #ifdef __ANDROID__
@@ -1051,18 +1052,18 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
     
         // Traverse all sprite rectangles
         for (const auto& rect : spriteRects) {
-            minX = (minX < rect.x) ? minX : rect.x;
-            minY = (minY < rect.y) ? minY : rect.y;
-            maxX = (maxX > rect.x + rect.w) ? maxX : (rect.x + rect.w);
-            maxY = (maxY > rect.y + rect.h) ? maxY : (rect.y + rect.h);
+            minX = std::min(minX, rect.x);
+            minY = std::min(minY, rect.y);
+            maxX = std::max(maxX, rect.x + rect.w);
+            maxY = std::max(maxY, rect.y + rect.h);
         }
     
         // Traverse all pixel rectangles (representing the screen pixels)
         for (const auto& rect : pixelRects) {
-            minX = (minX < rect.x) ? minX : rect.x;
-            minY = (minY < rect.y) ? minY : rect.y;
-            maxX = (maxX > rect.x + rect.w) ? maxX : (rect.x + rect.w);
-            maxY = (maxY > rect.y + rect.h) ? maxY : (rect.y + rect.h);
+            minX = std::min(minX, rect.x);
+            minY = std::min(minY, rect.y);
+            maxX = std::max(maxX, rect.x + rect.w);
+            maxY = std::max(maxY, rect.y + rect.h);
         }
     
         // Calculate the width and height of the capture area
@@ -1209,18 +1210,18 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 
 		// Traverse all sprite rectangles
 		for (const auto& rect : spriteRects) {
-			minX = (minX < rect.x) ? minX : rect.x;
-			minY = (minY < rect.y) ? minY : rect.y;
-			maxX = (maxX > rect.x + rect.w) ? maxX : (rect.x + rect.w);
-			maxY = (maxY > rect.y + rect.h) ? maxY : (rect.y + rect.h);
+			minX = std::min(minX, rect.x);
+			minY = std::min(minY, rect.y);
+			maxX = std::max(maxX, rect.x + rect.w);
+			maxY = std::max(maxY, rect.y + rect.h);
 		}
 
 		// Traverse all pixel rectangles (representing the screen pixels)
 		for (const auto& rect : pixelRects) {
-			minX = (minX < rect.x) ? minX : rect.x;
-			minY = (minY < rect.y) ? minY : rect.y;
-			maxX = (maxX > rect.x + rect.w) ? maxX : (rect.x + rect.w);
-			maxY = (maxY > rect.y + rect.h) ? maxY : (rect.y + rect.h);
+			minX = std::min(minX, rect.x);
+			minY = std::min(minY, rect.y);
+			maxX = std::max(maxX, rect.x + rect.w);
+			maxY = std::max(maxY, rect.y + rect.h);
 		}
 
 		// Calculate the width and height of the capture area
@@ -1254,18 +1255,18 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 
 		// Traverse all sprite rectangles
 		for (const auto& rect : spriteRects) {
-			minX = (minX < rect.x) ? minX : rect.x;
-			minY = (minY < rect.y) ? minY : rect.y;
-			maxX = (maxX > rect.x + rect.w) ? maxX : (rect.x + rect.w);
-			maxY = (maxY > rect.y + rect.h) ? maxY : (rect.y + rect.h);
+			minX = std::min(minX, rect.x);
+			minY = std::min(minY, rect.y);
+			maxX = std::max(maxX, rect.x + rect.w);
+			maxY = std::max(maxY, rect.y + rect.h);
 		}
 
 		// Traverse all pixel rectangles (representing the screen pixels)
 		for (const auto& rect : pixelRects) {
-			minX = (minX < rect.x) ? minX : rect.x;
-			minY = (minY < rect.y) ? minY : rect.y;
-			maxX = (maxX > rect.x + rect.w) ? maxX : (rect.x + rect.w);
-			maxY = (maxY > rect.y + rect.h) ? maxY : (rect.y + rect.h);
+			minX = std::min(minX, rect.x);
+			minY = std::min(minY, rect.y);
+			maxX = std::max(maxX, rect.x + rect.w);
+			maxY = std::max(maxY, rect.y + rect.h);
 		}
 
 		// Calculate the width and height of the capture area
