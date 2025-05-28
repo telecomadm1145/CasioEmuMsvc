@@ -666,18 +666,18 @@ namespace casioemu {
 				{0x96EA, "PreAns"}};
 		}
 		else if (hid == HW_TI) {
-			size_t i = 0;
-			return {
-				{0xE490 + 16 * i++, "x"},
-				{0xE490 + 16 * i++, "y"},
-				{0xE490 + 16 * i++, "z"},
-				{0xE490 + 16 * i++, "t"},
-				{0xE490 + 16 * i++, "a"},
-				{0xE490 + 16 * i++, "b"},
-				{0xE490 + 16 * i++, "c"},
-				{0xE490 + 16 * i++, "d"},
-				{0xE490 + 16 * i++, "ans"},
-			}; // Invalid
+			//size_t i = 0;
+			//return {
+			//	{0xE490 + 16 * i++, "x"},
+			//	{0xE490 + 16 * i++, "y"},
+			//	{0xE490 + 16 * i++, "z"},
+			//	{0xE490 + 16 * i++, "t"},
+			//	{0xE490 + 16 * i++, "a"},
+			//	{0xE490 + 16 * i++, "b"},
+			//	{0xE490 + 16 * i++, "c"},
+			//	{0xE490 + 16 * i++, "d"},
+			//	{0xE490 + 16 * i++, "ans"},
+			//}; // Invalid
 		}
 		else {
 			PANIC("HardwareId");

@@ -40,7 +40,7 @@ RomInfo rom_info(std::vector<byte>& rom, const std::vector<byte>& flash, bool ch
 		CWX,
 		CWII,
 	} sum_type{};
-	if (spinit == 0xf000) { // cwx or cwii
+	if (spinit == 0xf000) { // cwx or casioemu
 		if (rom.size() < 0x40000) {
 			return ri;
 		}

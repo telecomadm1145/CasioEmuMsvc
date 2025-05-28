@@ -6,7 +6,7 @@
 
 namespace casioemu {
 	class IOPorts : public Peripheral {
-		// There are 2 mode registers for Port1 in cwii.
+		// There are 2 mode registers for Port1 in casioemu.
 		MMURegion region_port0_data, region_port0_mode, region_port0_control_0, region_port0_control_1, region_port0_direction, region_port0_unk,
 			region_port1_data, region_port1_mode_0, region_port1_mode_1, region_port1_control_0, region_port1_control_1, region_port1_direction;
 

@@ -3,7 +3,6 @@
 #include "AddressWindow.h"
 #include "BitmapViewer.h"
 #include "CallAnalysis.h"
-#include "CasioData.h"
 #include "Chipset/Chipset.hpp"
 #include "Chipset/MMU.hpp"
 #include "CodeViewer.hpp"
@@ -19,7 +18,6 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_sdl2.h"
 #include "imgui/imgui_impl_sdlrenderer2.h"
-#include <Assemblier.h>
 #include <Gui.h>
 #include <SDL.h>
 #include <filesystem>
@@ -36,8 +34,6 @@ Injector* injector = 0;
 MemBreakPoint* membp = 0;
 
 std::vector<UIWindow*> windows{};
-
-static ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
 void gui_loop() {
     if (!m_emu->Running())
@@ -57,15 +53,15 @@ void gui_loop() {
         win->Render();
     }
 
-    #ifndef __ANDROID__
-    ImGui::Begin("Debug");
-    if (ImGui::Button("Crash")) {
-        throw 0;
-    }
-    ImGui::End();
-    #endif
+    //#ifndef __ANDROID__
+    //ImGui::Begin("Debug");
+    //if (ImGui::Button("Crash")) {
+    //    throw 0;
+    //}
+    //ImGui::End();
+    //#endif
 
-    #ifdef __ANDROID__
+    #ifdef SINGLE_WINDOW
     ImGui::SetNextWindowBgAlpha(0.0f);
     ImGui::Begin("Overlay", nullptr, 
         ImGuiWindowFlags_NoDecoration | 
@@ -190,7 +186,7 @@ int test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 			 injector = new Injector(),
 			 membp = new MemBreakPoint(),
 			 CreateAddressWindow(),
-			 MakeAssemblerUI(),
+			 // MakeAssemblerUI(),
 			 MakeThemeWindow(),
 			 CreateBitmapViewer()})
 		windows.push_back(item);

@@ -1034,6 +1034,7 @@ std::string sui_loop() {
 		}
 	});
 	t3.detach();
+	bool once = true;
 	while (1) {
 		SDL_Event event;
 		while (!SDL_PollEvent(&event)) {
@@ -1047,6 +1048,20 @@ std::string sui_loop() {
 			ui.Render();
 			for (auto& wind : *windows2) {
 				wind->Render();
+			}
+			if (once && !std::filesystem::exists("locale.txt")) {
+				ImGui::OpenPopup("LanguageChooser");
+				once = false;
+			}
+			if (ImGui::BeginPopupModal("LanguageChooser")) {
+				ImGui::Text("Please choose your language to continue");
+				// ImGui::Combo()
+				if (ImGui::Button("Ok")) {
+					g_local.ChangeLanguage("en_US");
+					// Restart...
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::EndPopup();
 			}
 			ImGui::EndFrame();
 			ImGui::Render();

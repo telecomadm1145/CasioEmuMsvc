@@ -9,7 +9,6 @@
     <ClCompile Include="Chipset\CPUControl.cpp" />
     <ClCompile Include="Chipset\CPULoadStore.cpp" />
     <ClCompile Include="Chipset\CPUPushPop.cpp" />
-    <ClCompile Include="Chipset\ePS6800.cpp" />
     <ClCompile Include="Chipset\InterruptSource.cpp" />
     <ClCompile Include="Chipset\MMU.cpp" />
     <ClCompile Include="Chipset\MMURegion.cpp" />
@@ -17,7 +16,6 @@
     <ClCompile Include="Emulator.cpp" />
     <ClCompile Include="Ext\SysDialog.cpp" />
     <ClCompile Include="Gui\5800FileSystem.cpp" />
-    <ClCompile Include="Gui\Assemblier.cpp" />
     <ClCompile Include="Gui\CallAnalysis.cpp" />
     <ClCompile Include="Gui\Editors.cpp" />
     <ClCompile Include="Gui\Gui.cpp" />
@@ -31,7 +29,6 @@
     <ClCompile Include="Peripheral\Uart.cpp" />
     <ClCompile Include="Peripheral\Spi.cpp" />
     <ClCompile Include="StartupUi\StartupUi.cpp" />
-    <ClCompile Include="Gui\CasioData.cpp" />
     <ClCompile Include="Gui\CodeViewer.cpp" />
     <ClCompile Include="Gui\imgui\imgui.cpp" />
     <ClCompile Include="Gui\imgui\imgui_draw.cpp" />
@@ -71,13 +68,13 @@
     <ClCompile Include="Plugin\PluginMan.cpp" />
     <ClCompile Include="Plugin\PluginApi_Impl.cpp" />
     <ClCompile Include="JitU8\JitU8.cpp" />
+    <ClCompile Include="Ext\ConsoleText.cpp" />
+    <ClCompile Include="Ext\GameBuffer.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Assemblier\U8Emitter.h" />
     <ClInclude Include="Ext\3rd_licenses.h" />
     <ClInclude Include="Gui\AddressWindow.h" />
     <ClInclude Include="Binary.h" />
-    <ClInclude Include="Dcl\ChipsetInfo.h" />
     <ClInclude Include="Chipset\Chipset.hpp" />
     <ClInclude Include="Chipset\CPU.hpp" />
     <ClInclude Include="Chipset\InterruptSource.hpp" />
@@ -88,7 +85,6 @@
     <ClInclude Include="Ext\LabelFile.h" />
     <ClInclude Include="Ext\RomPackage.h" />
     <ClInclude Include="Ext\SysDialog.h" />
-    <ClInclude Include="Gui\Assemblier.h" />
     <ClInclude Include="Gui\Localization.h" />
     <ClInclude Include="Gui\PopUpDisplay.h" />
     <ClInclude Include="Gui\Theme.h" />
@@ -96,7 +92,6 @@
     <ClInclude Include="Peripheral\SD\FakeSdCard.h" />
     <ClInclude Include="Gui\5800FileSystem.h" />
     <ClInclude Include="Gui\CallAnalysis.h" />
-    <ClInclude Include="Gui\CasioData.h" />
     <ClInclude Include="Gui\CwiiHelp.h" />
     <ClInclude Include="Data\ColourInfo.hpp" />
     <ClInclude Include="Data\EventCode.hpp" />
@@ -161,6 +156,11 @@
     <ClInclude Include="locales\lang.h" />
     <ClInclude Include="Plugin\PluginMan.h" />
     <ClInclude Include="Settings.h" />
+    <ClInclude Include="Ext\ConsoleText.h" />
+    <ClInclude Include="Ext\GameBuffer.h" />
+    <ClInclude Include="Ext\Unicode.h" />
+    <ClInclude Include="Gui\FileDialog.hpp" />
+    <ClInclude Include="Gui\UIScaling.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

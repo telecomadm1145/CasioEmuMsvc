@@ -45,21 +45,21 @@ void VariableWindow::RenderCore() {
 		std::string s;
 		ImGui::TextUnformatted(v.Name);
 		ImGui::SameLine(90);
-		s = cwii::StringizeCwiiNumber(base_addr + v.RealPartOffset);
+		s = casioemu::BCD2Str(base_addr + v.RealPartOffset);
 		ImGui::TextUnformatted(s.c_str());
 		if (s_im) {
 			ImGui::SameLine(320);
-			s = cwii::StringizeCwiiNumber(base_addr + v.RealPartOffset + casioemu::GetReImOffset(m_emu->hardware_id));
+			s = casioemu::BCD2Str(base_addr + v.RealPartOffset + casioemu::GetReImOffset(m_emu->hardware_id));
 			ImGui::TextUnformatted(s.c_str());
 		}
 		if (showhex) {
 			ImGui::TextUnformatted("VarWindow.Hex"_lc);
 			ImGui::SameLine(90);
-			s = cwii::HexizeString(base_addr + v.RealPartOffset, casioemu::GetVariableSize(m_emu->hardware_id));
+			s = casioemu::ConvHex(base_addr + v.RealPartOffset, casioemu::GetVariableSize(m_emu->hardware_id));
 			ImGui::TextUnformatted(s.c_str());
 			if (s_im) {
 				ImGui::SameLine(320);
-				s = cwii::HexizeString(base_addr + v.RealPartOffset + casioemu::GetReImOffset(m_emu->hardware_id), casioemu::GetVariableSize(m_emu->hardware_id));
+				s = casioemu::ConvHex(base_addr + v.RealPartOffset + casioemu::GetReImOffset(m_emu->hardware_id), casioemu::GetVariableSize(m_emu->hardware_id));
 				ImGui::TextUnformatted(s.c_str());
 			}
 		}
@@ -78,7 +78,7 @@ void VariableWindow::RenderCore() {
 	if (m_emu->hardware_id == casioemu::HW_CLASSWIZ_II) {
 		ImGui::TextUnformatted("Theta");
 		ImGui::SameLine(90);
-		auto a = cwii::StringizeCwiiNumber(n_ram_buffer + 0xBDEC - 0x9000);
+		auto a = casioemu::BCD2Str(n_ram_buffer + 0xBDEC - 0x9000);
 		ImGui::TextUnformatted(a.c_str());
 		if (showaddr) {
 			ImGui::TextUnformatted("VarWindow.Addr"_lc);

@@ -3,7 +3,7 @@
 #include "Models.h"
 #include <string>
 #include <unordered_map>
-namespace cwii {
+namespace __temp_namesp_1456456 {
 	inline std::string trim(const std::string& str) {
 		size_t first = str.find_first_not_of('0');
 		if (first == std::string::npos)
@@ -36,7 +36,7 @@ namespace cwii {
 		return str.substr(first);
 	}
 
-	inline std::string HexizeString(const char* p, size_t size) {
+	inline std::string ConvHex(const char* p, size_t size) {
 		std::string fin;
 		const char stock[] = "0123456789ABCDEF";
 		for (size_t i = 0; i < size; i++) {
@@ -92,7 +92,7 @@ namespace cwii {
 		}
 		return 1;
 	}
-	inline std::string StringizeTiNumber(const char* p) {
+	inline std::string TiBCD2Str(const char* p) {
 		auto sign = ((p[6] & 0xf) == 0x8);
 		if ((unsigned char)p[0] > 0x99 || p[0] == 0) { // Special
 			if (p[7] == 0x00) {
@@ -114,8 +114,8 @@ namespace cwii {
 				return (sign ? "-" : "") + (std::string)buffer + s;
 			}
 			if (p[7] == 0x02) {
-				auto divider = trimStart(HexizeString(&p[1], 2));
-				auto number = HexizeString(&p[3], 4);
+				auto divider = trimStart(ConvHex(&p[1], 2));
+				auto number = ConvHex(&p[3], 4);
 				number.resize(7);
 				number = trimStart(number);
 				if (divider == "1")
@@ -123,9 +123,9 @@ namespace cwii {
 				return number + "/" + divider;
 			}
 			if (p[7] == 0x03) {
-				auto divider = trimStart(HexizeString(&p[1], 2));
-				auto number = HexizeString(&p[3], 2);
-				auto scale = HexizeString(&p[5], 2);
+				auto divider = trimStart(ConvHex(&p[1], 2));
+				auto number = ConvHex(&p[3], 2);
+				auto scale = ConvHex(&p[5], 2);
 				number.resize(3);
 				scale.resize(3);
 				number = trimStart(number);
@@ -135,13 +135,13 @@ namespace cwii {
 				return scale + "*" + number + "/" + divider;
 			}
 			if (p[7] == 0x04) {
-				auto sqrt1 = HexizeString(p, 2);
+				auto sqrt1 = ConvHex(p, 2);
 				sqrt1.erase(sqrt1.begin());
 				sqrt1 = trimStart(sqrt1);
-				auto divider = trimStart(HexizeString(&p[2], 1));
-				auto coeff1 = trimStart(HexizeString(&p[3], 1));
-				auto sqrt2 = HexizeString(&p[5], 2);
-				auto coeff2 = trimStart(HexizeString(&p[4], 1));
+				auto divider = trimStart(ConvHex(&p[2], 1));
+				auto coeff1 = trimStart(ConvHex(&p[3], 1));
+				auto sqrt2 = ConvHex(&p[5], 2);
+				auto coeff2 = trimStart(ConvHex(&p[4], 1));
 				sqrt2.erase(sqrt2.end() - 1);
 				sqrt2 = trimStart(sqrt2);
 				return "(" + coeff1 + "*sqrt(" + sqrt1 + ")+" + coeff2 + "*sqrt(" + sqrt2 + "))/" + divider;
@@ -149,7 +149,7 @@ namespace cwii {
 			return "frac";
 		}
 	parse_0:
-		auto dat = HexizeString(p, 7);
+		auto dat = ConvHex(p, 7);
 		auto exp = (int)p[7];
 
 		dat.resize(2 * 7 - 1);
@@ -166,9 +166,9 @@ namespace cwii {
 		}
 		return dat;
 	}
-	inline std::string StringizeCwiiNumber(const char* p) {
+	inline std::string BCD2Str(const char* p) {
 		if (m_emu->hardware_id == casioemu::HW_TI) {
-			return StringizeTiNumber(p);
+			return TiBCD2Str(p);
 		}
 		auto sz = casioemu::GetVariableSize(m_emu->hardware_id);
 		auto type = (p[0] >> 4) & 0xF;
@@ -178,7 +178,7 @@ namespace cwii {
 		auto expsign = 1;
 		if (!ConvertSign(sign, expsign, numbersign))
 			;
-		auto base = HexizeString(p, sz - 2);
+		auto base = ConvHex(p, sz - 2);
 		switch (type) {
 		case 0x0:
 		case 0x4: {
@@ -194,6 +194,10 @@ namespace cwii {
 				return trimEnd(base) + "x10^" + exps;
 
 			return trimEnd(base);
+
+			// Idk why this is such a hard problem for llms :(
+			// Todo: fix this
+
 			// base[0] = base[1];
 			// base[1] = '.';
 			// if (numbersign == -1) {
@@ -333,24 +337,31 @@ namespace cwii {
 			return "";
 		}
 	}
-	inline static std::unordered_map<int, std::string> ModeNames = []() {
-		std::unordered_map<int, std::string> a{};
-		a[0] = "Reset 68";
-		a[0x06] = "Matrix";
-		a[0x07] = "Vector";
-		a[0x0D] = "Spreadsheet";
-		a[0x0E] = "Algorithm";
-		a[0x4F] = "Math Box";
-		a[0x88] = "Table";
-		a[0x89] = "Verify";
-		a[0xC1] = "Calculate";
-		a[0xC4] = "Complex";
-		a[0x02] = "Base-N";
-		a[0x03] = "Statistics";
-		a[0x0C] = "Distribution";
-		a[0x45] = "Equation";
-		a[0x4A] = "Ratio";
-		a[0x4B] = "Inequality";
-		return a;
-	}();
-} // namespace cwii
+	//inline static std::unordered_map<int, std::string> ModeNames = []() {
+	//	std::unordered_map<int, std::string> a{};
+	//	a[0] = "Reset 68";
+	//	a[0x06] = "Matrix";
+	//	a[0x07] = "Vector";
+	//	a[0x0D] = "Spreadsheet";
+	//	a[0x0E] = "Algorithm";
+	//	a[0x4F] = "Math Box";
+	//	a[0x88] = "Table";
+	//	a[0x89] = "Verify";
+	//	a[0xC1] = "Calculate";
+	//	a[0xC4] = "Complex";
+	//	a[0x02] = "Base-N";
+	//	a[0x03] = "Statistics";
+	//	a[0x0C] = "Distribution";
+	//	a[0x45] = "Equation";
+	//	a[0x4A] = "Ratio";
+	//	a[0x4B] = "Inequality";
+	//	return a;
+	//}();
+}
+
+// Export them.
+namespace casioemu {
+	using __temp_namesp_1456456::TiBCD2Str;
+	using __temp_namesp_1456456::BCD2Str;
+	using __temp_namesp_1456456::ConvHex;
+}
