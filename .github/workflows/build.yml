@@ -1,0 +1,180 @@
+name: Auto build and release
+
+on:
+  pull_request:
+    branches: [ "stable" ]
+  workflow_dispatch:
+  push:
+    branches: [ "stable" ]
+
+env:
+  # MSBuild configs
+  SOLUTION_FILE_PATH: .
+  BUILD_CONFIGURATION: Release
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - platform: windows
+            os: windows-latest
+            name: "Windows"
+          - platform: android
+            os: ubuntu-latest
+            name: "Android"
+    
+    runs-on: ${{ matrix.os }}
+    name: Build ${{ matrix.name }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4.1.7
+      with:
+        fetch-depth: ${{ matrix.platform == 'android' && '0' || '1' }}
+        submodules: true
+
+    - name: Add MSBuild to PATH
+      if: matrix.platform == 'windows'
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Restore NuGet packages
+      if: matrix.platform == 'windows'
+      run: nuget restore ${{env.SOLUTION_FILE_PATH}}
+
+    - name: Build Solution
+      if: matrix.platform == 'windows'
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: |
+        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x64 ${{env.SOLUTION_FILE_PATH}}
+        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x86 ${{env.SOLUTION_FILE_PATH}}
+
+    - name: Upload x86 Build Artifact
+      if: matrix.platform == 'windows'
+      uses: actions/upload-artifact@v4.4.0
+      with:
+        name: Release-x86
+        path: Win32\${{env.BUILD_CONFIGURATION}}
+        if-no-files-found: error
+
+    - name: Upload x64 Build Artifact
+      if: matrix.platform == 'windows'
+      uses: actions/upload-artifact@v4.4.0
+      with:
+        name: Release-x64
+        path: x64\${{env.BUILD_CONFIGURATION}}
+        if-no-files-found: error
+
+    - name: Clone SDL2 and dependencies
+      if: matrix.platform == 'android'
+      run: |
+        git clone --depth 1 -b release-2.30.3 https://github.com/libsdl-org/SDL.git
+        git clone --depth 1 -b SDL2 https://github.com/libsdl-org/SDL_image.git
+
+    - name: Set up JDK 21
+      if: matrix.platform == 'android'
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission to gradlew
+      if: matrix.platform == 'android'
+      run: chmod +x gradlew
+
+    - name: Build with Gradle
+      if: matrix.platform == 'android'
+      run: ./gradlew assembleRelease
+
+    - name: Upload APK
+      if: matrix.platform == 'android'
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-release
+        path: app/build/outputs/apk/release/app-release.apk
+        compression-level: 0
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/stable'
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4.1.7
+      with:
+        fetch-depth: 0
+
+    - name: Download All Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+
+    - name: Generate Release Details
+      id: release_details
+      run: |
+        SHORT_HASH=$(git rev-parse --short HEAD)
+        echo "COMMIT_HASH=$SHORT_HASH" >> $GITHUB_ENV
+        echo "RELEASE_TAG=stable-$(date +'%Y%m%d%H%M%S')-$SHORT_HASH" >> $GITHUB_ENV
+        echo "RELEASE_DATE=$(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
+        
+        CHANGELOG_CONTENT=$(git log -5 --pretty=format:"- %s (%h)" --abbrev-commit)
+        echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+        echo "$CHANGELOG_CONTENT" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+
+    - name: Prepare Release Assets
+      run: |
+        mkdir -p release_assets
+        
+        # Copy and rename Android APK
+        if [ -f "./artifacts/app-release/app-release.apk" ]; then
+          cp "./artifacts/app-release/app-release.apk" "release_assets/app-android-${{ env.COMMIT_HASH }}.apk"
+        fi
+        
+        # Package Windows x86 build
+        if [ -d "./artifacts/Release-x86" ]; then
+          cd "./artifacts/Release-x86"
+          zip -r "../../release_assets/windows-x86-${{ env.COMMIT_HASH }}.zip" .
+          cd ../..
+        fi
+        
+        # Package Windows x64 build
+        if [ -d "./artifacts/Release-x64" ]; then
+          cd "./artifacts/Release-x64"
+          zip -r "../../release_assets/windows-x64-${{ env.COMMIT_HASH }}.zip" .
+          cd ../..
+        fi
+        
+        ls -la release_assets/
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2.2.2
+      with:
+        tag_name: ${{ env.RELEASE_TAG }}
+        name: '🚧 Auto Build ${{ env.RELEASE_TAG }} (Pre-release)'
+        body: |
+          ## ⚠️ Pre-release Auto Build
+          
+          > **Warning**: This is an automated pre-release build for testing purposes. 
+          > It may contain bugs and is not recommended for production use.
+          
+          **Build Date:** ${{ env.RELEASE_DATE }}
+          **Commit:** [${{ env.COMMIT_HASH }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+          
+          ### Recent Changes
+          ${{ env.CHANGELOG }}
+          
+          ### Notes
+          - This is an automated build from the latest commit on the stable branch
+          - Use at your own risk - this is a development build
+        files: release_assets/*
+        draft: false
+        prerelease: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

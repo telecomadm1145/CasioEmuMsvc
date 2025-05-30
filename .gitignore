@@ -362,18 +362,15 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 
-models/
-models/*/*.bin
-models/*/*.txt
-*.exe
-*.pdb
-.vscode/
-.vs/
-x64/
-Debug/
-Release/
-packages/
-enc_temp_folder/
-obj/
-bin/
-/CasioEmuMsvc/Chipset/ePS6800.cpp
+.gradle/
+
+*.o
+*.log
+
+app/.cxx/
+app/release/
+app/build/
+workspace.xml
+
+SDL/
+SDL_image/

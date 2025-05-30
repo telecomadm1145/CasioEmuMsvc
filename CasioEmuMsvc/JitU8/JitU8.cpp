@@ -1,4 +1,4 @@
-﻿/*
+/*
 	JitU8 编译优化
 */
 #include "CPU.hpp"
@@ -151,7 +151,7 @@ public:
 		uint32_t csr_val = entry_offset & 0xFF0000; // Full CSR shifted value e.g. 0x0F0000
 
 		// CPU struct member offsets
-		auto reg_off = offsetof(casioemu::CPU::reg8_t, casioemu::CPU::reg8_t::raw);
+		auto reg_off = offsetof(casioemu::CPU::reg8_t, raw);
 		auto reg8_size = sizeof(casioemu::CPU::reg8_t);
 		// auto reg16_size = sizeof(casioemu::CPU::reg16_t); // Not used directly it seems
 		auto lr_off = offsetof(casioemu::CPU, reg_lr);

@@ -139,6 +139,7 @@ Ui.ForceUpdateLang=Bắt buộc cập nhật ngôn ngữ
 Ui.ForceUpdateLangDesc=Tải lại ngôn ngữ mặc định (thường dùng để cập nhật lại file ngôn ngữ nếu có bản cập nhật cho android)
 Ui.Browse=Duyệt
 Ui.InjectionFilePath=Đường dẫn file custom inj
+Ui.DisableVibration=Tắt rung
 
 Rop.Input=Đầu vào
 Rop.InputSize=Nhập

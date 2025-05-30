@@ -43,7 +43,7 @@
     <ClCompile Include="Gui\Ui.cpp" />
     <ClCompile Include="Gui\WatchWindow.cpp" />
     <ClCompile Include="Gui\FileDialog.cpp" />
-    <ClCompile Include="Ext\Logger.cpp" />
+    <ClCompile Include="Ext\LoggerImpl.cpp" />
     <ClCompile Include="Gui\VariableWindow.cpp" />
     <ClCompile Include="Peripheral\5800Flash.cpp" />
     <ClCompile Include="Peripheral\Audio.cpp" />
@@ -68,6 +68,7 @@
     <ClCompile Include="Plugin\PluginMan.cpp" />
     <ClCompile Include="Plugin\PluginApi_Impl.cpp" />
     <ClCompile Include="JitU8\JitU8.cpp" />
+    <ClCompile Include="asmjit\src\**\*.cpp" />
     <ClCompile Include="Ext\ConsoleText.cpp" />
     <ClCompile Include="Ext\GameBuffer.cpp" />
   </ItemGroup>
@@ -161,6 +162,7 @@
     <ClInclude Include="Ext\Unicode.h" />
     <ClInclude Include="Gui\FileDialog.hpp" />
     <ClInclude Include="Gui\UIScaling.h" />
+    <ClInclude Include="asmjit\src\**\*.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

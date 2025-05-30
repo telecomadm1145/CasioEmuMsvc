@@ -1,11 +1,11 @@
 name: MSBuild
 
 on:
-  pull_request:
-    branches: [ "stable" ]
+  # pull_request:
+    # branches: [ "stable" ]
+  # push:
+    # branches: [ "stable" ]
   workflow_dispatch:
-  push:
-    branches: [ "stable" ]
 
 env:
   SOLUTION_FILE_PATH: .
