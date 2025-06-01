@@ -342,6 +342,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Chipset\ePSCpu.cpp" />
     <ClCompile Include="Ext\ConsoleText.cpp" />
     <ClCompile Include="Ext\GameBuffer.cpp" />
     <ClCompile Include="JitU8\JitU8.cpp" />
