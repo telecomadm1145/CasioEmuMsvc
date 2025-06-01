@@ -21,6 +21,7 @@
 #include "Chipset/Chipset.hpp"
 #include "Chipset/MMU.hpp"
 #include "Chipset/MMURegion.hpp"
+#include "Chipset/ePSCpu.h"
 #include "Emulator.hpp"
 #include "Gui/HwController.h"
 #include "Logger.hpp"
@@ -214,7 +215,9 @@ namespace casioemu {
 				ratio = 1 - 1e-4;
 			else
 				ratio = 1 - 5e-4;
-
+#ifdef __ANDROID__
+			ratio = 0.80;
+#endif
 			if constexpr (hardware_id == HW_TI) {
 				ratio = 1 - 1e-4;
 				if (!ti_enabled) {
@@ -257,10 +260,39 @@ namespace casioemu {
 
 				return;
 			}
-
-#ifdef __ANDROID__
-			ratio = 0.80;
-#endif
+			else if (hardware_id == HW_EPS6800) {
+				ratio = 1 - 1e-4;
+				float ink_alpha_on = 255;
+				float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);
+				ink_alpha_on = std::clamp(ink_alpha_on, 0.0f, 255.0f);
+				uint8_t* screen_buffer = (uint8_t*)emulator.chipset.epscpu->vram;
+				// if (emulator.ModelDefinition.real_hardware) {
+				//	screen_buffer = this->screen_buffer;
+				// }
+				for (int ix = 0; ix < 96; ++ix) {
+					for (int iy = 0; iy < 64; ++iy) {
+						uint32_t i = (ix << 6) | iy;
+						int bIndx = (i >> 3);
+						int subIndx = (i & 7);
+						int mask = (1 << subIndx);
+						bool on = (screen_buffer[bIndx] & mask) != 0;
+						auto& data = screen_ink_alpha[(iy * 96 + 96) + ix];
+						data = data * ratio + (on ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
+					}
+				}
+				screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xe5d4;
+				// if (emulator.ModelDefinition.real_hardware) {
+				//	screen_buffer = this->screen_buffer + 8 * 192;
+				// }
+				// int x = 0;
+				// for (int ix = 1; ix != SPR_MAX; ++ix) {
+				//	auto off = sprite_bitmap[ix].offset;
+				//	auto& data = screen_ink_alpha[x];
+				//	data = data * ratio + ((screen_buffer[off] & sprite_bitmap[ix].mask) ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
+				//	x++;
+				// }
+				return;
+			}
 
 			if (screen_refresh_rate < screen_flashing_threshold && !enable_screen_fading)
 				;
@@ -567,6 +599,18 @@ namespace casioemu {
 	template <>
 	const int Screen<HW_ES_PLUS>::SPR_MAX = 19;
 
+	// that's meaningless, just make compiler happy xd
+	template <>
+	const int Screen<HW_EPS6800>::N_ROW = 31;
+	template <>
+	const int Screen<HW_EPS6800>::ROW_SIZE = 16;
+	template <>
+	const int Screen<HW_EPS6800>::OFFSET = 16;
+	template <>
+	const int Screen<HW_EPS6800>::ROW_SIZE_DISP = 12;
+	template <>
+	const int Screen<HW_EPS6800>::SPR_MAX = 19;
+
 	template <>
 	const SpriteBitmap Screen<HW_CLASSWIZ_II>::sprite_bitmap[] = {
 		{"rsd_pixel", 0, 0},
@@ -615,6 +659,28 @@ namespace casioemu {
 
 	template <>
 	const SpriteBitmap Screen<HW_ES_PLUS>::sprite_bitmap[] = {
+		{"rsd_pixel", 0, 0},
+		{"rsd_s", 0x10, 0x00},
+		{"rsd_a", 0x04, 0x00},
+		{"rsd_m", 0x10, 0x01},
+		{"rsd_sto", 0x02, 0x01},
+		{"rsd_rcl", 0x40, 0x02},
+		{"rsd_stat", 0x40, 0x03},
+		{"rsd_cmplx", 0x80, 0x04},
+		{"rsd_mat", 0x40, 0x05},
+		{"rsd_vct", 0x01, 0x05},
+		{"rsd_d", 0x20, 0x07},
+		{"rsd_r", 0x02, 0x07},
+		{"rsd_g", 0x10, 0x08},
+		{"rsd_fix", 0x01, 0x08},
+		{"rsd_sci", 0x20, 0x09},
+		{"rsd_math", 0x40, 0x0A},
+		{"rsd_down", 0x08, 0x0A},
+		{"rsd_up", 0x80, 0x0B},
+		{"rsd_disp", 0x10, 0x0B}};
+
+	template <>
+	const SpriteBitmap Screen<HW_EPS6800>::sprite_bitmap[] = {
 		{"rsd_pixel", 0, 0},
 		{"rsd_s", 0x10, 0x00},
 		{"rsd_a", 0x04, 0x00},

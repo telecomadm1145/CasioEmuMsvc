@@ -16,7 +16,7 @@ namespace casioemu {
 		ePSCPU(casioemu::MMU& mmu) : mmu(mmu) {
 		}
 
-		char vram[98 * 4]{};
+		char vram[0x2000]{};
 		struct SFRs {
 			enum {
 				INDF0,
@@ -60,7 +60,7 @@ namespace casioemu {
 		char rdata = 0;
 
 		// 单位是word
-		uint32_t stack[32]{};
+		uint32_t stack[256]{};
 
 		uint32_t pc{};
 		// 单位是byte
@@ -239,11 +239,12 @@ namespace casioemu {
 #undef __A
 		// --- Memory Access Helpers (implementing Sleigh readDat/writeDat logic) ---
 		uint16_t FetchInst() {
+			pc &= 0xffff;
 			return _byteswap_ushort(mmu.ReadCode((size_t)(pc++) << 1));
 		}
-		// --- Memory Access Helpers (implementing Sleigh readDat/writeDat logic) ---
 		uint16_t FetchWord() {
-			return _byteswap_ushort(mmu.ReadCode((size_t)(pc++) << 1));
+			pc &= 0xffff;
+			return (mmu.ReadCode((size_t)(pc++) << 1));
 		}
 		// Internal read without post-increment for MOV defgh, reg8 type instructions
 		uint8_t _internal_read_reg_direct(uint8_t addr) {
@@ -602,11 +603,11 @@ namespace casioemu {
 
 		void PushPC() {
 			stack[STKPTR() >> 1] = pc;
-			STKPTR() = (STKPTR() - 2) & 31;
+			STKPTR() = (STKPTR() + 2);
 		}
 		void PopPC() {
+			STKPTR() = (STKPTR() - 2);
 			pc = stack[STKPTR() >> 1];
-			STKPTR() = (STKPTR() + 2) & 31;
 		}
 
 		bool repeat_flag;
@@ -646,14 +647,15 @@ namespace casioemu {
 						operand_word = FetchWord(); // imm16
 						// cadr1: a = (efgh<<17) + imm16 << 1;
 						// efgh = opcode & 0x0F
-						target_addr = (static_cast<uint32_t>(opcode & 0x0F) << 16) | (static_cast<uint32_t>(operand_word));
+						pc = (static_cast<uint32_t>(opcode & 0x0F) << 16) | (static_cast<uint32_t>(operand_word));
+						std::cout << pc << "\n";
 						break;
 					case 3:							// LCALL
 						operand_word = FetchWord(); // imm16
 						// cadr1: a = (efgh<<17) + imm16 << 1;
 						// efgh = opcode & 0x0F
-						target_addr = (static_cast<uint32_t>(opcode & 0x0F) << 16) | (static_cast<uint32_t>(operand_word));
 						PushPC();
+						pc = (static_cast<uint32_t>(opcode & 0x0F) << 16) | (static_cast<uint32_t>(operand_word));
 						break;
 					default:
 						goto invalid_op;
@@ -1154,8 +1156,8 @@ namespace casioemu {
 			case 0x3E:
 			case 0x3F:						// LCALL
 				operand_word = FetchWord(); // imm16
+				PushPC();					// Push current PC (after fetching operands)
 				target_addr = (static_cast<uint32_t>(opcode & 0x0F) << 17) | (static_cast<uint32_t>(operand_word) << 1);
-				PushPC(); // Push current PC (after fetching operands)
 
 				break;
 			// TBPTL imm8 (0100 0000) + imm8
@@ -1460,16 +1462,16 @@ namespace casioemu {
 					imm_val = op2; // imm8 for cadr3
 					// cadr3: a = (inst_start & 0xFC000) | (defgh<<9) | imm8 << 1;
 					pc = (inst_pc & 0x1e000) |
-						 (static_cast<uint32_t>(defgh_val) << 9) |
-						 (static_cast<uint32_t>(imm_val) << 1);
+						 (static_cast<uint32_t>(defgh_val) << 8) |
+						 (static_cast<uint32_t>(imm_val));
 				}
 				else if (op1 >= 0xe0) {
 					uint8_t defgh_val = opcode & 0x1F;
 					imm_val = op2;
-					pc = (inst_pc & 0x1e000) |
-						 (static_cast<uint32_t>(defgh_val) << 9) |
-						 (static_cast<uint32_t>(imm_val) << 1);
 					PushPC();
+					pc = (inst_pc & 0x1e000) |
+						 (static_cast<uint32_t>(defgh_val) << 8) |
+						 (static_cast<uint32_t>(imm_val));
 				}
 				else {
 				invalid_op:

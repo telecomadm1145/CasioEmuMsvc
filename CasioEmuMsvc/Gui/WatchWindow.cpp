@@ -1,6 +1,7 @@
 ﻿#include "WatchWindow.hpp"
-#include "Chipset//Chipset.hpp"
+#include "Chipset/Chipset.hpp"
 #include "Chipset/CPU.hpp"
+#include "Chipset/ePSCpu.h"
 #include "CodeViewer.hpp"
 #include "Config.hpp"
 #include "Models.h"
@@ -16,15 +17,23 @@
 #include <stdlib.h>
 
 void WatchWindow::PrepareRX() {
-	for (int i = 0; i < 16; i++) {
-		sprintf((char*)reg_rx[i], "%02x", m_emu->chipset.cpu.reg_r[i] & 0x0ff);
+	if (m_emu->chipset.epscpu) {
+		sprintf(reg_pc, "%05x", (uint32_t)(m_emu->chipset.epscpu->pc << 1));
+		sprintf(reg_lr, "%05x", 0xdead);
+		sprintf(reg_sp, "%04x", m_emu->chipset.epscpu->STKPTR());
+		sprintf(reg_psw, "%02x", m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::STATUS]);
 	}
-	sprintf(reg_pc, "%05x", (uint32_t)(m_emu->chipset.cpu.reg_csr << 16) | m_emu->chipset.cpu.reg_pc);
-	sprintf(reg_lr, "%05x", (uint32_t)(m_emu->chipset.cpu.reg_lcsr << 16) | m_emu->chipset.cpu.reg_lr);
-	sprintf(reg_sp, "%04x", m_emu->chipset.cpu.reg_sp | 0);
-	sprintf(reg_ea, "%04x", m_emu->chipset.cpu.reg_ea | 0);
-	sprintf(reg_psw, "%02x", m_emu->chipset.cpu.reg_psw | 0);
-	sprintf(reg_dsr, "%02x", m_emu->chipset.cpu.reg_dsr | 0);
+	else {
+		for (int i = 0; i < 16; i++) {
+			sprintf((char*)reg_rx[i], "%02x", m_emu->chipset.cpu.reg_r[i] & 0x0ff);
+		}
+		sprintf(reg_pc, "%05x", (uint32_t)(m_emu->chipset.cpu.reg_csr << 16) | m_emu->chipset.cpu.reg_pc);
+		sprintf(reg_lr, "%05x", (uint32_t)(m_emu->chipset.cpu.reg_lcsr << 16) | m_emu->chipset.cpu.reg_lr);
+		sprintf(reg_sp, "%04x", m_emu->chipset.cpu.reg_sp | 0);
+		sprintf(reg_ea, "%04x", m_emu->chipset.cpu.reg_ea | 0);
+		sprintf(reg_psw, "%02x", m_emu->chipset.cpu.reg_psw | 0);
+		sprintf(reg_dsr, "%02x", m_emu->chipset.cpu.reg_dsr | 0);
+	}
 }
 
 void WatchWindow::ShowRX() {
@@ -110,7 +119,7 @@ void WatchWindow::UpdateRX() {
 	auto pc = strtol((char*)reg_pc, nullptr, 16);
 	m_emu->chipset.cpu.reg_pc = (uint16_t)pc;
 	m_emu->chipset.cpu.reg_csr = pc >> 16;
-	 pc = strtol((char*)reg_lr, nullptr, 16);
+	pc = strtol((char*)reg_lr, nullptr, 16);
 	m_emu->chipset.cpu.reg_lr = (uint16_t)pc;
 	m_emu->chipset.cpu.reg_lcsr = pc >> 16;
 	m_emu->chipset.cpu.reg_ea = (uint16_t)strtol((char*)reg_ea, nullptr, 16);
@@ -141,13 +150,14 @@ inline static std::string lookup_symbol(uint32_t addr) {
 void WatchWindow::RenderCore() {
 	char_width = ImGui::CalcTextSize("F").x;
 	casioemu::Chipset& chipset = m_emu->chipset;
-	ImGui::BeginChild("##reg_trace", ImVec2(0, ImGui::GetTextLineHeightWithSpacing() *8), false, 0);
+	ImGui::BeginChild("##reg_trace", ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * 8), false, 0);
 	auto rm = m_emu->chipset.run_mode;
 	using casioemu::Chipset::RM_HALT;
 	using casioemu::Chipset::RM_RUN;
 	using casioemu::Chipset::RM_STOP;
-    ImGui::TextUnformatted(("WatchWindow.CoreStatus"_l + ": " + 
-        (rm == RM_RUN ? "Run" : (rm == RM_STOP ? "Stop" : (rm == RM_HALT ? "Halt" : "?")))).c_str());
+	ImGui::TextUnformatted(("WatchWindow.CoreStatus"_l + ": " +
+							(rm == RM_RUN ? "Run" : (rm == RM_STOP ? "Stop" : (rm == RM_HALT ? "Halt" : "?"))))
+			.c_str());
 	// ImGui::Text("Psw");
 	// for (size_t i = 0; i < 8; i++) {
 	//	ImGui::SameLine(i * 25. + 50.);

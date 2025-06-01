@@ -435,6 +435,12 @@ namespace casioemu {
 	}
 
 	void Chipset::ConstructPeripherals() {
+		if (emulator.hardware_id == HW_EPS6800) {
+			peripherals.push_front(CreateBatteryBackedRAM(emulator));
+			peripherals.push_front(CreateScreen(emulator));
+			peripherals.push_front(CreateKeyboard(emulator));
+			return;
+		}
 		// Only tested on fx-991cnx
 		if (emulator.hardware_id != HW_TI) {
 			BLKCON_mask = emulator.hardware_id == HW_CLASSWIZ ? 0x1F : 0xFF;
@@ -496,9 +502,9 @@ namespace casioemu {
 			if (emulator.hardware_id == HW_CLASSWIZ)
 				peripherals.push_front(CreateFlash(emulator));
 		}
-		auto spi = QueryInterface<ISpiProvider>();
-		if (spi)
-			new FakeSdCard(spi);
+		// auto spi = QueryInterface<ISpiProvider>();
+		// if (spi)
+		//	new FakeSdCard(spi);
 	}
 
 	void Chipset::DestructPeripherals() {
@@ -528,6 +534,7 @@ namespace casioemu {
 			flash_data[0x37FFE] = 0xff;
 			flash_data[0x37FFF] = 0x44;
 		}
+
 		{
 			auto ri = rom_info(rom_data, flash_data);
 			if (ri.ok) {
@@ -563,8 +570,8 @@ namespace casioemu {
 
 		for (auto& peripheral : peripherals)
 			peripheral->Reset();
-
-		cpu.Reset();
+		if (emulator.hardware_id != HW_EPS6800)
+			cpu.Reset();
 
 		interrupts_active[INT_RESET] = true;
 		pending_interrupt_count = 1;
@@ -886,7 +893,11 @@ namespace casioemu {
 		}
 
 		if (run_mode == RM_RUN && SYSCLKTick) {
+			if (emulator.hardware_id != HW_EPS6800)
 			cpu.Next();
+			else {
+				epscpu->Next();
+			}
 		}
 
 		LSCLKTick = false;

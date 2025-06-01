@@ -5,12 +5,16 @@
 
 namespace casioemu {
 	inline constexpr size_t GetRamBaseAddr(HardwareId hid) {
+		if (hid == HW_EPS6800)
+			return 0;
 		if (hid == HW_TI)
 			return 0xB000;
 		return (hid == HW_FX_5800P || hid == HW_ES_PLUS) ? 0x8000 : hid == HW_CLASSWIZ ? 0xD000
 																					   : 0x9000;
 	}
 	inline constexpr size_t GetRamSize(HardwareId hid) {
+		if (hid == HW_EPS6800)
+			return 64 * 128;
 		if (hid == HW_TI)
 			return 0xF000 - 0xB000;
 		return (hid == HW_FX_5800P || hid == HW_ES_PLUS) ? 0x0E00 : hid == HW_CLASSWIZ ? 0x2000
@@ -19,7 +23,7 @@ namespace casioemu {
 	inline std::vector<MemoryEditor::MarkedSpan> GetCommonMemLabels(HardwareId hid) {
 		int i = 0;
 #define SColor \
-	i++ % 2 ? ImColor{40, 120, 40, 255} : ImColor { 40, 40, 120, 255 }
+	i++ % 2 ? ImColor{40, 120, 40, 255} : ImColor{40, 40, 120, 255}
 		switch (hid) {
 		case HardwareId::HW_CLASSWIZ_II: {
 			size_t v = 0x9188;
@@ -666,8 +670,8 @@ namespace casioemu {
 				{0x96EA, "PreAns"}};
 		}
 		else if (hid == HW_TI) {
-			//size_t i = 0;
-			//return {
+			// size_t i = 0;
+			// return {
 			//	{0xE490 + 16 * i++, "x"},
 			//	{0xE490 + 16 * i++, "y"},
 			//	{0xE490 + 16 * i++, "z"},
@@ -677,8 +681,10 @@ namespace casioemu {
 			//	{0xE490 + 16 * i++, "c"},
 			//	{0xE490 + 16 * i++, "d"},
 			//	{0xE490 + 16 * i++, "ans"},
-			//}; // Invalid
+			// }; // Invalid
 		}
+		else if (hid == HW_EPS6800)
+			;
 		else {
 			PANIC("HardwareId");
 		}
