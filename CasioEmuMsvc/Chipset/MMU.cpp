@@ -101,6 +101,8 @@ namespace casioemu {
 			if (segment_index >= 8)
 				return le_read(emulator.chipset.flash_data[offset & 0x7ffff]);
 			return 0xFFFF;
+		case HW_EPS6800:
+			return le_read(emulator.chipset.rom_data[offset]);
 		default:
 			return 0;
 		}

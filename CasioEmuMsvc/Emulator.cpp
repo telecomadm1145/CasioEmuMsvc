@@ -24,13 +24,15 @@ namespace casioemu {
 		if (hardware_id < HW_MIN || hardware_id > HW_MAX)
 			PANIC("Unknown hardware id %d\n", hardware_id);
 		this->hardware_id = (HardwareId)hardware_id;
-
 		if (ModelDefinition.real_hardware) {
 			cycles_per_second = hardware_id == HW_ES_PLUS ? 128 * 1024 * 2 : hardware_id == HW_CLASSWIZ ? 1024 * 1024 * 2
 																										: 2048 * 1024 * 2;
 		}
 		else {
 			cycles_per_second = 1024 * 1024 * 8;
+		}
+		if (hardware_id == HW_EPS6800) {
+			cycles_per_second = 4;
 		}
 		timer_interval = 20;
 

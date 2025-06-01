@@ -6,7 +6,6 @@
 
 #include "Peripheral/ExternalInterrupts.hpp"
 #include "Peripheral/IOPorts.hpp"
-
 #include <SDL.h>
 #include <forward_list>
 #include <string>
@@ -83,6 +82,7 @@ namespace casioemu {
 		Emulator& emulator;
 		CPU& cpu;
 		MMU& mmu;
+		class ePSCPU* epscpu;
 
 		std::vector<unsigned char> rom_data;
 		std::vector<unsigned char> flash_data;

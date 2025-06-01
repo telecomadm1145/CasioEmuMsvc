@@ -22,8 +22,8 @@ namespace casioemu {
 		HW_FX_5800P = 6,
 		HW_TI = 7,
 		HW_SOLARII = 8,
-
-		HW_MAX = 8,
+		HW_EPS6800 = 9,
+		HW_MAX = HW_EPS6800,
 	};
 	struct SpriteInfo {
 		Rect src, dest;

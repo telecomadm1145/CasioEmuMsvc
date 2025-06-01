@@ -414,6 +414,7 @@
     <ClCompile Include="asmjit\src\**\*.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Chipset\ePSCpu.h" />
     <ClInclude Include="Ext\ConsoleText.h" />
     <ClInclude Include="Ext\GameBuffer.h" />
     <ClInclude Include="Ext\Unicode.h" />

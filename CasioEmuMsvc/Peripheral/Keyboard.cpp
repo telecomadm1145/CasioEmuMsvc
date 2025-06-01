@@ -6,13 +6,13 @@
 #include "Logger.hpp"
 #include "ModelInfo.h"
 
+#include "vibration.h"
 #include <ML620Ports.h>
 #include <SDL.h>
 #include <chrono>
 #include <fstream>
 #include <thread>
 #include <unordered_map>
-#include "vibration.h"
 
 namespace casioemu {
 	class Keyboard : public Peripheral {
@@ -90,6 +90,10 @@ namespace casioemu {
 			});
 			pp->SetPortInput(0, 0, 0x20);
 			pp->SetPortInput(4, 0, 0xff);
+			goto init_kbd;
+		}
+		if (emulator.hardware_id == HW_EPS6800) {
+			// TODO!
 			goto init_kbd;
 		}
 
@@ -392,15 +396,16 @@ namespace casioemu {
 
 	void Keyboard::UIEvent(SDL_Event& event) {
 		switch (event.type) {
-            case SDL_FINGERDOWN:
-            case SDL_FINGERUP:
-                if (event.type == SDL_FINGERDOWN) {
-                    SDL_Log("Pressed at: %f %f",event.tfinger.x , event.tfinger.y);
-                    PressAt(event.tfinger.x , event.tfinger.y, false);
-                } else {
-                    ReleaseAll();
-                }
-                break;
+		case SDL_FINGERDOWN:
+		case SDL_FINGERUP:
+			if (event.type == SDL_FINGERDOWN) {
+				SDL_Log("Pressed at: %f %f", event.tfinger.x, event.tfinger.y);
+				PressAt(event.tfinger.x, event.tfinger.y, false);
+			}
+			else {
+				ReleaseAll();
+			}
+			break;
 		case SDL_MOUSEBUTTONDOWN:
 		case SDL_MOUSEBUTTONUP:
 			switch (event.button.button) {
@@ -665,7 +670,7 @@ namespace casioemu {
 
 	void Keyboard::ReleaseAll() {
 		bool had_effect = false;
-        SDL_Log("Release All called!");
+		SDL_Log("Release All called!");
 		for (auto& button : buttons) {
 			if (!button.stuck && button.pressed) {
 				button.pressed = false;
