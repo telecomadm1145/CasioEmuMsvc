@@ -93,7 +93,7 @@ class ModelEditor : public UIWindow {
 	casioemu::ModelInfo mi;
 	int v;
 	int k;
-	static constexpr const char* items[9] = {"##1", "##2", "##3", "ES(P)", "CWX", "CWII", "Fx5800p", "TI", "SolarII"};
+	static constexpr const char* items[10] = {"##1", "##2", "##3", "ES(P)", "CWX", "CWII", "Fx5800p", "TI", "SolarII", "EPS6800"};
 	char path1[260];
 	char path2[260];
 	char path3[260];
@@ -210,7 +210,7 @@ public:
 				}
 			}
 			auto sp2 = mi.sprites["rsd_pixel"];
-			if (mi.hardware_id == casioemu::HW_ES_PLUS || mi.hardware_id == casioemu::HW_FX_5800P) {
+			if (mi.hardware_id == casioemu::HW_ES_PLUS || mi.hardware_id == casioemu::HW_FX_5800P || mi.hardware_id == casioemu::HW_EPS6800) {
 				for (size_t j = 0; j < 31; j++) {
 					for (size_t i = 0; i < 96; i++) {
 						ImGui::SetCursorPos({(float)(sp2.dest.x + i * sp2.dest.w) * scaleFactor, (float)(sp2.dest.y + j * sp2.dest.h) * scaleFactor + y});

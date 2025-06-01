@@ -45,40 +45,40 @@
 #endif
 
 #ifdef __ANDROID__
-#include <jni.h>
-#include <android/log.h>
 #include <android/api-level.h>
+#include <android/log.h>
+#include <jni.h>
 
 bool saveImageToMediaStore(const void* pixels, int width, int height, int pitch, const char* filename) {
-    JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
-    jobject activity = (jobject)SDL_AndroidGetActivity();
-    
-    // Create a Java direct ByteBuffer from the pixel data
-    jobject byteBuffer = env->NewDirectByteBuffer((void*)pixels, height * pitch);
-    
-    // Call the Java method to handle saving to MediaStore
-    jclass activityClass = env->GetObjectClass(activity);
-    jmethodID saveImageMethod = env->GetMethodID(activityClass, "saveImageToMediaStore", 
-        "(Ljava/nio/ByteBuffer;IIILjava/lang/String;)Z");
-    
-    // If the method doesn't exist, we need to add it to the Java side
-    if (saveImageMethod == NULL) {
-        SDL_Log("Error: saveImageToMediaStore method not found. Please add it to your Java activity.");
-        env->DeleteLocalRef(byteBuffer);
-        env->DeleteLocalRef(activityClass);
-        env->DeleteLocalRef(activity);
-        return false;
-    }
-    
-    jstring jfilename = env->NewStringUTF(filename);
-    jboolean result = env->CallBooleanMethod(activity, saveImageMethod, byteBuffer, width, height, pitch, jfilename);
-    
-    env->DeleteLocalRef(jfilename);
-    env->DeleteLocalRef(byteBuffer);
-    env->DeleteLocalRef(activityClass);
-    env->DeleteLocalRef(activity);
-    
-    return result;
+	JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+	jobject activity = (jobject)SDL_AndroidGetActivity();
+
+	// Create a Java direct ByteBuffer from the pixel data
+	jobject byteBuffer = env->NewDirectByteBuffer((void*)pixels, height * pitch);
+
+	// Call the Java method to handle saving to MediaStore
+	jclass activityClass = env->GetObjectClass(activity);
+	jmethodID saveImageMethod = env->GetMethodID(activityClass, "saveImageToMediaStore",
+		"(Ljava/nio/ByteBuffer;IIILjava/lang/String;)Z");
+
+	// If the method doesn't exist, we need to add it to the Java side
+	if (saveImageMethod == NULL) {
+		SDL_Log("Error: saveImageToMediaStore method not found. Please add it to your Java activity.");
+		env->DeleteLocalRef(byteBuffer);
+		env->DeleteLocalRef(activityClass);
+		env->DeleteLocalRef(activity);
+		return false;
+	}
+
+	jstring jfilename = env->NewStringUTF(filename);
+	jboolean result = env->CallBooleanMethod(activity, saveImageMethod, byteBuffer, width, height, pitch, jfilename);
+
+	env->DeleteLocalRef(jfilename);
+	env->DeleteLocalRef(byteBuffer);
+	env->DeleteLocalRef(activityClass);
+	env->DeleteLocalRef(activity);
+
+	return result;
 }
 #endif
 
@@ -1037,171 +1037,179 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		enabled_2 = false;
 	}
 	// Function to capture the current screen, save as PNG file and copy to clipboard
-    void CaptureScreenshot(SDL_Renderer* renderer, const std::vector<SDL_Rect>& spriteRects, const std::vector<SDL_Rect>& pixelRects) {
-        // Get current time to generate a unique filename
-        std::time_t t = std::time(nullptr);
-        std::tm tm = *std::localtime(&t);
-        std::ostringstream filename;
-        
-        filename << "screenshot-" 
-                 << std::put_time(&tm, "%Y-%m-%d-%H-%M-%S-") << std::rand() % 1000 
-                 << ".png";
-        
-        // Calculate the bounding box of the rendering area from both sprite and pixel rectangles  
-        int minX = INT_MAX, minY = INT_MAX, maxX = INT_MIN, maxY = INT_MIN;
-    
-        // Traverse all sprite rectangles
-        for (const auto& rect : spriteRects) {
-            minX = std::min(minX, rect.x);
-            minY = std::min(minY, rect.y);
-            maxX = std::max(maxX, rect.x + rect.w);
-            maxY = std::max(maxY, rect.y + rect.h);
-        }
-    
-        // Traverse all pixel rectangles (representing the screen pixels)
-        for (const auto& rect : pixelRects) {
-            minX = std::min(minX, rect.x);
-            minY = std::min(minY, rect.y);
-            maxX = std::max(maxX, rect.x + rect.w);
-            maxY = std::max(maxY, rect.y + rect.h);
-        }
-    
-        // Calculate the width and height of the capture area
-        int captureWidth = maxX - minX;
-        int captureHeight = maxY - minY;
-    
-        // Create a surface to capture the screen content
-        SDL_Surface* screenSurface = SDL_CreateRGBSurface(0, captureWidth, captureHeight, 32,
-            0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
-        
-        if (screenSurface != nullptr) {
-            // Define the area to capture
-            SDL_Rect captureRect = {minX, minY, captureWidth, captureHeight};
-    
-            // Copy the renderer to the surface
-            if (SDL_RenderReadPixels(renderer, &captureRect, SDL_PIXELFORMAT_RGBA32, 
-                screenSurface->pixels, screenSurface->pitch) == 0) {
-                
-    #ifdef __ANDROID__
-                // Save to MediaStore
-                auto str = filename.str();
-                bool success = saveImageToMediaStore(screenSurface->pixels, screenSurface->w, screenSurface->h, screenSurface->pitch, str.c_str());
-                if (!success) {
-                    SDL_Log("Error saving screenshot using MediaStore API");
-                } else {
-                    SDL_Log("Screenshot saved successfully with MediaStore API");
-                }
-                
-                // Copy to clipboard on Android using JNI
-                JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
-                jobject activity = (jobject)SDL_AndroidGetActivity();
-                
-                if (env && activity) {
-                    // Create a Java direct ByteBuffer from the pixel data
-                    jobject byteBuffer = env->NewDirectByteBuffer(screenSurface->pixels, 
-                                                                 screenSurface->h * screenSurface->pitch);
-                    
-                    // Call the Java method to copy to clipboard
-                    jclass activityClass = env->GetObjectClass(activity);
-                    jmethodID copyToClipboardMethod = env->GetMethodID(activityClass, "copyImageToClipboard", 
-                        "(Ljava/nio/ByteBuffer;III)Z");
-                    
-                    if (copyToClipboardMethod != NULL) {
-                        jboolean result = env->CallBooleanMethod(activity, copyToClipboardMethod, 
-                                                               byteBuffer, screenSurface->w, 
-                                                               screenSurface->h, screenSurface->pitch);
-                        if (result) {
-                            SDL_Log("Screenshot copied to clipboard");
-                        } else {
-                            SDL_Log("Failed to copy screenshot to clipboard");
-                        }
-                    } else {
-                        SDL_Log("copyImageToClipboard method not found. Add it to your Java activity.");
-                    }
-                    
-                    env->DeleteLocalRef(byteBuffer);
-                    env->DeleteLocalRef(activityClass);
-                    env->DeleteLocalRef(activity);
-                }
-    #else
-                // Save to file on Windows/Desktop
-                auto str = filename.str();
-                if (IMG_SavePNG(screenSurface, str.c_str()) != 0) {
-                    SDL_Log("Error saving screenshot: %s", IMG_GetError());
-                } else {
-                    SDL_Log("Screenshot saved to %s", str.c_str());
-                }
-                
-                // Copy to clipboard on Windows/Desktop
-                #ifdef _WIN32
-                // Convert SDL_Surface to Windows DIB format for clipboard
-                HDC hdcScreen = GetDC(NULL);
-                HDC hdcMem = CreateCompatibleDC(hdcScreen);
-                
-                BITMAPINFOHEADER bi;
-                ZeroMemory(&bi, sizeof(BITMAPINFOHEADER));
-                bi.biSize = sizeof(BITMAPINFOHEADER);
-                bi.biWidth = screenSurface->w;
-                bi.biHeight = -screenSurface->h; // Negative for top-down
-                bi.biPlanes = 1;
-                bi.biBitCount = 32;
-                bi.biCompression = BI_RGB;
-                
-                void* bits = NULL;
-                HBITMAP hBitmap = CreateDIBSection(hdcMem, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &bits, NULL, 0);
-                
-                if (hBitmap) {
-                    // Copy pixels from SDL surface to DIB
-                    SelectObject(hdcMem, hBitmap);
-                    
-                    // Convert RGBA to BGRA and copy to DIB
-                    uint8_t* src = (uint8_t*)screenSurface->pixels;
-                    uint8_t* dst = (uint8_t*)bits;
-                    
-                    for (int y = 0; y < screenSurface->h; y++) {
-                        for (int x = 0; x < screenSurface->w; x++) {
-                            // RGBA to BGRA
-                            dst[0] = src[2]; // B
-                            dst[1] = src[1]; // G
-                            dst[2] = src[0]; // R
-                            dst[3] = src[3]; // A
-                            
-                            src += 4;
-                            dst += 4;
-                        }
-                    }
-                    
-                    // Copy to clipboard
-                    if (OpenClipboard(NULL)) {
-                        EmptyClipboard();
-                        SetClipboardData(CF_BITMAP, hBitmap);
-                        CloseClipboard();
-                        SDL_Log("Screenshot copied to clipboard");
-                    } else {
-                        SDL_Log("Failed to open clipboard");
-                        DeleteObject(hBitmap);
-                    }
-                    
-                    DeleteDC(hdcMem);
-                } else {
-                    SDL_Log("Failed to create DIB section for clipboard");
-                }
-                
-                ReleaseDC(NULL, hdcScreen);
-                #else
-                // For other desktop platforms like Linux/macOS
-                // Use platform-specific clipboard APIs if needed
-                SDL_Log("Clipboard copy not implemented for this platform");
-                #endif
-    #endif
-            } else {
-                SDL_Log("Error capturing screen pixels: %s", SDL_GetError());
-            }
-            SDL_FreeSurface(screenSurface); // Free the surface after use
-        } else {
-            SDL_Log("Error creating surface: %s", SDL_GetError());
-        }
-    }
+	void CaptureScreenshot(SDL_Renderer* renderer, const std::vector<SDL_Rect>& spriteRects, const std::vector<SDL_Rect>& pixelRects) {
+		// Get current time to generate a unique filename
+		std::time_t t = std::time(nullptr);
+		std::tm tm = *std::localtime(&t);
+		std::ostringstream filename;
+
+		filename << "screenshot-"
+				 << std::put_time(&tm, "%Y-%m-%d-%H-%M-%S-") << std::rand() % 1000
+				 << ".png";
+
+		// Calculate the bounding box of the rendering area from both sprite and pixel rectangles
+		int minX = INT_MAX, minY = INT_MAX, maxX = INT_MIN, maxY = INT_MIN;
+
+		// Traverse all sprite rectangles
+		for (const auto& rect : spriteRects) {
+			minX = std::min(minX, rect.x);
+			minY = std::min(minY, rect.y);
+			maxX = std::max(maxX, rect.x + rect.w);
+			maxY = std::max(maxY, rect.y + rect.h);
+		}
+
+		// Traverse all pixel rectangles (representing the screen pixels)
+		for (const auto& rect : pixelRects) {
+			minX = std::min(minX, rect.x);
+			minY = std::min(minY, rect.y);
+			maxX = std::max(maxX, rect.x + rect.w);
+			maxY = std::max(maxY, rect.y + rect.h);
+		}
+
+		// Calculate the width and height of the capture area
+		int captureWidth = maxX - minX;
+		int captureHeight = maxY - minY;
+
+		// Create a surface to capture the screen content
+		SDL_Surface* screenSurface = SDL_CreateRGBSurface(0, captureWidth, captureHeight, 32,
+			0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
+
+		if (screenSurface != nullptr) {
+			// Define the area to capture
+			SDL_Rect captureRect = {minX, minY, captureWidth, captureHeight};
+
+			// Copy the renderer to the surface
+			if (SDL_RenderReadPixels(renderer, &captureRect, SDL_PIXELFORMAT_RGBA32,
+					screenSurface->pixels, screenSurface->pitch) == 0) {
+
+#ifdef __ANDROID__
+				// Save to MediaStore
+				auto str = filename.str();
+				bool success = saveImageToMediaStore(screenSurface->pixels, screenSurface->w, screenSurface->h, screenSurface->pitch, str.c_str());
+				if (!success) {
+					SDL_Log("Error saving screenshot using MediaStore API");
+				}
+				else {
+					SDL_Log("Screenshot saved successfully with MediaStore API");
+				}
+
+				// Copy to clipboard on Android using JNI
+				JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+				jobject activity = (jobject)SDL_AndroidGetActivity();
+
+				if (env && activity) {
+					// Create a Java direct ByteBuffer from the pixel data
+					jobject byteBuffer = env->NewDirectByteBuffer(screenSurface->pixels,
+						screenSurface->h * screenSurface->pitch);
+
+					// Call the Java method to copy to clipboard
+					jclass activityClass = env->GetObjectClass(activity);
+					jmethodID copyToClipboardMethod = env->GetMethodID(activityClass, "copyImageToClipboard",
+						"(Ljava/nio/ByteBuffer;III)Z");
+
+					if (copyToClipboardMethod != NULL) {
+						jboolean result = env->CallBooleanMethod(activity, copyToClipboardMethod,
+							byteBuffer, screenSurface->w,
+							screenSurface->h, screenSurface->pitch);
+						if (result) {
+							SDL_Log("Screenshot copied to clipboard");
+						}
+						else {
+							SDL_Log("Failed to copy screenshot to clipboard");
+						}
+					}
+					else {
+						SDL_Log("copyImageToClipboard method not found. Add it to your Java activity.");
+					}
+
+					env->DeleteLocalRef(byteBuffer);
+					env->DeleteLocalRef(activityClass);
+					env->DeleteLocalRef(activity);
+				}
+#else
+				// Save to file on Windows/Desktop
+				auto str = filename.str();
+				if (IMG_SavePNG(screenSurface, str.c_str()) != 0) {
+					SDL_Log("Error saving screenshot: %s", IMG_GetError());
+				}
+				else {
+					SDL_Log("Screenshot saved to %s", str.c_str());
+				}
+
+// Copy to clipboard on Windows/Desktop
+#ifdef _WIN32
+				// Convert SDL_Surface to Windows DIB format for clipboard
+				HDC hdcScreen = GetDC(NULL);
+				HDC hdcMem = CreateCompatibleDC(hdcScreen);
+
+				BITMAPINFOHEADER bi;
+				ZeroMemory(&bi, sizeof(BITMAPINFOHEADER));
+				bi.biSize = sizeof(BITMAPINFOHEADER);
+				bi.biWidth = screenSurface->w;
+				bi.biHeight = -screenSurface->h; // Negative for top-down
+				bi.biPlanes = 1;
+				bi.biBitCount = 32;
+				bi.biCompression = BI_RGB;
+
+				void* bits = NULL;
+				HBITMAP hBitmap = CreateDIBSection(hdcMem, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &bits, NULL, 0);
+
+				if (hBitmap) {
+					// Copy pixels from SDL surface to DIB
+					SelectObject(hdcMem, hBitmap);
+
+					// Convert RGBA to BGRA and copy to DIB
+					uint8_t* src = (uint8_t*)screenSurface->pixels;
+					uint8_t* dst = (uint8_t*)bits;
+
+					for (int y = 0; y < screenSurface->h; y++) {
+						for (int x = 0; x < screenSurface->w; x++) {
+							// RGBA to BGRA
+							dst[0] = src[2]; // B
+							dst[1] = src[1]; // G
+							dst[2] = src[0]; // R
+							dst[3] = src[3]; // A
+
+							src += 4;
+							dst += 4;
+						}
+					}
+
+					// Copy to clipboard
+					if (OpenClipboard(NULL)) {
+						EmptyClipboard();
+						SetClipboardData(CF_BITMAP, hBitmap);
+						CloseClipboard();
+						SDL_Log("Screenshot copied to clipboard");
+					}
+					else {
+						SDL_Log("Failed to open clipboard");
+						DeleteObject(hBitmap);
+					}
+
+					DeleteDC(hdcMem);
+				}
+				else {
+					SDL_Log("Failed to create DIB section for clipboard");
+				}
+
+				ReleaseDC(NULL, hdcScreen);
+#else
+				// For other desktop platforms like Linux/macOS
+				// Use platform-specific clipboard APIs if needed
+				SDL_Log("Clipboard copy not implemented for this platform");
+#endif
+#endif
+			}
+			else {
+				SDL_Log("Error capturing screen pixels: %s", SDL_GetError());
+			}
+			SDL_FreeSurface(screenSurface); // Free the surface after use
+		}
+		else {
+			SDL_Log("Error creating surface: %s", SDL_GetError());
+		}
+	}
 
 	void UpdatePreview(SDL_Renderer* renderer, ScreenMirror* sm, const std::vector<SDL_Rect>& spriteRects, const std::vector<SDL_Rect>& pixelRects) {
 
@@ -1368,7 +1376,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 
 		case HW_TI:
 			return new Screen<HW_TI>(emulator);
-
+		case HW_EPS6800:
+			return new Screen<HW_EPS6800>(emulator);
 		default:
 			PANIC("Unknown hardware id\n");
 		}

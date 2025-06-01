@@ -17,6 +17,7 @@
 #include "Miscellaneous.hpp"
 #include "ModelInfo.h"
 #include "Models.h"
+#include "Peripheral/SD/FakeSdCard.h"
 #include "PowerSupply.hpp"
 #include "ROMWindow.hpp"
 #include "RealTimeClock.hpp"
@@ -27,14 +28,13 @@
 #include "TimerBaseCounter.hpp"
 #include "Uart.h"
 #include "WatchdogTimer.hpp"
+#include "ePSCpu.h"
 #include <ML620Ports.h>
 #include <Spi.h>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <fstream>
-
-#include "Peripheral/SD/FakeSdCard.h"
 
 namespace casioemu {
 	void* Chipset::QueryInterface(const char* name) {
@@ -55,16 +55,21 @@ namespace casioemu {
 			interrupts_active[ix] = false;
 		pending_interrupt_count = 0;
 
-		cpu.SetMemoryModel(CPU::MM_LARGE);
-		cpu.SetCPUModel(emulator.hardware_id == HW_CLASSWIZ || emulator.hardware_id == HW_CLASSWIZ_II || emulator.hardware_id == HW_TI ? CPU::CM_NX_U16 : CPU::CM_NX_U8);
-
-		std::initializer_list<int> segments_es_plus{0, 1, 8}, segments_classwiz{0, 1, 2, 3, 4, 5}, segments_classwiz_ii{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
-		for (auto segment_index : emulator.hardware_id == HW_ES_PLUS ? segments_es_plus : emulator.hardware_id == HW_CLASSWIZ ? segments_classwiz
-																															  : segments_classwiz_ii)
-			mmu.GenerateSegmentDispatch(segment_index);
-
 		real_hardware = emulator.ModelDefinition.real_hardware;
 
+		if (emulator.hardware_id != HW_EPS6800) {
+			cpu.SetMemoryModel(CPU::MM_LARGE);
+			cpu.SetCPUModel(emulator.hardware_id == HW_CLASSWIZ || emulator.hardware_id == HW_CLASSWIZ_II || emulator.hardware_id == HW_TI ? CPU::CM_NX_U16 : CPU::CM_NX_U8);
+
+			std::initializer_list<int> segments_es_plus{0, 1, 8}, segments_classwiz{0, 1, 2, 3, 4, 5}, segments_classwiz_ii{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+			for (auto segment_index : emulator.hardware_id == HW_ES_PLUS ? segments_es_plus : emulator.hardware_id == HW_CLASSWIZ ? segments_classwiz
+																																  : segments_classwiz_ii)
+				mmu.GenerateSegmentDispatch(segment_index);
+		}
+		else {
+			epscpu = new ePSCPU(mmu);
+			mmu.GenerateSegmentDispatch(0);
+		}
 		ConstructPeripherals();
 	}
 
@@ -72,7 +77,7 @@ namespace casioemu {
 		DestructPeripherals();
 		DestructClockGenerator();
 		DestructInterruptSFR();
-
+		delete epscpu;
 		delete &mmu;
 		delete &cpu;
 	}
