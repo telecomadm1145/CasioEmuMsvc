@@ -271,7 +271,7 @@ namespace casioemu {
 				// }
 				for (int ix = 0; ix < 96; ++ix) {
 					for (int iy = 0; iy < 64; ++iy) {
-						uint32_t i = (ix << 6) | iy;
+						uint32_t i = (ix * 64) | iy;
 						int bIndx = (i >> 3);
 						int subIndx = (i & 7);
 						int mask = (1 << subIndx);

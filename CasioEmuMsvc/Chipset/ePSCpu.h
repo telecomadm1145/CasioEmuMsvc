@@ -3,6 +3,7 @@
 #include "MMU.hpp"
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 namespace casioemu {
 	class ePSCPU {
@@ -246,6 +247,10 @@ namespace casioemu {
 			pc &= 0xffff;
 			return (mmu.ReadCode((size_t)(pc++) << 1));
 		}
+		uint16_t FetchWord2() {
+			pc &= 0xffff;
+			return (mmu.ReadCode((size_t)(pc++) << 1));
+		}
 		// Internal read without post-increment for MOV defgh, reg8 type instructions
 		uint8_t _internal_read_reg_direct(uint8_t addr) {
 			if (addr < 0x80)
@@ -300,7 +305,6 @@ namespace casioemu {
 			}                                                                       \
 		}                                                                           \
 	}
-
 		// Simulates Sleigh readDat and stores result in rdata_temp
 		void
 		ReadDat(uint8_t rptr_arg) {
@@ -558,8 +562,8 @@ namespace casioemu {
 			std::cout << "PCODE: HALT" << std::endl;
 			running = 0; /* TODO: Halt CPU */
 		}
-		void pcode_sfr4() { std::cout << "PCODE: SFR4 (not implemented)" << std::endl; /* TODO */ }
-		void pcode_sfl4() { std::cout << "PCODE: SFL4 (not implemented)" << std::endl; /* TODO */ }
+		void pcode_sfr4() { /*std::cout << "PCODE: SFR4 (not implemented)" << std::endl; *//* TODO */ }
+		void pcode_sfl4() { /*std::cout << "PCODE: SFL4 (not implemented)" << std::endl;*/ /* TODO */ }
 		void pcode_daa() { // Decimal Adjust Accumulator after ADD/ADC
 			uint8_t acc_val = ACC();
 			bool old_c = getCFlag();
@@ -602,12 +606,14 @@ namespace casioemu {
 		void pcode_enableMaskableInterrupts() { setGLINTFlag(true); }
 
 		void PushPC() {
+			std::cout << "Pushed PC(0x" << std::hex << (pc << 1) << ")\n";
 			stack[STKPTR() >> 1] = pc;
 			STKPTR() = (STKPTR() + 2);
 		}
 		void PopPC() {
 			STKPTR() = (STKPTR() - 2);
 			pc = stack[STKPTR() >> 1];
+			std::cout << "Poped PC(0x" << std::hex << (pc << 1) << ")\n";
 		}
 
 		bool repeat_flag;
@@ -644,18 +650,19 @@ namespace casioemu {
 						// LJMP cadr1 is code = 0x00 ; abcd = 0x2... -> 0010 xxxx (efgh from opcode)
 						// LCALL cadr1 is code = 0x00 ; abcd = 0x3... -> 0011 xxxx (efgh from opcode)
 					case 2:							// LJMP
-						operand_word = FetchWord(); // imm16
+						operand_word = FetchWord2(); // imm16
 						// cadr1: a = (efgh<<17) + imm16 << 1;
 						// efgh = opcode & 0x0F
 						pc = (static_cast<uint32_t>(opcode & 0x0F) << 16) | (static_cast<uint32_t>(operand_word));
-						std::cout << pc << "\n";
+						std::cout  << "From 0x" << std::hex << (inst_pc<<1) << " calls " << std::hex << "0x" << (pc << 1) << "\n";
 						break;
 					case 3:							// LCALL
-						operand_word = FetchWord(); // imm16
+						operand_word = FetchWord2(); // imm16
 						// cadr1: a = (efgh<<17) + imm16 << 1;
 						// efgh = opcode & 0x0F
 						PushPC();
 						pc = (static_cast<uint32_t>(opcode & 0x0F) << 16) | (static_cast<uint32_t>(operand_word));
+						std::cout  << "From 0x" << std::hex << (inst_pc<<1) << " calls " << std::hex << "0x" << (pc << 1) << "\n";
 						break;
 					default:
 						goto invalid_op;
@@ -668,7 +675,7 @@ namespace casioemu {
 			case 0x01:
 				reg_addr = op2;
 				pcode_sfr4(); // Needs to know about reg_addr
-				std::cout << "SFR4 on reg 0x" << std::hex << (int)reg_addr << std::endl;
+				// std::cout << "SFR4 on reg 0x" << std::hex << (int)reg_addr << std::endl;
 				break;
 
 			// OR "A", reg8 (0000 0010) + reg8
@@ -1195,14 +1202,13 @@ namespace casioemu {
 			// JGE "A", imm8, radr0 (0100 0111) + imm8 + imm16
 			case 0x47:
 				imm_val = op2;
-				operand_word = FetchInst();										  // imm16 for radr0
-				if (static_cast<int8_t>(ACC()) >= static_cast<int8_t>(imm_val)) { // Signed compare for JGE/JLE
-																				  // Sleigh: if (ACC > imm8)
-																				  // This is unsigned in Sleigh.
-					if (ACC() > imm_val) {										  // Unsigned compare
-						// radr0: a = (inst_start & 0x80000) | imm16 << 1;
-						pc = (inst_pc & 0x10000) | (static_cast<uint32_t>(operand_word));
-					}
+				operand_word = FetchWord();											// imm16 for radr0
+				if (static_cast<uint8_t>(ACC()) >= static_cast<uint8_t>(imm_val)) { // Signed compare for JGE/JLE
+																					// Sleigh: if (ACC > imm8)
+																					// This is unsigned in Sleigh.
+					// radr0: a = (inst_start & 0x80000) | imm16 << 1;
+					pc = (inst_pc & 0x10000) | (static_cast<uint32_t>(operand_word));
+					std::cout  << "From 0x" << std::hex << (inst_pc<<1) << " calls " << std::hex << "0x" << (pc << 1) << "\n";
 				}
 				break;
 			// JLE "A", imm8, radr0 (0100 1000) + imm8 + imm16
@@ -1211,6 +1217,7 @@ namespace casioemu {
 				operand_word = FetchWord();
 				if (ACC() < imm_val) { // Unsigned compare
 					pc = (inst_pc & 0x10000) | (static_cast<uint32_t>(operand_word));
+					std::cout  << "From 0x" << std::hex << (inst_pc<<1) << " calls " << std::hex << "0x" << (pc << 1) << "\n";
 				}
 				break;
 			// JE "A", imm8, radr0 (0100 1001) + imm8 + imm16
@@ -1219,6 +1226,7 @@ namespace casioemu {
 				operand_word = FetchWord();
 				if (ACC() == imm_val) {
 					pc = (inst_pc & 0x10000) | (static_cast<uint32_t>(operand_word));
+					std::cout  << "From 0x" << std::hex << (inst_pc<<1) << " calls " << std::hex << "0x" << (pc << 1) << "\n";
 				}
 				break;
 
@@ -1249,11 +1257,10 @@ namespace casioemu {
 				ZCheck(ACC());
 				break;
 			// SFL4 reg8 (0100 1111) + reg8
-			case 0x4F:
+			case 0x4F: {
 				reg_addr = op2;
-				pcode_sfl4(); // Needs reg_addr
-				std::cout << "SFL4 on reg 0x" << std::hex << (int)reg_addr << std::endl;
-				break;
+				std::cout << "A\n";
+			} break;
 
 			// JDNZ "A", reg8, radr0 (0101 0000) + reg8 + imm16
 			case 0x50:
@@ -1264,6 +1271,7 @@ namespace casioemu {
 				ZCheck(ACC());								  // Z flag based on ACC
 				if (ACC() != 0) {
 					pc = (inst_pc & 0x10000) | (static_cast<uint32_t>(operand_word));
+					std::cout  << "From 0x" << std::hex << (inst_pc<<1) << " calls " << std::hex << "0x" << (pc << 1) << "\n";
 				}
 				break;
 			// JDNZ reg8, radr0 (0101 0001) + reg8 + imm16
@@ -1277,6 +1285,7 @@ namespace casioemu {
 					ZCheck(val);			 // Z based on written value
 					if (val != 0) {
 						pc = (inst_pc & 0x10000) | (static_cast<uint32_t>(operand_word));
+						std::cout  << "From 0x" << std::hex << (inst_pc<<1) << " calls " << std::hex << "0x" << (pc << 1) << "\n";
 					}
 				}
 				break;
@@ -1325,6 +1334,7 @@ namespace casioemu {
 				ReadDat(reg_addr);								// val in rdata_temp
 				if (ACC() > static_cast<uint8_t>(rdata_temp)) { // Unsigned
 					pc = (inst_pc & 0x10000) | (static_cast<uint32_t>(operand_word));
+					std::cout  << "From 0x" << std::hex << (inst_pc<<1) << " calls " << std::hex << "0x" << (pc << 1) << "\n";
 				}
 				break;
 			// JLE "A", reg8, radr0 (0101 0110) + reg8 + imm16
@@ -1334,6 +1344,7 @@ namespace casioemu {
 				ReadDat(reg_addr);
 				if (ACC() < static_cast<uint8_t>(rdata_temp)) { // Unsigned
 					pc = (inst_pc & 0x10000) | (static_cast<uint32_t>(operand_word));
+					std::cout  << "From 0x" << std::hex << (inst_pc<<1) << " calls " << std::hex << "0x" << (pc << 1) << "\n";
 				}
 				break;
 			// JE "A", reg8, radr0 (0101 0111) + reg8 + imm16
@@ -1343,6 +1354,7 @@ namespace casioemu {
 				ReadDat(reg_addr);
 				if (ACC() == static_cast<uint8_t>(rdata_temp)) {
 					pc = (inst_pc & 0x10000) | (static_cast<uint32_t>(operand_word));
+					std::cout  << "From 0x" << std::hex << (inst_pc<<1) << " calls " << std::hex << "0x" << (pc << 1) << "\n";
 				}
 				break;
 
@@ -1372,6 +1384,7 @@ namespace casioemu {
 				ReadDat(reg_addr);											  // val in rdata_temp
 				if (!(static_cast<uint8_t>(rdata_temp) & (1 << bit_index))) { // If bit is Clear
 					pc = (inst_pc & 0x10000) | (static_cast<uint32_t>(operand_word));
+					std::cout  << "From 0x" << std::hex << (inst_pc<<1) << " calls " << std::hex << "0x" << (pc << 1) << "\n";
 				}
 			} break;
 			case 0x60:
@@ -1389,6 +1402,7 @@ namespace casioemu {
 				ReadDat(reg_addr);
 				if ((static_cast<uint8_t>(rdata_temp) & (1 << bit_index))) {
 					pc = (inst_pc & 0x10000) | (static_cast<uint32_t>(operand_word));
+					std::cout  << "From 0x" << std::hex << (inst_pc<<1) << " calls " << std::hex << "0x" << (pc << 1) << "\n";
 				}
 			} break;
 			case 0x68:
@@ -1464,6 +1478,7 @@ namespace casioemu {
 					pc = (inst_pc & 0x1e000) |
 						 (static_cast<uint32_t>(defgh_val) << 8) |
 						 (static_cast<uint32_t>(imm_val));
+					std::cout  << "From 0x" << std::hex << (inst_pc<<1) << " calls " << std::hex << "0x" << (pc << 1) << "\n";
 				}
 				else if (op1 >= 0xe0) {
 					uint8_t defgh_val = opcode & 0x1F;
@@ -1472,6 +1487,7 @@ namespace casioemu {
 					pc = (inst_pc & 0x1e000) |
 						 (static_cast<uint32_t>(defgh_val) << 8) |
 						 (static_cast<uint32_t>(imm_val));
+					std::cout  << "From 0x" << std::hex << (inst_pc<<1) << " calls " << std::hex << "0x" << (pc << 1) << "\n";
 				}
 				else {
 				invalid_op:

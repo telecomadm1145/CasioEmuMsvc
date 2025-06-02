@@ -1,6 +1,6 @@
 ﻿#include "WatchWindow.hpp"
-#include "Chipset/Chipset.hpp"
 #include "Chipset/CPU.hpp"
+#include "Chipset/Chipset.hpp"
 #include "Chipset/ePSCpu.h"
 #include "CodeViewer.hpp"
 #include "Config.hpp"
@@ -209,38 +209,56 @@ void WatchWindow::RenderCore() {
 		ImGui::TableSetupColumn("ER2", ImGuiTableColumnFlags_WidthFixed, 40);
 		ImGui::TableSetupColumn("LR", ImGuiTableColumnFlags_WidthStretch, 1);
 		ImGui::TableHeadersRow();
-		auto stack = chipset.cpu.stack.get();
-		class reverse_view {
-		public:
-			reverse_view(decltype(*stack)& vector1) : stk(vector1) {}
-			decltype(*stack)& stk;
-			auto begin() {
-				return stk.rbegin();
+		if (chipset.epscpu) {
+			for (size_t i = 0; i < (chipset.epscpu->STKPTR() / 2); i++) {
+				ImGui::TableNextRow();
+				ImGui::TableNextColumn();
+				ImGui::Text("%06X", chipset.epscpu->stack[i] << 1);
+				ImGui::TableNextColumn();
+				ImGui::Text("%06X", chipset.epscpu->stack[i] << 1);
+				ImGui::TableNextColumn();
+				ImGui::Text("%04X", i);
+				ImGui::TableNextColumn();
+				ImGui::Text("%04X", 0);
+				ImGui::TableNextColumn();
+				ImGui::Text("%04X", 0);
+				ImGui::TableNextColumn();
+				ImGui::TextUnformatted("");
 			}
-			auto end() {
-				return stk.rend();
-			}
-		};
-
-		for (auto& frame : reverse_view{*stack}) {
-			ImGui::TableNextRow();
-			ImGui::TableNextColumn();
-			ImGui::TextUnformatted(lookup_symbol(frame.new_pc).c_str());
-			ImGui::TableNextColumn();
-			ImGui::Text("%06X", frame.new_pc);
-			ImGui::TableNextColumn();
-			ImGui::Text("%04X", frame.sp);
-			ImGui::TableNextColumn();
-			ImGui::Text("%04X", frame.er0);
-			ImGui::TableNextColumn();
-			ImGui::Text("%04X", frame.er2);
-			ImGui::TableNextColumn();
-			if (frame.lr_pushed) {
-				if (frame.lr == 0xffffff) {
-					ImGui::TextUnformatted("WatchWindow.LrDestroyed"_lc);
+		}
+		else {
+			auto stack = chipset.cpu.stack.get();
+			class reverse_view {
+			public:
+				reverse_view(decltype(*stack)& vector1) : stk(vector1) {}
+				decltype(*stack)& stk;
+				auto begin() {
+					return stk.rbegin();
 				}
-				else {
-					ImGui::TextUnformatted(lookup_symbol(frame.lr).c_str());
+				auto end() {
+					return stk.rend();
+				}
+			};
+			for (auto& frame : reverse_view{*stack}) {
+				ImGui::TableNextRow();
+				ImGui::TableNextColumn();
+				ImGui::TextUnformatted(lookup_symbol(frame.new_pc).c_str());
+				ImGui::TableNextColumn();
+				ImGui::Text("%06X", frame.new_pc);
+				ImGui::TableNextColumn();
+				ImGui::Text("%04X", frame.sp);
+				ImGui::TableNextColumn();
+				ImGui::Text("%04X", frame.er0);
+				ImGui::TableNextColumn();
+				ImGui::Text("%04X", frame.er2);
+				ImGui::TableNextColumn();
+				if (frame.lr_pushed) {
+					if (frame.lr == 0xffffff) {
+						ImGui::TextUnformatted("WatchWindow.LrDestroyed"_lc);
+					}
+					else {
+						ImGui::TextUnformatted(lookup_symbol(frame.lr).c_str());
+					}
 				}
 			}
 		}
