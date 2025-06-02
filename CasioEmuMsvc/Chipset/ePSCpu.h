@@ -5,7 +5,13 @@
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <cstdio>
 namespace casioemu {
+	// Custom byteswap function for uint16_t
+	inline uint16_t byteswap_ushort(uint16_t x) {
+		return ((x & 0xFF00) >> 8) | ((x & 0x00FF) << 8);
+	}
+
 	class ePSCPU {
 	public:
 		char regs[0x80]{};
@@ -60,11 +66,11 @@ namespace casioemu {
 
 		char rdata = 0;
 
-		// 单位是word
+		// 鍗曚綅鏄痺ord
 		uint32_t stack[256]{};
 
 		uint32_t pc{};
-		// 单位是byte
+		// 鍗曚綅鏄痓yte
 		uint32_t tabptr{};
 
 		uint32_t lcd_ptr{};
@@ -226,22 +232,21 @@ namespace casioemu {
 				return (regs[SFRs::POST_ID] & bit) != 0;
 			return false; // Should not happen if called correctly
 		}
+
 		// Specific getters for POST_ID bits used in FSR post-inc/dec
-#define __A(a, b) \
-	bool get##a##_##b##() const { return (static_cast<uint8_t>(regs[SFRs::POST_ID]) & PostIDBits::##a##_##b##_BIT) != 0; }
-#define __B(a)  \
-	__A(a, PE); \
-	__A(a, ID);
-		__B(FSR0);
-		__B(FSR1);
-		__B(FSR2);
-		__B(LCD);
-#undef __B
-#undef __A
+		bool getFSR0_PE() const { return (static_cast<uint8_t>(regs[SFRs::POST_ID]) & PostIDBits::FSR0_PE_BIT) != 0; }
+		bool getFSR0_ID() const { return (static_cast<uint8_t>(regs[SFRs::POST_ID]) & PostIDBits::FSR0_ID_BIT) != 0; }
+		bool getFSR1_PE() const { return (static_cast<uint8_t>(regs[SFRs::POST_ID]) & PostIDBits::FSR1_PE_BIT) != 0; }
+		bool getFSR1_ID() const { return (static_cast<uint8_t>(regs[SFRs::POST_ID]) & PostIDBits::FSR1_ID_BIT) != 0; }
+		bool getFSR2_PE() const { return (static_cast<uint8_t>(regs[SFRs::POST_ID]) & PostIDBits::FSR2_PE_BIT) != 0; }
+		bool getFSR2_ID() const { return (static_cast<uint8_t>(regs[SFRs::POST_ID]) & PostIDBits::FSR2_ID_BIT) != 0; }
+		bool getLCD_PE() const { return (static_cast<uint8_t>(regs[SFRs::POST_ID]) & PostIDBits::LCD_PE_BIT) != 0; }
+		bool getLCD_ID() const { return (static_cast<uint8_t>(regs[SFRs::POST_ID]) & PostIDBits::LCD_ID_BIT) != 0; }
+
 		// --- Memory Access Helpers (implementing Sleigh readDat/writeDat logic) ---
 		uint16_t FetchInst() {
 			pc &= 0xffff;
-			return _byteswap_ushort(mmu.ReadCode((size_t)(pc++) << 1));
+			return byteswap_ushort(mmu.ReadCode((size_t)(pc++) << 1));
 		}
 		uint16_t FetchWord() {
 			pc &= 0xffff;
@@ -256,7 +261,7 @@ namespace casioemu {
 			if (addr < 0x80)
 				return static_cast<uint8_t>(regs[addr]);
 			// This version is for direct access only, not banked GPRs via FSR interpretation
-			std::cerr << "Error: _internal_read_reg_direct called for banked addr 0x" << std::hex << (int)addr << std::endl;
+			fprintf(stderr, "Error: _internal_read_reg_direct called for banked addr 0x%02x\n", addr);
 			return 0xFF;
 		}
 
@@ -264,30 +269,31 @@ namespace casioemu {
 			if (addr < 0x80)
 				regs[addr] = static_cast<char>(value);
 			else {
-				std::cerr << "Error: _internal_write_reg_direct called for banked addr 0x" << std::hex << (int)addr << std::endl;
+				fprintf(stderr, "Error: _internal_write_reg_direct called for banked addr 0x%02x\n", addr);
 			}
 		}
 
-#define _post_id_handle_indf(x)                                                 \
-	if (original_rptr_for_post_id == SFRs::INDF##x) {                           \
-		if (getFSR##x##_PE()) {                                                 \
-			uint8_t temp_FSR##x## = static_cast<uint8_t>(regs[SFRs::FSR##x##]); \
-			if (getFSR##x##_ID())                                               \
-				regs[SFRs::FSR##x##] = static_cast<char>(temp_FSR##x## + 1);    \
-			else                                                                \
-				regs[SFRs::FSR##x##] = static_cast<char>(temp_FSR##x## - 1);    \
-		}                                                                       \
-	}
-#define _post_id_handle_lcddata(x)                                   \
-	if (original_rptr_for_post_id == SFRs::LCDDATA) {                \
-		if (getLCD_PE()) {                                           \
-			uint8_t temp = static_cast<uint8_t>(regs[SFRs::LCDARL]); \
-			if (getLCD_ID())                                         \
-				regs[SFRs::FSR##x##] = static_cast<char>(temp + 1);  \
-			else                                                     \
-				regs[SFRs::FSR##x##] = static_cast<char>(temp - 1);  \
-		}                                                            \
-	}
+#define _post_id_handle_indf(x) \
+    if (original_rptr_for_post_id == SFRs::INDF##x) { \
+        if (getFSR##x##_PE()) { \
+            uint8_t temp_FSR##x = static_cast<uint8_t>(regs[SFRs::FSR##x]); \
+            if (getFSR##x##_ID()) \
+                regs[SFRs::FSR##x] = static_cast<char>(temp_FSR##x + 1); \
+            else \
+                regs[SFRs::FSR##x] = static_cast<char>(temp_FSR##x - 1); \
+        } \
+    }
+
+#define _post_id_handle_lcddata(x) \
+    if (original_rptr_for_post_id == SFRs::LCDDATA) { \
+        if (getLCD_PE()) { \
+            uint8_t temp = static_cast<uint8_t>(regs[SFRs::LCDARL]); \
+            if (getLCD_ID()) \
+                regs[SFRs::LCDARL] = static_cast<char>(temp + 1); \
+            else \
+                regs[SFRs::LCDARL] = static_cast<char>(temp - 1); \
+        } \
+    }
 
 #define _post_id_handle_indf2(x)                                                    \
 	if (original_rptr_for_post_id == SFRs::INDF##x) {                               \
@@ -429,9 +435,6 @@ namespace casioemu {
 						auto high = regs[SFRs::LCDARH] & 0x3;
 						vram[high * 98 + low] = value_to_write;
 					}
-					else {
-						0;
-					}
 				}
 				else {
 					regs[current_ptr_val] = static_cast<char>(value_to_write);
@@ -555,11 +558,11 @@ namespace casioemu {
 		// --- P-Code Op Stubs ---
 		void pcode_nop() { /* No operation */ }
 		void pcode_sleep() {
-			std::cout << "PCODE: SLEEP" << std::endl;
+			printf("PCODE: SLEEP\n");
 			running = 0; /* TODO: Halt CPU, wait for interrupt */
 		}
 		void pcode_halt() {
-			std::cout << "PCODE: HALT" << std::endl;
+			printf("PCODE: HALT\n");
 			running = 0; /* TODO: Halt CPU */
 		}
 		void pcode_sfr4() { /*std::cout << "PCODE: SFR4 (not implemented)" << std::endl; *//* TODO */ }
@@ -1105,8 +1108,7 @@ namespace casioemu {
 					PopPC();
 				}
 				else {
-					std::cout << "Warning: Unknown sub-opcode for 0x2B: 0x" << std::hex << (int)sub_opcode << std::endl;
-					// Potentially an illegal instruction
+					printf("Warning: Unknown sub-opcode for 0x2B: 0x%02x\n", sub_opcode);
 				}
 			} break;
 
@@ -1491,8 +1493,7 @@ namespace casioemu {
 				}
 				else {
 				invalid_op:
-					std::cout << "Warning: Unimplemented opcode 0x" << std::hex << (uint32_t)opcode
-							  << " at PC=0x" << inst_pc << std::endl;
+					printf("Warning: Unimplemented opcode 0x%08x at PC=0x%x\n", opcode, inst_pc);
 					break;
 				}
 			} break;

@@ -103,6 +103,7 @@ HwController.Value2=Screen flashing brightness coeff
 HwController.ScreenBufferSelect=Screen buffer select
 HwController.CPS=Cycles per second
 HwController.Interrupt=Raise an interrupt
+HwController.HotReload=Hot Reload
 
 MemBP.BPType=Choose breakpoint type:
 MemBP.Delete=Delete

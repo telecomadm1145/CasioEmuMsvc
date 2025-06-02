@@ -110,6 +110,7 @@ HwController.Value2=Screen flashing brightness coeff
 HwController.ScreenBufferSelect=Screen buffer select
 HwController.CPS=Cycles per second
 HwController.Interrupt=Raise an interrupt
+HwController.HotReload=Hot Reload
 
 MemBP.BPType=Choose breakpoint type:
 MemBP.Delete=Delete
@@ -302,6 +303,7 @@ HwController.Value2=Hệ số độ sáng nháy màn hình
 HwController.ScreenBufferSelect=Chọn buffer màn hình
 HwController.CPS=Chu kỳ mỗi giây
 HwController.Interrupt=Kích hoạt ngắt
+HwController.HotReload=Tải lại nhanh
 
 MemBP.BPType=Chọn loại điểm dừng:
 MemBP.Delete=Xóa
@@ -492,6 +494,7 @@ HwController.Value2=闪屏对比度补偿
 HwController.ScreenBufferSelect=屏幕缓冲区选择
 HwController.CPS=每秒周期数
 HwController.Interrupt=触发中断
+HwController.HotReload=热重载
 
 MemBP.BPType=选择断点类型：
 MemBP.Delete=删除
