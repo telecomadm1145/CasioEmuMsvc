@@ -298,7 +298,7 @@ namespace casioemu {
 #define _post_id_handle_indf2(x)                                                    \
 	if (original_rptr_for_post_id == SFRs::INDF##x) {                               \
 		if (getFSR##x##_PE()) {                                                     \
-			uint8_t temp = static_cast<uint8_t>(regs[SFRs::FSR##x##]);              \
+			uint8_t temp = static_cast<uint8_t>(regs[SFRs::FSR##x]);              \
 			if (getFSR##x##_ID()) {                                                 \
 				if (temp == 0x7f)                                                   \
 					++BSR##x();                                                     \
