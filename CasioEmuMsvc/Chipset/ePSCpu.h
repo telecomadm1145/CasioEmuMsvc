@@ -360,7 +360,7 @@ namespace casioemu {
 					rdata = TABPTRH();
 				}
 				else if (current_ptr_val == SFRs::LCDDATA) {
-					auto low = regs[SFRs::LCDARL] & 0x63;
+					auto low = regs[SFRs::LCDARL];
 					if (low <= 0x61) {
 						auto high = regs[SFRs::LCDARH] & 0x3;
 						rdata = vram[high * 98 + low];
@@ -430,7 +430,7 @@ namespace casioemu {
 					setTABPTRH(value_to_write);
 				}
 				else if (current_ptr_val == SFRs::LCDDATA) {
-					auto low = regs[SFRs::LCDARL] & 0x63;
+					auto low = regs[SFRs::LCDARL];
 					if (low <= 0x61) {
 						auto high = regs[SFRs::LCDARH] & 0x3;
 						vram[high * 98 + low] = value_to_write;
