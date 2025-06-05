@@ -19,9 +19,18 @@
 void WatchWindow::PrepareRX() {
 	if (m_emu->chipset.epscpu) {
 		sprintf(reg_pc, "%05x", (uint32_t)(m_emu->chipset.epscpu->pc << 1));
-		sprintf(reg_lr, "%05x", 0xdead);
+		if (m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::FSR0] & 0x80) {
+			sprintf(reg_lr, "%05x", (uint32_t)((m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::BSR] << 7) | (m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::FSR0] & 0x7f)));
+		}
+		else {
+			sprintf(reg_lr, "%02x(SFR)", (uint32_t)((m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::FSR0] & 0x7f)));
+		}
+		sprintf(reg_ea, "%05x", (uint32_t)((m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::BSR1] << 7) | (m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::FSR1] & 0x7f)));
+		sprintf(reg_ex1, "%05x", (uint32_t)((m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::BSR2] << 7) | (m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::FSR2] & 0x7f)));
+		sprintf(reg_ex2, "%05x", (uint32_t)(((m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::LCDARH] & 0x03) * 98) | (std::min((uint8_t)m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::LCDARL], (uint8_t)97))));
 		sprintf(reg_sp, "%04x", m_emu->chipset.epscpu->STKPTR());
 		sprintf(reg_psw, "%02x", m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::STATUS]);
+		sprintf(reg_dsr, "%02x", m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::BSR]);
 	}
 	else {
 		for (int i = 0; i < 16; i++) {
@@ -38,20 +47,24 @@ void WatchWindow::PrepareRX() {
 
 void WatchWindow::ShowRX() {
 	char id[10];
-	ImGui::TextColored(ImVec4(0, 200, 0, 255), "RXn: ");
-	for (int i = 0; i < 16; i++) {
-		ImGui::SameLine();
-		sprintf(id, "##data%d", i);
-		ImGui::SetNextItemWidth(char_width * 3);
-		ImGui::TextUnformatted((char*)&reg_rx[i][0]);
+	if (m_emu->chipset.epscpu) {
 	}
-	ImGui::TextUnformatted("ERn: ");
-	for (int i = 0; i < 16; i += 2) {
-		ImGui::SameLine();
-		uint16_t val = m_emu->chipset.cpu.reg_r[i + 1]
-						   << 8 |
-					   m_emu->chipset.cpu.reg_r[i];
-		ImGui::Text("%04x ", val);
+	else {
+		ImGui::TextColored(ImVec4(0, 200, 0, 255), "RXn: ");
+		for (int i = 0; i < 16; i++) {
+			ImGui::SameLine();
+			sprintf(id, "##data%d", i);
+			ImGui::SetNextItemWidth(char_width * 3);
+			ImGui::TextUnformatted((char*)&reg_rx[i][0]);
+		}
+		ImGui::TextUnformatted("ERn: ");
+		for (int i = 0; i < 16; i += 2) {
+			ImGui::SameLine();
+			uint16_t val = m_emu->chipset.cpu.reg_r[i + 1]
+							   << 8 |
+						   m_emu->chipset.cpu.reg_r[i];
+			ImGui::Text("%04x ", val);
+		}
 	}
 	auto show_sfr = ([&](char* ptr, const char* label, int i, int width = 4) {
 		ImGui::TextColored(ImVec4(0, 200, 0, 255), "%s", label);
@@ -62,15 +75,31 @@ void WatchWindow::ShowRX() {
 	});
 	show_sfr(reg_pc, "PC: ", 1, 6);
 	ImGui::SameLine();
-	show_sfr(reg_lr, "LR: ", 2, 6);
-	ImGui::SameLine();
-	show_sfr(reg_ea, "EA: ", 3);
-	ImGui::SameLine();
-	show_sfr(reg_sp, "SP: ", 4);
-	ImGui::SameLine();
-	show_sfr(reg_psw, "PSW: ", 5, 2);
-	ImGui::SameLine();
-	show_sfr(reg_dsr, "DSR: ", 6, 2);
+	if (m_emu->chipset.epscpu) {
+		show_sfr(reg_lr, "INDF0: ", 2, 6);
+		ImGui::SameLine();
+		show_sfr(reg_ea, "INDF1: ", 3, 6);
+		ImGui::SameLine();
+		show_sfr(reg_ex1, "INDF2: ", 7, 6);
+		ImGui::SameLine();
+		show_sfr(reg_sp, "STKPTR: ", 4);
+		ImGui::SameLine();
+		show_sfr(reg_psw, "STATUS: ", 5, 2);
+		ImGui::SameLine();
+		show_sfr(reg_dsr, "BSR: ", 6, 2);
+		show_sfr(reg_ex2, "LCDAR: ", 8, 6);
+	}
+	else {
+		show_sfr(reg_lr, "LR: ", 2, 6);
+		ImGui::SameLine();
+		show_sfr(reg_ea, "EA: ", 3);
+		ImGui::SameLine();
+		show_sfr(reg_sp, "SP: ", 4);
+		ImGui::SameLine();
+		show_sfr(reg_psw, "PSW: ", 5, 2);
+		ImGui::SameLine();
+		show_sfr(reg_dsr, "DSR: ", 6, 2);
+	}
 }
 void WatchWindow::ModRX() {
 	char id[10];

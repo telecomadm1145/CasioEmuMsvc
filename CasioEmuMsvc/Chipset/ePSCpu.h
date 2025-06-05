@@ -360,7 +360,7 @@ namespace casioemu {
 					rdata = TABPTRH();
 				}
 				else if (current_ptr_val == SFRs::LCDDATA) {
-					auto low = regs[SFRs::LCDARL] & 0x63;
+					auto low = regs[SFRs::LCDARL];
 					if (low <= 0x61) {
 						auto high = regs[SFRs::LCDARH] & 0x3;
 						rdata = vram[high * 98 + low];
@@ -368,6 +368,7 @@ namespace casioemu {
 					else {
 						rdata = 0;
 					}
+					is_indirect = true;
 				}
 				else {
 					rdata = regs[current_ptr_val];
@@ -430,11 +431,13 @@ namespace casioemu {
 					setTABPTRH(value_to_write);
 				}
 				else if (current_ptr_val == SFRs::LCDDATA) {
-					auto low = regs[SFRs::LCDARL] & 0x63;
+					auto low = regs[SFRs::LCDARL];
 					if (low <= 0x61) {
 						auto high = regs[SFRs::LCDARH] & 0x3;
 						vram[high * 98 + low] = value_to_write;
 					}
+					std::cout << "LCD:0x" << std::hex << (int)value_to_write << "\n";
+					is_indirect = true;
 				}
 				else {
 					regs[current_ptr_val] = static_cast<char>(value_to_write);
@@ -553,7 +556,7 @@ namespace casioemu {
 			updateSGEFlag(static_cast<int8_t>(dest));
 		}
 
-		bool running = 0;
+		bool running = 01;
 
 		// --- P-Code Op Stubs ---
 		void pcode_nop() { /* No operation */ }
@@ -622,6 +625,8 @@ namespace casioemu {
 		bool repeat_flag;
 		// --- Instruction Execution ---
 		void Next() {
+			if (!running)
+				return;
 			uint32_t inst_pc = pc;
 			bool is_rpt = false;
 			uint16_t opcode = FetchInst();

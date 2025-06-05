@@ -560,6 +560,8 @@ namespace casioemu {
 	inline constexpr size_t GetModeOffset(HardwareId hid) {
 		if (hid == HW_TI)
 			return 0xB000;
+		if (hid == HW_EPS6800)
+			return 0;
 		return hid == HW_ES_PLUS ? 0x80F9 : hid == HW_CLASSWIZ ? 0xD111
 															   : 0x91A1;
 	}
