@@ -298,7 +298,7 @@ namespace casioemu {
 #define _post_id_handle_indf2(x)                                                    \
 	if (original_rptr_for_post_id == SFRs::INDF##x) {                               \
 		if (getFSR##x##_PE()) {                                                     \
-			uint8_t temp = static_cast<uint8_t>(regs[SFRs::FSR##x##]);              \
+			uint8_t temp = static_cast<uint8_t>(regs[SFRs::FSR##x]);              \
 			if (getFSR##x##_ID()) {                                                 \
 				if (temp == 0x7f)                                                   \
 					++BSR##x();                                                     \
@@ -623,6 +623,7 @@ namespace casioemu {
 		}
 
 		bool repeat_flag;
+  int rptc=0;
 		// --- Instruction Execution ---
 		void Next() {
 			if (!running)
@@ -636,7 +637,7 @@ namespace casioemu {
 			uint8_t reg_addr;
 			uint8_t imm_val;
 			uint32_t target_addr;
-			static auto& rdata_temp = rdata;
+			auto& rdata_temp = rdata;
 			switch (op1) {
 			case 0: {
 				switch (op2) {
@@ -874,6 +875,16 @@ namespace casioemu {
 					uint8_t temp_val = static_cast<uint8_t>(rdata_temp);
 					AdcWithFlags(temp_val, ACC());
 					WriteDat(reg_addr, temp_val);
+				if (reg_addr == SFRs::PCL) {
+						if (getCFlag()) {
+							regs[SFRs::PCM]++;
+						}
+					}
+					else if (reg_addr == SFRs::TABPTRL) {
+						if (getCFlag()) {
+							regs[SFRs::TABPTRM]++;
+						}
+					}
 				}
 				break;
 			// ADDDC "A", reg8 (0001 0100) + reg8
@@ -1075,7 +1086,7 @@ namespace casioemu {
 			case 0x27:
 				reg_addr = op2;
 				ReadDat(reg_addr);						  // Value of reg8 into rdata_temp
-				ACC() = static_cast<uint8_t>(rdata_temp); // ACC gets the repeat count
+				rptc = static_cast<uint8_t>(rdata_temp); // ACC gets the repeat count
 				is_rpt = repeat_flag = true;
 				break;
 
@@ -1504,7 +1515,7 @@ namespace casioemu {
 			} break;
 			}
 
-			(repeat_flag && !is_rpt) && (ACC() ? (--ACC(), pc = inst_pc) : repeat_flag = 0);
+			(repeat_flag && !is_rpt) && (rptc ? (--rptc, pc = inst_pc) : repeat_flag = 0);
 		}
 	}; // namespace casioemu
 }; // namespace casioemu
