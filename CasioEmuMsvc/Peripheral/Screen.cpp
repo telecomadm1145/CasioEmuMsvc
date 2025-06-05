@@ -269,14 +269,14 @@ namespace casioemu {
 				// if (emulator.ModelDefinition.real_hardware) {
 				//	screen_buffer = this->screen_buffer;
 				// }
-				for (int ix = 0; ix < 96; ++ix) {
+				for (int ix = 0; ix < 98; ++ix) {
 					for (int iy = 0; iy < 64; ++iy) {
 						uint32_t i = (ix * 64) | iy;
 						int bIndx = (i >> 3);
 						int subIndx = (i & 7);
 						int mask = (1 << subIndx);
 						bool on = (screen_buffer[bIndx] & mask) != 0;
-						auto& data = screen_ink_alpha[(iy * 96 + 96) + ix];
+						auto& data = screen_ink_alpha[(iy * 192 + 192) + ix];
 						data = data * ratio + (on ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
 					}
 				}
