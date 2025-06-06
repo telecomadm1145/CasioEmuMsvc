@@ -342,7 +342,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Chipset\ePSCpu.cpp" />
     <ClCompile Include="Ext\ConsoleText.cpp" />
+    <ClCompile Include="Ext\ePSDisas.cpp" />
     <ClCompile Include="Ext\GameBuffer.cpp" />
     <ClCompile Include="JitU8\JitU8.cpp" />
     <ClCompile Include="Gui\AddressWindow.cpp" />
@@ -416,6 +418,7 @@
   <ItemGroup>
     <ClInclude Include="Chipset\ePSCpu.h" />
     <ClInclude Include="Ext\ConsoleText.h" />
+    <ClInclude Include="Ext\ePSDisas.h" />
     <ClInclude Include="Ext\GameBuffer.h" />
     <ClInclude Include="Ext\Unicode.h" />
     <ClInclude Include="Gui\FileDialog.hpp" />

@@ -17,20 +17,21 @@
 #include <stdlib.h>
 
 void WatchWindow::PrepareRX() {
-	if (m_emu->chipset.epscpu) {
-		sprintf(reg_pc, "%05x", (uint32_t)(m_emu->chipset.epscpu->pc << 1));
-		if (m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::FSR0] & 0x80) {
-			sprintf(reg_lr, "%05x", (uint32_t)((m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::BSR] << 7) | (m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::FSR0] & 0x7f)));
+	auto eps = m_emu->chipset.epscpu;
+	if (eps) {
+		sprintf(reg_pc, "%05x", eps->PC());
+		if (eps->FSR & 0x80) {
+			sprintf(reg_lr, "%05x", (uint32_t)((eps->BSR << 7) | (eps->FSR & 0x7f)));
 		}
 		else {
-			sprintf(reg_lr, "%02x(SFR)", (uint32_t)((m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::FSR0] & 0x7f)));
+			sprintf(reg_lr, "%02x(SFR)", (uint32_t)((eps->FSR & 0x7f)));
 		}
-		sprintf(reg_ea, "%05x", (uint32_t)((m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::BSR1] << 7) | (m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::FSR1] & 0x7f)));
-		sprintf(reg_ex1, "%05x", (uint32_t)((m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::BSR2] << 7) | (m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::FSR2] & 0x7f)));
-		sprintf(reg_ex2, "%05x", (uint32_t)(((m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::LCDARH] & 0x03) * 98) | (std::min((uint8_t)m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::LCDARL], (uint8_t)97))));
-		sprintf(reg_sp, "%04x", m_emu->chipset.epscpu->STKPTR());
-		sprintf(reg_psw, "%02x", m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::STATUS]);
-		sprintf(reg_dsr, "%02x", m_emu->chipset.epscpu->regs[casioemu::ePSCPU::SFRs::BSR]);
+		sprintf(reg_ea, "%05x", (uint32_t)((eps->BSR1 << 7) | (eps->FSR1 & 0x7f)));
+		sprintf(reg_ex1, "%05x", (uint32_t)((eps->BSR2 << 7) | (eps->FSR2 & 0x7f)));
+		sprintf(reg_ex2, "%05x", (uint32_t)(((eps->LCDARH & 0x03) * 0x60) | eps->LCDARL));
+		sprintf(reg_sp, "%04x", eps->STKPTR << 1);
+		sprintf(reg_psw, "%02x", eps->STATUS);
+		sprintf(reg_dsr, "%02x", eps->BSR);
 	}
 	else {
 		for (int i = 0; i < 16; i++) {
@@ -239,7 +240,7 @@ void WatchWindow::RenderCore() {
 		ImGui::TableSetupColumn("LR", ImGuiTableColumnFlags_WidthStretch, 1);
 		ImGui::TableHeadersRow();
 		if (chipset.epscpu) {
-			for (size_t i = 0; i < (chipset.epscpu->STKPTR() / 2); i++) {
+			for (size_t i = 0; i < (chipset.epscpu->STKPTR); i++) {
 				ImGui::TableNextRow();
 				ImGui::TableNextColumn();
 				ImGui::Text("%06X", chipset.epscpu->stack[i] << 1);

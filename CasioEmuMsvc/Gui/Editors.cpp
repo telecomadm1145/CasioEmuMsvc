@@ -87,7 +87,6 @@ inline auto MMU_Hex(auto he) {
 	};
 	return he;
 }
-
 inline auto Highlight_Default(auto he) {
 	he->HighlightFn = [](const ImU8* data, size_t off) -> bool {
 		if ((size_t)(data + off) == m_emu->chipset.cpu.reg_sp) {
@@ -107,8 +106,9 @@ std::vector<UIWindow*> GetEditors() {
 			ram_edit_ov[mea.offset] = 255;
 	});
 	std::vector<UIWindow*> windows;
+	windows.push_back(new HexEditor{"Rom", m_emu->chipset.rom_data.data(), m_emu->chipset.rom_data.size(), 0});
 	if (m_emu->hardware_id == casioemu::HW_EPS6800) {
-		windows.push_back(MMU_Hex(new SpansHexEditor{"Ram", 0, 128 * 64, 0, {}}));
+		windows.push_back(new HexEditor{"Ram", m_emu->chipset.epscpu->ram, 128 * 64, 0});
 		windows.push_back(new HexEditor{"Regs", m_emu->chipset.epscpu->regs, 128, 0});
 		windows.push_back(new HexEditor{"VRam", m_emu->chipset.epscpu->vram, 0x2000, 0});
 	}
@@ -122,7 +122,6 @@ std::vector<UIWindow*> GetEditors() {
 						0x10000 - casioemu::GetRamBaseAddr(m_emu->hardware_id),
 						casioemu::GetRamBaseAddr(m_emu->hardware_id),
 						GetCommonMemLabels(m_emu->hardware_id)})));
-		windows.push_back(new HexEditor{"Rom", m_emu->chipset.rom_data.data(), m_emu->chipset.rom_data.size(), 0});
 		if (m_emu->hardware_id == casioemu::HW_FX_5800P) {
 			windows.push_back(MMU_Hex(new SpansHexEditor{"PRam", (void*)0x40000, 0x8000, 0x40000, GetCommonMemLabels(m_emu->hardware_id)}));
 			windows.push_back(new HexEditor{"Flash", m_emu->chipset.flash_data.data(), m_emu->chipset.flash_data.size(), 0});

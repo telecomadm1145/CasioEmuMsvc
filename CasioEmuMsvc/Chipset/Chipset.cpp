@@ -521,7 +521,9 @@ namespace casioemu {
 		if (rom_handle.fail())
 			PANIC("std::ifstream failed: %s\n", std::strerror(errno));
 		rom_data = std::vector<unsigned char>((std::istreambuf_iterator<char>(rom_handle)), std::istreambuf_iterator<char>());
-
+		if (epscpu) {
+			std::copy(rom_data.begin(), rom_data.begin() + 0x40000, epscpu->Rom);
+		}
 		if (emulator.hardware_id == HW_FX_5800P) {
 			std::ifstream flash_handle(emulator.GetModelFilePath(emulator.ModelDefinition.flash_path), std::ifstream::binary);
 			if (flash_handle.fail())
