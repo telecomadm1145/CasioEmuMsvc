@@ -6,11 +6,14 @@
 #include "Hooks.h"
 #include "Logger.hpp"
 #include "U8Disas.h"
+#include "ePSCpu.h"
 #include "imgui/imgui.h"
+#include <Localization.h>
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <ePSDisas.h>
 #include <fstream>
 #include <ios>
 #include <iostream>
@@ -20,7 +23,6 @@
 #include <string>
 #include <thread>
 #include <unordered_set>
-#include <Localization.h>
 casioemu::Emulator* m_emu = nullptr;
 
 uint32_t pc_cache = 0;
@@ -106,94 +108,140 @@ inline static std::string lookup_symbol(uint32_t addr) {
 
 void CodeViewer::PrepareDisasm() {
 	std::thread t1([this]() {
+		if (m_emu->chipset.epscpu) {
+			std::vector<CodeElem> finals;
+
+#define READ_WORD_BE(ptr)         \
+	((uint32_t)(ptr)[0] << 16 |   \
+		(uint32_t)(ptr)[1] << 8 | \
+		(uint32_t)(ptr)[2] << 4 | \
+		(uint32_t)(ptr)[3])
+
+			auto ptr = m_emu->chipset.rom_data.data();
+			for (size_t i = 0; i < 0x10000; i++) {
+				if (i == 0)
+					finals.push_back(CodeElem{(uint32_t)(i), "reset:", 1, 0});
+				if (i == 2)
+					finals.push_back(CodeElem{(uint32_t)(i), "paint:", 1, 0});
+				if (i == 4)
+					finals.push_back(CodeElem{(uint32_t)(i), "reserved:", 1, 0});
+				if (i == 6)
+					finals.push_back(CodeElem{(uint32_t)(i), "reserved:", 1, 0});
+				if (i == 8)
+					finals.push_back(CodeElem{(uint32_t)(i), "tmrxi:", 1, 0});
+				if (i == 0xa)
+					finals.push_back(CodeElem{(uint32_t)(i), "reserved:", 1, 0});
+				if (i >= 0xc && i <= 0xf) {
+					finals.push_back(CodeElem{(uint32_t)(i), "<Code Option>", 0, 0});
+					continue;
+				}
+				if (i == 0x10)
+					finals.push_back(CodeElem{(uint32_t)(i), "test:", 1, 0});
+				CodeElem ce{};
+				ce.offset = i;
+				bool l = false;
+				auto str = decodeeps((char*)ptr, i, l);
+				strcpy_s(ce.srcbuf, str);
+				free(str);
+				finals.push_back(ce);
+				if (l)
+					i++;
+			}
+			codes = std::move(finals);
+			printf("[UI][Info] Finished!\n");
+			max_row = codes.size();
+			is_loaded = true;
+		}
+		else {
 #ifndef _DEBUG
-		printf("[UI][Info] Start to disasm ...\n");
-		auto dat = std::unique_ptr<uint8_t>(new uint8_t[0x80100]);
-		std::memset(dat.get(), 0xff, 0x80100);
-		std::memcpy(dat.get(), m_emu->chipset.rom_data.data(), std::min((size_t)0x5e000, m_emu->chipset.rom_data.size()));
-		if (m_emu->chipset.rom_data.size() >= 0x60000) // TODO: fix this hack!!!
-			std::memcpy(dat.get() + 0x70000, m_emu->chipset.rom_data.data() + 0x5e000, 0x2000);
-		uint8_t* beg = dat.get();
-		auto rom = beg;
-		auto end = rom + 0x80000;
-		printf("[UI][Info] Pass1: decoding opcodes...\n");
-		std::stringstream ss{};
-		while (rom < end) {
-			auto pc = rom - beg;
-			auto before = rom;
-			decode(ss, rom, rom - beg);
-			auto size = rom - before;
-			CodeElem ce{};
-			if (size == 2) {
-				sprintf(ce.srcbuf, "%04X         ", (*(uint16_t*)before));
+			printf("[UI][Info] Start to disasm ...\n");
+			auto dat = std::unique_ptr<uint8_t>(new uint8_t[0x80100]);
+			std::memset(dat.get(), 0xff, 0x80100);
+			std::memcpy(dat.get(), m_emu->chipset.rom_data.data(), std::min((size_t)0x5e000, m_emu->chipset.rom_data.size()));
+			if (m_emu->chipset.rom_data.size() >= 0x60000) // TODO: fix this hack!!!
+				std::memcpy(dat.get() + 0x70000, m_emu->chipset.rom_data.data() + 0x5e000, 0x2000);
+			uint8_t* beg = dat.get();
+			auto rom = beg;
+			auto end = rom + 0x80000;
+			printf("[UI][Info] Pass1: decoding opcodes...\n");
+			std::stringstream ss{};
+			while (rom < end) {
+				auto pc = rom - beg;
+				auto before = rom;
+				decode(ss, rom, rom - beg);
+				auto size = rom - before;
+				CodeElem ce{};
+				if (size == 2) {
+					sprintf(ce.srcbuf, "%04X         ", (*(uint16_t*)before));
+				}
+				else if (size == 4) {
+					sprintf(ce.srcbuf, "%04X %04X    ", (*(uint16_t*)before), ((uint16_t*)before)[1]);
+				}
+				else {
+					strcpy(ce.srcbuf, "             ");
+				}
+				ce.offset = pc;
+				auto s = ss.str();
+				if (s[8] == '$') {
+					ce.xref_operand = SDL_strtol(&s[9], 0, 16);
+				}
+				strcpy(ce.srcbuf + 9 + 4, s.c_str());
+				codes.push_back(ce);
+				ss.str("");
 			}
-			else if (size == 4) {
-				sprintf(ce.srcbuf, "%04X %04X    ", (*(uint16_t*)before), ((uint16_t*)before)[1]);
+			printf("[UI][Info] Pass2: handling xrefs...\n");
+			std::optional<int> last_label{};
+			std::unordered_set<int> quick_find{};
+			for (auto& ce : codes) {
+				quick_find.emplace(ce.offset);
 			}
-			else {
-				strcpy(ce.srcbuf, "             ");
-			}
-			ce.offset = pc;
-			auto s = ss.str();
-			if (s[8] == '$') {
-				ce.xref_operand = SDL_strtol(&s[9], 0, 16);
-			}
-			strcpy(ce.srcbuf + 9 + 4, s.c_str());
-			codes.push_back(ce);
-			ss.str("");
-		}
-		printf("[UI][Info] Pass2: handling xrefs...\n");
-		std::optional<int> last_label{};
-		std::unordered_set<int> quick_find{};
-		for (auto& ce : codes) {
-			quick_find.emplace(ce.offset);
-		}
-		std::map<int, std::string> labels;
-		for (auto& lb : p_labels) {
-			CodeElem ce{};
-			auto iter = quick_find.find(lb.first);
-			if (iter == quick_find.end()) // 如果找不到指令那就是错误解码数据了
-				continue;
-			ce.is_label = true;
-			if (lb.second) {
-				auto symb = lookup_symbol(lb.first);
-				strcpy(ce.srcbuf, symb.c_str());
-				ce.offset = 0;
-				labels[lb.first] = std::move(symb);
-				last_label = lb.first;
-			}
-			else {
-				if (last_label.has_value()) {
-					char buf[20]{};
-					auto symb = std::string(".l_") + SDL_itoa(lb.first - *last_label, buf, 16);
+			std::map<int, std::string> labels;
+			for (auto& lb : p_labels) {
+				CodeElem ce{};
+				auto iter = quick_find.find(lb.first);
+				if (iter == quick_find.end()) // 如果找不到指令那就是错误解码数据了
+					continue;
+				ce.is_label = true;
+				if (lb.second) {
+					auto symb = lookup_symbol(lb.first);
 					strcpy(ce.srcbuf, symb.c_str());
 					ce.offset = 0;
 					labels[lb.first] = std::move(symb);
+					last_label = lb.first;
+				}
+				else {
+					if (last_label.has_value()) {
+						char buf[20]{};
+						auto symb = std::string(".l_") + SDL_itoa(lb.first - *last_label, buf, 16);
+						strcpy(ce.srcbuf, symb.c_str());
+						ce.offset = 0;
+						labels[lb.first] = std::move(symb);
+					}
 				}
 			}
-		}
-		printf("[UI][Info] Pass3: applying xrefs...\n");
-		std::vector<CodeElem> finals;
-		finals.reserve(codes.size() + labels.size());
-		for (auto& ce : codes) {
-			auto iter = labels.find(ce.offset);
-			if (iter != labels.end()) {
-				CodeElem ce2{};
-				ce2.is_label = true;
-				strcpy(ce2.srcbuf, (iter->second + ":").c_str());
-				ce2.offset = 0;
-				finals.push_back(ce2);
+			printf("[UI][Info] Pass3: applying xrefs...\n");
+			std::vector<CodeElem> finals;
+			finals.reserve(codes.size() + labels.size());
+			for (auto& ce : codes) {
+				auto iter = labels.find(ce.offset);
+				if (iter != labels.end()) {
+					CodeElem ce2{};
+					ce2.is_label = true;
+					strcpy(ce2.srcbuf, (iter->second + ":").c_str());
+					ce2.offset = 0;
+					finals.push_back(ce2);
+				}
+				if (ce.xref_operand) {
+					strcpy(&ce.srcbuf[8 + 13], labels[ce.xref_operand].c_str());
+				}
+				finals.push_back(ce);
 			}
-			if (ce.xref_operand) {
-				strcpy(&ce.srcbuf[8 + 13], labels[ce.xref_operand].c_str());
-			}
-			finals.push_back(ce);
-		}
-		codes = std::move(finals);
-		printf("[UI][Info] Finished!\n");
-		max_row = codes.size();
+			codes = std::move(finals);
+			printf("[UI][Info] Finished!\n");
+			max_row = codes.size();
 #endif
-		is_loaded = true;
+			is_loaded = true;
+		}
 	});
 	t1.detach();
 }
@@ -300,13 +348,15 @@ void CodeViewer::JumpTo(uint32_t offset) {
 }
 
 void CodeViewer::RenderCore() {
-
 	int h = ImGui::GetTextLineHeight() + 4;
 	int w = ImGui::CalcTextSize("F").x;
 	if (!is_loaded) {
 		ImGui::SetCursorPos(ImVec2(w * 2, h * 5));
 		ImGui::TextUnformatted("CodeViewer.Loading"_lc);
 		return;
+	}
+	if (m_emu->chipset.epscpu) {
+		pc_cache = m_emu->chipset.epscpu->PC() >> 1;
 	}
 	ImVec2 sz;
 	h *= 10;

@@ -1,2 +1,2 @@
 #pragma once
-char* decodeeps(char* rom, int pc);
+char* decodeeps(char* rom, int pc, bool& l);

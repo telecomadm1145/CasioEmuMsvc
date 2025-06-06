@@ -19,7 +19,7 @@
 void WatchWindow::PrepareRX() {
 	auto eps = m_emu->chipset.epscpu;
 	if (eps) {
-		sprintf(reg_pc, "%05x", eps->PC());
+		sprintf(reg_pc, "%05x", eps->PC() >> 1);
 		if (eps->FSR & 0x80) {
 			sprintf(reg_lr, "%05x", (uint32_t)((eps->BSR << 7) | (eps->FSR & 0x7f)));
 		}
