@@ -141,7 +141,8 @@ void CodeViewer::PrepareDisasm() {
 				ce.offset = i;
 				bool l = false;
 				auto str = decodeeps((char*)ptr, i, l);
-				strcpy_s(ce.srcbuf, str);
+				strncpy(ce.srcbuf, str, sizeof(ce.srcbuf) - 1);
+				ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0';
 				free(str);
 				finals.push_back(ce);
 				if (l)

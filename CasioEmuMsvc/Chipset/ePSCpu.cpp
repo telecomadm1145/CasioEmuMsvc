@@ -1,6 +1,7 @@
 #include "ePSCpu.h"
 #include "MMU.hpp"
 #include <array>
+#include <cstdint>
 
 using WCHAR = char;
 
@@ -226,18 +227,18 @@ namespace detail {
 	using casioemu::ePSCPU;
 
 	//--------------------------------------------------------------
-	// Ö¸Áî±í½Úµã
+	// Ö¸ï¿½ï¿½ï¿½ï¿½Úµï¿½
 	//--------------------------------------------------------------
 	struct InstTbl {
-		/* ×Ó±í¹¹Ôì£ºdepth = 0 ±íÊ¾¼ÌÐøÏòÏÂ²é±í */
+		/* ï¿½Ó±ï¿½ï¿½ï¿½ï¿½ì£ºdepth = 0 ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â²ï¿½ï¿½ */
 		constexpr InstTbl(const InstTbl (*next)[16]) noexcept
 			: next(next), depth(0) {}
 
-		/* Ò¶½Úµã¹¹Ôì£ºdepth = 0xFF ±íÊ¾µ½´Ë½áÊø£¬handler Îª×îÖÕÖ¸Áî */
+		/* Ò¶ï¿½Úµã¹¹ï¿½ì£ºdepth = 0xFF ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½Ë½ï¿½ï¿½ï¿½ï¿½ï¿½handler Îªï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½ */
 		constexpr InstTbl(ePSCPU::OP_Handler op) noexcept
 			: handler(op), depth(0xFF) {}
 
-		/* Ä¬ÈÏ¹¹Ôì£ºÎ´ÖªÖ¸Áî */
+		/* Ä¬ï¿½Ï¹ï¿½ï¿½ì£ºÎ´ÖªÖ¸ï¿½ï¿½ */
 		constexpr InstTbl() noexcept
 			: handler(&ePSCPU::OP_UD), depth(0xFF) {}
 
@@ -249,21 +250,21 @@ namespace detail {
 	};
 
 	//--------------------------------------------------------------
-	// 000_ : Èý¼¶×Ó±í
+	// 000_ : ï¿½ï¿½ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_000_[16]{
 &ePSCPU::OP_NOP, &ePSCPU::OP_WDTC, &ePSCPU::OP_SLEP
 	};
 
 	//--------------------------------------------------------------
-	// 00__ : ¶þ¼¶×Ó±í
+	// 00__ : ï¿½ï¿½ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_00__[16]{
 		&TB_000_, {}, &ePSCPU::OP_LJMP, &ePSCPU::OP_LCALL,
 	};
 
 	//--------------------------------------------------------------
-	// 0___ : Ò»¼¶×Ó±í
+	// 0___ : Ò»ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_0___[16]{
 		/* 0x0 */ &TB_00__, &ePSCPU::OP_SFR4, &ePSCPU::OP_OR_A, &ePSCPU::OP_OR_R,
@@ -272,7 +273,7 @@ namespace detail {
 		/* 0xC */ &ePSCPU::OP_RLCA, &ePSCPU::OP_RLC, &ePSCPU::OP_SWAPA, &ePSCPU::OP_SWAP};
 
 	//--------------------------------------------------------------
-	// 1___ : Ò»¼¶×Ó±í
+	// 1___ : Ò»ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_1___[16]{
 		&ePSCPU::OP_ADD_A, &ePSCPU::OP_ADD_r, &ePSCPU::OP_ADC_A, &ePSCPU::OP_ADC_r,
@@ -281,14 +282,14 @@ namespace detail {
 		&ePSCPU::OP_INCA, &ePSCPU::OP_INC, &ePSCPU::OP_DECA, &ePSCPU::OP_DEC};
 
 	//--------------------------------------------------------------
-	// 2B__ : Èý¼¶×Ó±í (2Bxx)
+	// 2B__ : ï¿½ï¿½ï¿½ï¿½ï¿½Ó±ï¿½ (2Bxx)
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_2B__[16]{
 		{}, {}, {}, {}, {}, {}, {}, {},
 		{}, {}, {}, {}, {}, {}, &ePSCPU::OP_RET, &ePSCPU::OP_RETI};
 
 	//--------------------------------------------------------------
-	// 2___ : Ò»¼¶×Ó±í
+	// 2___ : Ò»ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_2___[16]{
 		&ePSCPU::OP_MOV_A, &ePSCPU::OP_MOV_r, &ePSCPU::OP_SHRA, &ePSCPU::OP_SHLA,
@@ -297,7 +298,7 @@ namespace detail {
 		&ePSCPU::OP_TBRD, &ePSCPU::OP_TBRD, &ePSCPU::OP_TBRD, &ePSCPU::OP_TBRD_A};
 
 	//--------------------------------------------------------------
-	// 4___ : Ò»¼¶×Ó±í
+	// 4___ : Ò»ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_4___[16]{
 		&ePSCPU::OP_TBPTRL, &ePSCPU::OP_TBPTRM, &ePSCPU::OP_TBPTRH, &ePSCPU::OP_BANK,
@@ -306,7 +307,7 @@ namespace detail {
 		&ePSCPU::OP_SUB_k, &ePSCPU::OP_SUBB_k, &ePSCPU::OP_MOV_k, &ePSCPU::OP_SFL4};
 
 	//--------------------------------------------------------------
-	// 5___ : Ò»¼¶×Ó±í
+	// 5___ : Ò»ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_5___[16]{
 		&ePSCPU::OP_JDNZ_A, &ePSCPU::OP_JDNZ_r, &ePSCPU::OP_EXL_r, &ePSCPU::OP_EXH_r,
@@ -315,7 +316,7 @@ namespace detail {
 		&ePSCPU::OP_JBC, &ePSCPU::OP_JBC, &ePSCPU::OP_JBC, &ePSCPU::OP_JBC};
 
 	//--------------------------------------------------------------
-	// 6___ : Ò»¼¶×Ó±í
+	// 6___ : Ò»ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_6___[16]{
 		/* 0x0-0x7 JBS */ &ePSCPU::OP_JBS, &ePSCPU::OP_JBS, &ePSCPU::OP_JBS, &ePSCPU::OP_JBS,
@@ -325,7 +326,7 @@ namespace detail {
 		&ePSCPU::OP_BC, &ePSCPU::OP_BC, &ePSCPU::OP_BC, &ePSCPU::OP_BC};
 
 	//--------------------------------------------------------------
-	// 7___ : Ò»¼¶×Ó±í
+	// 7___ : Ò»ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_7___[16]{
 		/* 0x0-0x7 BS  */ &ePSCPU::OP_BS, &ePSCPU::OP_BS, &ePSCPU::OP_BS, &ePSCPU::OP_BS,
@@ -335,7 +336,7 @@ namespace detail {
 		&ePSCPU::OP_BTG, &ePSCPU::OP_BTG, &ePSCPU::OP_BTG, &ePSCPU::OP_BTG};
 
 	//--------------------------------------------------------------
-	// ¶¥²ãÖ÷²éÕÒ±í
+	// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl main_lookup_tbl[16]{
 		&TB_0___, &TB_1___, &TB_2___, &ePSCPU::OP_S0CALL,
@@ -355,7 +356,7 @@ void casioemu::ePSCPU::Next() {
 	(this->*(cur.handler))(p);
 }
 
-// Port²Ù×÷
+// Portï¿½ï¿½ï¿½ï¿½
 inline void casioemu::ePSCPU::FUN_0040c910(uint32_t unk) {
 	std::cout << "!\n";
 }
@@ -1167,7 +1168,7 @@ inline void casioemu::ePSCPU::OP_JBC(byte* param_1)
 	WCHAR local_204[0x100];
 	uint local_4;
 
-	local_4 = g_stack_cookie ^ (uint)auStack_210;
+	local_4 = g_stack_cookie ^ (uintptr_t)auStack_210;
 	bVar1 = *(byte*)(param_1 + 0x3);
 	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
 	bVar2 = (byte)uVar5;
@@ -1201,7 +1202,7 @@ inline void casioemu::ePSCPU::OP_JBC(byte* param_1)
 		PostID_Process(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x2;
-	___security_check_cookie_4(local_4 ^ (uint)auStack_210);
+	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_210);
 	return;
 }
 
@@ -1372,7 +1373,7 @@ inline void casioemu::ePSCPU::OP_MOVRP(byte* param_1)
 	WCHAR local_204[0x100];
 	uint local_4;
 
-	local_4 = g_stack_cookie ^ (uint)auStack_210;
+	local_4 = g_stack_cookie ^ (uintptr_t)auStack_210;
 	bVar1 = (*param_1 << 0x4 | param_1[0x1]) + 0x80;
 	local_20c = (uint)(byte)param_1[0x2] << 0x4 | (uint)(byte)param_1[0x3];
 	uVar5 = (uint)bVar1;
@@ -1426,7 +1427,7 @@ inline void casioemu::ePSCPU::OP_MOVRP(byte* param_1)
 	PCM = (byte)((uint)iVar6 >> 0x8);
 	PCL = (byte)iVar6;
 	PCH = (undefined)((uint)iVar6 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uint)auStack_210);
+	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_210);
 	return;
 }
 
@@ -1447,7 +1448,7 @@ inline void casioemu::ePSCPU::OP_MOVPR(byte* param_1)
 	WCHAR local_204[0x100];
 	uint local_4;
 
-	local_4 = g_stack_cookie ^ (uint)auStack_20c;
+	local_4 = g_stack_cookie ^ (uintptr_t)auStack_20c;
 	bVar1 = param_1[0x3];
 	bVar2 = (byte)((uint)(byte)param_1[0x2] << 0x4);
 	uVar7 = (uint)(byte)param_1[0x2] << 0x4 & 0xff | (uint)bVar1;
@@ -1483,7 +1484,7 @@ inline void casioemu::ePSCPU::OP_MOVPR(byte* param_1)
 	PCL = (byte)iVar6;
 	PCM = (byte)((uint)iVar6 >> 0x8);
 	PCH = (undefined)((uint)iVar6 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uint)auStack_20c);
+	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_20c);
 	return;
 }
 
@@ -1542,7 +1543,7 @@ inline void casioemu::ePSCPU::OP_TBRD(byte* param_1)
 	WCHAR local_204[0x100];
 	uint local_4;
 
-	local_4 = g_stack_cookie ^ (uint)auStack_21c;
+	local_4 = g_stack_cookie ^ (uintptr_t)auStack_21c;
 	local_219 = *(char*)(param_1 + 0x1) - 0xc;
 	uVar3 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
 	local_210 = uVar3 | *(byte*)(param_1 + 0x3);
@@ -1593,7 +1594,7 @@ inline void casioemu::ePSCPU::OP_TBRD(byte* param_1)
 	PCM = (byte)((uint)iVar4 >> 0x8);
 	PCL = (byte)iVar4;
 	PCH = (undefined)((uint)iVar4 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uint)auStack_21c);
+	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_21c);
 	return;
 }
 
@@ -2563,7 +2564,7 @@ inline void casioemu::ePSCPU::OP_ADDDC_r(byte* param_1)
 	WCHAR local_204[0x100];
 	uint local_4;
 
-	local_4 = g_stack_cookie ^ (uint)&local_208;
+	local_4 = g_stack_cookie ^ (uintptr_t)&local_208;
 	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
 	local_208 = uVar6 | *(byte*)(param_1 + 0x3);
 	uVar6 = uVar6 & 0xff | (uint) * (byte*)(param_1 + 0x3);
@@ -2605,7 +2606,7 @@ inline void casioemu::ePSCPU::OP_ADDDC_r(byte* param_1)
 	PCL = (byte)iVar4;
 	PCM = (byte)((uint)iVar4 >> 0x8);
 	PCH = (undefined)((uint)iVar4 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uint)&local_208);
+	___security_check_cookie_4(local_4 ^ (uintptr_t)&local_208);
 	return;
 }
 
@@ -2947,7 +2948,7 @@ inline void casioemu::ePSCPU::OP_BC(byte* param_1)
 	WCHAR local_204[0x100];
 	uint local_4;
 
-	local_4 = g_stack_cookie ^ (uint)auStack_20c;
+	local_4 = g_stack_cookie ^ (uintptr_t)auStack_20c;
 	bVar1 = *(byte*)(param_1 + 0x3);
 	local_20a = *(char*)(param_1 + 0x1) - 0x8;
 	uVar7 = (uint)local_20a;
@@ -2983,7 +2984,7 @@ inline void casioemu::ePSCPU::OP_BC(byte* param_1)
 	PCM = (byte)((uint)iVar4 >> 0x8);
 	PCL = (byte)iVar4;
 	PCH = (undefined)((uint)iVar4 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uint)auStack_20c);
+	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_20c);
 	return;
 }
 
@@ -3004,7 +3005,7 @@ inline void casioemu::ePSCPU::OP_BS(byte* param_1)
 	WCHAR local_204[0x100];
 	uint local_4;
 
-	local_4 = g_stack_cookie ^ (uint)auStack_210;
+	local_4 = g_stack_cookie ^ (uintptr_t)auStack_210;
 	bVar1 = *(byte*)(param_1 + 0x3);
 	bVar2 = *(byte*)(param_1 + 0x1);
 	uVar7 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
@@ -3048,7 +3049,7 @@ inline void casioemu::ePSCPU::OP_BS(byte* param_1)
 	PCM = (byte)((uint)iVar5 >> 0x8);
 	PCL = (byte)iVar5;
 	PCH = (undefined)((uint)iVar5 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uint)auStack_210);
+	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_210);
 	return;
 }
 
