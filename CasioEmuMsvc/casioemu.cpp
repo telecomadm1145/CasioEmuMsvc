@@ -323,148 +323,161 @@ int main(int argc, char* argv[]) {
 			break;
 #ifdef __ANDROID__
 		case SDL_FINGERDOWN:
+			// Always send FINGERDOWN to emulator first
+			// The emulator's Keyboard::UIEvent should handle it if it's on a button
+			// We need a way for Keyboard::UIEvent to indicate if it consumed the event
+			// For now, we'll let both ImGui and emulator process it if ImGui is active.
+			// This might lead to double presses if not handled carefully in Keyboard.cpp (next step)
+			emulator.UIEvent(event); // Pass raw finger event to emulator
+
+			// Existing ImGui touch processing (simplified for now)
 			if (!touchState.touching) {
 				touchState.touching = true;
-				touchState.startX = event.tfinger.x * wid; // 转换为窗口坐标
+				touchState.startX = event.tfinger.x * wid;
 				touchState.startY = event.tfinger.y * hei;
 				touchState.currentX = touchState.startX;
 				touchState.currentY = touchState.startY;
 				touchState.startTime = SDL_GetTicks();
 				touchState.fingerId = event.tfinger.fingerId;
-				touchState.dragging = false;  // Reset dragging state
-			}
-			else if (!touchState2.touching) {
+				touchState.dragging = false;
+			} else if (!touchState2.touching) {
 				touchState2.touching = true;
 				touchState2.startX = event.tfinger.x * wid;
 				touchState2.startY = event.tfinger.y * hei;
 				touchState2.currentX = touchState2.startX;
 				touchState2.currentY = touchState2.startY;
 				touchState2.fingerId = event.tfinger.fingerId;
-				touchState2.dragging = false;  // Reset dragging state
-				SDL_Event wheelEvent;
+				touchState2.dragging = false;
+				// ImGui specific interaction for second touch if needed
+				SDL_Event wheelEvent; // Example: pinch might still be mouse wheel for ImGui
 				SDL_memset(&wheelEvent, 0, sizeof(wheelEvent));
-				wheelEvent.type = SDL_MOUSEMOTION;
+				wheelEvent.type = SDL_MOUSEMOTION; // Simulating mouse over for ImGui context
 				wheelEvent.motion.x = touchState.currentX;
 				wheelEvent.motion.y = touchState.currentY;
-				ImGui_ImplSDL2_ProcessEvent(&wheelEvent);
+				if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&wheelEvent);
 			}
 			break;
 		case SDL_FINGERUP:
+			// Always send FINGERUP to emulator first
+			emulator.UIEvent(event); // Pass raw finger event to emulator
+
+			// Existing ImGui touch processing (simplified)
 			if (touchState.dragging && touchState.fingerId == event.tfinger.fingerId) {
 				float endX = event.tfinger.x * wid;
 				float endY = event.tfinger.y * hei;
-				
 				SDL_Event motionEvent;
 				SDL_memset(&motionEvent, 0, sizeof(motionEvent));
 				motionEvent.type = SDL_MOUSEBUTTONUP;
 				motionEvent.button.button = SDL_BUTTON_LEFT;
 				motionEvent.button.x = endX;
 				motionEvent.button.y = endY;
-				ImGui_ImplSDL2_ProcessEvent(&motionEvent);
+				if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&motionEvent);
 				touchState.dragging = false;
-
 				touchState.currentX = endX;
 				touchState.currentY = endY;
 			}
-			if (touchState2.dragging && touchState2.fingerId == event.tfinger.fingerId) {
-				float endX = event.tfinger.x * wid;
-				float endY = event.tfinger.y * hei;
-				
-				SDL_Event motionEvent;
-				SDL_memset(&motionEvent, 0, sizeof(motionEvent));
-				motionEvent.type = SDL_MOUSEBUTTONUP;
-				motionEvent.button.button = SDL_BUTTON_LEFT;
-				motionEvent.button.x = endX;
-				motionEvent.button.y = endY;
-				ImGui_ImplSDL2_ProcessEvent(&motionEvent);
-				touchState2.dragging = false;
-
-				touchState2.currentX = endX;
-				touchState2.currentY = endY;
-			}
+			// Handle tap/long press for ImGui if necessary, only if emulator didn't handle it
+			// This part needs careful thought: if emulator handled it, we might not want ImGui reaction
 			if (touchState.touching && touchState.fingerId == event.tfinger.fingerId) {
+				// Potentially check if ImGui should react (e.g., if not over an emulator button)
+				// For now, keep ImGui logic, but it might conflict or be redundant
 				float endX = event.tfinger.x * wid;
 				float endY = event.tfinger.y * hei;
 				Uint32 endTime = SDL_GetTicks();
-
 				touchState.currentX = endX;
 				touchState.currentY = endY;
 
-				if (endTime - touchState.startTime < LONG_PRESS_DELAY) { // 单击
-					float dist = std::hypot(endX - touchState.startX, endY - touchState.startY);
-					if (dist < 10.0f) { // 避免滑动时触发单击
-						SDL_Event clickEventDown;
-						SDL_memset(&clickEventDown, 0, sizeof(clickEventDown));
-						clickEventDown.type = SDL_MOUSEMOTION;
-						clickEventDown.button.button = SDL_BUTTON_LEFT;
-						clickEventDown.button.x = endX;
-						clickEventDown.button.y = endY;
-						ImGui_ImplSDL2_ProcessEvent(&clickEventDown);
-						SDL_memset(&clickEventDown, 0, sizeof(clickEventDown));
-						clickEventDown.type = SDL_MOUSEBUTTONDOWN;
-						clickEventDown.button.button = SDL_BUTTON_LEFT;
-						clickEventDown.button.x = endX;
-						clickEventDown.button.y = endY;
-						ImGui_ImplSDL2_ProcessEvent(&clickEventDown);
-						SDL_Event clickEventUp;
-						SDL_memset(&clickEventUp, 0, sizeof(clickEventUp));
-						clickEventUp.type = SDL_MOUSEBUTTONUP;
-						clickEventUp.button.button = SDL_BUTTON_LEFT;
-						clickEventUp.button.x = endX;
-						clickEventUp.button.y = endY;
-						ImGui_ImplSDL2_ProcessEvent(&clickEventUp);
-						lastTapTime = endTime;
-						lastTapX = endX;
-						lastTapY = endY;
-					}
-				}
-				else {
-					// 长按（可以添加长按处理逻辑）
-					SDL_Event longPressEvent;
+				bool is_tap_for_imgui = (endTime - touchState.startTime < LONG_PRESS_DELAY) &&
+				                        (std::hypot(endX - touchState.startX, endY - touchState.startY) < 10.0f);
+
+				if (is_tap_for_imgui) {
+					// Simulate left click for ImGui
+					SDL_Event clickEventDown;
+					SDL_memset(&clickEventDown, 0, sizeof(clickEventDown));
+					clickEventDown.type = SDL_MOUSEMOTION; // Ensure ImGui knows mouse position
+					clickEventDown.motion.x = endX;
+					clickEventDown.motion.y = endY;
+					if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&clickEventDown);
+
+					SDL_memset(&clickEventDown, 0, sizeof(clickEventDown));
+					clickEventDown.type = SDL_MOUSEBUTTONDOWN;
+					clickEventDown.button.button = SDL_BUTTON_LEFT;
+					clickEventDown.button.x = endX;
+					clickEventDown.button.y = endY;
+					if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&clickEventDown);
+
+					SDL_Event clickEventUp;
+					SDL_memset(&clickEventUp, 0, sizeof(clickEventUp));
+					clickEventUp.type = SDL_MOUSEBUTTONUP;
+					clickEventUp.button.button = SDL_BUTTON_LEFT;
+					clickEventUp.button.x = endX;
+					clickEventUp.button.y = endY;
+					if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&clickEventUp);
+					lastTapTime = endTime; // For double tap logic
+					lastTapX = endX;
+					lastTapY = endY;
+				} else if (endTime - touchState.startTime >= LONG_PRESS_DELAY) { // Long press for ImGui (right click)
+                    SDL_Event longPressEvent;
 					SDL_memset(&longPressEvent, 0, sizeof(longPressEvent));
 					longPressEvent.type = SDL_MOUSEMOTION;
-					longPressEvent.button.button = SDL_BUTTON_LEFT;
-					longPressEvent.button.x = endX;
-					longPressEvent.button.y = endY;
-					ImGui_ImplSDL2_ProcessEvent(&longPressEvent);
+					longPressEvent.motion.x = endX;
+					longPressEvent.motion.y = endY;
+					if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&longPressEvent);
+
 					SDL_memset(&longPressEvent, 0, sizeof(longPressEvent));
 					longPressEvent.type = SDL_MOUSEBUTTONDOWN;
-					longPressEvent.button.button = SDL_BUTTON_RIGHT;
+					longPressEvent.button.button = SDL_BUTTON_RIGHT; // Simulate Right Click
 					longPressEvent.button.x = endX;
 					longPressEvent.button.y = endY;
-					ImGui_ImplSDL2_ProcessEvent(&longPressEvent);
+					if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&longPressEvent);
+
 					SDL_memset(&longPressEvent, 0, sizeof(longPressEvent));
 					longPressEvent.type = SDL_MOUSEBUTTONUP;
 					longPressEvent.button.button = SDL_BUTTON_RIGHT;
 					longPressEvent.button.x = endX;
 					longPressEvent.button.y = endY;
-					ImGui_ImplSDL2_ProcessEvent(&longPressEvent);
-				}
+					if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&longPressEvent);
+                }
 				touchState.touching = false;
 			}
-			if (touchState2.touching && touchState2.fingerId == event.tfinger.fingerId) {
-				float endX = event.tfinger.x * wid;
+
+			if (touchState2.dragging && touchState2.fingerId == event.tfinger.fingerId) {
+                // Similar ImGui drag release for second touch if it was dragging
+                 float endX = event.tfinger.x * wid;
 				float endY = event.tfinger.y * hei;
-				
+				SDL_Event motionEvent;
+				SDL_memset(&motionEvent, 0, sizeof(motionEvent));
+				motionEvent.type = SDL_MOUSEBUTTONUP;
+				motionEvent.button.button = SDL_BUTTON_LEFT; // Assuming second touch also drags with left
+				motionEvent.button.x = endX;
+				motionEvent.button.y = endY;
+				if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&motionEvent);
+				touchState2.dragging = false;
 				touchState2.currentX = endX;
 				touchState2.currentY = endY;
+            }
+			if (touchState2.touching && touchState2.fingerId == event.tfinger.fingerId) {
 				touchState2.touching = false;
+				// ImGui specific release for second touch if needed (e.g. if it was a tap/longpress)
 			}
 			break;
 
-		case SDL_FINGERMOTION: {
+		case SDL_FINGERMOTION:
+            // Send FINGERMOTION to emulator. It might use it for something (e.g. dragging an item in emu)
+            // Or it might ignore it if it only cares about down/up on buttons.
+            emulator.UIEvent(event);
+
+            // Existing ImGui gesture logic (drag, pinch-zoom)
 			if (touchState.touching && !touchState2.touching &&
-				touchState.fingerId == event.tfinger.fingerId) {
-				// 单指滑动
+				touchState.fingerId == event.tfinger.fingerId) { // Single finger drag for ImGui
 				float currentX = event.tfinger.x * wid;
 				float currentY = event.tfinger.y * hei;
 				float deltaX = currentX - touchState.startX;
 				float deltaY = currentY - touchState.startY;
-
 				touchState.currentX = currentX;
 				touchState.currentY = currentY;
 
-				if ((deltaX * deltaX + deltaY * deltaY) > 1.f) {
+				if ((deltaX * deltaX + deltaY * deltaY) > 1.f) { // Threshold for dragging
 					if (!touchState.dragging) {
 						SDL_Event motionEvent;
 						SDL_memset(&motionEvent, 0, sizeof(motionEvent));
@@ -472,86 +485,115 @@ int main(int argc, char* argv[]) {
 						motionEvent.button.button = SDL_BUTTON_LEFT;
 						motionEvent.button.x = currentX;
 						motionEvent.button.y = currentY;
-						ImGui_ImplSDL2_ProcessEvent(&motionEvent);
+						if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&motionEvent);
 						touchState.dragging = true;
 					}
-					
-					// 发送鼠标移动事件
 					SDL_Event motionEvent;
 					SDL_memset(&motionEvent, 0, sizeof(motionEvent));
 					motionEvent.type = SDL_MOUSEMOTION;
 					motionEvent.motion.x = currentX;
 					motionEvent.motion.y = currentY;
-					motionEvent.motion.state = SDL_BUTTON_LMASK; // 按住左键拖动
-					ImGui_ImplSDL2_ProcessEvent(&motionEvent);
+					motionEvent.motion.state = SDL_BUTTON_LMASK;
+					if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&motionEvent);
 				}
-			}
-			else if (touchState.touching && !touchState.dragging && touchState2.touching &&
-					 touchState.fingerId != touchState2.fingerId && touchState.fingerId == event.tfinger.fingerId) {
-				// 双指缩放
-				float currentY = event.tfinger.y * hei;
+			} else if (touchState.touching && !touchState.dragging && touchState2.touching &&
+					   touchState.fingerId != touchState2.fingerId &&
+					   (touchState.fingerId == event.tfinger.fingerId || touchState2.fingerId == event.tfinger.fingerId) ) { // Pinch-zoom for ImGui
 				
-				touchState.currentX = event.tfinger.x * wid;
-				touchState.currentY = currentY;
-				
-				float delta = (touchState2.currentY - currentY);
+                // Update the correct finger's current position
+                if(touchState.fingerId == event.tfinger.fingerId) {
+                    touchState.currentX = event.tfinger.x * wid;
+				    touchState.currentY = event.tfinger.y * hei;
+                } else if (touchState2.fingerId == event.tfinger.fingerId) {
+                    touchState2.currentX = event.tfinger.x * wid;
+				    touchState2.currentY = event.tfinger.y * hei;
+                }
 
-				if (std::abs(delta) > 1.0f) {
+                // Simplified pinch-zoom: use distance between fingers for wheel event
+                // This part of the original code was a bit complex and might need more refinement
+                // For now, let's assume a simple pinch based on Y distance change of one finger relative to other's start
+                float currentY_finger1 = touchState.currentY;
+                float startY_finger2 = touchState2.startY; // or currentY if we track delta between current positions
+
+                // This needs a better pinch detection logic. The original was comparing one finger's current Y to the other's start Y.
+                // A more common way is to track the distance between touchState.current and touchState2.current over time.
+                // For now, this is a placeholder for more robust pinch logic for ImGui.
+                // float delta = (touchState.currentY - touchState2.currentY) - (touchState.startY - touchState2.startY); // Change in distance
+                // Simplified: if finger1 moved, compare its Y to finger2's Y
+                float deltaY_for_wheel = 0;
+                if (touchState.fingerId == event.tfinger.fingerId) { // finger1 moved
+                    deltaY_for_wheel = (touchState.currentY - touchState.startY) - (touchState2.currentY - touchState2.startY);
+                } else { // finger2 moved
+                     deltaY_for_wheel = (touchState2.currentY - touchState2.startY) - (touchState.currentY - touchState.startY);
+                }
+
+
+				if (std::abs(deltaY_for_wheel) > 1.0f) { // Threshold for wheel event
 					SDL_Event wheelEvent;
 					SDL_memset(&wheelEvent, 0, sizeof(wheelEvent));
 					wheelEvent.type = SDL_MOUSEWHEEL;
-					wheelEvent.wheel.preciseY = delta / 100;
-					wheelEvent.wheel.mouseX = touchState.currentX;
-					wheelEvent.wheel.mouseY = touchState.currentY;
-					ImGui_ImplSDL2_ProcessEvent(&wheelEvent);
-					touchState.startY = currentY;
+					wheelEvent.wheel.preciseY = deltaY_for_wheel / 100; // Adjust sensitivity
+					wheelEvent.wheel.mouseX = (touchState.currentX + touchState2.currentX) / 2; // Midpoint
+					wheelEvent.wheel.mouseY = (touchState.currentY + touchState2.currentY) / 2;
+					if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&wheelEvent);
+                    // Update startY to avoid continuous wheel events without further motion
+                    if(touchState.fingerId == event.tfinger.fingerId) touchState.startY = touchState.currentY;
+                    if(touchState2.fingerId == event.tfinger.fingerId) touchState2.startY = touchState2.currentY;
 				}
 			}
-		}
+            // Update touch trails
 			if (touchState.touching && touchState.fingerId == event.tfinger.fingerId) {
 				touchState.currentX = event.tfinger.x * wid;
 				touchState.currentY = event.tfinger.y * hei;
-				
-				trail1.samples[trail1.current_index] = {
-					touchState.currentX,
-					touchState.currentY,
-					SDL_GetTicks()};
+				trail1.samples[trail1.current_index] = { touchState.currentX, touchState.currentY, SDL_GetTicks()};
 				trail1.current_index = (trail1.current_index + 1) % TRAIL_BUFFER_SIZE;
 			}
-
 			if (touchState2.touching && touchState2.fingerId == event.tfinger.fingerId) {
 				touchState2.currentX = event.tfinger.x * wid;
 				touchState2.currentY = event.tfinger.y * hei;
-				
-				trail2.samples[trail2.current_index] = {
-					touchState2.currentX,
-					touchState2.currentY,
-					SDL_GetTicks()};
+				trail2.samples[trail2.current_index] = { touchState2.currentX, touchState2.currentY, SDL_GetTicks()};
 				trail2.current_index = (trail2.current_index + 1) % TRAIL_BUFFER_SIZE;
 			}
 			break;
-#else
+#else // Not __ANDROID__
 		case SDL_MOUSEBUTTONDOWN:
 		case SDL_MOUSEBUTTONUP:
 		case SDL_MOUSEMOTION:
+			// Standard mouse handling for non-Android builds
+			// ImGui processes it, then if not captured, emulator processes it.
 #endif
 		case SDL_KEYDOWN:
 		case SDL_KEYUP:
 		case SDL_TEXTINPUT:
 		case SDL_MOUSEWHEEL:
 #ifdef SINGLE_WINDOW
-			ImGui_ImplSDL2_ProcessEvent(&event);
-			if (ImGui::GetIO().WantCaptureMouse) {
-				break;
+			if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&event);
+			// For non-Android, or for non-finger events on Android:
+			// If ImGui wants mouse/keyboard, it consumes it.
+			if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEWHEEL) {
+				if (guiCreated && ImGui::GetIO().WantCaptureMouse) {
+					break; // ImGui captured mouse
+				}
+			} else if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP || event.type == SDL_TEXTINPUT) {
+				if (guiCreated && ImGui::GetIO().WantCaptureKeyboard) {
+					break; // ImGui captured keyboard
+				}
 			}
-#else
+			// If not captured by ImGui, or not a mouse/keyboard event ImGui cares about, pass to emulator
+			emulator.UIEvent(event);
+			break;
+#else // Not SINGLE_WINDOW ( предполагает отдельные окна для ImGui и эмулятора)
 			if ((SDL_GetKeyboardFocus() != emulator.window) && guiCreated) {
-				ImGui_ImplSDL2_ProcessEvent(&event);
+				ImGui_ImplSDL2_ProcessEvent(&event); // ImGui gets event if emulator window not focused
 				break;
 			}
+			// If emulator window is focused, or no separate GUI window, emulator gets the event.
+			// (This part of the #else might need more context on how SINGLE_WINDOW affects focus)
+			emulator.UIEvent(event);
+			break;
 #endif
-			[[fallthrough]];
 		default:
+			// Other events directly to emulator
 			emulator.UIEvent(event);
 			break;
 		}
