@@ -1,4 +1,5 @@
-﻿#include "Keyboard.hpp"
+﻿#include <SDL.h>
+#include "Keyboard.hpp"
 
 #include "Chipset/Chipset.hpp"
 #include "Chipset/MMU.hpp"
@@ -8,8 +9,6 @@
 
 #include "vibration.h"
 #include <ML620Ports.h>
-#include <SDL.h>
-#include <SDL_touch.h> // Ensure SDL_FingerID is available
 #include <chrono>
 #include <fstream>
 #include <thread>
@@ -62,8 +61,8 @@ namespace casioemu {
 		void Frame();
 		void UIEvent(SDL_Event& event);
 		void Uninitialise();
-		void PressButton(Button& button, bool stick, SDL_FingerID fingerId = -1);
-		void PressAt(int x, int y, bool stick, SDL_FingerID fingerId = -1);
+		void PressButton(Button& button, bool stick, SDL_FingerID fingerId);
+		void PressAt(int x, int y, bool stick, SDL_FingerID fingerId);
 		void ReleaseAt(int x, int y, SDL_FingerID fingerId);
 		void PressButtonByCode(uint8_t code);
 		void StartInject();
@@ -425,9 +424,9 @@ namespace casioemu {
 			// Mouse clicks do not carry finger ID, treat as new press or stick
 			// The PressAt/PressButton will handle if a button is already pressed by a finger
 			if (event.button.button == SDL_BUTTON_LEFT) {
-				PressAt(event.button.x, event.button.y, false);
+				PressAt(event.button.x, event.button.y, false, -1);
 			} else if (event.button.button == SDL_BUTTON_RIGHT) {
-				PressAt(event.button.x, event.button.y, true);
+				PressAt(event.button.x, event.button.y, true, -1);
 			}
 			break;
 		case SDL_MOUSEBUTTONUP:
@@ -494,7 +493,7 @@ namespace casioemu {
 			if (iterator == keyboard_map.end())
 				break;
 			if (event.key.state == SDL_PRESSED)
-				PressButton(buttons[iterator->second], false);
+				PressButton(buttons[iterator->second], false, iterator->second);
 			else
 				ReleaseAll();
 			break;
@@ -539,7 +538,7 @@ namespace casioemu {
 			keyboard_in_emu = current_keyboard_in_emu;
 			keyboard_out_emu = current_keyboard_out_emu;
 			emu_ki_readcount = emu_ko_readcount = 0;
-			if (EXI0INT < emulator.chipset.MaskableInterrupts.size()) { // Basic bounds check
+			if (EXI0INT == 0) {
 				emulator.chipset.MaskableInterrupts[EXI0INT].TryRaise();
 			}
 		} else {
@@ -550,7 +549,7 @@ namespace casioemu {
 		has_input = (keyboard_in_emu != 0);
 	}
 
-	void Keyboard::PressButton(Button& button, bool stick) {
+	void Keyboard::PressButton(Button& button, bool stick, SDL_FingerID fingerId) {
 		// SDL_Log("PressButton: code %02X, stick %d, fingerId %lld, current button fingerId %lld", button.code, stick, fingerId, button.pressingFingerId);
 
 		// Prevent a button from being simultaneously claimed by two different fingers.
@@ -630,7 +629,7 @@ namespace casioemu {
 		}
 	}
 
-	void Keyboard::PressAt(int x, int y, bool stick) {
+	void Keyboard::PressAt(int x, int y, bool stick, SDL_FingerID fingerId) {
 		// SDL_Log("PressAt: x %d, y %d, stick %d, fingerId %lld", x, y, stick, fingerId);
 		for (auto& button : buttons) {
 			if (button.rect.x <= x && button.rect.y <= y && button.rect.x + button.rect.w > x && button.rect.y + button.rect.h > y) {
@@ -678,12 +677,12 @@ namespace casioemu {
 	void Keyboard::PressButtonByCode(uint8_t code) {
 		if (code == 0xFF) {
 			// Assuming POWER button is at index 63, not passing fingerId (treat as system event)
-			PressButton(buttons[63], false);
+			PressButton(buttons[63], false, 0);
 		}
 		else {
 			int button_index = ((code >> 1) & 0x38) | (code & 0x07);
 			if (button_index < 63) { // Ensure index is valid
-				PressButton(buttons[button_index], false); // Not passing fingerId
+				PressButton(buttons[button_index], false, 0); // Not passing fingerId
 			}
 			else {
 				// printf("[Keyboard][Info] Invalid button code 0x%02X for PressButtonByCode!\n", code);
