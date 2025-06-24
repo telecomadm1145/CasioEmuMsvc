@@ -1376,6 +1376,7 @@ inline void casioemu::ePSCPU::OP_MOVRP(byte* param_1)
 	local_4 = g_stack_cookie ^ (uintptr_t)auStack_210;
 	bVar1 = (*param_1 << 0x4 | param_1[0x1]) + 0x80;
 	local_20c = (uint)(byte)param_1[0x2] << 0x4 | (uint)(byte)param_1[0x3];
+	extraout_ECX = local_20c;
 	uVar5 = (uint)bVar1;
 	uVar2 = (uint)(byte)param_1[0x2] << 0x4 & 0xff | (uint)(byte)param_1[0x3];
 	debug_printf("MOVRP p=%x(%s) r=%x(%s)", uVar5, Sfr_in_str + uVar5, uVar2, Sfr_in_str + uVar2);
@@ -1994,15 +1995,16 @@ inline void casioemu::ePSCPU::OP_INC(byte* param_1)
 	byte bVar3;
 	byte* pbVar4;
 	int iVar5;
-	uint extraout_EDX;
 	byte bVar6;
 	uint uVar7;
+	uint extraout_EDX;
 	byte local_4;
 
 	bVar1 = *(byte*)(param_1 + 0x3);
 	uVar7 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
 	bVar3 = (byte)uVar7;
 	bVar6 = bVar3 | bVar1;
+	extraout_EDX = uVar7;
 	uVar7 = uVar7 & 0xff | (uint)bVar1;
 	do {
 		pbVar4 = rget(bVar3 | bVar1);
@@ -2567,6 +2569,7 @@ inline void casioemu::ePSCPU::OP_ADDDC_r(byte* param_1)
 	local_4 = g_stack_cookie ^ (uintptr_t)&local_208;
 	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
 	local_208 = uVar6 | *(byte*)(param_1 + 0x3);
+	extraout_CL = (byte)local_208;
 	uVar6 = uVar6 & 0xff | (uint) * (byte*)(param_1 + 0x3);
 	do {
 		debug_printf("ADDDC r=%x(%s) A", uVar6, Sfr_in_str + uVar6);
