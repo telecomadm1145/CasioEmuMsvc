@@ -538,7 +538,7 @@ namespace casioemu {
 			keyboard_in_emu = current_keyboard_in_emu;
 			keyboard_out_emu = current_keyboard_out_emu;
 			emu_ki_readcount = emu_ko_readcount = 0;
-			if (EXI0INT == 0) {
+			if (EXI0INT < emulator.chipset.EffectiveMICount) {
 				emulator.chipset.MaskableInterrupts[EXI0INT].TryRaise();
 			}
 		} else {
