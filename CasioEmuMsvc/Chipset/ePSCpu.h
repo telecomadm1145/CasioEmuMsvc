@@ -22,8 +22,9 @@ namespace casioemu {
 	public:
 		uint8_t wbk[0x30]{};
 		// idk but this should work for most compilers
+		// start = 0x0041e0a0
 		union {
-			struct {
+			struct{
 				uint8_t INDF0;
 				uint8_t FSR;
 				uint8_t BSR;
@@ -52,17 +53,54 @@ namespace casioemu {
 				uint8_t FSR2;
 				uint8_t BSR2;
 
-				uint8_t _padding[14];
+				uint8_t _padding[13];
 
 				uint8_t CPUCON;
 				uint8_t POST_ID;
 
 				uint8_t LCDARL;
 				uint8_t LCDARH;
+
+				uint8_t INTSTA;
+
+				uint8_t TR0CON;
+				uint8_t TRL0L;
+				uint8_t TRL0H;
+				uint8_t T0CL;
+				uint8_t T0CH;
+				uint8_t TR1CON;
+				uint8_t TRL1;
+				uint8_t TR2WCON;
+				uint8_t TRL2;
+				uint8_t LCDCON;
+				uint8_t _padding2;
+
+				uint8_t STBCON;
+				uint8_t PORTA;
+				uint8_t PACON;
+				uint8_t DCRA;
+				uint8_t PAWAKE;
+				uint8_t PAINTEN;
+				uint8_t PAINTSTA;
+				uint8_t PORTB;
+				uint8_t PBCON;
+				uint8_t DCRB;
+				uint8_t PORTC;
+				uint8_t PCCON;
+				uint8_t DCRC;
+				uint8_t PORTD;
+				uint8_t PORTE;
+				uint8_t DCRDE;
+				// 0x3f
+				uint8_t gpr_40;
+				uint8_t gpr_41;
+				uint8_t gpr_42;
+				uint8_t gpr_43;
 			};
 			uint8_t regs[0x80]{};
 			uint8_t EmuMem;
 		};
+
 		uint8_t ram[64 * 0x80]{};
 
 		uint8_t Rom[0x40000]{};
@@ -78,14 +116,12 @@ namespace casioemu {
 			uint8_t VRam;
 		};
 
-		byte* rget(byte param_1);
-		void PostID_Process(char param_1);
+		byte* reg(byte param_1);
+		void post_pid(char param_1);
 
-		void HandleCarryOnSfrs(char param_1);
+		void auto_carry(char param_1);
 
-		void HandleBorrowOnSfrs(char param_1);
-
-		void Sleep(auto){};
+		void auto_borrow(char param_1);
 
 		void debug_printf(const wchar_t* format, auto... args) {
 			wprintf(format, args...);
@@ -107,26 +143,68 @@ namespace casioemu {
 
 		void Next();
 
+		void Reset();
+
+		enum {
+			// 低速振荡器
+			ST_SLOW,
+			// 高速振荡器
+			ST_FAST,
+			// 停止,低速振荡器继续工作
+			ST_STOP,
+			// 全部停止
+			ST_SLEEP,
+		} run_stat;
+		// ???
+		uint8_t t0tick;
+		uint16_t t1tick;
+		uint8_t t1tick2;
+		uint8_t t1_pre;
+		uint8_t DAT_0041e192;
 		uint64_t CycleCounter;
 		uint8_t RepeatCount;
 		uint8_t DAT_004202b5;
 		uint8_t DAT_004202b7;
 		uint8_t InstFlags;
 
-		// 这些应该是 SFR ，但是我懒得映射了（
-		uint8_t DAT_0041e0d9;
-		uint8_t DAT_0041e0c7, DAT_0041e0c6, DAT_0041e0c5, DAT_0041e0ca, DAT_0041e0cb,
-			DAT_0041e0d1, DAT_0041e0d3, DAT_0041e0d7, DAT_0041e0da,
-			DAT_0041e0e3, DAT_0041e192;
+		// 这个函数应该是用来初始化的（?)
+		// void FUN_004083f0(void)
+		//{
+		//	_memset(&StackRam, 0x0, 0x2258);
+		//	_DAT_0042012c = 0xffffffff;
+		//	_DAT_00420130 = 0xffffffff;
+		//	EmuMem = 0x1;
+		//	DAT_0041e0a3 = 0x1;
+		//	INDF2 = 0x1;
+		//	FSR1 = 0x80;
+		//	STATUS = 0xc0;
+		//	FSR2 = 0x80;
+		//	POST_ID = 0x70;
+		//	PAWAKE = 0xff;
+		//	PORTC = 0xff;
+		//	DAT_0041e0dc = 0xf;
+		//	DAT_0041e0df = 0x33;
+		//	return;
+		//}
 
-		// Port操作
-		void FUN_0040c910(uint32_t unk);
-		void FUN_0040c8b0(uint32_t unk);
-		uint8_t FUN_004044b0(uint32_t unk);
+		// Port&Timer操作
+		void InvalidateTimerSetting(uint32_t unk);
+		void UpdateTimerSetting(uint32_t unk);
+		void InvalidatePORTA();
+
+		std::function<void()> portacalc;
+
+		void RaisePAINT(int source);
+		void RaiseTMINT(int source);
+
+		void Timer0Next();
 
 		using OP_Handler = void (ePSCPU::*)(byte* param_1);
 
+		// 用来修复那一坨shi
 		static constexpr uint32_t g_stack_cookie = 0x11451419;
+		void Sleep(auto){};
+
 		void OP_NOP(byte* param_1);
 
 		void OP_WDTC(byte* param_1);
@@ -178,28 +256,6 @@ namespace casioemu {
 		void OP_SUBB_k(byte* param_1);
 
 		void OP_UD(byte* param_1);
-
-		// WARNING: Globals starting with '_' overlap smaller symbols at the same address
-
-		// void FUN_004083f0(void)
-
-		//{
-		//	_memset(&StackRam, 0x0, 0x2258);
-		//	_DAT_0042012c = 0xffffffff;
-		//	_DAT_00420130 = 0xffffffff;
-		//	EmuMem = 0x1;
-		//	DAT_0041e0a3 = 0x1;
-		//	INDF2 = 0x1;
-		//	FSR1 = 0x80;
-		//	STATUS = 0xc0;
-		//	FSR2 = 0x80;
-		//	POST_ID = 0x70;
-		//	DAT_0041e0d3 = 0xff;
-		//	DAT_0041e0d9 = 0xff;
-		//	DAT_0041e0dc = 0xf;
-		//	DAT_0041e0df = 0x33;
-		//	return;
-		//}
 
 		void OP_RPT(byte* param_1);
 

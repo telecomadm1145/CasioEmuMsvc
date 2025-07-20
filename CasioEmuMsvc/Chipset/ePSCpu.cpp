@@ -37,7 +37,7 @@ static char Sfr_in_str[128][20]{
 	"BSR2",
 };
 
-inline byte* casioemu::ePSCPU::rget(byte param_1) {
+inline byte* casioemu::ePSCPU::reg(byte param_1) {
 	uint uVar1;
 	byte* pbVar2;
 	uVar1 = (uint)param_1;
@@ -75,7 +75,7 @@ inline byte* casioemu::ePSCPU::rget(byte param_1) {
 	return pbVar2;
 }
 
-inline void casioemu::ePSCPU::PostID_Process(char param_1) {
+inline void casioemu::ePSCPU::post_pid(char param_1) {
 	byte bVar1;
 
 	if (param_1 == '\0') {
@@ -123,7 +123,7 @@ inline void casioemu::ePSCPU::PostID_Process(char param_1) {
 	return;
 }
 
-inline void casioemu::ePSCPU::HandleCarryOnSfrs(char param_1) {
+inline void casioemu::ePSCPU::auto_carry(char param_1) {
 	if (param_1 == '\a') {
 		if ((STATUS & 0x1) != 0x0) {
 			PCM += '\x01';
@@ -168,7 +168,7 @@ inline void casioemu::ePSCPU::HandleCarryOnSfrs(char param_1) {
 	return;
 }
 
-inline void casioemu::ePSCPU::HandleBorrowOnSfrs(char param_1)
+inline void casioemu::ePSCPU::auto_borrow(char param_1)
 
 {
 	char cVar1;
@@ -252,14 +252,16 @@ namespace detail {
 	// 000_ : 三级子表
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_000_[16]{
-&ePSCPU::OP_NOP, &ePSCPU::OP_WDTC, &ePSCPU::OP_SLEP
-	};
+		&ePSCPU::OP_NOP, &ePSCPU::OP_WDTC, &ePSCPU::OP_SLEP};
 
 	//--------------------------------------------------------------
 	// 00__ : 二级子表
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_00__[16]{
-		&TB_000_, {}, &ePSCPU::OP_LJMP, &ePSCPU::OP_LCALL,
+		&TB_000_,
+		{},
+		&ePSCPU::OP_LJMP,
+		&ePSCPU::OP_LCALL,
 	};
 
 	//--------------------------------------------------------------
@@ -285,7 +287,7 @@ namespace detail {
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_2B__[16]{
 		{}, {}, {}, {}, {}, {}, {}, {},
-		{}, {}, {}, {}, {}, {}, &ePSCPU::OP_RET, &ePSCPU::OP_RETI};
+		{}, {}, {}, {}, {}, {}, &ePSCPU::OP_RETI, &ePSCPU::OP_RET};
 
 	//--------------------------------------------------------------
 	// 2___ : 一级子表
@@ -346,6 +348,11 @@ namespace detail {
 } // namespace detail
 
 void casioemu::ePSCPU::Next() {
+	if (run_stat > ST_SLEEP)
+		return;
+	Timer0Next();
+	if (run_stat > ST_FAST)
+		return;
 	detail::InstTbl cur = &detail::main_lookup_tbl;
 	auto p = Rom + (PC() << 1);
 	auto ptr = p;
@@ -355,18 +362,114 @@ void casioemu::ePSCPU::Next() {
 	(this->*(cur.handler))(p);
 }
 
+void casioemu::ePSCPU::Reset() {
+	run_stat = ST_SLOW;
+	memset(regs, 0, 0x80);
+	memset(ram, 0, 0x80 * 64);
+	memset(stackram, 0, sizeof(stackram));
+	memset(vram, 0, 0x60*4);
+	INDF0 = INDF1 = INDF2 = 1;
+	FSR1 = FSR2 = 0x80;
+	//STATUS = 0xc0;
+	POST_ID = 0x70;
+	DCRA = DCRB = 0xff;
+	DCRC = 0xf;
+	DCRDE = 0x33;
+	RepeatCount = 0;
+	CycleCounter = 0;
+	InstFlags = 0;
+}
+
 // Port操作
-inline void casioemu::ePSCPU::FUN_0040c910(uint32_t unk) {
-	std::cout << "!\n";
+inline void casioemu::ePSCPU::InvalidateTimerSetting(uint32_t idx) {
 }
 
-inline void casioemu::ePSCPU::FUN_0040c8b0(uint32_t unk) {
-	std::cout << "!!\n";
+inline void casioemu::ePSCPU::UpdateTimerSetting(uint32_t idx) {
 }
 
-inline uint8_t casioemu::ePSCPU::FUN_004044b0(uint32_t unk) {
-	std::cout << "!!!\n";
-	return 0;
+inline void casioemu::ePSCPU::InvalidatePORTA() {
+	if (portacalc)
+		portacalc();
+}
+
+void casioemu::ePSCPU::RaisePAINT(int source) {
+	if (CPUCON & 0b100) { // GLINT = 1
+		// CPUCON &= ~0b100; // GLINT = 0
+		run_stat = ST_SLOW;
+		*(ushort*)(&StackRam + (uint)STKPTR * 0x2) = (ushort)PCM * 0x100 + (ushort)PCL + 0x2;
+		CycleCounter += 0x2;
+		PCL = 2;
+		PCM = 0;
+		PCH = 0;
+		STKPTR = STKPTR + 0x1 & 0x1f;
+	}
+}
+
+void casioemu::ePSCPU::RaiseTMINT(int source) {
+	if (CPUCON & 0b100) {	   // GLINT = 1
+		INTSTA |= 1 << source; // Timer Interrupt Status Register.
+		// CPUCON &= ~0b100;	   // GLINT = 0
+		// run_stat = ST_SLOW;
+		*(ushort*)(&StackRam + (uint)STKPTR * 0x2) = (ushort)PCM * 0x100 + (ushort)PCL + 0x2;
+		CycleCounter += 0x2;
+		PCL = 8;
+		PCM = 0;
+		PCH = 0;
+		STKPTR = STKPTR + 0x1 & 0x1f;
+	}
+}
+
+void casioemu::ePSCPU::Timer0Next() {
+	{
+		auto& timer0cnt = *(ushort*)&T0CL;
+		auto& timer0reload = *(ushort*)&TRL0L;
+		auto prescale = TR0CON & 0b11;
+		if (TR0CON & 0b100000) // Event counter mode
+			return;			   // we don't impl that.
+
+		if (TR0CON & 0b100) { // 高速模式
+		}
+		else { // 低速模式...
+		}
+
+		if (TR0CON & 0b1000) // T0EN
+		{
+			if (t0tick++ > (1 << (prescale * 2))) {
+				if (!(timer0cnt--)) {
+					timer0cnt = timer0reload;					   // 计数器溢出
+					if (TR0CON & 0b10000 && (run_stat <= ST_FAST)) // TMR0IE
+					{
+						RaiseTMINT(0);
+					}
+				}
+				t0tick = 0;
+			}
+		}
+	}
+	{
+		auto prescale = TR1CON & 0b11;
+
+		if (TR1CON & 0b1000) // T1EN
+		{
+			if (t1_pre++ > 64) // 缩放
+			{
+				if (t1tick++ > (1 << (prescale * 2 + 1))) {
+					if (!(t1tick2--)) {
+						t1tick2 = TRL1;									// 计数器溢出
+						if (run_stat <= ST_FAST || TR1CON & 0b10000000) // 唤醒功能
+							if (TR1CON & 0b10000)						// TMR1IE
+							{
+								if (TR1CON & 0b10000000)
+									run_stat = ST_SLOW;
+								RaiseTMINT(1);
+							}
+					}
+					t1tick = 0;
+				}
+				t1_pre = 0;
+			}
+		}
+	}
 }
 
 inline void casioemu::ePSCPU::OP_NOP(byte* param_1) {
@@ -388,6 +491,7 @@ inline void casioemu::ePSCPU::OP_NOP(byte* param_1) {
 inline void casioemu::ePSCPU::OP_WDTC(byte* param_1) {
 	int iVar1;
 	STATUS |= 0xc0;
+	//RepeatCount = 0; // RPT WDTC是什么鬼？
 	CycleCounter += 0x1;
 	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar1;
@@ -397,8 +501,15 @@ inline void casioemu::ePSCPU::OP_WDTC(byte* param_1) {
 }
 
 inline void casioemu::ePSCPU::OP_SLEP(byte* param_1) {
-	DAT_004202b5 = (CPUCON & 0x2) != 0x2;
+	run_stat = ((CPUCON & 0x2) != 0x2) ? ST_SLEEP : ST_STOP;
+	if (run_stat == ST_SLEEP) {
+		debug_printf("entering SLEEP mode!!!\n");
+	}
+	else if (run_stat == ST_STOP) {
+		debug_printf("entering STOP mode!!!\n");
+	}
 	Sleep(0x1);
+//RepeatCount = 0; // RPT SLEP是什么鬼？
 	CycleCounter += 0x1;
 	int iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar1;
@@ -888,7 +999,7 @@ inline void casioemu::ePSCPU::OP_RPT(byte* param_1)
 	byte* pbVar1;
 	int iVar2;
 
-	pbVar1 = rget(*(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3));
+	pbVar1 = reg(*(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3));
 	CycleCounter += 0x1;
 	RepeatCount = (ushort)*pbVar1;
 	iVar2 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -909,14 +1020,14 @@ inline void casioemu::ePSCPU::OP_TEST(byte* param_1)
 	bVar1 = *(byte*)(param_1 + 0x3);
 	bVar2 = *(char*)(param_1 + 0x2) << 0x4;
 	do {
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		if (*pbVar3 == 0x0) {
 			STATUS |= 0x4;
 		}
 		else {
 			STATUS &= 0xfb;
 		}
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x1;
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -950,7 +1061,7 @@ inline void casioemu::ePSCPU::OP_JDNZ_A(byte* param_1)
 	bVar4 = *(byte*)(param_1 + 0x6);
 	uVar10 = uVar10 & 0xff | (uint)bVar1;
 	do {
-		pbVar8 = rget(bVar5 | bVar1);
+		pbVar8 = reg(bVar5 | bVar1);
 		bVar7 = *pbVar8 - 0x1;
 		ACC = bVar7;
 		debug_printf("JDNZ A=%x r=%x(%s) addr0x%x", (uint)bVar7, uVar10, Sfr_in_str + uVar10,
@@ -966,7 +1077,7 @@ inline void casioemu::ePSCPU::OP_JDNZ_A(byte* param_1)
 		}
 		PCL = (byte)uVar9;
 		PCH = (undefined)(uVar9 >> 0x10);
-		PostID_Process(bVar5 | bVar1);
+		post_pid(bVar5 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x2;
 	return;
@@ -997,13 +1108,13 @@ inline void casioemu::ePSCPU::OP_JDNZ_r(byte* param_1)
 	uVar12 = uVar10 & 0xff | (uint)bVar2;
 	do {
 		bVar6 = (byte)uVar10;
-		pbVar8 = rget(bVar6 | bVar2);
+		pbVar8 = reg(bVar6 | bVar2);
 		bVar1 = *pbVar8;
-		pbVar8 = rget(bVar6 | bVar2);
+		pbVar8 = reg(bVar6 | bVar2);
 		*pbVar8 = bVar1 - 0x1;
 		debug_printf("JDNZ r=0x%x(%s) addr 0x%x", uVar12, Sfr_in_str + uVar12,
 			((uVar11 | bVar3) << 0x4 | (uint)bVar5) << 0x4 | (uint)bVar4);
-		pbVar8 = rget(bVar6 | bVar2);
+		pbVar8 = reg(bVar6 | bVar2);
 		if (*pbVar8 == 0x0) {
 			uVar9 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x2;
 			PCM = (byte)(uVar9 >> 0x8);
@@ -1015,7 +1126,7 @@ inline void casioemu::ePSCPU::OP_JDNZ_r(byte* param_1)
 		}
 		PCL = (byte)uVar9;
 		PCH = (undefined)(uVar9 >> 0x10);
-		PostID_Process(bVar6 | bVar2);
+		post_pid(bVar6 | bVar2);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x2;
 	return;
@@ -1046,7 +1157,7 @@ inline void casioemu::ePSCPU::OP_JGE_A_r(byte* param_1)
 	do {
 		debug_printf("JGE A=0x%x r=0x%x(%s) 0x%x", (uint)ACC, uVar9, Sfr_in_str + uVar9,
 			((uVar10 | bVar2) << 0x4 | (uint)bVar4) << 0x4 | (uint)bVar3);
-		pbVar7 = rget(bVar5 | bVar1);
+		pbVar7 = reg(bVar5 | bVar1);
 		if (ACC < *pbVar7) {
 			uVar8 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x2;
 			PCM = (byte)(uVar8 >> 0x8);
@@ -1058,7 +1169,7 @@ inline void casioemu::ePSCPU::OP_JGE_A_r(byte* param_1)
 		}
 		PCL = (byte)uVar8;
 		PCH = (undefined)(uVar8 >> 0x10);
-		PostID_Process(bVar5 | bVar1);
+		post_pid(bVar5 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x2;
 	return;
@@ -1089,7 +1200,7 @@ inline void casioemu::ePSCPU::OP_JLE_A_r(byte* param_1)
 	do {
 		debug_printf("JLE A=0x%x r=0x%x(%s) addr 0x%x", (uint)ACC, uVar9, Sfr_in_str + uVar9,
 			((uVar10 | bVar2) << 0x4 | (uint)bVar4) << 0x4 | (uint)bVar3);
-		pbVar7 = rget(bVar5 | bVar1);
+		pbVar7 = reg(bVar5 | bVar1);
 		if (*pbVar7 < ACC) {
 			uVar8 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x2;
 			PCM = (byte)(uVar8 >> 0x8);
@@ -1101,7 +1212,7 @@ inline void casioemu::ePSCPU::OP_JLE_A_r(byte* param_1)
 		}
 		PCL = (byte)uVar8;
 		PCH = (undefined)(uVar8 >> 0x10);
-		PostID_Process(bVar5 | bVar1);
+		post_pid(bVar5 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x2;
 	return;
@@ -1132,7 +1243,7 @@ inline void casioemu::ePSCPU::OP_JE_A_r(byte* param_1)
 	do {
 		debug_printf("JE A=0x%x r=0x%x(%s) addr 0x%x", (uint)ACC, uVar9, Sfr_in_str + uVar9,
 			((uVar10 | bVar2) << 0x4 | (uint)bVar4) << 0x4 | (uint)bVar3);
-		pbVar7 = rget(bVar5 | bVar1);
+		pbVar7 = reg(bVar5 | bVar1);
 		if (ACC == *pbVar7) {
 			uVar6 = ((uVar10 | bVar2) << 0x4 | (uint)bVar4) << 0x4;
 			uVar8 = uVar6 | bVar3;
@@ -1144,7 +1255,7 @@ inline void casioemu::ePSCPU::OP_JE_A_r(byte* param_1)
 		}
 		PCL = (byte)uVar8;
 		PCH = (undefined)(uVar8 >> 0x10);
-		PostID_Process(bVar5 | bVar1);
+		post_pid(bVar5 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x2;
 	return;
@@ -1182,12 +1293,12 @@ inline void casioemu::ePSCPU::OP_JBC(byte* param_1)
 	do {
 		debug_printf("JBC r=0x%x(%s) b=0x%x addr 0x%x", uVar7, local_20c, uVar5, uVar6);
 		if ((bVar2 | bVar1) == 0x31) {
-			// local_208 = CONCAT31(local_208._1_3_, DAT_0041e0d9 | DAT_0041e0d7);
-			DAT_0041e0d1 = FUN_004044b0(DAT_0041e0d9 | DAT_0041e0d7);
-			debug_printf("JBC PORTA %x DCRB&PORTB %x DCRA %x", (uint)DAT_0041e0d1,
-				(uint)(DAT_0041e0d9 & DAT_0041e0d7), (uint)DAT_0041e0d3);
+			// local_208 = CONCAT31(local_208._1_3_, PORTC | PBCON);
+			InvalidatePORTA();
+			debug_printf("JBC PORTA %x DCRB&PORTB %x DCRA %x", (uint)PACON,
+				(uint)(PORTC & PBCON), (uint)PAWAKE);
 		}
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		uVar4 = uVar6;
 		if ((*pbVar3 >> (local_20d & 0x1f) & 0x1) != 0x0) {
 			uVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x2;
@@ -1196,9 +1307,9 @@ inline void casioemu::ePSCPU::OP_JBC(byte* param_1)
 		PCH = (undefined)(uVar4 >> 0x10);
 		PCM = (byte)(uVar4 >> 0x8);
 		if (((bVar2 | bVar1) == 0x43) && (local_20d == 0x0)) {
-			debug_printf2(local_204, L"r43 is %x\n", (uint)DAT_0041e0e3);
+			debug_printf2(local_204, L"r43 is %x\n", (uint)gpr_43);
 		}
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x2;
 	___security_check_cookie_4(local_4 ^ (uint)auStack_210);
@@ -1233,12 +1344,12 @@ inline void casioemu::ePSCPU::OP_JBS(byte* param_1)
 		debug_printf("JBS r=%x(%s) b=%x addr 0x%x", uVar10, Sfr_in_str + uVar10, (uint)bVar2,
 			((uVar11 | bVar3) << 0x4 | (uint)bVar4) << 0x4 | (uint)bVar5);
 		if ((bVar6 | bVar1) == 0x31) {
-			DAT_0041e0d1 = FUN_004044b0(DAT_0041e0d9 | DAT_0041e0d7);
-			debug_printf("JBS PORTA %x DCRB&PORTB %x DCRA %x", (uint)DAT_0041e0d1,
-				(uint)(DAT_0041e0d9 & DAT_0041e0d7), (uint)DAT_0041e0d3);
+			InvalidatePORTA();
+			debug_printf("JBS PORTA %x DCRB&PORTB %x DCRA %x", (uint)PACON,
+				(uint)(PORTC & PBCON), (uint)PAWAKE);
 		}
-		pbVar8 = rget(bVar6 | bVar1);
-		if ((*pbVar8 >> (bVar2 & 0x1f) & 0x1) == 0x0) {
+		pbVar8 = reg(bVar6 | bVar1);
+		if (((*pbVar8 >> (bVar2 & 0x1f)) & 0x1) == 0x0) {
 			uVar9 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x2;
 			PCM = (byte)(uVar9 >> 0x8);
 		}
@@ -1249,7 +1360,7 @@ inline void casioemu::ePSCPU::OP_JBS(byte* param_1)
 		}
 		PCL = (byte)uVar9;
 		PCH = (undefined)(uVar9 >> 0x10);
-		PostID_Process(bVar6 | bVar1);
+		post_pid(bVar6 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x2;
 	return;
@@ -1270,19 +1381,19 @@ inline void casioemu::ePSCPU::OP_MOV_A(byte* param_1)
 	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
 	bVar2 = (byte)uVar6;
 	bVar5 = bVar2 | bVar1;
-	pbVar3 = rget(bVar2 | bVar1);
+	pbVar3 = reg(bVar2 | bVar1);
 	uVar6 = uVar6 & 0xff | (uint)bVar1;
 	debug_printf("MOV A r=%x(%s) %x", uVar6, Sfr_in_str + uVar6, (uint)*pbVar3);
 	do {
 		if (bVar5 == 0x31) {
-			DAT_0041e0d1 = FUN_004044b0(DAT_0041e0d9 | DAT_0041e0d7);
-			debug_printf("MOV A PORTA %x DCRB&PORTB %x DCRA %x", (uint)DAT_0041e0d1,
-				(uint)(DAT_0041e0d9 & DAT_0041e0d7), (uint)DAT_0041e0d3);
+			InvalidatePORTA();
+			debug_printf("MOV A PORTA %x DCRB&PORTB %x DCRA %x", (uint)PACON,
+				(uint)(PORTC & PBCON), (uint)PAWAKE);
 		}
 		else if (bVar5 == 0x3a) {
-			DAT_0041e0da = 0x0;
+			PCCON = 0x0;
 		}
-		pbVar3 = rget(bVar5);
+		pbVar3 = reg(bVar5);
 		ACC = *pbVar3;
 		if (bVar5 == 0x3) {
 			pcVar7 = "MOV A INDF1,BSR1 %x, FSR1 %x,value %x";
@@ -1303,7 +1414,7 @@ inline void casioemu::ePSCPU::OP_MOV_A(byte* param_1)
 		else {
 			STATUS &= 0xfb;
 		}
-		PostID_Process(bVar5);
+		post_pid(bVar5);
 		if ((RepeatCount == 0x0) || (RepeatCount += -0x1, RepeatCount == 0x0)) {
 			iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 			PCL = (char)iVar4;
@@ -1332,20 +1443,20 @@ inline void casioemu::ePSCPU::OP_MOV_r(byte* param_1)
 	uVar6 = uVar6 & 0xff | (uint)bVar1;
 	debug_printf("MOV r=%x(%s) A %x", uVar6, Sfr_in_str + uVar6, (uint)ACC);
 	do {
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		*pbVar3 = ACC;
 		if ((((bVar5 == 0x26) || (bVar5 == 0x27)) || (bVar5 == 0x25)) &&
-			(((uint)DAT_0041e0c7 * 0x100 + (uint)DAT_0041e0c6 != 0x0 && ((DAT_0041e0c5 & 0x8) != 0x0)))) {
-			FUN_0040c8b0(0x0);
+			(((uint)TRL0H * 0x100 + (uint)TRL0L != 0x0 && ((TR0CON & 0x8) != 0x0)))) {
+			UpdateTimerSetting(0x0);
 		}
 		if (((bVar5 == 0x2b) || (bVar5 == 0x2a)) &&
-			((DAT_0041e0cb != '\0' && ((DAT_0041e0ca & 0x8) != 0x0)))) {
-			FUN_0040c8b0(0x1);
+			((TRL1 != '\0' && ((TR1CON & 0x8) != 0x0)))) {
+			UpdateTimerSetting(0x1);
 		}
 		if (bVar5 == 0x3) {
 			debug_printf("MOV r a:INDF1,BSR1 %x, FSR1 %x,value %x", (uint)BSR1, (uint)FSR1, (uint)ACC);
 		}
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 		CycleCounter += 0x1;
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -1378,36 +1489,35 @@ inline void casioemu::ePSCPU::OP_MOVRP(byte* param_1)
 	uVar5 = (uint)bVar1;
 	uVar2 = (uint)(byte)param_1[0x2] << 0x4 & 0xff | (uint)(byte)param_1[0x3];
 	debug_printf("MOVRP p=%x(%s) r=%x(%s)", uVar5, Sfr_in_str + uVar5, uVar2, Sfr_in_str + uVar2);
-	uVar2 = extraout_ECX;
+	uVar2 = uVar5;
 	do {
 		bVar4 = (byte)uVar2;
 		if (bVar4 == 0x31) {
-			// local_208 = CONCAT31(local_208._1_3_, DAT_0041e0d9 | DAT_0041e0d7);
-			DAT_0041e0d1 = FUN_004044b0(DAT_0041e0d9 | DAT_0041e0d7);
-			debug_printf("MOVRP p=%x(%s) PORTA %x DCRB&PORTB %x DCRA %x", uVar5, Sfr_in_str + uVar5,
-				(uint)DAT_0041e0d1, (uint)(DAT_0041e0d9 & DAT_0041e0d7), (uint)DAT_0041e0d3);
+			// local_208 = CONCAT31(local_208._1_3_, PORTC | PBCON);
+			InvalidatePORTA();
+			//debug_printf("MOVRP p=%x(%s) PORTA %x DCRB&PORTB %x DCRA %x", uVar5, Sfr_in_str + uVar5,(uint)PACON, (uint)(PORTC & PBCON), (uint)PAWAKE);
 			bVar4 = (byte)local_20c;
 		}
-		pbVar3 = rget(bVar4);
+		pbVar3 = reg(bVar4);
 		local_20d = *pbVar3;
-		pbVar3 = rget(bVar1);
+		pbVar3 = reg(bVar1);
 		*pbVar3 = local_20d;
 		if (bVar1 == 0xe) {
-			debug_printf("LCDDATA %x ARH(%x) ARL(%x)",
-				(uint)(byte)(&VRam)[(uint)LCDARL + (LCDARH & 0x3) * 0x60], (uint)LCDARH,
-				(uint)LCDARL);
+			//debug_printf("LCDDATA %x ARH(%x) ARL(%x)",
+			//	(uint)(byte)(&VRam)[(uint)LCDARL + (LCDARH & 0x3) * 0x60], (uint)LCDARH,
+			//	(uint)LCDARL);
 		}
 		else if (bVar1 == 0x0) {
-			debug_printf2(local_204, L"BSR 0 FSR f2, data p %x\n", (uint)DAT_0041e192);
+			//debug_printf2(local_204, L"BSR 0 FSR f2, data p %x\n", (uint)DAT_0041e192);
 		}
 		if (((((char)local_20c == '\0') || (bVar1 == 0x0)) || ((char)local_20c == '\x03')) ||
 			(bVar1 == 0x3)) {
-			debug_printf2(local_204, L"BSR 0 FSR %x, data r %x\n", (uint)FSR, (uint)(byte)(&EmuMem)[FSR]);
-			pbVar3 = rget(bVar1);
-			debug_printf("MOVRP BSR %x FSR %x,BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,data %x", (uint)BSR, (uint)FSR, (uint)BSR1, (uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)*pbVar3);
+			//debug_printf2(local_204, L"BSR 0 FSR %x, data r %x\n", (uint)FSR, (uint)(byte)(&EmuMem)[FSR]);
+			pbVar3 = reg(bVar1);
+			//debug_printf("MOVRP BSR %x FSR %x,BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,data %x", (uint)BSR, (uint)FSR, (uint)BSR1, (uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)*pbVar3);
 		}
-		PostID_Process((char)local_20c);
-		PostID_Process(bVar1);
+		post_pid((char)local_20c);
+		post_pid(bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, uVar2 = local_20c, RepeatCount != 0x0));
 	if (bVar1 == 0xe) {
 		InstFlags |= 0x2;
@@ -1415,8 +1525,8 @@ inline void casioemu::ePSCPU::OP_MOVRP(byte* param_1)
 		iVar6 = 0xa;
 		do {
 			uVar5 = uVar2;
-			debug_printf("BANK 0 r%x, data %x", uVar2, (uint)(byte)(&EmuMem)[uVar2]);
-			debug_printf2(local_204, L"BANK 0 r%x, data %x\n", uVar5, (uint)(byte)(&EmuMem)[uVar5]);
+			//debug_printf("BANK 0 r%x, data %x", uVar2, (uint)(byte)(&EmuMem)[uVar2]);
+			//debug_printf2(local_204, L"BANK 0 r%x, data %x\n", uVar5, (uint)(byte)(&EmuMem)[uVar5]);
 			uVar2 = (uint)(byte)((char)uVar2 + 0x1);
 			iVar6 += -0x1;
 		} while (iVar6 != 0x0);
@@ -1457,23 +1567,23 @@ inline void casioemu::ePSCPU::OP_MOVPR(byte* param_1)
 	while (true) {
 		bVar3 = (byte)uVar4;
 		if ((byte)uVar4 == 0x31) {
-			// local_208 = CONCAT31(local_208._1_3_, DAT_0041e0d9 | DAT_0041e0d7);
-			DAT_0041e0d1 = FUN_004044b0(DAT_0041e0d9 | DAT_0041e0d7);
+			// local_208 = CONCAT31(local_208._1_3_, PORTC | PBCON);
+			InvalidatePORTA();
 			debug_printf("MOVPR r=%x(%s) PORTA %x DCRB&PORTB %x DCRA %x", uVar7, Sfr_in_str + uVar7,
-				(uint)DAT_0041e0d1, (uint)(DAT_0041e0d9 & DAT_0041e0d7), (uint)DAT_0041e0d3);
+				(uint)PACON, (uint)(PORTC & PBCON), (uint)PAWAKE);
 			bVar3 = local_20a;
 		}
-		pbVar5 = rget(bVar3);
+		pbVar5 = reg(bVar3);
 		local_209 = *pbVar5;
-		pbVar5 = rget(bVar2 | bVar1);
+		pbVar5 = reg(bVar2 | bVar1);
 		*pbVar5 = local_209;
 		if (local_20a == 0x3) {
 			debug_printf2(local_204, L"BSR 0 FSR %x, data r %x\n", (uint)FSR, (uint)(byte)(&EmuMem)[FSR]);
-			pbVar5 = rget(0x3);
+			pbVar5 = reg(0x3);
 			debug_printf("MOVPR r p BSR1 %x,FSR1 %x,data %x", (uint)BSR1, (uint)FSR1, (uint)*pbVar5);
 		}
-		PostID_Process(bVar2 | bVar1);
-		PostID_Process(local_20a);
+		post_pid(bVar2 | bVar1);
+		post_pid(local_20a);
 		if ((RepeatCount == 0x0) || (RepeatCount += -0x1, RepeatCount == 0x0))
 			break;
 		uVar4 = (uint)local_20a;
@@ -1502,18 +1612,18 @@ inline void casioemu::ePSCPU::OP_CLR(byte* param_1)
 	uVar5 = uVar5 & 0xff | (uint)bVar1;
 	debug_printf("CLR r=%x(%s)", uVar5, Sfr_in_str + uVar5);
 	do {
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		*pbVar3 = 0x0;
 		STATUS |= 0x4;
 		if ((bVar2 | bVar1) == 0x31) {
-			DAT_0041e0d1 = FUN_004044b0(DAT_0041e0d9 | DAT_0041e0d7);
-			debug_printf("CLR PORTA %x DCRB&PORTB %x DCRA %x", (uint)DAT_0041e0d1,
-				(uint)(DAT_0041e0d9 & DAT_0041e0d7), (uint)DAT_0041e0d3);
+			InvalidatePORTA();
+			debug_printf("CLR PORTA %x DCRB&PORTB %x DCRA %x", (uint)PACON,
+				(uint)(PORTC & PBCON), (uint)PAWAKE);
 		}
 		else if ((bVar2 | bVar1) == 0x3) {
 			debug_printf("CLR INDF1 BSR1 %x,FSR1 %x", (uint)BSR1, (uint)FSR1);
 		}
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 		CycleCounter += 0x1;
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -1558,7 +1668,7 @@ inline void casioemu::ePSCPU::OP_TBRD(byte* param_1)
 			iVar5 = local_218 * 0x2;
 		}
 		local_214 = (uint) * (byte*)(Rom + 0x1 + iVar5) | (uint) * (byte*)(Rom + iVar5) << 0x4;
-		pbVar2 = rget((byte)local_210);
+		pbVar2 = reg((byte)local_210);
 		*pbVar2 = (byte)local_214;
 		local_214 = (uint) * (byte*)(Rom + 0x1 + iVar5) | (uint) * (byte*)(Rom + iVar5) << 0x4;
 		cVar1 = (char)local_210;
@@ -1586,7 +1696,7 @@ inline void casioemu::ePSCPU::OP_TBRD(byte* param_1)
 		if (cVar1 == '\x03') {
 			debug_printf("TBRD BSR1 %x,FSR1 %x ", (uint)BSR1, (uint)FSR1);
 		}
-		PostID_Process(cVar1);
+		post_pid(cVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x1;
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -1619,7 +1729,7 @@ inline void casioemu::ePSCPU::OP_TBRD_A(byte* param_1)
 		}
 		cVar1 = *(char*)(Rom + iVar4);
 		bVar2 = *(byte*)(Rom + 0x1 + iVar4);
-		pbVar3 = rget(bVar5);
+		pbVar3 = reg(bVar5);
 		*pbVar3 = cVar1 << 0x4 | bVar2;
 		debug_printf("TBRD A=%x r=%x(%s) addr1 %x, addr2 %x, value %x", (uint)ACC, uVar6,
 			Sfr_in_str + uVar6, uVar7, iVar4,
@@ -1628,7 +1738,7 @@ inline void casioemu::ePSCPU::OP_TBRD_A(byte* param_1)
 		if (bVar5 == 0x3) {
 			debug_printf("TBRD BSR1 %x,FSR1 %x ", (uint)BSR1, (uint)FSR1);
 		}
-		PostID_Process(bVar2);
+		post_pid(bVar2);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar4;
@@ -1652,7 +1762,7 @@ inline void casioemu::ePSCPU::OP_OR_A(byte* param_1)
 	bVar2 = (byte)uVar5;
 	uVar5 = uVar5 & 0xff | (uint)bVar1;
 	do {
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		ACC |= *pbVar3;
 		if (ACC == 0x0) {
 			STATUS |= 0x4;
@@ -1661,7 +1771,7 @@ inline void casioemu::ePSCPU::OP_OR_A(byte* param_1)
 			STATUS &= 0xfb;
 		}
 		debug_printf("OR A r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x1;
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -1688,13 +1798,13 @@ inline void casioemu::ePSCPU::OP_OR_R(byte* param_1)
 	uVar6 = uVar6 & 0xff | (uint)bVar1;
 	do {
 		if ((bVar5 == 0x3) || (bVar5 == 0x10)) {
-			pbVar3 = rget(bVar2 | bVar1);
+			pbVar3 = reg(bVar2 | bVar1);
 			debug_printf("OR r: BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,a %x,before data %x,z flag %x", (uint)BSR1,
 				(uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)ACC, (uint)*pbVar3, STATUS >> 0x2 & 0x1);
 		}
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		*pbVar3 = *pbVar3 | ACC;
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		if (*pbVar3 == 0x0) {
 			STATUS |= 0x4;
 		}
@@ -1703,11 +1813,11 @@ inline void casioemu::ePSCPU::OP_OR_R(byte* param_1)
 		}
 		debug_printf("OR r=%x(%s) A %x", uVar6, Sfr_in_str + uVar6, (uint)ACC);
 		if ((bVar5 == 0x3) || (bVar5 == 0x10)) {
-			pbVar3 = rget(bVar2 | bVar1);
+			pbVar3 = reg(bVar2 | bVar1);
 			debug_printf("OR r: BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,a %x,after data %x,z flag %x", (uint)BSR1,
 				(uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)ACC, (uint)*pbVar3, STATUS >> 0x2 & 0x1);
 		}
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	InstFlags |= 0x2;
 	CycleCounter += 0x1;
@@ -1733,7 +1843,7 @@ inline void casioemu::ePSCPU::OP_AND_A(byte* param_1)
 	uVar5 = uVar5 & 0xff | (uint)bVar1;
 	debug_printf("AND A r=%x(%s)", uVar5, Sfr_in_str + uVar5);
 	do {
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		ACC &= *pbVar3;
 		if (ACC == 0x0) {
 			STATUS |= 0x4;
@@ -1741,7 +1851,7 @@ inline void casioemu::ePSCPU::OP_AND_A(byte* param_1)
 		else {
 			STATUS &= 0xfb;
 		}
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x1;
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -1769,12 +1879,12 @@ inline void casioemu::ePSCPU::OP_AND_r(byte* param_1)
 	debug_printf("AND r=%x(%s) A", uVar6, Sfr_in_str + uVar6);
 	do {
 		if ((bVar5 == 0x3) || (bVar5 == 0x10)) {
-			pbVar3 = rget(bVar2 | bVar1);
+			pbVar3 = reg(bVar2 | bVar1);
 			debug_printf("AND r: BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,a %x,before data %x,z flag %x", (uint)BSR1, (uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)ACC, (uint)*pbVar3, STATUS >> 0x2 & 0x1);
 		}
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		*pbVar3 = *pbVar3 & ACC;
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		if (*pbVar3 == 0x0) {
 			STATUS |= 0x4;
 		}
@@ -1782,11 +1892,11 @@ inline void casioemu::ePSCPU::OP_AND_r(byte* param_1)
 			STATUS &= 0xfb;
 		}
 		if ((bVar5 == 0x3) || (bVar5 == 0x10)) {
-			pbVar3 = rget(bVar2 | bVar1);
+			pbVar3 = reg(bVar2 | bVar1);
 			debug_printf("AND r: BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,a %x,after data %x,z flag %x", (uint)BSR1,
 				(uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)ACC, (uint)*pbVar3, STATUS >> 0x2 & 0x1);
 		}
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x1;
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -1811,7 +1921,7 @@ inline void casioemu::ePSCPU::OP_XOR_A(byte* param_1)
 	uVar5 = uVar5 & 0xff | (uint)bVar1;
 	do {
 		debug_printf("XOR A r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		ACC ^= *pbVar3;
 		if (ACC == 0x0) {
 			STATUS |= 0x4;
@@ -1819,7 +1929,7 @@ inline void casioemu::ePSCPU::OP_XOR_A(byte* param_1)
 		else {
 			STATUS &= 0xfb;
 		}
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x1;
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -1845,16 +1955,16 @@ inline void casioemu::ePSCPU::OP_XOR_r(byte* param_1)
 	do {
 		debug_printf("XOR r=%x(%s) A", uVar6, Sfr_in_str + uVar6);
 		bVar2 = (byte)uVar5;
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		*pbVar3 = *pbVar3 ^ ACC;
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		if (*pbVar3 == 0x0) {
 			STATUS |= 0x4;
 		}
 		else {
 			STATUS &= 0xfb;
 		}
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x1;
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -1878,7 +1988,7 @@ inline void casioemu::ePSCPU::OP_COMA(byte* param_1)
 	bVar2 = (byte)uVar5;
 	uVar5 = uVar5 & 0xff | (uint)bVar1;
 	do {
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		ACC = ~*pbVar3;
 		if (ACC == 0x0) {
 			STATUS |= 0x4;
@@ -1887,7 +1997,7 @@ inline void casioemu::ePSCPU::OP_COMA(byte* param_1)
 			STATUS &= 0xfb;
 		}
 		debug_printf("COMA r=%x(%s) ", uVar5, Sfr_in_str + uVar5);
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x1;
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -1913,11 +2023,11 @@ inline void casioemu::ePSCPU::OP_COM(byte* param_1)
 	uVar7 = uVar6 & 0xff | (uint)bVar2;
 	do {
 		bVar3 = (byte)uVar6;
-		pbVar4 = rget(bVar3 | bVar2);
+		pbVar4 = reg(bVar3 | bVar2);
 		bVar1 = *pbVar4;
-		pbVar4 = rget(bVar3 | bVar2);
+		pbVar4 = reg(bVar3 | bVar2);
 		*pbVar4 = ~bVar1;
-		pbVar4 = rget(bVar3 | bVar2);
+		pbVar4 = reg(bVar3 | bVar2);
 		if (*pbVar4 == 0x0) {
 			STATUS |= 0x4;
 		}
@@ -1925,7 +2035,7 @@ inline void casioemu::ePSCPU::OP_COM(byte* param_1)
 			STATUS &= 0xfb;
 		}
 		debug_printf("COM r=%x(%s) ", uVar7, Sfr_in_str + uVar7);
-		PostID_Process(bVar3 | bVar2);
+		post_pid(bVar3 | bVar2);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar5;
@@ -1950,9 +2060,9 @@ inline void casioemu::ePSCPU::OP_INCA(byte* param_1)
 	bVar2 = (byte)uVar6;
 	uVar6 = uVar6 & 0xff | (uint)bVar1;
 	do {
-		pbVar4 = rget(bVar2 | bVar1);
+		pbVar4 = reg(bVar2 | bVar1);
 		bVar3 = *pbVar4;
-		pbVar4 = rget(bVar2 | bVar1);
+		pbVar4 = reg(bVar2 | bVar1);
 		ACC = (char)(bVar3 + 0x1);
 		if ((((bVar2 | bVar1) == 0x4) || ((bVar2 | bVar1) == 0x11)) && (*pbVar4 == 0xff)) {
 			if (ACC == '\0') {
@@ -1975,7 +2085,7 @@ inline void casioemu::ePSCPU::OP_INCA(byte* param_1)
 			STATUS = bVar3 & 0xfb;
 		}
 		debug_printf("INCA r=%x(%s) ", uVar6, Sfr_in_str + uVar6);
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar5;
@@ -2004,13 +2114,13 @@ inline void casioemu::ePSCPU::OP_INC(byte* param_1)
 	bVar6 = bVar3 | bVar1;
 	uVar7 = uVar7 & 0xff | (uint)bVar1;
 	do {
-		pbVar4 = rget(bVar3 | bVar1);
+		pbVar4 = reg(bVar3 | bVar1);
 		debug_printf("INC r=%x(%s) value %x", uVar7, Sfr_in_str + uVar7, (uint)*pbVar4);
-		pbVar4 = rget(bVar3 | bVar1);
+		pbVar4 = reg(bVar3 | bVar1);
 		bVar2 = *pbVar4;
 		local_4 = (byte)(bVar2 + 0x1);
 		if (bVar6 != 0x13) {
-			pbVar4 = rget(bVar3 | bVar1);
+			pbVar4 = reg(bVar3 | bVar1);
 			*pbVar4 = local_4;
 		}
 		if ((bVar2 + 0x1 & 0xff00) == 0x0) {
@@ -2025,14 +2135,14 @@ inline void casioemu::ePSCPU::OP_INC(byte* param_1)
 		else {
 			STATUS &= 0xfb;
 		}
-		HandleCarryOnSfrs(bVar3 | bVar1);
+		auto_carry(bVar3 | bVar1);
 		if (bVar6 == 0xa) {
 			debug_printf("INC A %x, i %x ,Z flag %x", (uint)ACC, extraout_EDX & 0xffff, STATUS >> 0x2 & 0x1);
 		}
 		else if (bVar6 == 0x11) {
 			debug_printf("INC FSR2 %x", (uint)FSR2);
 		}
-		PostID_Process(bVar3 | bVar1);
+		post_pid(bVar3 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar5;
@@ -2058,7 +2168,7 @@ inline void casioemu::ePSCPU::OP_ADD_A(byte* param_1)
 	uVar6 = uVar6 & 0xff | (uint)bVar1;
 	do {
 		debug_printf("ADD A r=%x(%s ", uVar6, Sfr_in_str + uVar6);
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		uVar5 = (ushort)ACC;
 		ACC = (byte)(uVar5 + *pbVar3);
 		if ((uVar5 + *pbVar3 & 0xff00) == 0x0) {
@@ -2073,7 +2183,7 @@ inline void casioemu::ePSCPU::OP_ADD_A(byte* param_1)
 		else {
 			STATUS &= 0xfb;
 		}
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x1;
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -2102,10 +2212,10 @@ inline void casioemu::ePSCPU::OP_ADD_r(byte* param_1)
 	do {
 		debug_printf("ADD r=%x(%s) A", uVar9, Sfr_in_str + uVar9);
 		bVar3 = (byte)uVar8;
-		pbVar4 = rget(bVar3 | bVar1);
+		pbVar4 = reg(bVar3 | bVar1);
 		bVar2 = *pbVar4;
 		uVar7 = (ushort)ACC;
-		pbVar4 = rget(bVar3 | bVar1);
+		pbVar4 = reg(bVar3 | bVar1);
 		bVar6 = (byte)(bVar2 + uVar7);
 		*pbVar4 = bVar6;
 		if ((bVar2 + uVar7 & 0xff00) == 0x0) {
@@ -2121,8 +2231,8 @@ inline void casioemu::ePSCPU::OP_ADD_r(byte* param_1)
 			STATUS &= 0xfb;
 		}
 		bVar3 |= bVar1;
-		HandleCarryOnSfrs(bVar3);
-		PostID_Process(bVar3);
+		auto_carry(bVar3);
+		post_pid(bVar3);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar5;
@@ -2149,7 +2259,7 @@ inline void casioemu::ePSCPU::OP_ADC_A(byte* param_1)
 	uVar7 = uVar7 & 0xff | (uint)bVar1;
 	do {
 		debug_printf("ADC A r=%x(%s) ", uVar7, Sfr_in_str + uVar7);
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		uVar6 = (ushort)(STATUS & 0x1) + (ushort)*pbVar3 + (ushort)ACC;
 		ACC = (byte)uVar6;
 		if ((uVar6 & 0xff00) == 0x0) {
@@ -2164,7 +2274,7 @@ inline void casioemu::ePSCPU::OP_ADC_A(byte* param_1)
 		else {
 			STATUS = bVar5 & 0xfb;
 		}
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x1;
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -2192,9 +2302,9 @@ inline void casioemu::ePSCPU::OP_ADC_r(byte* param_1)
 	do {
 		debug_printf("ADC r=%x(%s) A", uVar8, Sfr_in_str + uVar8);
 		bVar2 = (byte)uVar7;
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		uVar6 = (ushort)(STATUS & 0x1) + (ushort)*pbVar3 + (ushort)ACC;
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		bVar5 = (byte)uVar6;
 		*pbVar3 = bVar5;
 		if ((uVar6 & 0xff00) == 0x0) {
@@ -2210,8 +2320,8 @@ inline void casioemu::ePSCPU::OP_ADC_r(byte* param_1)
 			STATUS &= 0xfb;
 		}
 		bVar2 |= bVar1;
-		HandleCarryOnSfrs(bVar2);
-		PostID_Process(bVar2);
+		auto_carry(bVar2);
+		post_pid(bVar2);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar4;
@@ -2235,7 +2345,7 @@ inline void casioemu::ePSCPU::OP_DECA(byte* param_1)
 	bVar2 = (byte)uVar5;
 	uVar5 = uVar5 & 0xff | (uint)bVar1;
 	do {
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		ACC = (char)(*pbVar3 - 0x1);
 		if ((*pbVar3 - 0x1 & 0xff00) == 0xff00) {
 			STATUS &= 0xfe;
@@ -2250,7 +2360,7 @@ inline void casioemu::ePSCPU::OP_DECA(byte* param_1)
 			STATUS &= 0xfb;
 		}
 		debug_printf("DECA r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x1;
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -2278,9 +2388,9 @@ inline void casioemu::ePSCPU::OP_DEC(byte* param_1)
 	do {
 		debug_printf("DEC r=%x(%s)", uVar8, Sfr_in_str + uVar8);
 		bVar3 = (byte)uVar7;
-		pbVar4 = rget(bVar3 | bVar1);
+		pbVar4 = reg(bVar3 | bVar1);
 		bVar2 = *pbVar4;
-		pbVar4 = rget(bVar3 | bVar1);
+		pbVar4 = reg(bVar3 | bVar1);
 		bVar6 = (byte)(bVar2 - 0x1);
 		*pbVar4 = bVar6;
 		if ((bVar2 - 0x1 & 0xff00) == 0xff00) {
@@ -2295,8 +2405,8 @@ inline void casioemu::ePSCPU::OP_DEC(byte* param_1)
 		else {
 			STATUS &= 0xfb;
 		}
-		HandleBorrowOnSfrs(bVar3 | bVar1);
-		PostID_Process(bVar3 | bVar1);
+		auto_borrow(bVar3 | bVar1);
+		post_pid(bVar3 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar5;
@@ -2324,7 +2434,7 @@ inline void casioemu::ePSCPU::OP_SUB_A(byte* param_1)
 		if ((bVar2 | bVar1) == 0x11) {
 			debug_printf("SUB A FSR2, A %x FSR2 %x", (uint)ACC, (uint)FSR2);
 		}
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		uVar4 = (uint)(ushort)((ushort)*pbVar3 - (ushort)ACC);
 		ACC = (byte)((ushort)*pbVar3 - (ushort)ACC);
 		if ((uVar4 & 0xff00) == 0xff00) {
@@ -2343,7 +2453,7 @@ inline void casioemu::ePSCPU::OP_SUB_A(byte* param_1)
 		if ((bVar2 | bVar1) == 0x11) {
 			debug_printf("SUB A FSR2, after A %x FSR2 %x", uVar4 & 0xff, (uint)FSR2);
 		}
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x1;
 	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -2372,14 +2482,14 @@ inline void casioemu::ePSCPU::OP_SUB_r(byte* param_1)
 	do {
 		debug_printf("SUB r=%x(%s) A", uVar8, Sfr_in_str + uVar8);
 		if ((bVar3 | bVar1) == 0x3) {
-			pbVar5 = rget(bVar3 | bVar1);
+			pbVar5 = reg(bVar3 | bVar1);
 			debug_printf("SUB INDF1 A: BSR1 %x,FSR1 %x,before indf1 data %x, a %x", (uint)BSR1, (uint)FSR1,
 				(uint)*pbVar5, (uint)ACC);
 		}
-		pbVar5 = rget(bVar3 | bVar1);
+		pbVar5 = reg(bVar3 | bVar1);
 		bVar2 = *pbVar5;
 		uVar4 = (ushort)ACC;
-		pbVar5 = rget(bVar3 | bVar1);
+		pbVar5 = reg(bVar3 | bVar1);
 		bVar7 = (byte)(bVar2 - uVar4);
 		*pbVar5 = bVar7;
 		if ((bVar2 - uVar4 & 0xff00) == 0xff00) {
@@ -2394,13 +2504,13 @@ inline void casioemu::ePSCPU::OP_SUB_r(byte* param_1)
 		else {
 			STATUS &= 0xfb;
 		}
-		HandleBorrowOnSfrs(bVar3 | bVar1);
+		auto_borrow(bVar3 | bVar1);
 		if ((bVar3 | bVar1) == 0x3) {
-			pbVar5 = rget(bVar3 | bVar1);
+			pbVar5 = reg(bVar3 | bVar1);
 			debug_printf("SUB INDF1 A: BSR1 %x,FSR1 %x,after indf1 data %x", (uint)BSR1, (uint)FSR1,
 				(uint)*pbVar5);
 		}
-		PostID_Process(bVar3 | bVar1);
+		post_pid(bVar3 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	iVar6 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar6;
@@ -2428,7 +2538,7 @@ inline void casioemu::ePSCPU::OP_SUBB_A(byte* param_1)
 	do {
 		bVar6 = STATUS & 0x1;
 		debug_printf("SUBB A r=%x(%s)", uVar7, Sfr_in_str + uVar7);
-		pbVar4 = rget(bVar2 | bVar1);
+		pbVar4 = reg(bVar2 | bVar1);
 		uVar3 = ((ushort)*pbVar4 - (ushort)ACC) - (ushort)(bVar6 != 0x1);
 		ACC = (byte)uVar3;
 		if ((uVar3 & 0xff00) == 0xff00) {
@@ -2443,7 +2553,7 @@ inline void casioemu::ePSCPU::OP_SUBB_A(byte* param_1)
 		else {
 			STATUS &= 0xfb;
 		}
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x1;
 	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -2472,9 +2582,9 @@ inline void casioemu::ePSCPU::OP_SUBB_r(byte* param_1)
 		bVar6 = STATUS & 0x1;
 		debug_printf("SUBB r=%x(%s) A", uVar8, Sfr_in_str + uVar8);
 		bVar2 = (byte)uVar7;
-		pbVar4 = rget(bVar2 | bVar1);
+		pbVar4 = reg(bVar2 | bVar1);
 		uVar3 = ((ushort)*pbVar4 - (ushort)ACC) - (ushort)(bVar6 != 0x1);
-		pbVar4 = rget(bVar2 | bVar1);
+		pbVar4 = reg(bVar2 | bVar1);
 		bVar6 = (byte)uVar3;
 		*pbVar4 = bVar6;
 		if ((uVar3 & 0xff00) == 0xff00) {
@@ -2489,8 +2599,8 @@ inline void casioemu::ePSCPU::OP_SUBB_r(byte* param_1)
 		else {
 			STATUS &= 0xfb;
 		}
-		HandleBorrowOnSfrs(bVar2 | bVar1);
-		PostID_Process(bVar2 | bVar1);
+		auto_borrow(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar5;
@@ -2515,7 +2625,7 @@ inline void casioemu::ePSCPU::OP_ADDDC_A(byte* param_1)
 	uVar6 = uVar6 & 0xff | (uint) * (byte*)(param_1 + 0x3);
 	do {
 		debug_printf("ADDDC A r=%x(%s)", uVar6, Sfr_in_str + uVar6);
-		pbVar3 = rget(bVar1);
+		pbVar3 = reg(bVar1);
 		uVar2 = (ushort)(STATUS & 0x1) + (ushort)ACC;
 		uVar5 = uVar2 + *pbVar3;
 		if ((0x9 < ((byte)uVar5 & 0xf)) || (0xf < (ushort)((uVar2 & 0xf) + (*pbVar3 & 0xf)))) {
@@ -2537,7 +2647,7 @@ inline void casioemu::ePSCPU::OP_ADDDC_A(byte* param_1)
 		else {
 			STATUS &= 0xfb;
 		}
-		PostID_Process(bVar1);
+		post_pid(bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar4;
@@ -2554,7 +2664,6 @@ inline void casioemu::ePSCPU::OP_ADDDC_r(byte* param_1)
 	byte* pbVar2;
 	uint uVar3;
 	int iVar4;
-	byte extraout_CL;
 	byte bVar5;
 	uint uVar6;
 	uint uVar7;
@@ -2569,7 +2678,7 @@ inline void casioemu::ePSCPU::OP_ADDDC_r(byte* param_1)
 	uVar6 = uVar6 & 0xff | (uint) * (byte*)(param_1 + 0x3);
 	do {
 		debug_printf("ADDDC r=%x(%s) A", uVar6, Sfr_in_str + uVar6);
-		pbVar2 = rget(extraout_CL);
+		pbVar2 = reg(uVar6);
 		uVar7 = (uint)*pbVar2;
 		uVar3 = (uint)(ushort)((ushort)(STATUS & 0x1) + (ushort)ACC);
 		uVar8 = uVar3 + uVar7;
@@ -2579,7 +2688,7 @@ inline void casioemu::ePSCPU::OP_ADDDC_r(byte* param_1)
 		if ((0x90 < (uVar8 & 0xf0)) || (0xff < (ushort)uVar8)) {
 			uVar8 += 0x60;
 		}
-		pbVar2 = rget((byte)local_208);
+		pbVar2 = reg((byte)local_208);
 		*pbVar2 = (byte)uVar8;
 		if ((uVar8 & 0xff00) == 0x0) {
 			bVar5 = STATUS & 0xfe;
@@ -2598,7 +2707,7 @@ inline void casioemu::ePSCPU::OP_ADDDC_r(byte* param_1)
 			debug_printf2(local_204, L"ADDDC R A %x,c %x,temp %x,BSR 0 FSR %x, data %x\n", (uint)ACC,
 				STATUS & 0x1, uVar7, (uint)FSR, (uint)(byte)(&EmuMem)[FSR]);
 		}
-		PostID_Process(cVar1);
+		post_pid(cVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x1;
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -2620,7 +2729,7 @@ inline void casioemu::ePSCPU::OP_SUBDB_A(byte* param_1)
 
 	bVar1 = *(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3);
 	do {
-		pbVar2 = rget(bVar1);
+		pbVar2 = reg(bVar1);
 		uVar4 = (0x9a - (ushort)((STATUS & 0x1) != 0x1)) - (ushort)ACC;
 		uVar5 = uVar4 + *pbVar2;
 		if ((0x9 < ((byte)uVar5 & 0xf)) || (0xf < (ushort)((uVar4 & 0xf) + (*pbVar2 & 0xf)))) {
@@ -2642,7 +2751,7 @@ inline void casioemu::ePSCPU::OP_SUBDB_A(byte* param_1)
 		else {
 			STATUS &= 0xfb;
 		}
-		PostID_Process(bVar1);
+		post_pid(bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	iVar3 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar3;
@@ -2663,7 +2772,7 @@ inline void casioemu::ePSCPU::OP_SUBDB_r(byte* param_1)
 
 	bVar3 = *(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3);
 	do {
-		pbVar1 = rget(bVar3);
+		pbVar1 = reg(bVar3);
 		uVar4 = (0x9a - (ushort)((STATUS & 0x1) != 0x1)) - (ushort)ACC;
 		uVar5 = uVar4 + *pbVar1;
 		if ((0x9 < ((byte)uVar5 & 0xf)) || (0xf < (ushort)((uVar4 & 0xf) + (*pbVar1 & 0xf)))) {
@@ -2672,7 +2781,7 @@ inline void casioemu::ePSCPU::OP_SUBDB_r(byte* param_1)
 		if ((0x90 < (uVar5 & 0xf0)) || (0xff < uVar5)) {
 			uVar5 += 0x60;
 		}
-		pbVar1 = rget(bVar3);
+		pbVar1 = reg(bVar3);
 		*pbVar1 = (byte)uVar5;
 		if ((uVar5 & 0xff00) == 0x0) {
 			STATUS &= 0xfe;
@@ -2686,7 +2795,7 @@ inline void casioemu::ePSCPU::OP_SUBDB_r(byte* param_1)
 		else {
 			STATUS &= 0xfb;
 		}
-		PostID_Process(bVar3);
+		post_pid(bVar3);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	iVar2 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar2;
@@ -2710,11 +2819,11 @@ inline void casioemu::ePSCPU::OP_RRCA(byte* param_1)
 	bVar2 = (byte)uVar5;
 	uVar5 = uVar5 & 0xff | (uint)bVar1;
 	do {
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		ACC = STATUS << 0x7 | *pbVar3 >> 0x1;
 		STATUS ^= (STATUS ^ *pbVar3) & 0x1;
 		debug_printf("RRCA r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;
@@ -2741,14 +2850,14 @@ inline void casioemu::ePSCPU::OP_RRC(byte* param_1)
 	bVar4 = (byte)uVar5 | *(byte*)(param_1 + 0x3);
 	uVar5 = uVar5 & 0xff | (uint) * (byte*)(param_1 + 0x3);
 	do {
-		pbVar2 = rget(bVar4);
+		pbVar2 = reg(bVar4);
 		bVar1 = *pbVar2;
 		bVar6 = STATUS << 0x7;
-		pbVar2 = rget(bVar4);
+		pbVar2 = reg(bVar4);
 		*pbVar2 = bVar6 | bVar1 >> 0x1;
 		STATUS ^= (STATUS ^ bVar1) & 0x1;
 		debug_printf("RRC r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		PostID_Process(bVar4);
+		post_pid(bVar4);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;
@@ -2773,11 +2882,11 @@ inline void casioemu::ePSCPU::OP_RLCA(byte* param_1)
 	bVar1 = (byte)uVar4 | *(byte*)(param_1 + 0x3);
 	uVar4 = uVar4 & 0xff | (uint) * (byte*)(param_1 + 0x3);
 	do {
-		pbVar2 = rget(bVar1);
+		pbVar2 = reg(bVar1);
 		ACC = STATUS & 0x1 | *pbVar2 * '\x02';
 		STATUS = STATUS & 0xfe | *pbVar2 >> 0x7;
 		debug_printf("RLCA r=%x(%s)", uVar4, Sfr_in_str + uVar4);
-		PostID_Process(bVar1);
+		post_pid(bVar1);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;
@@ -2809,23 +2918,23 @@ inline void casioemu::ePSCPU::OP_RLC(byte* param_1)
 	uVar8 = uVar8 & 0xff | (uint)bVar2;
 	do {
 		if ((bVar7 == 0x3) || (bVar7 == 0x10)) {
-			pbVar5 = rget(bVar3 | bVar2);
+			pbVar5 = reg(bVar3 | bVar2);
 			debug_printf("RLC r: BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,before data %x, c flag %x", (uint)BSR1,
 				(uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)*pbVar5, STATUS & 0x1);
 		}
-		pbVar5 = rget(bVar3 | bVar2);
+		pbVar5 = reg(bVar3 | bVar2);
 		bVar1 = *pbVar5;
 		bVar4 = STATUS & 0x1;
-		pbVar5 = rget(bVar3 | bVar2);
+		pbVar5 = reg(bVar3 | bVar2);
 		*pbVar5 = bVar4 | bVar1 * '\x02';
 		STATUS = STATUS & 0xfe | bVar1 >> 0x7;
 		if ((bVar7 == 0x3) || (bVar7 == 0x10)) {
-			pbVar5 = rget(bVar3 | bVar2);
+			pbVar5 = reg(bVar3 | bVar2);
 			debug_printf("RLC r: BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,after data %x,c flag %x", (uint)BSR1,
 				(uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)*pbVar5, STATUS & 0x1);
 		}
 		debug_printf("RLC r=%x(%s)", uVar8, Sfr_in_str + uVar8);
-		PostID_Process(bVar3 | bVar2);
+		post_pid(bVar3 | bVar2);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	iVar6 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar6;
@@ -2849,10 +2958,10 @@ inline void casioemu::ePSCPU::OP_SHRA(byte* param_1)
 	bVar2 = (byte)uVar5;
 	uVar5 = uVar5 & 0xff | (uint)bVar1;
 	do {
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		ACC = STATUS << 0x7 | *pbVar3 >> 0x1;
 		debug_printf("SHRA r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;
@@ -2879,10 +2988,10 @@ inline void casioemu::ePSCPU::OP_SHLA(byte* param_1)
 	bVar2 = (byte)uVar5;
 	uVar5 = uVar5 & 0xff | (uint)bVar1;
 	do {
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		ACC = STATUS & 0x1 | *pbVar3 * '\x02';
 		debug_printf("SHLA r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;
@@ -2912,12 +3021,12 @@ inline void casioemu::ePSCPU::OP_EX_r(byte* param_1)
 	debug_printf("EX r=%x(%s)", uVar4, Sfr_in_str + uVar4);
 	do {
 		bVar3 = (byte)uVar7;
-		pbVar5 = rget(bVar3 | bVar2);
+		pbVar5 = reg(bVar3 | bVar2);
 		bVar1 = *pbVar5;
-		pbVar5 = rget(bVar3 | bVar2);
+		pbVar5 = reg(bVar3 | bVar2);
 		*pbVar5 = ACC;
 		ACC = bVar1;
-		PostID_Process(bVar3 | bVar2);
+		post_pid(bVar3 | bVar2);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;
@@ -2957,26 +3066,26 @@ inline void casioemu::ePSCPU::OP_BC(byte* param_1)
 	uVar6 = uVar6 & 0xff | (uint)bVar1;
 	local_209 = ~('\x01' << (local_20a & 0x1f));
 	do {
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		*pbVar3 = *pbVar3 & local_209;
 		if (bVar5 == 0x31) {
-			// local_208 = CONCAT31(local_208._1_3_, DAT_0041e0d9 | DAT_0041e0d7);
-			DAT_0041e0d1 = FUN_004044b0(DAT_0041e0d9 | DAT_0041e0d7);
-			debug_printf("BC PORTA %x DCRB&PORTB %x DCRA %x", (uint)DAT_0041e0d1,
-				(uint)(DAT_0041e0d9 & DAT_0041e0d7), (uint)DAT_0041e0d3);
+			// local_208 = CONCAT31(local_208._1_3_, PORTC | PBCON);
+			InvalidatePORTA();
+			debug_printf("BC PORTA %x DCRB&PORTB %x DCRA %x", (uint)PACON,
+				(uint)(PORTC & PBCON), (uint)PAWAKE);
 		}
 		else if (bVar5 == 0x43) {
 			if (local_20a == 0x0) {
-				debug_printf2(local_204, L"bit clear of r43 %x\n", (uint)DAT_0041e0e3);
+				debug_printf2(local_204, L"bit clear of r43 %x\n", (uint)gpr_43);
 			}
 		}
 		else if ((bVar5 == 0x20) && (local_20a == 0x1)) {
-			FUN_0040c910(0x0);
-			FUN_0040c910(0x1);
-			FUN_0040c910(0x2);
+			InvalidateTimerSetting(0x0);
+			InvalidateTimerSetting(0x1);
+			InvalidateTimerSetting(0x2);
 		}
 		debug_printf("BC r(b) r=%x(%s) b=%x", uVar6, Sfr_in_str + uVar6, uVar7);
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x1;
 	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -3014,34 +3123,34 @@ inline void casioemu::ePSCPU::OP_BS(byte* param_1)
 	uVar7 = uVar7 & 0xff | (uint)bVar1;
 	local_20c = (uint)bVar2;
 	do {
-		pbVar4 = rget(bVar3 | bVar1);
+		pbVar4 = reg(bVar3 | bVar1);
 		*pbVar4 = *pbVar4 | local_20d;
 		if (bVar6 == 0x31) {
-			// local_208 = CONCAT31(local_208._1_3_, DAT_0041e0d9 | DAT_0041e0d7);
-			DAT_0041e0d1 = FUN_004044b0(DAT_0041e0d9 | DAT_0041e0d7);
-			debug_printf("BS PORTA %x DCRB&PORTB %x DCRA %x", (uint)DAT_0041e0d1,
-				(uint)(DAT_0041e0d9 & DAT_0041e0d7), (uint)DAT_0041e0d3);
+			// local_208 = CONCAT31(local_208._1_3_, PORTC | PBCON);
+			InvalidatePORTA();
+			debug_printf("BS PORTA %x DCRB&PORTB %x DCRA %x", (uint)PACON,
+				(uint)(PORTC & PBCON), (uint)PAWAKE);
 		}
 		else {
 			if ((bVar6 == 0x3) || (bVar6 == 0x10)) {
-				pbVar4 = rget(bVar3 | bVar1);
+				pbVar4 = reg(bVar3 | bVar1);
 				debug_printf("BS r: BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,after data %x", (uint)BSR1, (uint)FSR1,
 					(uint)BSR2, (uint)FSR2, (uint)*pbVar4);
 			}
-			if ((bVar6 == 0x2a) && ((DAT_0041e0ca & 0x8) != 0x0)) {
-				FUN_0040c8b0(0x1);
+			if ((bVar6 == 0x2a) && ((TR1CON & 0x8) != 0x0)) {
+				UpdateTimerSetting(0x1);
 			}
 		}
 		debug_printf("BS r(b) r=%x(%s) b=%x", uVar7, Sfr_in_str + uVar7, (uint)bVar2);
 		if (bVar6 == 0x2a) {
 			if ((char)local_20c == '\x04') {
-				debug_printf("TR1CON is %x", (uint)DAT_0041e0ca);
+				debug_printf("TR1CON is %x", (uint)TR1CON);
 			}
 		}
 		else if ((bVar6 == 0x43) && ((char)local_20c == '\0')) {
-			debug_printf2(local_204, L"bit set of r43 %x\n", (uint)DAT_0041e0e3);
+			debug_printf2(local_204, L"bit set of r43 %x\n", (uint)gpr_43);
 		}
-		PostID_Process(bVar3 | bVar1);
+		post_pid(bVar3 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x1;
 	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
@@ -3068,10 +3177,10 @@ inline void casioemu::ePSCPU::OP_BTG(byte* param_1)
 	bVar2 = (byte)uVar6;
 	uVar6 = uVar6 & 0xff | (uint)bVar1;
 	do {
-		pbVar4 = rget(bVar2 | bVar1);
+		pbVar4 = reg(bVar2 | bVar1);
 		*pbVar4 = *pbVar4 ^ '\x01' << (bVar3 & 0x1f);
 		debug_printf("BTG r(b) r=%x(%s) b=%x", uVar6, Sfr_in_str + uVar6, (uint)bVar3);
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;
@@ -3099,16 +3208,16 @@ inline void casioemu::ePSCPU::OP_EXL_r(byte* param_1)
 	bVar3 = (byte)uVar7 | *(byte*)(param_1 + 0x3);
 	uVar7 = uVar7 & 0xff | (uint) * (byte*)(param_1 + 0x3);
 	do {
-		pbVar4 = rget(bVar3);
+		pbVar4 = reg(bVar3);
 		bVar1 = *pbVar4;
-		pbVar4 = rget(bVar3);
+		pbVar4 = reg(bVar3);
 		bVar6 = *pbVar4 ^ ACC;
 		bVar2 = *pbVar4;
-		pbVar4 = rget(bVar3);
+		pbVar4 = reg(bVar3);
 		*pbVar4 = bVar6 & 0xf ^ bVar2;
 		ACC = ACC & 0xf0 | bVar1 & 0xf;
 		debug_printf("EXL r=%x(%s)", uVar7, Sfr_in_str + uVar7);
-		PostID_Process(bVar3);
+		post_pid(bVar3);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;
@@ -3136,16 +3245,16 @@ inline void casioemu::ePSCPU::OP_EXH_r(byte* param_1)
 	bVar5 = (byte)uVar7 | *(byte*)(param_1 + 0x3);
 	uVar7 = uVar7 & 0xff | (uint) * (byte*)(param_1 + 0x3);
 	do {
-		pbVar3 = rget(bVar5);
+		pbVar3 = reg(bVar5);
 		bVar1 = *pbVar3;
-		pbVar3 = rget(bVar5);
+		pbVar3 = reg(bVar5);
 		bVar2 = *pbVar3;
 		bVar6 = ACC << 0x4;
-		pbVar3 = rget(bVar5);
+		pbVar3 = reg(bVar5);
 		*pbVar3 = bVar6 | bVar2 & 0xf;
 		ACC = ACC & 0xf0 | bVar1 >> 0x4;
 		debug_printf("EXH r=%x(%s)", uVar7, Sfr_in_str + uVar7);
-		PostID_Process(bVar5);
+		post_pid(bVar5);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;
@@ -3172,13 +3281,13 @@ inline void casioemu::ePSCPU::OP_MOVL_r(byte* param_1)
 	bVar4 = (byte)uVar5 | *(byte*)(param_1 + 0x3);
 	uVar5 = uVar5 & 0xff | (uint) * (byte*)(param_1 + 0x3);
 	do {
-		pbVar2 = rget(bVar4);
+		pbVar2 = reg(bVar4);
 		bVar6 = *pbVar2 ^ ACC;
 		bVar1 = *pbVar2;
-		pbVar2 = rget(bVar4);
+		pbVar2 = reg(bVar4);
 		*pbVar2 = bVar6 & 0xf ^ bVar1;
 		debug_printf("MOVL r=%x(%s) A", uVar5, Sfr_in_str + uVar5);
-		PostID_Process(bVar4);
+		post_pid(bVar4);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;
@@ -3205,13 +3314,13 @@ inline void casioemu::ePSCPU::OP_MOVH_r(byte* param_1)
 	bVar4 = (byte)uVar6 | *(byte*)(param_1 + 0x3);
 	uVar6 = uVar6 & 0xff | (uint) * (byte*)(param_1 + 0x3);
 	do {
-		pbVar2 = rget(bVar4);
+		pbVar2 = reg(bVar4);
 		bVar1 = *pbVar2;
 		bVar5 = ACC << 0x4;
-		pbVar2 = rget(bVar4);
+		pbVar2 = reg(bVar4);
 		*pbVar2 = bVar1 & 0xf | bVar5;
 		debug_printf("MOVH r=%x(%s) A", uVar6, Sfr_in_str + uVar6);
-		PostID_Process(bVar4);
+		post_pid(bVar4);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;
@@ -3238,10 +3347,10 @@ inline void casioemu::ePSCPU::OP_MOVL_A(byte* param_1)
 	bVar2 = (byte)uVar5;
 	uVar5 = uVar5 & 0xff | (uint)bVar1;
 	do {
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		ACC = *pbVar3 & 0xf;
 		debug_printf("MOVL A r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;
@@ -3268,10 +3377,10 @@ inline void casioemu::ePSCPU::OP_MOVH_A(byte* param_1)
 	bVar2 = (byte)uVar5;
 	uVar5 = uVar5 & 0xff | (uint)bVar1;
 	do {
-		pbVar3 = rget(bVar2 | bVar1);
+		pbVar3 = reg(bVar2 | bVar1);
 		ACC = *pbVar3 >> 0x4;
 		debug_printf("MOVH A r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		PostID_Process(bVar2 | bVar1);
+		post_pid(bVar2 | bVar1);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;
@@ -3299,18 +3408,18 @@ inline void casioemu::ePSCPU::OP_SFR4(byte* param_1)
 	uVar6 = uVar6 & 0xff | (uint) * (byte*)(param_1 + 0x3);
 	do {
 		bVar2 = ACC;
-		pbVar3 = rget(bVar5);
+		pbVar3 = reg(bVar5);
 		ACC ^= (*pbVar3 ^ ACC) & 0xf;
-		pbVar3 = rget(bVar5);
+		pbVar3 = reg(bVar5);
 		bVar1 = *pbVar3;
-		pbVar3 = rget(bVar5);
+		pbVar3 = reg(bVar5);
 		*pbVar3 = bVar1 >> 0x4;
-		pbVar3 = rget(bVar5);
+		pbVar3 = reg(bVar5);
 		bVar1 = *pbVar3;
-		pbVar3 = rget(bVar5);
+		pbVar3 = reg(bVar5);
 		*pbVar3 = bVar2 << 0x4 | bVar1 & 0xf;
 		debug_printf("SFR4 r=%x(%s)", uVar6, Sfr_in_str + uVar6);
-		PostID_Process(bVar5);
+		post_pid(bVar5);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;
@@ -3341,18 +3450,18 @@ inline void casioemu::ePSCPU::OP_SFL4(byte* param_1)
 	do {
 		bVar3 = (byte)uVar6;
 		local_1 = ACC & 0xf;
-		pbVar4 = rget(bVar3 | bVar2);
+		pbVar4 = reg(bVar3 | bVar2);
 		ACC = *pbVar4 >> 0x4 | ACC & 0xf0;
-		pbVar4 = rget(bVar3 | bVar2);
+		pbVar4 = reg(bVar3 | bVar2);
 		bVar1 = *pbVar4;
-		pbVar4 = rget(bVar3 | bVar2);
+		pbVar4 = reg(bVar3 | bVar2);
 		*pbVar4 = bVar1 << 0x4;
-		pbVar4 = rget(bVar3 | bVar2);
+		pbVar4 = reg(bVar3 | bVar2);
 		bVar1 = *pbVar4;
-		pbVar4 = rget(bVar3 | bVar2);
+		pbVar4 = reg(bVar3 | bVar2);
 		*pbVar4 = bVar1 & 0xf0 | local_1;
 		debug_printf("SFL4 r=%x(%s)", uVar7, Sfr_in_str + uVar7);
-		PostID_Process(bVar3 | bVar2);
+		post_pid(bVar3 | bVar2);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;
@@ -3378,14 +3487,14 @@ inline void casioemu::ePSCPU::OP_SWAP(byte* param_1)
 	bVar2 = *(byte*)(param_1 + 0x3);
 	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
 	bVar3 = (byte)uVar6;
-	pbVar4 = rget(bVar3 | bVar2);
+	pbVar4 = reg(bVar3 | bVar2);
 	bVar1 = *pbVar4;
 	uVar6 = uVar6 & 0xff | (uint)bVar2;
 	do {
-		pbVar4 = rget(bVar3 | bVar2);
+		pbVar4 = reg(bVar3 | bVar2);
 		*pbVar4 = bVar1 << 0x4 | bVar1 >> 0x4;
 		debug_printf("SWAP r=%x(%s)", uVar6, Sfr_in_str + uVar6);
-		PostID_Process(bVar3 | bVar2);
+		post_pid(bVar3 | bVar2);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;
@@ -3414,12 +3523,12 @@ inline void casioemu::ePSCPU::OP_SWAPA(byte* param_1)
 	uVar7 = uVar6 & 0xff | (uint)bVar2;
 	do {
 		bVar3 = (byte)uVar6;
-		pbVar4 = rget(bVar3 | bVar2);
+		pbVar4 = reg(bVar3 | bVar2);
 		bVar1 = *pbVar4;
-		pbVar4 = rget(bVar3 | bVar2);
+		pbVar4 = reg(bVar3 | bVar2);
 		ACC = *pbVar4 << 0x4 | bVar1 >> 0x4;
 		debug_printf("SWAPA r=%x(%s)", uVar7, Sfr_in_str + uVar7);
-		PostID_Process(bVar3 | bVar2);
+		post_pid(bVar3 | bVar2);
 		if (RepeatCount == 0x0)
 			break;
 		RepeatCount += -0x1;

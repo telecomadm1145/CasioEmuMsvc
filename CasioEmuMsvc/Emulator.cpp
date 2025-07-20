@@ -32,7 +32,7 @@ namespace casioemu {
 			cycles_per_second = 1024 * 1024 * 8;
 		}
 		if (hardware_id == HW_EPS6800) {
-			cycles_per_second = 4;
+			cycles_per_second = 1024 * 1024 * 2;
 		}
 		timer_interval = 20;
 

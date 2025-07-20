@@ -574,6 +574,8 @@ namespace casioemu {
 			peripheral->Reset();
 		if (emulator.hardware_id != HW_EPS6800)
 			cpu.Reset();
+		else
+			epscpu->Reset();
 
 		interrupts_active[INT_RESET] = true;
 		pending_interrupt_count = 1;
@@ -896,7 +898,7 @@ namespace casioemu {
 
 		if (run_mode == RM_RUN && SYSCLKTick) {
 			if (emulator.hardware_id != HW_EPS6800)
-			cpu.Next();
+				cpu.Next();
 			else {
 				epscpu->Next();
 			}

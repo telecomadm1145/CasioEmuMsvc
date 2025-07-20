@@ -5,7 +5,7 @@
 #include "Emulator.hpp"
 #include "Logger.hpp"
 #include "ModelInfo.h"
-
+#include "ePSCpu.h"
 #include "vibration.h"
 #include <ML620Ports.h>
 #include <SDL.h>
@@ -94,6 +94,9 @@ namespace casioemu {
 		}
 		if (emulator.hardware_id == HW_EPS6800) {
 			// TODO!
+			emulator.chipset.epscpu->portacalc = [this]() {
+				this->RecalculateKI();
+			};
 			goto init_kbd;
 		}
 
@@ -340,6 +343,9 @@ namespace casioemu {
 
 	void Keyboard::Tick() {
 		if (emulator.ModelDefinition.hardware_id == HW_TI) {
+			return;
+		}
+		if (emulator.ModelDefinition.hardware_id == HW_EPS6800) {
 			return;
 		}
 		if (factory_test) {
@@ -633,6 +639,20 @@ namespace casioemu {
 			pp->SetPortInput(4, keyboard_in, 0xff);
 			return;
 		}
+		if (emulator.hardware_id == HW_EPS6800) {
+			auto orig = emulator.chipset.epscpu->PORTA;
+			auto& kin = emulator.chipset.epscpu->PORTA;
+			kin = 0xff;
+			for (auto& button : buttons)
+				if (button.type == Button::BT_BUTTON && button.pressed && button.ko_bit & (~emulator.chipset.epscpu->DCRB))
+					kin &= ~button.ki_bit;
+			if ((orig ^ kin) & orig) {
+				emulator.chipset.epscpu->PAINTSTA = (orig ^ kin) & orig;
+				emulator.chipset.epscpu->RaisePAINT(0);
+			}
+			return;
+		}
+
 		if (emulator.hardware_id == HW_FX_5800P || emulator.ModelDefinition.legacy_ko) { // TODO: label this as legacy ko?
 			keyboard_in = 0xFF;
 			for (auto& button : buttons)

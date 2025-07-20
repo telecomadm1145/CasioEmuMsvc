@@ -82,7 +82,7 @@ namespace casioemu {
 		Emulator& emulator;
 		CPU& cpu;
 		MMU& mmu;
-		class ePSCPU* epscpu;
+		class ePSCPU* epscpu = 0;
 
 		std::vector<unsigned char> rom_data;
 		std::vector<unsigned char> flash_data;

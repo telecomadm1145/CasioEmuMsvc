@@ -262,24 +262,26 @@ namespace casioemu {
 			}
 			else if (hardware_id == HW_EPS6800) {
 				ratio = 1 - 1e-4;
-				float ink_alpha_on = 255;
+				float ink_alpha_on = (emulator.chipset.epscpu->LCDARH & 0xf0) * 2;
 				float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);
 				ink_alpha_on = std::clamp(ink_alpha_on, 0.0f, 255.0f);
 				uint8_t* screen_buffer = (uint8_t*)emulator.chipset.epscpu->vram;
 				// if (emulator.ModelDefinition.real_hardware) {
 				//	screen_buffer = this->screen_buffer;
 				// }
-				for (int ix = 0; ix < 98; ++ix) {
+				for (int ix = 0; ix < 0x60; ++ix) {
 					for (int iy = 0; iy < 64; ++iy) {
-						uint32_t i = (ix * 64) | iy;
-						int bIndx = (i >> 3);
-						int subIndx = (i & 7);
-						int mask = (1 << subIndx);
-						bool on = (screen_buffer[bIndx] & mask) != 0;
-						auto& data = screen_ink_alpha[(iy * 192 + 192) + ix];
+						int y = iy;
+						int page = y >> 3;
+						int bIndx = page * 0x60 + ix;
+						int subIndx = y & 7;
+						int mask = 1 << subIndx;
+						bool on = (screen_buffer[bIndx - 0x180] & mask) != 0;
+						float& data = screen_ink_alpha[((-iy + 63) * 192 + ix)];
 						data = data * ratio + (on ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
 					}
 				}
+
 				screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xe5d4;
 				// if (emulator.ModelDefinition.real_hardware) {
 				//	screen_buffer = this->screen_buffer + 8 * 192;
@@ -293,44 +295,50 @@ namespace casioemu {
 				// }
 				return;
 			}
-
+			// When the value less than 5 is set to DSPCLK register, the value of the register becomes 6.
+			if (screen_refresh_rate < 6) {
+				screen_refresh_rate = 6;
+			}
 			if (screen_refresh_rate < screen_flashing_threshold && !enable_screen_fading)
 				;
 			else {
 				int n = update_screen_scan_alpha(screen_scan_alpha, SDL_GetTicks64(), screen_refresh_rate);
 				screen_scan_report = ((n / (screen_scan_report_en ? screen_scan_report_op1 : 64)) % 2 ? 3 : 0) ^ (n % 64 == 0 ? 1 : (n % 64 == 32 ? 2 : 0));
 			}
-			if (screen_refresh_rate < 6) {
-				screen_refresh_rate = 6;
-			}
-			auto sb = screen_brightness;
-			if (sb < 3) {
-				sb = 3;
-			}
+			/*
+			BSN2-BSN0 (bit 3 to 1)
+The BSN2 to BSN0 bit are used to select a clock for multiplying the bias voltage in the bias generation
+circuit.
+LSCLK to 1/128LSCLK can be selected.
+00 - 1/4
+01 - 1/1
+02 - 1/2
+03 - 1/8
+04 - 1/16
+05 - 1/32
+06 - 1/64
+07 - 1/128
+			*/
+
+			auto bias_generation_clock = screen_brightness;
 			auto contrast = (int)screen_contrast;
-			// if (screen_contrast2_en) {
-			//        contrast += screen_contrast2 * 0.5;
-			// }
 			if (contrast < 0) {
 				contrast = 0;
 			}
-			auto coeff = 16;
-			auto off = 0;
-			if constexpr (hardware_id != HW_CLASSWIZ_II) {
-				coeff = 28;
-				off = -240;
-			}
-			int ink_alpha_on = off + contrast * coeff - sb * 8;
-			int ink_alpha_off = off + 20 + (contrast) * (coeff - 11) - sb * 13;
-			if (ink_alpha_on < 0)
-				ink_alpha_on = 0;
-			if (ink_alpha_off < 0)
-				ink_alpha_off = 0;
 			bool enable_status, enable_dotmatrix, clear_dots;
 
 			bool mode_6 = false;
 
 			auto screen_buffer = this->screen_buffer;
+			int ink_alpha_on = 0;
+			int ink_alpha_off = 0;
+			// 00 - 1/5
+			// 01 - 1/4
+			// 10 - 1/3
+			// 11 - 1/2
+			auto bias_generation_bias = screen_range & 0x3;
+			int rng1 = (4 - (bias_generation_bias));
+			int rng = rng1 * 8;
 			uint8_t* screen_buffer1;
 			size_t row_size = ROW_SIZE;
 			if constexpr (hardware_id == HW_CLASSWIZ_II) {
@@ -370,8 +378,76 @@ namespace casioemu {
 			default:
 				goto clean_scr;
 			}
-			if (screen_range & 0b100000)
-				goto clean_scr;
+			{
+				// Let's make a quick estimation for LCD load
+				double screen_load = 1e-5; // epsilon
+				if (enable_status) {
+					for (int ix = 1; ix != SPR_MAX; ++ix) {
+						double load = 0.0;
+						auto off = (sprite_bitmap[ix].offset + screen_offset * row_size) % ((N_ROW + 1) * row_size);
+						if constexpr (hardware_id == HW_CLASSWIZ_II) {
+							if (screen_buffer[off] & sprite_bitmap[ix].mask)
+								load += 0.2;
+							if (screen_buffer1[off] & sprite_bitmap[ix].mask)
+								load += 0.8;
+						}
+						else {
+							if (screen_buffer[off] & sprite_bitmap[ix].mask)
+								load = 1.0;
+						}
+						screen_load += load * 30.;
+					}
+				}
+				if (enable_dotmatrix) {
+					if constexpr (hardware_id == HW_CLASSWIZ_II) {
+						for (int iy = 1; iy != (N_ROW + 1); ++iy) {
+							bool clear = 0;
+							if (iy >= rng && iy < 32)
+								clear = 1;
+							for (int ix = 0; ix != ROW_SIZE_DISP; ++ix) {
+								auto index = iy * row_size + ix;
+								for (uint8_t mask = 0x80; mask; mask >>= 1) {
+									double load = 0.0;
+									if (!clear_dots && screen_buffer[index] & mask)
+										load += 0.2;
+									if (!clear_dots && screen_buffer1[index] & mask)
+										load += 0.8;
+									screen_load += load;
+								}
+							}
+						}
+					}
+					else {
+						for (int iy = 1; iy != (N_ROW + 1); ++iy) {
+							bool clear = 0;
+							if (iy >= rng && iy < 32)
+								clear = 1;
+							for (int ix = 0; ix != ROW_SIZE_DISP; ++ix) {
+								auto index = iy * row_size + ix;
+								for (uint8_t mask = 0x80; mask; mask >>= 1) {
+									double load = 0.0;
+									if (!clear_dots && screen_buffer[index] & mask)
+										load += 1;
+									screen_load += load;
+								}
+							}
+						}
+					}
+				}
+				auto vdd = (double)emulator.BatteryVoltage;
+				auto vl1 = contrast * 0.01 + 1.035;
+				// VL1_Max = 0.5VDD
+				if (screen_range & 0b100000) {
+					vl1 = std::min(0.5 * vdd, vl1);
+				}
+				else {
+					vl1 = std::min(vdd, vl1);
+				}
+				vl1 *= (1 - screen_load / 480000);
+				 
+
+			}
+
 			{
 				bool flip_screen_h = screen_mode & 0b1000;
 				bool flip_screen_v = !(screen_mode & 0b10000);
@@ -380,10 +456,6 @@ namespace casioemu {
 				else {
 					flip_screen_v = flip_screen_v = 0;
 				}
-				int rng1 = (4 - (screen_range & 0x3));
-				ink_alpha_off *= (4 / rng1);
-				ink_alpha_on *= (4 / rng1);
-				int rng = rng1 * 8;
 
 				if (enable_status) {
 					int ink_alpha = ink_alpha_off;
@@ -926,6 +998,12 @@ namespace casioemu {
 				}
 			}
 			if constexpr (hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) {
+				// DSPMOD0
+				// Range.4 Bias generation related.
+				// Range.3 unk
+				// Range.2 unk
+				// Range.1 Bias
+				// Range.0
 				region_range.Setup(0xF030, 1, "Screen/Range", &screen_range, MMURegion::DefaultRead<uint8_t, 0x2F>,
 					MMURegion::DefaultWrite<uint8_t, 0x2F>, emulator);
 			}
@@ -1006,15 +1084,24 @@ namespace casioemu {
 					emulator);
 			}
 			else {
-				region_contrast.Setup(0xF032, 1, "Screen/Contrast", &screen_contrast, MMURegion::DefaultRead<uint8_t, 0x1f>,
+				region_contrast.Setup(0xF032, 1, "Screen/DSPCNT", &screen_contrast, MMURegion::DefaultRead<uint8_t, 0x1f>,
 					MMURegion::DefaultWrite<uint8_t, 0x1f>, emulator);
 			}
 
 			if constexpr (hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) {
-				region_select.Setup(0xF037, 1, "Screen/Select", &screen_select, MMURegion::DefaultRead < uint8_t, 0x04 | 1 >,
+				region_select.Setup(0xF037, 1, "Screen/DSPBUF", &screen_select, MMURegion::DefaultRead < uint8_t, 0x04 | 1 >,
 					MMURegion::DefaultWrite < uint8_t, 0x04 | 1 >, emulator);
-
-				region_brightness.Setup(0xF033, 1, "Screen/Brightness", &screen_brightness, MMURegion::DefaultRead<uint8_t, 0x07>,
+				/*
+					00 - 1/4
+					01 - 1/1
+					02 - 1/2
+					03 - 1/8
+					04 - 1/16
+					05 - 1/32
+					06 - 1/64
+					07 - 1/128
+				*/
+				region_brightness.Setup(0xF033, 1, "Screen/BIASCON_BSN", &screen_brightness, MMURegion::DefaultRead<uint8_t, 0x07>,
 					MMURegion::DefaultWrite<uint8_t, 0x07>, emulator);
 
 				/*
@@ -1026,10 +1113,11 @@ cwx中F03B的值应该是由屏幕扫描和F035/F036决定的
 n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2 ? 3 : 0 ) ^ ( n % 64 == 0 ? 1 : ( n % 64 == 32 ? 2 : 0)  )
 				*/
 
-				region_scan_report_op1.Setup(0xF035, 1, "Screen/ScanReportOption1", &screen_scan_report_op1, MMURegion::DefaultRead<uint8_t, 0x1E>,
-					MMURegion::DefaultWrite<uint8_t, 0x1E>, emulator);
-
-				region_scan_report_en.Setup(0xF036, 1, "Screen/ScanReportOptionEnable", &screen_scan_report_en, MMURegion::DefaultRead<uint8_t, 0b1001>,
+				// LCL0~4, LCD lines inversion
+				region_scan_report_op1.Setup(0xF035, 1, "Screen/DSPCON2", &screen_scan_report_op1, MMURegion::DefaultRead<uint8_t, 0x1F>,
+					MMURegion::DefaultWrite<uint8_t, 0x1F>, emulator);
+				// The INV bit is used to select frame inversion or n lines inversion.
+				region_scan_report_en.Setup(0xF036, 1, "Screen/DSPCON3", &screen_scan_report_en, MMURegion::DefaultRead<uint8_t, 0b1001>,
 					MMURegion::DefaultWrite<uint8_t, 0b1001>, emulator);
 
 				region_scan_report.Setup(0xF03B, 1, "Screen/ScanReport", &screen_scan_report, MMURegion::DefaultRead<uint8_t, 0x3>,
@@ -1048,8 +1136,10 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 				region_offset.Setup(0xF039, 1, "Screen/DSPOFST", &screen_offset, MMURegion::DefaultRead<uint8_t, 0x3F>,
 					MMURegion::DefaultWrite<uint8_t, 0x3F>, emulator);
 
+				// Frame frequency = LSCLK frequency / (DUTY[4:0] +1) / DCL[6:0]
+				// When DSPCLK set to 0~5, please calculate frame frequency for “6” in DCL.
 				// 25us
-				region_refresh_rate.Setup(0xF034, 1, "Screen/RefreshRate", &screen_refresh_rate, MMURegion::DefaultRead<uint8_t, 0x7F>,
+				region_refresh_rate.Setup(0xF034, 1, "Screen/DSPCLK", &screen_refresh_rate, MMURegion::DefaultRead<uint8_t, 0x7F>,
 					MMURegion::DefaultWrite<uint8_t, 0x7F>, emulator);
 			}
 			enabled_2 = true;
