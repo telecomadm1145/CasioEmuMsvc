@@ -311,5 +311,5 @@ char* decodeeps(char* rom, int pc, bool& l) {
 	}
 LABEL_105:
 	// Íê³É
-	return strdup(v7);
+	return _strdup(v7);
 }

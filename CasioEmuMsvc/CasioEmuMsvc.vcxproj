@@ -508,6 +508,7 @@
     <ClInclude Include="Gui\Gui.h" />
     <ClInclude Include="locales\lang.h" />
     <ClInclude Include="asmjit\src\**\*.h" />
+    <ClInclude Include="version.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".clang-format" />

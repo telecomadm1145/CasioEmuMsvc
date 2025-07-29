@@ -21,42 +21,44 @@
 
 #ifdef __ANDROID__
 #include "../Gui/UIScaling.h"
-#include <jni.h>
-#include <android/log.h>
 #include <SDL.h>
 #include <SDL_system.h>
+#include <android/log.h>
+#include <jni.h>
 
 static JavaVM* g_VM = nullptr;
 
-extern "C" {
-    JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
-        g_VM = vm;
-        return JNI_VERSION_1_6;
-    }
+extern "C"
+{
+	JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
+		g_VM = vm;
+		return JNI_VERSION_1_6;
+	}
 }
 
 // Helper function to get JNIEnv
 bool GetJNIEnv(JNIEnv** env) {
-    if (g_VM == nullptr) {
-        return false;
-    }
+	if (g_VM == nullptr) {
+		return false;
+	}
 
-    jint result = g_VM->GetEnv((void**)env, JNI_VERSION_1_6);
-    if (result == JNI_EDETACHED) {
-        if (g_VM->AttachCurrentThread(env, nullptr) != 0) {
-            return false;
-        }
-    } else if (result != JNI_OK) {
-        return false;
-    }
-    return true;
+	jint result = g_VM->GetEnv((void**)env, JNI_VERSION_1_6);
+	if (result == JNI_EDETACHED) {
+		if (g_VM->AttachCurrentThread(env, nullptr) != 0) {
+			return false;
+		}
+	}
+	else if (result != JNI_OK) {
+		return false;
+	}
+	return true;
 }
 
 // Helper function to detach current thread from JVM
 void DetachCurrentThread() {
-    if (g_VM != nullptr) {
-        g_VM->DetachCurrentThread();
-    }
+	if (g_VM != nullptr) {
+		g_VM->DetachCurrentThread();
+	}
 }
 #endif
 
@@ -310,7 +312,6 @@ public:
 	}
 };
 
-
 inline char* stristr(const char* str1, const char* str2) {
 	const char* p1 = str1;
 	const char* p2 = str2;
@@ -505,227 +506,227 @@ namespace casioemu {
 		bool not_show_emu = false;
 		bool loading = false;
 
-        inline std::string generate_random_string(size_t length) {
-            static const char charset[] = "0123456789abcdefghijklmnopqrstuvwxyz";
-            std::string result;
-            result.reserve(length);
-            srand((unsigned int)time(nullptr));
-            for (size_t i = 0; i < length; i++) {
-                result += charset[rand() % (sizeof(charset) - 1)];
-            }
-            return result;
-        }
-        inline std::string create_unique_directory(const std::string& base_name) {
-            std::string dir_name = base_name;
-            while (std::filesystem::exists("./models/" + dir_name)) {
-                dir_name = base_name + "." + generate_random_string(6);
-            }
-            return dir_name;
-        }
+		inline std::string generate_random_string(size_t length) {
+			static const char charset[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+			std::string result;
+			result.reserve(length);
+			srand((unsigned int)time(nullptr));
+			for (size_t i = 0; i < length; i++) {
+				result += charset[rand() % (sizeof(charset) - 1)];
+			}
+			return result;
+		}
+		inline std::string create_unique_directory(const std::string& base_name) {
+			std::string dir_name = base_name;
+			while (std::filesystem::exists("./models/" + dir_name)) {
+				dir_name = base_name + "." + generate_random_string(6);
+			}
+			return dir_name;
+		}
 
-        void Render() {
-            auto& io = ImGui::GetIO();
-            
-            #ifdef __ANDROID__
-            UI::Scaling::UpdateUIScale();
-            float scaledWidth = UI::Scaling::windowWidth;
-            float scaledHeight = UI::Scaling::windowHeight;
-            float fontScale = UI::Scaling::fontScale;
-            float padding = UI::Scaling::padding;
-            float buttonHeight = UI::Scaling::buttonHeight;
+		void Render() {
+			auto& io = ImGui::GetIO();
 
-            float contentWidth = scaledWidth * 0.95f;
-            float searchBarWidth = contentWidth * 0.45f;
-            float filterWidth = contentWidth * 0.25f;
-            float tableHeight = scaledHeight * 0.35f;
-            float buttonWidth = contentWidth * 0.3f;
-            #else
-            float scaledWidth = io.DisplaySize.x;
-            float scaledHeight = io.DisplaySize.y;
-            float fontScale = 1.0f;
-            float padding = 8.0f;
-            float buttonHeight = 40.0f;
-            float contentWidth = scaledWidth;
-            float searchBarWidth = 200.0f;
-            float filterWidth = 80.0f; 
-            float tableHeight = 300.0f;
-            float buttonWidth = 200.0f;
-            #endif
-        
-            ImGui::SetNextWindowSize({scaledWidth, scaledHeight});
-            ImGui::SetNextWindowPos({});
-            ImGui::Begin("StartupUI.Title"_lc, 0, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoDocking);
-        
-            #ifdef __ANDROID__
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(padding, padding));
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(padding * 1.5f, padding));
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(padding, padding * 0.5f));
-            #endif
-        
-            static char password[256] = "";
-            static bool show_password_input = false;
-            static std::filesystem::path current_file;
-            static RomPackage current_rp;
-            static bool password_error = false;
-            
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(padding, buttonHeight * 0.25f));
-            if (ImGui::Button("StartupUI.ImportRomPackage"_lc, ImVec2(buttonWidth, 0))) {
-                SystemDialogs::OpenFileDialog([&](std::filesystem::path f) {
-                    std::ifstream ifs{f, std::ios::binary};
-                    if (ifs) {
-                        RomPackage rp{};
-                        Binary::Read(ifs, rp);
-                        if (rp.IsEncrypted) {
-                            show_password_input = true;
-                            current_file = f;
-                            current_rp = std::move(rp);
-                            password_error = false;
-                            std::fill((volatile char*)password, (volatile char*)password + 256, 0);
-                        }
-                        else {
-                            std::string filename = f.stem().string();
-                            std::string unique_dirname = create_unique_directory(filename);
-                            std::filesystem::path extract_path = "./models/" + unique_dirname;
-                            rp.ExtractTo(extract_path);
-                            Reload();
-                        }
-                    }
-                });
-            }
-            ImGui::PopStyleVar();
-            if (show_password_input) {
-                ImGui::OpenPopup("StartupUI.EnterPassword"_lc);
-            }
-        
-            #ifdef __ANDROID__
-            ImGui::SetNextWindowSize(ImVec2(contentWidth * 0.8f, 0));
-            #endif
-        
-            if (ImGui::BeginPopupModal("StartupUI.EnterPassword"_lc, NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
-                ImGui::TextUnformatted("StartupUI.PasswordPopupHint"_lc);
-                
-                #ifdef __ANDROID__
-                float inputWidth = ImGui::GetContentRegionAvail().x - padding * 2;
-                ImGui::PushItemWidth(inputWidth);
-                #endif
-                
-                ImGui::InputText("##password", password, IM_ARRAYSIZE(password), ImGuiInputTextFlags_Password);
-                
-                #ifdef __ANDROID__
-                ImGui::PopItemWidth();
-                #endif
-        
-                if (password_error) {
-                    ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Password incorrect. Please try again.");
-                }
-        
-                #ifdef __ANDROID__
-                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(padding, buttonHeight * 0.25f));
-                #endif
-        
-                if (ImGui::Button("Button.Positive"_lc)) {
-                    try {
-                        current_rp.Decrypt(password);
-                        std::string filename = current_file.stem().string();
-                        std::string unique_dirname = create_unique_directory(filename);
-                        std::filesystem::path extract_path = "./models/" + unique_dirname;
-                        current_rp.ExtractTo(extract_path);
-                        Reload();
-                        show_password_input = false;
-                        password_error = false;
-                        ImGui::CloseCurrentPopup();
-                    }
-                    catch (...) {
-                        password_error = true;
-                    }
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Button.Negative"_lc)) {
-                    show_password_input = false;
-                    password_error = false;
-                    ImGui::CloseCurrentPopup();
-                }
-        
-                #ifdef __ANDROID__
-                ImGui::PopStyleVar();
-                #endif
-        
-                ImGui::EndPopup();
-            }
-        
-            ImGui::SameLine();
-            if (ImGui::Button("Button.Refresh"_lc)) {
-                Reload();
-            }
-        
-            if (loading) {
-                #ifdef __ANDROID__
-                ImGui::PopStyleVar(3);
-                #endif
-                ImGui::End();
-                return;
-            }
-        
-            ImGui::TextUnformatted("StartupUI.ChooseModelHint"_lc);
-            ImGui::Separator();
-            ImGui::TextUnformatted("StartupUI.RecentlyUsed"_lc);
+#ifdef __ANDROID__
+			UI::Scaling::UpdateUIScale();
+			float scaledWidth = UI::Scaling::windowWidth;
+			float scaledHeight = UI::Scaling::windowHeight;
+			float fontScale = UI::Scaling::fontScale;
+			float padding = UI::Scaling::padding;
+			float buttonHeight = UI::Scaling::buttonHeight;
 
-            if (ImGui::BeginTable("Recently", 4, pretty_table | ImGuiTableFlags_ScrollY, ImVec2(0, tableHeight))) {
-                RenderHeaders();
-                auto i = 114;
-                for (auto& s : recently_used) {
-                    auto iter = std::find_if(models.begin(), models.end(), [&](const Model& x) {
-                        return x.path == s;
-                    });
-                    if (iter != models.end()) {
-                        auto& model = *iter;
-                        RenderModel(model, i);
-                    }
-                }
-                ImGui::EndTable();
-            }
+			float contentWidth = scaledWidth * 0.95f;
+			float searchBarWidth = contentWidth * 0.45f;
+			float filterWidth = contentWidth * 0.25f;
+			float tableHeight = scaledHeight * 0.35f;
+			float buttonWidth = contentWidth * 0.3f;
+#else
+			float scaledWidth = io.DisplaySize.x;
+			float scaledHeight = io.DisplaySize.y;
+			float fontScale = 1.0f;
+			float padding = 8.0f;
+			float buttonHeight = 40.0f;
+			float contentWidth = scaledWidth;
+			float searchBarWidth = 200.0f;
+			float filterWidth = 80.0f;
+			float tableHeight = 300.0f;
+			float buttonWidth = 200.0f;
+#endif
 
-            if (ImGui::CollapsingHeader("StartupUI.AllModel"_lc)) {
-                ImGui::SetNextItemWidth(searchBarWidth);
-                ImGui::InputText("StartupUI.SearchBoxHeader"_lc, search_txt, 200);
-                ImGui::SameLine();
+			ImGui::SetNextWindowSize({scaledWidth, scaledHeight});
+			ImGui::SetNextWindowPos({});
+			ImGui::Begin("StartupUI.Title"_lc, 0, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoDocking);
 
-                const char* items[] = {"##", "ES", "ESP", "ESP2nd", "CWX", "CWII", "Fx5800p", "TI", "SolarII"};
-                ImGui::SetNextItemWidth(filterWidth);
-                if (ImGui::BeginCombo("##cb", current_filter)) {
-                    for (int n = 0; n < IM_ARRAYSIZE(items); n++) {
-                        bool is_selected = (current_filter == items[n]);
-                        if (ImGui::Selectable(items[n], is_selected))
-                            current_filter = items[n];
-                        if (is_selected)
-                            ImGui::SetItemDefaultFocus();
-                    }
-                    ImGui::EndCombo();
-                }
-        
-                ImGui::SameLine();
-                ImGui::Checkbox("StartupUI.DontShowEmuRom"_lc, &not_show_emu);
+#ifdef __ANDROID__
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(padding, padding));
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(padding * 1.5f, padding));
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(padding, padding * 0.5f));
+#endif
 
-                if (ImGui::BeginTable("All", 4, pretty_table | ImGuiTableFlags_ScrollY, ImVec2(0, tableHeight))) {
-                    RenderHeaders();
-                    auto i = 114;
-                    for (auto& model : models) {
-                        bool matches_filter = (strcmp(current_filter, "##") == 0) || (current_filter == model.type);
-                        bool matches_search = (stristr(model.name.c_str(), search_txt) != nullptr || stristr(model.version.c_str(), search_txt) != nullptr);
-                        if (matches_filter && matches_search && (not_show_emu ? model.realhw : 1)) {
-                            RenderModel(model, i);
-                        }
-                    }
-                    ImGui::EndTable();
-                }
-            }
-        
-            #ifdef __ANDROID__
-            ImGui::PopStyleVar(3);
-            #endif
-        
-            ImGui::End();
-        }
+			static char password[256] = "";
+			static bool show_password_input = false;
+			static std::filesystem::path current_file;
+			static RomPackage current_rp;
+			static bool password_error = false;
+
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(padding, buttonHeight * 0.25f));
+			if (ImGui::Button("StartupUI.ImportRomPackage"_lc, ImVec2(buttonWidth, 0))) {
+				SystemDialogs::OpenFileDialog([&](std::filesystem::path f) {
+					std::ifstream ifs{f, std::ios::binary};
+					if (ifs) {
+						RomPackage rp{};
+						Binary::Read(ifs, rp);
+						if (rp.IsEncrypted) {
+							show_password_input = true;
+							current_file = f;
+							current_rp = std::move(rp);
+							password_error = false;
+							std::fill((volatile char*)password, (volatile char*)password + 256, 0);
+						}
+						else {
+							std::string filename = f.stem().string();
+							std::string unique_dirname = create_unique_directory(filename);
+							std::filesystem::path extract_path = "./models/" + unique_dirname;
+							rp.ExtractTo(extract_path);
+							Reload();
+						}
+					}
+				});
+			}
+			ImGui::PopStyleVar();
+			if (show_password_input) {
+				ImGui::OpenPopup("StartupUI.EnterPassword"_lc);
+			}
+
+#ifdef __ANDROID__
+			ImGui::SetNextWindowSize(ImVec2(contentWidth * 0.8f, 0));
+#endif
+
+			if (ImGui::BeginPopupModal("StartupUI.EnterPassword"_lc, NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+				ImGui::TextUnformatted("StartupUI.PasswordPopupHint"_lc);
+
+#ifdef __ANDROID__
+				float inputWidth = ImGui::GetContentRegionAvail().x - padding * 2;
+				ImGui::PushItemWidth(inputWidth);
+#endif
+
+				ImGui::InputText("##password", password, IM_ARRAYSIZE(password), ImGuiInputTextFlags_Password);
+
+#ifdef __ANDROID__
+				ImGui::PopItemWidth();
+#endif
+
+				if (password_error) {
+					ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Password incorrect. Please try again.");
+				}
+
+#ifdef __ANDROID__
+				ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(padding, buttonHeight * 0.25f));
+#endif
+
+				if (ImGui::Button("Button.Positive"_lc)) {
+					try {
+						current_rp.Decrypt(password);
+						std::string filename = current_file.stem().string();
+						std::string unique_dirname = create_unique_directory(filename);
+						std::filesystem::path extract_path = "./models/" + unique_dirname;
+						current_rp.ExtractTo(extract_path);
+						Reload();
+						show_password_input = false;
+						password_error = false;
+						ImGui::CloseCurrentPopup();
+					}
+					catch (...) {
+						password_error = true;
+					}
+				}
+				ImGui::SameLine();
+				if (ImGui::Button("Button.Negative"_lc)) {
+					show_password_input = false;
+					password_error = false;
+					ImGui::CloseCurrentPopup();
+				}
+
+#ifdef __ANDROID__
+				ImGui::PopStyleVar();
+#endif
+
+				ImGui::EndPopup();
+			}
+
+			ImGui::SameLine();
+			if (ImGui::Button("Button.Refresh"_lc)) {
+				Reload();
+			}
+
+			if (loading) {
+#ifdef __ANDROID__
+				ImGui::PopStyleVar(3);
+#endif
+				ImGui::End();
+				return;
+			}
+
+			ImGui::TextUnformatted("StartupUI.ChooseModelHint"_lc);
+			ImGui::Separator();
+			ImGui::TextUnformatted("StartupUI.RecentlyUsed"_lc);
+
+			if (ImGui::BeginTable("Recently", 4, pretty_table | ImGuiTableFlags_ScrollY, ImVec2(0, tableHeight))) {
+				RenderHeaders();
+				auto i = 114;
+				for (auto& s : recently_used) {
+					auto iter = std::find_if(models.begin(), models.end(), [&](const Model& x) {
+						return x.path == s;
+					});
+					if (iter != models.end()) {
+						auto& model = *iter;
+						RenderModel(model, i);
+					}
+				}
+				ImGui::EndTable();
+			}
+
+			if (ImGui::CollapsingHeader("StartupUI.AllModel"_lc)) {
+				ImGui::SetNextItemWidth(searchBarWidth);
+				ImGui::InputText("StartupUI.SearchBoxHeader"_lc, search_txt, 200);
+				ImGui::SameLine();
+
+				const char* items[] = {"##", "ES", "ESP", "ESP2nd", "CWX", "CWII", "Fx5800p", "TI", "SolarII"};
+				ImGui::SetNextItemWidth(filterWidth);
+				if (ImGui::BeginCombo("##cb", current_filter)) {
+					for (int n = 0; n < IM_ARRAYSIZE(items); n++) {
+						bool is_selected = (current_filter == items[n]);
+						if (ImGui::Selectable(items[n], is_selected))
+							current_filter = items[n];
+						if (is_selected)
+							ImGui::SetItemDefaultFocus();
+					}
+					ImGui::EndCombo();
+				}
+
+				ImGui::SameLine();
+				ImGui::Checkbox("StartupUI.DontShowEmuRom"_lc, &not_show_emu);
+
+				if (ImGui::BeginTable("All", 4, pretty_table | ImGuiTableFlags_ScrollY, ImVec2(0, tableHeight))) {
+					RenderHeaders();
+					auto i = 114;
+					for (auto& model : models) {
+						bool matches_filter = (strcmp(current_filter, "##") == 0) || (current_filter == model.type);
+						bool matches_search = (stristr(model.name.c_str(), search_txt) != nullptr || stristr(model.version.c_str(), search_txt) != nullptr);
+						if (matches_filter && matches_search && (not_show_emu ? model.realhw : 1)) {
+							RenderModel(model, i);
+						}
+					}
+					ImGui::EndTable();
+				}
+			}
+
+#ifdef __ANDROID__
+			ImGui::PopStyleVar(3);
+#endif
+
+			ImGui::End();
+		}
 		void RenderHeaders() {
 			ImGui::TableSetupColumn("StartupUI.RomName"_lc, ImGuiTableColumnFlags_WidthStretch, 200);
 			ImGui::TableSetupColumn("StartupUI.RomVer"_lc, ImGuiTableColumnFlags_WidthFixed, 120);
@@ -735,203 +736,205 @@ namespace casioemu {
 			ImGui::TableHeadersRow();
 		}
 
-        void RenderModel(const Model& model, int& i) {
-            static char password[60]{};
-            static bool pwd_op = true;
-            ImGui::TableNextRow();
-            ImGui::PushID(i++);
-            ImGui::TableNextColumn();
-            if (ImGui::Selectable(model.name.c_str())) {
-                ImGui::OpenPopup("ContextMenu");
-                pwd_op = false;
-            }
-            if (ImGui::BeginPopup("ContextMenu")) {
-                if (pwd_op) {
-                    ImGui::InputText("##input_pwd", password, 60);
-
+		void RenderModel(const Model& model, int& i) {
+			static char password[60]{};
+			static bool pwd_op = true;
+			ImGui::TableNextRow();
+			ImGui::PushID(i++);
+			ImGui::TableNextColumn();
+			if (ImGui::Selectable(model.name.c_str())) {
+				ImGui::OpenPopup("ContextMenu");
+				pwd_op = false;
+			}
+			if (ImGui::BeginPopup("ContextMenu")) {
+				if (pwd_op) {
+					ImGui::InputText("##input_pwd", password, 60);
 
 #ifdef __ANDROID__
-                    if (ImGui::MenuItem("StartupUI.Export"_lc)) {
-                        RomPackage rp{};
-                        try {
-                            rp.Load(model.path);
-                            if (*password != 0) {
-                                rp.Encrypt(password);
-                            } else {
-                                rp.Encrypt("0x0d000721");
-                                std::cout << "Using default password 0x0d000721\n";
-                            }
-                            memset(password, 0, 60);
-                    
-                            SystemDialogs::SaveFileDialog(model.name + ".package",
-                                [rp](std::filesystem::path fl) {
-                                    JNIEnv *env = nullptr;
-                                    if (!GetJNIEnv(&env)) {
-                                        std::cerr << "Failed to get JNI environment" << std::endl;
-                                        return;
-                                    }
-                    
-                                    try {
-                                        std::vector<unsigned char> buffer;
-                                        {
-                                            std::stringstream ss;
-                                            Binary::Write(ss, rp);
-                                            std::string str = ss.str();
-                                            buffer.assign(str.begin(), str.end());
-                                        }
-                    
-                                        jobject activity = (jobject)SDL_AndroidGetActivity();
-                                        if (!activity) {
-                                            throw std::runtime_error("Failed to get Android activity");
-                                        }
-                    
-                                        jclass gameClass = env->FindClass("com/tele/u8emulator/Game");
-                                        if (!gameClass) {
-                                            env->DeleteLocalRef(activity);
-                                            throw std::runtime_error("Failed to find Game class");
-                                        }
-                    
-                                        jmethodID exportMethod = env->GetStaticMethodID(gameClass, "exportData", "([BLandroid/net/Uri;)V");
-                                        if (!exportMethod) {
-                                            env->DeleteLocalRef(gameClass);
-                                            env->DeleteLocalRef(activity);
-                                            throw std::runtime_error("Failed to find exportData method");
-                                        }
-                    
-                                        jbyteArray jdata = env->NewByteArray(buffer.size());
-                                        env->SetByteArrayRegion(jdata, 0, buffer.size(), (jbyte*)buffer.data());
-                    
-                                        jclass uriClass = env->FindClass("android/net/Uri");
-                                        if (!uriClass) {
-                                            env->DeleteLocalRef(jdata);
-                                            env->DeleteLocalRef(gameClass);
-                                            env->DeleteLocalRef(activity);
-                                            throw std::runtime_error("Failed to find Uri class");
-                                        }
-                    
-                                        jmethodID parseMethod = env->GetStaticMethodID(uriClass, "parse", 
-                                            "(Ljava/lang/String;)Landroid/net/Uri;");
-                                        if (!parseMethod) {
-                                            env->DeleteLocalRef(jdata);
-                                            env->DeleteLocalRef(uriClass);
-                                            env->DeleteLocalRef(gameClass);
-                                            env->DeleteLocalRef(activity);
-                                            throw std::runtime_error("Failed to find parse method");
-                                        }
-                    
-                                        jstring jpath = env->NewStringUTF(fl.string().c_str());
-                                        jobject uri = env->CallStaticObjectMethod(uriClass, parseMethod, jpath);
-                    
-                                        // Export the data
-                                        env->CallStaticVoidMethod(gameClass, exportMethod, jdata, uri);
-                    
-                                        // Cleanup
-                                        env->DeleteLocalRef(jdata);
-                                        env->DeleteLocalRef(jpath);
-                                        env->DeleteLocalRef(uri);
-                                        env->DeleteLocalRef(uriClass);
-                                        env->DeleteLocalRef(gameClass);
-                                        env->DeleteLocalRef(activity);
-                    
-                                        // Close popup after successful export
-                                        ImGui::CloseCurrentPopup();
-                    
-                                    } catch (const std::exception& e) {
-                                        std::cerr << "Export failed: " << e.what() << std::endl;
-                                    }
-                                });
-                    
-                        } catch (const std::exception& e) {
-                            std::cerr << "Export preparation failed: " << e.what() << std::endl;
-                        }
-                    }
+					if (ImGui::MenuItem("StartupUI.Export"_lc)) {
+						RomPackage rp{};
+						try {
+							rp.Load(model.path);
+							if (*password != 0) {
+								rp.Encrypt(password);
+							}
+							else {
+								rp.Encrypt("0x0d000721");
+								std::cout << "Using default password 0x0d000721\n";
+							}
+							memset(password, 0, 60);
+
+							SystemDialogs::SaveFileDialog(model.name + ".package",
+								[rp](std::filesystem::path fl) {
+									JNIEnv* env = nullptr;
+									if (!GetJNIEnv(&env)) {
+										std::cerr << "Failed to get JNI environment" << std::endl;
+										return;
+									}
+
+									try {
+										std::vector<unsigned char> buffer;
+										{
+											std::stringstream ss;
+											Binary::Write(ss, rp);
+											std::string str = ss.str();
+											buffer.assign(str.begin(), str.end());
+										}
+
+										jobject activity = (jobject)SDL_AndroidGetActivity();
+										if (!activity) {
+											throw std::runtime_error("Failed to get Android activity");
+										}
+
+										jclass gameClass = env->FindClass("com/tele/u8emulator/Game");
+										if (!gameClass) {
+											env->DeleteLocalRef(activity);
+											throw std::runtime_error("Failed to find Game class");
+										}
+
+										jmethodID exportMethod = env->GetStaticMethodID(gameClass, "exportData", "([BLandroid/net/Uri;)V");
+										if (!exportMethod) {
+											env->DeleteLocalRef(gameClass);
+											env->DeleteLocalRef(activity);
+											throw std::runtime_error("Failed to find exportData method");
+										}
+
+										jbyteArray jdata = env->NewByteArray(buffer.size());
+										env->SetByteArrayRegion(jdata, 0, buffer.size(), (jbyte*)buffer.data());
+
+										jclass uriClass = env->FindClass("android/net/Uri");
+										if (!uriClass) {
+											env->DeleteLocalRef(jdata);
+											env->DeleteLocalRef(gameClass);
+											env->DeleteLocalRef(activity);
+											throw std::runtime_error("Failed to find Uri class");
+										}
+
+										jmethodID parseMethod = env->GetStaticMethodID(uriClass, "parse",
+											"(Ljava/lang/String;)Landroid/net/Uri;");
+										if (!parseMethod) {
+											env->DeleteLocalRef(jdata);
+											env->DeleteLocalRef(uriClass);
+											env->DeleteLocalRef(gameClass);
+											env->DeleteLocalRef(activity);
+											throw std::runtime_error("Failed to find parse method");
+										}
+
+										jstring jpath = env->NewStringUTF(fl.string().c_str());
+										jobject uri = env->CallStaticObjectMethod(uriClass, parseMethod, jpath);
+
+										// Export the data
+										env->CallStaticVoidMethod(gameClass, exportMethod, jdata, uri);
+
+										// Cleanup
+										env->DeleteLocalRef(jdata);
+										env->DeleteLocalRef(jpath);
+										env->DeleteLocalRef(uri);
+										env->DeleteLocalRef(uriClass);
+										env->DeleteLocalRef(gameClass);
+										env->DeleteLocalRef(activity);
+
+										// Close popup after successful export
+										ImGui::CloseCurrentPopup();
+									}
+									catch (const std::exception& e) {
+										std::cerr << "Export failed: " << e.what() << std::endl;
+									}
+								});
+						}
+						catch (const std::exception& e) {
+							std::cerr << "Export preparation failed: " << e.what() << std::endl;
+						}
+					}
 #else
-                    if (ImGui::MenuItem("StartupUI.Export"_lc)) {
-                        RomPackage rp{};
-                        try {
-                            rp.Load(model.path);
-                            if (*password != 0) {
-                                rp.Encrypt(password);
-                            } else {
-                                rp.Encrypt("0x0d000721");
-                                std::cout << "Using default password 0x0d000721\n";
-                            }
-                            memset(password, 0, 60);
-                    
-                            SystemDialogs::SaveFileDialog(model.name + ".package",
-                                [rp](std::filesystem::path fl) {
-                                    try {
-                                        std::ofstream ofs(fl, std::ios::binary);
-                                        if (!ofs) {
-                                            throw std::runtime_error("Cannot create output file");
-                                        }
-                                        Binary::Write(ofs, rp);
-                                        ofs.close();
-                                    } catch (const std::exception& e) {
-                                        std::cerr << "Export failed: " << e.what() << std::endl;
-                                    }
-                                });
-                    
-                        } catch (const std::exception& e) {
-                            std::cerr << "Export preparation failed: " << e.what() << std::endl;
-                        }
-                    }
+					if (ImGui::MenuItem("StartupUI.Export"_lc)) {
+						RomPackage rp{};
+						try {
+							rp.Load(model.path);
+							if (*password != 0) {
+								rp.Encrypt(password);
+							}
+							else {
+								rp.Encrypt("0x0d000721");
+								std::cout << "Using default password 0x0d000721\n";
+							}
+							memset(password, 0, 60);
+
+							SystemDialogs::SaveFileDialog(model.name + ".package",
+								[rp](std::filesystem::path fl) {
+									try {
+										std::ofstream ofs(fl, std::ios::binary);
+										if (!ofs) {
+											throw std::runtime_error("Cannot create output file");
+										}
+										Binary::Write(ofs, rp);
+										ofs.close();
+									}
+									catch (const std::exception& e) {
+										std::cerr << "Export failed: " << e.what() << std::endl;
+									}
+								});
+						}
+						catch (const std::exception& e) {
+							std::cerr << "Export preparation failed: " << e.what() << std::endl;
+						}
+					}
 #endif
-                }
-                else {
-                    if (ImGui::MenuItem("StartupUI.Launch"_lc)) {
-                        selected_path = model.path;
-                        auto iter = std::find_if(recently_used.begin(), recently_used.end(),
-                            [&](auto& x) {
-                                return x == model.path.string();
-                            });
-                        if (iter != recently_used.end())
-                            recently_used.erase(iter);
-                        recently_used.insert(recently_used.begin(), model.path.string());
-                        if (recently_used.size() > 5) {
-                            recently_used.resize(5);
-                        }
-                    }
-        #ifdef _WIN32
-                    if (ImGui::MenuItem("StartupUI.Reveal"_lc)) {
-                        char buffer[480];
-                        sprintf(buffer, "explorer.exe \"%s\"", model.path.string().c_str());
-                        system(buffer);
-                    }
-        #endif
-                    if (ImGui::MenuItem("StartupUI.Edit"_lc)) {
-                        windows2->push_back(new ModelEditor(model.path));
-                    }
-                    if (ImGui::MenuItem("StartupUI.Export"_lc)) {
-                        ImGui::EndPopup();
-                        ImGui::OpenPopup("ContextMenu");
-                        pwd_op = true;
-                        goto ed;
-                    }
-                }
-                ImGui::EndPopup();
-            }
-        ed:
-            ImGui::TableNextColumn();
-            ImGui::TextUnformatted(model.version.c_str());
-            ImGui::TableNextColumn();
-            if (model.realhw) {
-                if (model.show_sum) {
-                    ImGui::Text("%s (%s) %s", model.checksum.c_str(), model.checksum2.c_str(), model.sum_good.c_str());
-                }
-                else {
-                    ImGui::TextUnformatted("Table.NotAvailable"_lc);
-                }
-            }
-            else {
-                ImGui::TextUnformatted("StartupUI.EmulatorRom"_lc);
-            }
-            ImGui::TableNextColumn();
-            ImGui::TextUnformatted(model.type.c_str());
-            ImGui::SameLine();
-            ImGui::Dummy({0, ImGui::GetTextLineHeightWithSpacing()});
-            ImGui::PopID();
-        }
+				}
+				else {
+					if (ImGui::MenuItem("StartupUI.Launch"_lc)) {
+						selected_path = model.path;
+						auto iter = std::find_if(recently_used.begin(), recently_used.end(),
+							[&](auto& x) {
+								return x == model.path.string();
+							});
+						if (iter != recently_used.end())
+							recently_used.erase(iter);
+						recently_used.insert(recently_used.begin(), model.path.string());
+						if (recently_used.size() > 5) {
+							recently_used.resize(5);
+						}
+					}
+#ifdef _WIN32
+					if (ImGui::MenuItem("StartupUI.Reveal"_lc)) {
+						char buffer[480];
+						sprintf(buffer, "explorer.exe \"%s\"", model.path.string().c_str());
+						system(buffer);
+					}
+#endif
+					if (ImGui::MenuItem("StartupUI.Edit"_lc)) {
+						windows2->push_back(new ModelEditor(model.path));
+					}
+					if (ImGui::MenuItem("StartupUI.Export"_lc)) {
+						ImGui::EndPopup();
+						ImGui::OpenPopup("ContextMenu");
+						pwd_op = true;
+						goto ed;
+					}
+				}
+				ImGui::EndPopup();
+			}
+		ed:
+			ImGui::TableNextColumn();
+			ImGui::TextUnformatted(model.version.c_str());
+			ImGui::TableNextColumn();
+			if (model.realhw) {
+				if (model.show_sum) {
+					ImGui::Text("%s (%s) %s", model.checksum.c_str(), model.checksum2.c_str(), model.sum_good.c_str());
+				}
+				else {
+					ImGui::TextUnformatted("Table.NotAvailable"_lc);
+				}
+			}
+			else {
+				ImGui::TextUnformatted("StartupUI.EmulatorRom"_lc);
+			}
+			ImGui::TableNextColumn();
+			ImGui::TextUnformatted(model.type.c_str());
+			ImGui::SameLine();
+			ImGui::Dummy({0, ImGui::GetTextLineHeightWithSpacing()});
+			ImGui::PopID();
+		}
 	};
 } // namespace casioemu
 class LicenseWindow : public UIWindow {
@@ -1035,6 +1038,8 @@ std::string sui_loop() {
 	});
 	t3.detach();
 	bool once = true;
+	std::vector<std::string> languages;
+	int selected_language_index = 0;
 	while (1) {
 		SDL_Event event;
 		while (!SDL_PollEvent(&event)) {
@@ -1049,17 +1054,81 @@ std::string sui_loop() {
 			for (auto& wind : *windows2) {
 				wind->Render();
 			}
+
+			// 检查是否应该打开语言选择弹窗
 			if (once && !std::filesystem::exists("locale.txt")) {
+				// 仅在首次打开弹窗前，扫描一次locales目录
+				if (languages.empty()) {
+					const std::string locales_dir = "./locales/";
+					if (std::filesystem::exists(locales_dir)) {
+						for (const auto& entry : std::filesystem::directory_iterator(locales_dir)) {
+							if (entry.is_regular_file()) {
+								// 从文件名（如 "en_US.json"）提取语言代码（"en_US"）
+								languages.push_back(entry.path().stem().string());
+							}
+						}
+					}
+					// 如果没有找到任何语言文件，添加一个默认回退选项
+					if (languages.empty()) {
+						languages.push_back("en_US");
+					}
+				}
+
 				ImGui::OpenPopup("LanguageChooser");
 				once = false;
 			}
-			if (ImGui::BeginPopupModal("LanguageChooser")) {
+
+			// 设置弹窗在屏幕中央显示
+			ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+			ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+			// 定义弹窗的内容和行为
+			if (ImGui::BeginPopupModal("LanguageChooser", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
 				ImGui::Text("Please choose your language to continue");
-				// ImGui::Combo()
-				if (ImGui::Button("Ok")) {
-					g_local.ChangeLanguage("en_US");
-					// Restart...
-					ImGui::CloseCurrentPopup();
+				ImGui::Separator();
+				ImGui::Spacing();
+
+				// 只有在语言列表不为空时才显示下拉框
+				if (!languages.empty()) {
+					const char* preview_value = languages[selected_language_index].c_str();
+					if (ImGui::BeginCombo("Language", preview_value)) {
+						for (int n = 0; n < languages.size(); n++) {
+							const bool is_selected = (selected_language_index == n);
+							if (ImGui::Selectable(languages[n].c_str(), is_selected)) {
+								selected_language_index = n;
+							}
+							if (is_selected) {
+								ImGui::SetItemDefaultFocus();
+							}
+						}
+						ImGui::EndCombo();
+					}
+				}
+
+				ImGui::Spacing();
+				ImGui::Separator();
+				ImGui::Spacing();
+
+				if (ImGui::Button("Ok", ImVec2(120, 0))) {
+					// 确保选择是有效的
+					if (!languages.empty() && selected_language_index < languages.size()) {
+						const std::string& selected_lang = languages[selected_language_index];
+
+						// 1. 调用你的语言切换逻辑
+						g_local.ChangeLanguage(selected_lang);
+						if ("Localization.EnableCJK"_l == "1" || "Localization.EnableCJK"_l == "true")
+							RebuildFont_Requested = true;
+
+						// 2. [重要] 创建 locale.txt 文件并保存选择，防止下次启动再次弹出
+						std::ofstream outfile("locale.txt");
+						outfile << selected_lang;
+						outfile.close();
+
+						// 3. 关闭弹窗
+						ImGui::CloseCurrentPopup();
+
+						// 注意：你可能需要在这里提示用户重启程序以使语言完全生效
+					}
 				}
 				ImGui::EndPopup();
 			}
@@ -1090,6 +1159,21 @@ std::string sui_loop() {
 		case SDL_MOUSEWHEEL:
 			ImGui_ImplSDL2_ProcessEvent(&event);
 			break;
+		}
+		if (RebuildFont_Requested) {
+			RebuildFont(RebuildFont_Scale);
+			if (RebuildFont_Scale != 0) {
+				ImGuiStyle igs = ImGuiStyle();
+				ImGui::StyleColorsDark(&igs);
+				ImGuiStyle& style = igs;
+				style.WindowRounding = 4.0f;
+				style.Colors[ImGuiCol_WindowBg].w = 0.9f;
+				style.FrameRounding = 4.0f;
+				style.ScaleAllSizes(RebuildFont_Scale);
+				ImGui::GetStyle() = igs;
+			}
+			ImGui_ImplSDLRenderer2_DestroyDeviceObjects();
+			RebuildFont_Requested = 0;
 		}
 		if (!ui.selected_path.empty())
 			goto exit;
