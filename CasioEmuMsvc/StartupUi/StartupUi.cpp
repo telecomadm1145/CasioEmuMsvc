@@ -18,6 +18,11 @@
 #include <filesystem>
 #include <imgui.h>
 #include <iostream>
+#ifdef _WIN32
+#include <windows.h>
+#include <shellapi.h>
+#endif
+#include "Ext/Random.hpp"
 
 #ifdef __ANDROID__
 #include "../Gui/UIScaling.h"
@@ -119,10 +124,10 @@ public:
 		Binary::Read(ifs, mi);
 		v = mi.csr_mask;
 		k = mi.pd_value;
-		strcpy(path1, mi.interface_path.c_str());
-		strcpy(path2, mi.rom_path.c_str());
-		strcpy(path3, mi.flash_path.c_str());
-		strcpy(name, mi.model_name.c_str());
+        strncpy_s(path1, mi.interface_path.c_str(), _TRUNCATE);
+        strncpy_s(path2, mi.rom_path.c_str(), _TRUNCATE);
+        strncpy_s(path3, mi.flash_path.c_str(), _TRUNCATE);
+        strncpy_s(name, mi.model_name.c_str(), _TRUNCATE);
 		color[0] = mi.ink_color.r / 255.0f;
 		color[1] = mi.ink_color.g / 255.0f;
 		color[2] = mi.ink_color.b / 255.0f;
@@ -234,7 +239,7 @@ public:
 			ImGui::PushID(btn.kiko + 20);
 			if (ImGui::Button(btn.keyname.c_str(), {scaleFactor * btn.rect.w, scaleFactor * btn.rect.h})) {
 				btninfo = &btn;
-				strcpy(buffer, btn.keyname.c_str());
+                strncpy_s(buffer, btn.keyname.c_str(), _TRUNCATE);
 				SDL_itoa(btn.kiko, buffer2, 16);
 			}
 			ImGui::PopID();
@@ -473,13 +478,17 @@ namespace casioemu {
 								mod.version = ri.ver;
 								std::array<char, 8> key{};
 								memcpy(key.data(), mod.version.data(), 6);
-								auto iter = RomNames.find(key);
+                        auto iter = RomNames.find(key);
 								if (iter != RomNames.end())
 									mod.name = iter->second;
 								mod.checksum = tohex(ri.real_sum, 4);
 								mod.checksum2 = tohex(ri.desired_sum, 4);
 								mod.sum_good = ri.real_sum == ri.desired_sum ? "OK" : "NG";
-								mod.id = tohex(*(unsigned long long*)ri.cid, 8);
+                                // Safely form version key and id
+                                std::array<char, 8> key2{};
+                                std::memset(key2.data(), 0, key2.size());
+                                std::memcpy(key2.data(), mod.version.data(), std::min<std::size_t>(6, mod.version.size()));
+                                mod.id = tohex(*(unsigned long long*)ri.cid, 8);
 								if (ri.type == RomInfo::ES) {
 									auto a = get_pd(mi.pd_value);
 									mod.version += std::string(" (P") + a + ")";
@@ -506,16 +515,9 @@ namespace casioemu {
 		bool not_show_emu = false;
 		bool loading = false;
 
-		inline std::string generate_random_string(size_t length) {
-			static const char charset[] = "0123456789abcdefghijklmnopqrstuvwxyz";
-			std::string result;
-			result.reserve(length);
-			srand((unsigned int)time(nullptr));
-			for (size_t i = 0; i < length; i++) {
-				result += charset[rand() % (sizeof(charset) - 1)];
-			}
-			return result;
-		}
+        inline std::string generate_random_string(size_t length) {
+            return util::Random::random_string(length);
+        }
 		inline std::string create_unique_directory(const std::string& base_name) {
 			std::string dir_name = base_name;
 			while (std::filesystem::exists("./models/" + dir_name)) {
@@ -896,11 +898,10 @@ namespace casioemu {
 						}
 					}
 #ifdef _WIN32
-					if (ImGui::MenuItem("StartupUI.Reveal"_lc)) {
-						char buffer[480];
-						sprintf(buffer, "explorer.exe \"%s\"", model.path.string().c_str());
-						system(buffer);
-					}
+                    if (ImGui::MenuItem("StartupUI.Reveal"_lc)) {
+                        std::wstring wpath = std::filesystem::path(model.path).wstring();
+                        ShellExecuteW(NULL, L"open", L"explorer.exe", wpath.c_str(), NULL, SW_SHOWNORMAL);
+                    }
 #endif
 					if (ImGui::MenuItem("StartupUI.Edit"_lc)) {
 						windows2->push_back(new ModelEditor(model.path));

@@ -21,13 +21,17 @@
 
 #define ENABLE_CRASH_CHECK
 #ifdef ENABLE_CRASH_CHECK
+#ifndef PANIC
 #define PANIC(...)           \
 	{                        \
 		printf(__VA_ARGS__); \
 		__debugbreak();      \
 	}
+#endif
 #else
+#ifndef PANIC
 #define PANIC(...) 0;
+#endif
 #endif
 
 #define LOCK(x) \

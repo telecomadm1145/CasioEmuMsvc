@@ -32,8 +32,8 @@
 #include "Ui.hpp"
 #include <algorithm> // for std::min, std::max
 #include <array>
-#include <cstdlib> // for std::rand
 #include <ctime>   // for std::time
+#include "Ext/Random.hpp"
 #include <iomanip>
 #include <vector>
 
@@ -104,10 +104,7 @@ inline constexpr std::array<uint8_t, 256> generate_lookup_table() {
 constexpr auto bit_lookup_table = generate_lookup_table();
 
 inline void fillRandomData(unsigned char* buf, size_t size) {
-	std::srand(static_cast<unsigned int>(SDL_GetPerformanceCounter())); // 使用当前时间作为随机种子
-	std::generate(buf, buf + size, []() {
-		return static_cast<unsigned char>(std::rand() % 256); // 生成0到255之间的随机数
-	});
+    util::Random::fillRandomBytes(reinterpret_cast<std::uint8_t*>(buf), size);
 }
 
 #pragma warning(disable : 4244)
@@ -1109,9 +1106,10 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		std::tm tm = *std::localtime(&t);
 		std::ostringstream filename;
 
-		filename << "screenshot-"
-				 << std::put_time(&tm, "%Y-%m-%d-%H-%M-%S-") << std::rand() % 1000
-				 << ".png";
+        filename << "screenshot-"
+                 << std::put_time(&tm, "%Y-%m-%d-%H-%M-%S-")
+                 << util::Random::uniform_uint32(0, 999)
+                 << ".png";
 
 		// Calculate the bounding box of the rendering area from both sprite and pixel rectangles
 		int minX = INT_MAX, minY = INT_MAX, maxX = INT_MIN, maxY = INT_MIN;

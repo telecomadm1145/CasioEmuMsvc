@@ -8,14 +8,12 @@
 #include <cstring>
 #include <fstream>
 #include <algorithm>
+#include "Ext/Random.hpp"
 
 namespace casioemu {
-	inline void fillRandomData(unsigned char* buf, size_t size) {
-		std::srand(static_cast<unsigned int>(SDL_GetPerformanceCounter())); // 使用当前时间作为随机种子
-		std::generate(buf, buf + size, []() {
-			return static_cast<unsigned char>(std::rand() % 256); // 生成0到255之间的随机数
-		});
-	}
+    inline void fillRandomData(unsigned char* buf, size_t size) {
+        util::Random::fillRandomBytes(reinterpret_cast<std::uint8_t*>(buf), size);
+    }
 
 	constexpr uint32_t SAVE_INTERVAL_MS = 10 * 1000; // 10s
 

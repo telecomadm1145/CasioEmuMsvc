@@ -4,6 +4,7 @@
 
 #include "Emulator.hpp"
 #include "Logger.hpp"
+#include "Ext/AppContext.hpp"
 #include "SDL_events.h"
 #include "SDL_keyboard.h"
 #include "SDL_mouse.h"
@@ -169,14 +170,18 @@ int main(int argc, char* argv[]) {
     LoadPlugins();
 #endif
 
-	while (emulator.Running()) {
+    // publish startup
+    GetAppContext().eventBus.publish("app.start", {});
+
+    while (emulator.Running()) {
 		SDL_Event event{};
 		busy = false;
 		if (!SDL_PollEvent(&event))
 			continue;
 		busy = true;
 		if (event.type == frame_event) {
-			SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+            GetAppContext().eventBus.publish("frame.begin", {});
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 			SDL_RenderClear(renderer);
 			if (bg_txt) {
 				int w, h;
@@ -279,7 +284,8 @@ int main(int argc, char* argv[]) {
 				SDL_RenderFillRect(renderer, &rect);
 			}
 
-			SDL_RenderPresent(emulator.renderer);
+            SDL_RenderPresent(emulator.renderer);
+            GetAppContext().eventBus.publish("frame.end", {});
 #else
 			gui_loop();
 			emulator.Frame();
@@ -314,7 +320,8 @@ int main(int argc, char* argv[]) {
 		case SDL_WINDOWEVENT:
 			switch (event.window.event) {
 			case SDL_WINDOWEVENT_CLOSE:
-				emulator.Shutdown();
+                GetAppContext().eventBus.publish("app.exit_requested", {});
+                emulator.Shutdown();
 				std::exit(0);
 				break;
 			case SDL_WINDOWEVENT_RESIZED:
@@ -552,9 +559,12 @@ int main(int argc, char* argv[]) {
 #endif
 			[[fallthrough]];
 		default:
-			emulator.UIEvent(event);
+            // Broadcast UI events for observers (plugins, overlays)
+            GetAppContext().eventBus.publish("sdl.event", event);
+            emulator.UIEvent(event);
 			break;
 		}
 	}
+    GetAppContext().eventBus.publish("app.stop", {});
 	return 0;
 };

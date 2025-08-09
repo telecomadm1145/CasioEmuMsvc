@@ -85,9 +85,9 @@ public:
 				}
 				else {
 					if (ImGui::Selectable(a.name.c_str())) {
-						char buf[40]{};
-						sprintf(buf, "%06X", curptr + a.file_ptr);
-						ImGui::SetClipboardText(buf);
+                    char buf[40]{};
+                    sprintf_s(buf, sizeof(buf), "%06X", curptr + a.file_ptr);
+                    ImGui::SetClipboardText(buf);
 					}
 					if (ImGui::IsItemHovered())
 						ImGui::SetTooltip("%06X", curptr+ a.file_ptr);
