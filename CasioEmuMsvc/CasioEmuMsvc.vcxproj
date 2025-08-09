@@ -393,6 +393,7 @@
     <ClCompile Include="Gui\FileDialog.cpp" />
     <ClCompile Include="Ext\LoggerImpl.cpp" />
     <ClCompile Include="Gui\VariableWindow.cpp" />
+    <ClCompile Include="Gui\GDBWindow.cpp" />
     <ClCompile Include="Peripheral\5800Flash.cpp" />
     <ClCompile Include="Peripheral\Audio.cpp" />
     <ClCompile Include="Peripheral\BatteryBackedRAM.cpp" />
@@ -413,6 +414,7 @@
     <ClCompile Include="Ext\U8Disas.cpp" />
     <ClCompile Include="Peripheral\VoltageLevelSupervisor.cpp" />
     <ClCompile Include="Ext\vibration.cpp" />
+    <ClCompile Include="GDB\GDBServer.cpp" />
     <ClCompile Include="asmjit\src\**\*.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -482,6 +484,7 @@
     <ClInclude Include="ModelInfo.h" />
     <ClInclude Include="Models.h" />
     <ClInclude Include="Gui\VariableWindow.h" />
+    <ClInclude Include="Gui\GDBWindow.hpp" />
     <ClInclude Include="Peripheral\5800Flash.h" />
     <ClInclude Include="Peripheral\Audio.h" />
     <ClInclude Include="Peripheral\BatteryBackedRAM.hpp" />
@@ -506,6 +509,7 @@
     <ClInclude Include="Peripheral\VoltageLevelSupervisor.h" />
     <ClInclude Include="Ext\vibration.h" />
     <ClInclude Include="Gui\Gui.h" />
+    <ClInclude Include="GDB\GDBServer.hpp" />
     <ClInclude Include="locales\lang.h" />
     <ClInclude Include="asmjit\src\**\*.h" />
     <ClInclude Include="version.h" />

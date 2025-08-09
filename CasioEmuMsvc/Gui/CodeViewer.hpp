@@ -52,4 +52,7 @@ public:
 	void DrawContent();
 	void DrawMonitor();
 	void JumpTo(uint32_t offset);
+	void RequestStep();
+    void AddBreakpoint(uint32_t address);
+    void RemoveBreakpoint(uint32_t address);
 };

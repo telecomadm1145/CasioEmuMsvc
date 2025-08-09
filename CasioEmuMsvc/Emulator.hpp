@@ -43,6 +43,7 @@ namespace casioemu
 		unsigned int cycles_per_second;
 		unsigned int timer_interval;
 		bool running, Paused;
+	std::atomic<bool> m_step_requested;
 		unsigned int last_frame_tick_count;
 		std::string model_path;
 		bool pause_on_mem_error;
@@ -119,6 +120,7 @@ namespace casioemu
 		void SetClockSpeed(float speed);
 		bool GetPaused();
 		void SetPaused(bool paused);
+	void RequestStep();
 		void UIEvent(SDL_Event &event);
 		SDL_Renderer *GetRenderer();
 		SDL_Texture *GetInterfaceTexture();

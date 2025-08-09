@@ -1,4 +1,4 @@
-﻿#include "CodeViewer.hpp"
+#include "CodeViewer.hpp"
 #include "Chipset/CPU.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Config.hpp"
@@ -452,4 +452,24 @@ void CodeViewer::RenderCore() {
 	if (ImGui::Button("CodeViewer.GotoPC"_lc)) {
 		JumpTo(pc_cache);
 	}
+}
+
+void CodeViewer::RequestStep()
+{
+    stepping = true;
+    m_emu->SetPaused(false);
+}
+
+void CodeViewer::AddBreakpoint(uint32_t address)
+{
+    int idx = 0;
+    LookUp(address, &idx);
+    break_points[idx] = 1;
+}
+
+void CodeViewer::RemoveBreakpoint(uint32_t address)
+{
+    int idx = 0;
+    LookUp(address, &idx);
+    break_points.erase(idx);
 }

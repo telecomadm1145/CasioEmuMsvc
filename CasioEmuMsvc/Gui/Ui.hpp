@@ -7,7 +7,9 @@
 #include "UIScaling.h"
 #endif
 
-int test_gui(bool* guiCreated,SDL_Window*,SDL_Renderer*);
+class GDBServer;
+class CodeViewer;
+CodeViewer* test_gui(bool* guiCreated,SDL_Window*,SDL_Renderer*, GDBServer* gdbServer);
 void gui_cleanup();
 void gui_loop();
 extern char* n_ram_buffer;

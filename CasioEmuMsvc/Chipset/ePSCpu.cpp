@@ -226,18 +226,18 @@ namespace detail {
 	using casioemu::ePSCPU;
 
 	//--------------------------------------------------------------
-	// Ö¸Áî±í½Úµã
+	// Ö¸ï¿½ï¿½ï¿½ï¿½Úµï¿½
 	//--------------------------------------------------------------
 	struct InstTbl {
-		/* ×Ó±í¹¹Ôì£ºdepth = 0 ±íÊ¾¼ÌÐøÏòÏÂ²é±í */
+		/* ï¿½Ó±ï¿½ï¿½ï¿½ï¿½ì£ºdepth = 0 ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â²ï¿½ï¿½ */
 		constexpr InstTbl(const InstTbl (*next)[16]) noexcept
 			: next(next), depth(0) {}
 
-		/* Ò¶½Úµã¹¹Ôì£ºdepth = 0xFF ±íÊ¾µ½´Ë½áÊø£¬handler Îª×îÖÕÖ¸Áî */
+		/* Ò¶ï¿½Úµã¹¹ï¿½ì£ºdepth = 0xFF ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½Ë½ï¿½ï¿½ï¿½ï¿½ï¿½handler Îªï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½ */
 		constexpr InstTbl(ePSCPU::OP_Handler op) noexcept
 			: handler(op), depth(0xFF) {}
 
-		/* Ä¬ÈÏ¹¹Ôì£ºÎ´ÖªÖ¸Áî */
+		/* Ä¬ï¿½Ï¹ï¿½ï¿½ì£ºÎ´ÖªÖ¸ï¿½ï¿½ */
 		constexpr InstTbl() noexcept
 			: handler(&ePSCPU::OP_UD), depth(0xFF) {}
 
@@ -249,13 +249,13 @@ namespace detail {
 	};
 
 	//--------------------------------------------------------------
-	// 000_ : Èý¼¶×Ó±í
+	// 000_ : ï¿½ï¿½ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_000_[16]{
 		&ePSCPU::OP_NOP, &ePSCPU::OP_WDTC, &ePSCPU::OP_SLEP};
 
 	//--------------------------------------------------------------
-	// 00__ : ¶þ¼¶×Ó±í
+	// 00__ : ï¿½ï¿½ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_00__[16]{
 		&TB_000_,
@@ -265,7 +265,7 @@ namespace detail {
 	};
 
 	//--------------------------------------------------------------
-	// 0___ : Ò»¼¶×Ó±í
+	// 0___ : Ò»ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_0___[16]{
 		/* 0x0 */ &TB_00__, &ePSCPU::OP_SFR4, &ePSCPU::OP_OR_A, &ePSCPU::OP_OR_R,
@@ -274,7 +274,7 @@ namespace detail {
 		/* 0xC */ &ePSCPU::OP_RLCA, &ePSCPU::OP_RLC, &ePSCPU::OP_SWAPA, &ePSCPU::OP_SWAP};
 
 	//--------------------------------------------------------------
-	// 1___ : Ò»¼¶×Ó±í
+	// 1___ : Ò»ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_1___[16]{
 		&ePSCPU::OP_ADD_A, &ePSCPU::OP_ADD_r, &ePSCPU::OP_ADC_A, &ePSCPU::OP_ADC_r,
@@ -283,14 +283,14 @@ namespace detail {
 		&ePSCPU::OP_INCA, &ePSCPU::OP_INC, &ePSCPU::OP_DECA, &ePSCPU::OP_DEC};
 
 	//--------------------------------------------------------------
-	// 2B__ : Èý¼¶×Ó±í (2Bxx)
+	// 2B__ : ï¿½ï¿½ï¿½ï¿½ï¿½Ó±ï¿½ (2Bxx)
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_2B__[16]{
 		{}, {}, {}, {}, {}, {}, {}, {},
 		{}, {}, {}, {}, {}, {}, &ePSCPU::OP_RETI, &ePSCPU::OP_RET};
 
 	//--------------------------------------------------------------
-	// 2___ : Ò»¼¶×Ó±í
+	// 2___ : Ò»ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_2___[16]{
 		&ePSCPU::OP_MOV_A, &ePSCPU::OP_MOV_r, &ePSCPU::OP_SHRA, &ePSCPU::OP_SHLA,
@@ -299,7 +299,7 @@ namespace detail {
 		&ePSCPU::OP_TBRD, &ePSCPU::OP_TBRD, &ePSCPU::OP_TBRD, &ePSCPU::OP_TBRD_A};
 
 	//--------------------------------------------------------------
-	// 4___ : Ò»¼¶×Ó±í
+	// 4___ : Ò»ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_4___[16]{
 		&ePSCPU::OP_TBPTRL, &ePSCPU::OP_TBPTRM, &ePSCPU::OP_TBPTRH, &ePSCPU::OP_BANK,
@@ -308,7 +308,7 @@ namespace detail {
 		&ePSCPU::OP_SUB_k, &ePSCPU::OP_SUBB_k, &ePSCPU::OP_MOV_k, &ePSCPU::OP_SFL4};
 
 	//--------------------------------------------------------------
-	// 5___ : Ò»¼¶×Ó±í
+	// 5___ : Ò»ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_5___[16]{
 		&ePSCPU::OP_JDNZ_A, &ePSCPU::OP_JDNZ_r, &ePSCPU::OP_EXL_r, &ePSCPU::OP_EXH_r,
@@ -317,7 +317,7 @@ namespace detail {
 		&ePSCPU::OP_JBC, &ePSCPU::OP_JBC, &ePSCPU::OP_JBC, &ePSCPU::OP_JBC};
 
 	//--------------------------------------------------------------
-	// 6___ : Ò»¼¶×Ó±í
+	// 6___ : Ò»ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_6___[16]{
 		/* 0x0-0x7 JBS */ &ePSCPU::OP_JBS, &ePSCPU::OP_JBS, &ePSCPU::OP_JBS, &ePSCPU::OP_JBS,
@@ -327,7 +327,7 @@ namespace detail {
 		&ePSCPU::OP_BC, &ePSCPU::OP_BC, &ePSCPU::OP_BC, &ePSCPU::OP_BC};
 
 	//--------------------------------------------------------------
-	// 7___ : Ò»¼¶×Ó±í
+	// 7___ : Ò»ï¿½ï¿½ï¿½Ó±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl TB_7___[16]{
 		/* 0x0-0x7 BS  */ &ePSCPU::OP_BS, &ePSCPU::OP_BS, &ePSCPU::OP_BS, &ePSCPU::OP_BS,
@@ -337,7 +337,7 @@ namespace detail {
 		&ePSCPU::OP_BTG, &ePSCPU::OP_BTG, &ePSCPU::OP_BTG, &ePSCPU::OP_BTG};
 
 	//--------------------------------------------------------------
-	// ¶¥²ãÖ÷²éÕÒ±í
+	// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò±ï¿½
 	//--------------------------------------------------------------
 	inline constexpr InstTbl main_lookup_tbl[16]{
 		&TB_0___, &TB_1___, &TB_2___, &ePSCPU::OP_S0CALL,
@@ -380,7 +380,7 @@ void casioemu::ePSCPU::Reset() {
 	InstFlags = 0;
 }
 
-// Port²Ù×÷
+// Portï¿½ï¿½ï¿½ï¿½
 inline void casioemu::ePSCPU::InvalidateTimerSetting(uint32_t idx) {
 }
 
@@ -427,16 +427,16 @@ void casioemu::ePSCPU::Timer0Next() {
 		if (TR0CON & 0b100000) // Event counter mode
 			return;			   // we don't impl that.
 
-		if (TR0CON & 0b100) { // ¸ßËÙÄ£Ê½
+		if (TR0CON & 0b100) { // ï¿½ï¿½ï¿½ï¿½Ä£Ê½
 		}
-		else { // µÍËÙÄ£Ê½...
+		else { // ï¿½ï¿½ï¿½ï¿½Ä£Ê½...
 		}
 
 		if (TR0CON & 0b1000) // T0EN
 		{
 			if (t0tick++ > (1 << (prescale * 2))) {
 				if (!(timer0cnt--)) {
-					timer0cnt = timer0reload;					   // ¼ÆÊýÆ÷Òç³ö
+					timer0cnt = timer0reload;					   // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 					if (TR0CON & 0b10000 && (run_stat <= ST_FAST)) // TMR0IE
 					{
 						RaiseTMINT(0);
@@ -451,12 +451,12 @@ void casioemu::ePSCPU::Timer0Next() {
 
 		if (TR1CON & 0b1000) // T1EN
 		{
-			if (t1_pre++ > 64) // Ëõ·Å
+			if (t1_pre++ > 64) // ï¿½ï¿½ï¿½ï¿½
 			{
 				if (t1tick++ > (1 << (prescale * 2 + 1))) {
 					if (!(t1tick2--)) {
-						t1tick2 = TRL1;									// ¼ÆÊýÆ÷Òç³ö
-						if (run_stat <= ST_FAST || TR1CON & 0b10000000) // »½ÐÑ¹¦ÄÜ
+						t1tick2 = TRL1;									// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+						if (run_stat <= ST_FAST || TR1CON & 0b10000000) // ï¿½ï¿½ï¿½Ñ¹ï¿½ï¿½ï¿½
 							if (TR1CON & 0b10000)						// TMR1IE
 							{
 								if (TR1CON & 0b10000000)
@@ -491,7 +491,7 @@ inline void casioemu::ePSCPU::OP_NOP(byte* param_1) {
 inline void casioemu::ePSCPU::OP_WDTC(byte* param_1) {
 	int iVar1;
 	STATUS |= 0xc0;
-	//RepeatCount = 0; // RPT WDTCÊÇÊ²Ã´¹í£¿
+	//RepeatCount = 0; // RPT WDTCï¿½ï¿½Ê²Ã´ï¿½ï¿½ï¿½ï¿½
 	CycleCounter += 0x1;
 	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar1;
@@ -509,7 +509,7 @@ inline void casioemu::ePSCPU::OP_SLEP(byte* param_1) {
 		debug_printf("entering STOP mode!!!\n");
 	}
 	Sleep(0x1);
-//RepeatCount = 0; // RPT SLEPÊÇÊ²Ã´¹í£¿
+//RepeatCount = 0; // RPT SLEPï¿½ï¿½Ê²Ã´ï¿½ï¿½ï¿½ï¿½
 	CycleCounter += 0x1;
 	int iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar1;
@@ -2103,7 +2103,7 @@ inline void casioemu::ePSCPU::OP_INC(byte* param_1)
 	byte bVar3;
 	byte* pbVar4;
 	int iVar5;
-	uint extraout_EDX;
+	uint extraout_EDX = 0;
 	byte bVar6;
 	uint uVar7;
 	byte local_4;

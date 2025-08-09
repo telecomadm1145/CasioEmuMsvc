@@ -40,6 +40,8 @@
 #include <Gui.h>
 #include <Plugin/PluginMan.h>
 
+#include "GDB/GDBServer.hpp"
+
 using namespace casioemu;
 
 int main(int argc, char* argv[]) {
@@ -95,6 +97,9 @@ int main(int argc, char* argv[]) {
 	Emulator emulator(argv_map);
 	m_emu = &emulator;
 
+	GDBServer gdbServer(&emulator, 1234);
+	gdbServer.Start();
+
 	// static std::atomic<bool> running(true);
 
 	bool guiCreated = false;
@@ -116,7 +121,7 @@ int main(int argc, char* argv[]) {
 	});
 	t3.detach();
 #ifdef DBG
-	test_gui(&guiCreated, emulator.window, emulator.renderer);
+	test_gui(&guiCreated, emulator.window, emulator.renderer, &gdbServer);
 #endif
 	SDL_Surface* background = IMG_Load("background.jpg");
 	SDL_Texture* bg_txt = 0;

@@ -12,7 +12,7 @@
 #include <string>
 
 namespace casioemu {
-	Emulator::Emulator(std::map<std::string, std::string>& _argv_map, bool _paused) : Paused(_paused), argv_map(_argv_map), chipset(*new Chipset(*this)) {
+	Emulator::Emulator(std::map<std::string, std::string>& _argv_map, bool _paused) : Paused(_paused), argv_map(_argv_map), chipset(*new Chipset(*this)), m_step_requested(false) {
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
 		running = true;
