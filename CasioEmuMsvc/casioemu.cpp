@@ -1,4 +1,4 @@
-﻿#include "Config.hpp"
+#include "Config.hpp"
 #include "Ui.hpp"
 #include "imgui_impl_sdl2.h"
 
@@ -340,12 +340,13 @@ int main(int argc, char* argv[]) {
 				touchState.startTime = SDL_GetTicks();
 				touchState.fingerId = event.tfinger.fingerId;
 				touchState.dragging = false;
-			} else if (!touchState2.touching) {
+			} else if (!touchState2.touching && touchState.fingerId != event.tfinger.fingerId) {
 				touchState2.touching = true;
 				touchState2.startX = event.tfinger.x * wid;
 				touchState2.startY = event.tfinger.y * hei;
 				touchState2.currentX = touchState2.startX;
 				touchState2.currentY = touchState2.startY;
+				touchState2.startTime = SDL_GetTicks();
 				touchState2.fingerId = event.tfinger.fingerId;
 				touchState2.dragging = false;
 				// ImGui specific interaction for second touch if needed
@@ -457,8 +458,41 @@ int main(int argc, char* argv[]) {
 				touchState2.currentY = endY;
             }
 			if (touchState2.touching && touchState2.fingerId == event.tfinger.fingerId) {
+				float endX = event.tfinger.x * wid;
+				float endY = event.tfinger.y * hei;
+				Uint32 endTime = SDL_GetTicks();
+				touchState2.currentX = endX;
+				touchState2.currentY = endY;
+
+				// Handle tap/long press for second finger if needed
+				bool is_tap_for_imgui = (endTime - touchState2.startTime < LONG_PRESS_DELAY) &&
+				                        (std::hypot(endX - touchState2.startX, endY - touchState2.startY) < 10.0f);
+
+				if (is_tap_for_imgui) {
+					// Simulate left click for ImGui for second finger
+					SDL_Event clickEventDown;
+					SDL_memset(&clickEventDown, 0, sizeof(clickEventDown));
+					clickEventDown.type = SDL_MOUSEMOTION;
+					clickEventDown.motion.x = endX;
+					clickEventDown.motion.y = endY;
+					if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&clickEventDown);
+
+					SDL_memset(&clickEventDown, 0, sizeof(clickEventDown));
+					clickEventDown.type = SDL_MOUSEBUTTONDOWN;
+					clickEventDown.button.button = SDL_BUTTON_LEFT;
+					clickEventDown.button.x = endX;
+					clickEventDown.button.y = endY;
+					if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&clickEventDown);
+
+					SDL_Event clickEventUp;
+					SDL_memset(&clickEventUp, 0, sizeof(clickEventUp));
+					clickEventUp.type = SDL_MOUSEBUTTONUP;
+					clickEventUp.button.button = SDL_BUTTON_LEFT;
+					clickEventUp.button.x = endX;
+					clickEventUp.button.y = endY;
+					if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&clickEventUp);
+				}
 				touchState2.touching = false;
-				// ImGui specific release for second touch if needed (e.g. if it was a tap/longpress)
 			}
 			break;
 
@@ -468,8 +502,7 @@ int main(int argc, char* argv[]) {
             emulator.UIEvent(event);
 
             // Existing ImGui gesture logic (drag, pinch-zoom)
-			if (touchState.touching && !touchState2.touching &&
-				touchState.fingerId == event.tfinger.fingerId) { // Single finger drag for ImGui
+			if (touchState.touching && touchState.fingerId == event.tfinger.fingerId) {
 				float currentX = event.tfinger.x * wid;
 				float currentY = event.tfinger.y * hei;
 				float deltaX = currentX - touchState.startX;
@@ -477,28 +510,39 @@ int main(int argc, char* argv[]) {
 				touchState.currentX = currentX;
 				touchState.currentY = currentY;
 
-				if ((deltaX * deltaX + deltaY * deltaY) > 1.f) { // Threshold for dragging
-					if (!touchState.dragging) {
+				// Handle single finger drag or first finger in multi-touch
+				if (!touchState2.touching) { // Single finger drag for ImGui
+					if ((deltaX * deltaX + deltaY * deltaY) > 1.f) { // Threshold for dragging
+						if (!touchState.dragging) {
+							SDL_Event motionEvent;
+							SDL_memset(&motionEvent, 0, sizeof(motionEvent));
+							motionEvent.type = SDL_MOUSEBUTTONDOWN;
+							motionEvent.button.button = SDL_BUTTON_LEFT;
+							motionEvent.button.x = currentX;
+							motionEvent.button.y = currentY;
+							if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&motionEvent);
+							touchState.dragging = true;
+						}
 						SDL_Event motionEvent;
 						SDL_memset(&motionEvent, 0, sizeof(motionEvent));
-						motionEvent.type = SDL_MOUSEBUTTONDOWN;
-						motionEvent.button.button = SDL_BUTTON_LEFT;
-						motionEvent.button.x = currentX;
-						motionEvent.button.y = currentY;
+						motionEvent.type = SDL_MOUSEMOTION;
+						motionEvent.motion.x = currentX;
+						motionEvent.motion.y = currentY;
+						motionEvent.motion.state = SDL_BUTTON_LMASK;
 						if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&motionEvent);
-						touchState.dragging = true;
 					}
-					SDL_Event motionEvent;
-					SDL_memset(&motionEvent, 0, sizeof(motionEvent));
-					motionEvent.type = SDL_MOUSEMOTION;
-					motionEvent.motion.x = currentX;
-					motionEvent.motion.y = currentY;
-					motionEvent.motion.state = SDL_BUTTON_LMASK;
-					if (guiCreated) ImGui_ImplSDL2_ProcessEvent(&motionEvent);
 				}
-			} else if (touchState.touching && !touchState.dragging && touchState2.touching &&
-					   touchState.fingerId != touchState2.fingerId &&
-					   (touchState.fingerId == event.tfinger.fingerId || touchState2.fingerId == event.tfinger.fingerId) ) { // Pinch-zoom for ImGui
+			} else if (touchState2.touching && touchState2.fingerId == event.tfinger.fingerId) {
+				float currentX = event.tfinger.x * wid;
+				float currentY = event.tfinger.y * hei;
+				touchState2.currentX = currentX;
+				touchState2.currentY = currentY;
+			}
+
+			// Handle pinch-zoom when both fingers are touching
+			if (touchState.touching && touchState2.touching &&
+				touchState.fingerId != touchState2.fingerId &&
+				(touchState.fingerId == event.tfinger.fingerId || touchState2.fingerId == event.tfinger.fingerId)) { // Pinch-zoom for ImGui
 				
                 // Update the correct finger's current position
                 if(touchState.fingerId == event.tfinger.fingerId) {
@@ -543,14 +587,10 @@ int main(int argc, char* argv[]) {
 			}
             // Update touch trails
 			if (touchState.touching && touchState.fingerId == event.tfinger.fingerId) {
-				touchState.currentX = event.tfinger.x * wid;
-				touchState.currentY = event.tfinger.y * hei;
 				trail1.samples[trail1.current_index] = { touchState.currentX, touchState.currentY, SDL_GetTicks()};
 				trail1.current_index = (trail1.current_index + 1) % TRAIL_BUFFER_SIZE;
 			}
 			if (touchState2.touching && touchState2.fingerId == event.tfinger.fingerId) {
-				touchState2.currentX = event.tfinger.x * wid;
-				touchState2.currentY = event.tfinger.y * hei;
 				trail2.samples[trail2.current_index] = { touchState2.currentX, touchState2.currentY, SDL_GetTicks()};
 				trail2.current_index = (trail2.current_index + 1) % TRAIL_BUFFER_SIZE;
 			}

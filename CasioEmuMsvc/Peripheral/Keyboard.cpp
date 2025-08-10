@@ -1,4 +1,4 @@
-﻿#include <SDL.h>
+#include <SDL.h>
 #include "Keyboard.hpp"
 
 #include "Chipset/Chipset.hpp"
@@ -517,24 +517,17 @@ namespace casioemu {
 
 		uint8_t current_keyboard_in_emu = 0;
 		uint8_t current_keyboard_out_emu = 0;
-		bool first_pressed_button_found = false;
+		bool any_pressed_button_found = false;
 
 		for (const auto& button : buttons) {
 			if (button.type == Button::BT_BUTTON && button.pressed) {
 				current_keyboard_in_emu |= button.ki_bit; // OR all pressed KI bits together
-
-				if (!first_pressed_button_found) {
-					// For KO, the original emulator behavior was "Report an arbitrary pressed key."
-					// This implies only one KO line might be considered active for the emulated CPU.
-					// If multiple KO lines can truly be active and sensed by the CPU, this should be ORed.
-					// Sticking to one KO line active based on the first found pressed button:
-					current_keyboard_out_emu = button.ko_bit;
-					first_pressed_button_found = true;
-				}
+				current_keyboard_out_emu |= button.ko_bit; // OR all pressed KO bits together for multi-key support
+				any_pressed_button_found = true;
 			}
 		}
 
-		if (first_pressed_button_found) {
+		if (any_pressed_button_found) {
 			keyboard_in_emu = current_keyboard_in_emu;
 			keyboard_out_emu = current_keyboard_out_emu;
 			emu_ki_readcount = emu_ko_readcount = 0;
@@ -553,6 +546,7 @@ namespace casioemu {
 		// SDL_Log("PressButton: code %02X, stick %d, fingerId %lld, current button fingerId %lld", button.code, stick, fingerId, button.pressingFingerId);
 
 		// Prevent a button from being simultaneously claimed by two different fingers.
+		// This check is important to prevent multiple fingers from controlling the same button simultaneously.
 		if (fingerId != -1 && button.pressed && button.pressingFingerId != -1 && button.pressingFingerId != fingerId) {
 			// SDL_Log("Button %02X already pressed by finger %lld, ignoring press from finger %lld", button.code, button.pressingFingerId, fingerId);
 			return;
