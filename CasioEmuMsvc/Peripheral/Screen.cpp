@@ -220,6 +220,9 @@ namespace casioemu {
 #endif
 			if constexpr (hardware_id == HW_TI) {
 				ratio = 1 - 1e-4;
+#ifdef __ANDROID__
+			ratio = 0.80;
+#endif
 				if (!ti_enabled) {
 					for (size_t i = 0; i < 65 * 192; i++) {
 						screen_ink_alpha[i] *= ratio;
@@ -262,6 +265,9 @@ namespace casioemu {
 			}
 			else if (hardware_id == HW_EPS6800) {
 				ratio = 1 - 1e-4;
+#ifdef __ANDROID__
+			ratio = 0.80;
+#endif
 				float ink_alpha_on = 255;
 				float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);
 				ink_alpha_on = std::clamp(ink_alpha_on, 0.0f, 255.0f);
