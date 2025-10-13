@@ -1,7 +1,6 @@
 #include "ePSCpu.h"
 #include "MMU.hpp"
 #include <array>
-#include <cstdint>
 
 using WCHAR = char;
 
@@ -368,10 +367,10 @@ void casioemu::ePSCPU::Reset() {
 	memset(regs, 0, 0x80);
 	memset(ram, 0, 0x80 * 64);
 	memset(stackram, 0, sizeof(stackram));
-	memset(vram, 0, 0x60*4);
+	memset(vram, 0, 0x60 * 4);
 	INDF0 = INDF1 = INDF2 = 1;
 	FSR1 = FSR2 = 0x80;
-	//STATUS = 0xc0;
+	// STATUS = 0xc0;
 	POST_ID = 0x70;
 	DCRA = DCRB = 0xff;
 	DCRC = 0xf;
@@ -492,7 +491,7 @@ inline void casioemu::ePSCPU::OP_NOP(byte* param_1) {
 inline void casioemu::ePSCPU::OP_WDTC(byte* param_1) {
 	int iVar1;
 	STATUS |= 0xc0;
-	//RepeatCount = 0; // RPT WDTC��ʲô����
+	// RepeatCount = 0; // RPT WDTC��ʲô����
 	CycleCounter += 0x1;
 	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar1;
@@ -510,7 +509,7 @@ inline void casioemu::ePSCPU::OP_SLEP(byte* param_1) {
 		debug_printf("entering STOP mode!!!\n");
 	}
 	Sleep(0x1);
-//RepeatCount = 0; // RPT SLEP��ʲô����
+	// RepeatCount = 0; // RPT SLEP��ʲô����
 	CycleCounter += 0x1;
 	int iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
 	PCL = (char)iVar1;
@@ -1279,7 +1278,7 @@ inline void casioemu::ePSCPU::OP_JBC(byte* param_1)
 	WCHAR local_204[0x100];
 	uint local_4;
 
-	local_4 = g_stack_cookie ^ (uintptr_t)auStack_210;
+	local_4 = g_stack_cookie ^ (uint)auStack_210;
 	bVar1 = *(byte*)(param_1 + 0x3);
 	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
 	bVar2 = (byte)uVar5;
@@ -1313,7 +1312,7 @@ inline void casioemu::ePSCPU::OP_JBC(byte* param_1)
 		post_pid(bVar2 | bVar1);
 	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
 	CycleCounter += 0x2;
-	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_210);
+	___security_check_cookie_4(local_4 ^ (uint)auStack_210);
 	return;
 }
 
@@ -1484,10 +1483,9 @@ inline void casioemu::ePSCPU::OP_MOVRP(byte* param_1)
 	WCHAR local_204[0x100];
 	uint local_4;
 
-	local_4 = g_stack_cookie ^ (uintptr_t)auStack_210;
+	local_4 = g_stack_cookie ^ (uint)auStack_210;
 	bVar1 = (*param_1 << 0x4 | param_1[0x1]) + 0x80;
 	local_20c = (uint)(byte)param_1[0x2] << 0x4 | (uint)(byte)param_1[0x3];
-	extraout_ECX = local_20c;
 	uVar5 = (uint)bVar1;
 	uVar2 = (uint)(byte)param_1[0x2] << 0x4 & 0xff | (uint)(byte)param_1[0x3];
 	debug_printf("MOVRP p=%x(%s) r=%x(%s)", uVar5, Sfr_in_str + uVar5, uVar2, Sfr_in_str + uVar2);
@@ -1497,7 +1495,7 @@ inline void casioemu::ePSCPU::OP_MOVRP(byte* param_1)
 		if (bVar4 == 0x31) {
 			// local_208 = CONCAT31(local_208._1_3_, PORTC | PBCON);
 			InvalidatePORTA();
-			//debug_printf("MOVRP p=%x(%s) PORTA %x DCRB&PORTB %x DCRA %x", uVar5, Sfr_in_str + uVar5,(uint)PACON, (uint)(PORTC & PBCON), (uint)PAWAKE);
+			// debug_printf("MOVRP p=%x(%s) PORTA %x DCRB&PORTB %x DCRA %x", uVar5, Sfr_in_str + uVar5,(uint)PACON, (uint)(PORTC & PBCON), (uint)PAWAKE);
 			bVar4 = (byte)local_20c;
 		}
 		pbVar3 = reg(bVar4);
@@ -1505,18 +1503,18 @@ inline void casioemu::ePSCPU::OP_MOVRP(byte* param_1)
 		pbVar3 = reg(bVar1);
 		*pbVar3 = local_20d;
 		if (bVar1 == 0xe) {
-			//debug_printf("LCDDATA %x ARH(%x) ARL(%x)",
+			// debug_printf("LCDDATA %x ARH(%x) ARL(%x)",
 			//	(uint)(byte)(&VRam)[(uint)LCDARL + (LCDARH & 0x3) * 0x60], (uint)LCDARH,
 			//	(uint)LCDARL);
 		}
 		else if (bVar1 == 0x0) {
-			//debug_printf2(local_204, L"BSR 0 FSR f2, data p %x\n", (uint)DAT_0041e192);
+			// debug_printf2(local_204, L"BSR 0 FSR f2, data p %x\n", (uint)DAT_0041e192);
 		}
 		if (((((char)local_20c == '\0') || (bVar1 == 0x0)) || ((char)local_20c == '\x03')) ||
 			(bVar1 == 0x3)) {
-			//debug_printf2(local_204, L"BSR 0 FSR %x, data r %x\n", (uint)FSR, (uint)(byte)(&EmuMem)[FSR]);
+			// debug_printf2(local_204, L"BSR 0 FSR %x, data r %x\n", (uint)FSR, (uint)(byte)(&EmuMem)[FSR]);
 			pbVar3 = reg(bVar1);
-			//debug_printf("MOVRP BSR %x FSR %x,BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,data %x", (uint)BSR, (uint)FSR, (uint)BSR1, (uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)*pbVar3);
+			// debug_printf("MOVRP BSR %x FSR %x,BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,data %x", (uint)BSR, (uint)FSR, (uint)BSR1, (uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)*pbVar3);
 		}
 		post_pid((char)local_20c);
 		post_pid(bVar1);
@@ -1527,8 +1525,8 @@ inline void casioemu::ePSCPU::OP_MOVRP(byte* param_1)
 		iVar6 = 0xa;
 		do {
 			uVar5 = uVar2;
-			//debug_printf("BANK 0 r%x, data %x", uVar2, (uint)(byte)(&EmuMem)[uVar2]);
-			//debug_printf2(local_204, L"BANK 0 r%x, data %x\n", uVar5, (uint)(byte)(&EmuMem)[uVar5]);
+			// debug_printf("BANK 0 r%x, data %x", uVar2, (uint)(byte)(&EmuMem)[uVar2]);
+			// debug_printf2(local_204, L"BANK 0 r%x, data %x\n", uVar5, (uint)(byte)(&EmuMem)[uVar5]);
 			uVar2 = (uint)(byte)((char)uVar2 + 0x1);
 			iVar6 += -0x1;
 		} while (iVar6 != 0x0);
@@ -1538,7 +1536,7 @@ inline void casioemu::ePSCPU::OP_MOVRP(byte* param_1)
 	PCM = (byte)((uint)iVar6 >> 0x8);
 	PCL = (byte)iVar6;
 	PCH = (undefined)((uint)iVar6 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_210);
+	___security_check_cookie_4(local_4 ^ (uint)auStack_210);
 	return;
 }
 
@@ -1559,7 +1557,7 @@ inline void casioemu::ePSCPU::OP_MOVPR(byte* param_1)
 	WCHAR local_204[0x100];
 	uint local_4;
 
-	local_4 = g_stack_cookie ^ (uintptr_t)auStack_20c;
+	local_4 = g_stack_cookie ^ (uint)auStack_20c;
 	bVar1 = param_1[0x3];
 	bVar2 = (byte)((uint)(byte)param_1[0x2] << 0x4);
 	uVar7 = (uint)(byte)param_1[0x2] << 0x4 & 0xff | (uint)bVar1;
@@ -1595,7 +1593,7 @@ inline void casioemu::ePSCPU::OP_MOVPR(byte* param_1)
 	PCL = (byte)iVar6;
 	PCM = (byte)((uint)iVar6 >> 0x8);
 	PCH = (undefined)((uint)iVar6 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_20c);
+	___security_check_cookie_4(local_4 ^ (uint)auStack_20c);
 	return;
 }
 
@@ -1654,7 +1652,7 @@ inline void casioemu::ePSCPU::OP_TBRD(byte* param_1)
 	WCHAR local_204[0x100];
 	uint local_4;
 
-	local_4 = g_stack_cookie ^ (uintptr_t)auStack_21c;
+	local_4 = g_stack_cookie ^ (uint)auStack_21c;
 	local_219 = *(char*)(param_1 + 0x1) - 0xc;
 	uVar3 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
 	local_210 = uVar3 | *(byte*)(param_1 + 0x3);
@@ -1705,7 +1703,7 @@ inline void casioemu::ePSCPU::OP_TBRD(byte* param_1)
 	PCM = (byte)((uint)iVar4 >> 0x8);
 	PCL = (byte)iVar4;
 	PCH = (undefined)((uint)iVar4 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_21c);
+	___security_check_cookie_4(local_4 ^ (uint)auStack_21c);
 	return;
 }
 
@@ -2108,14 +2106,12 @@ inline void casioemu::ePSCPU::OP_INC(byte* param_1)
 	uint extraout_EDX = 0;
 	byte bVar6;
 	uint uVar7;
-	uint extraout_EDX;
 	byte local_4;
 
 	bVar1 = *(byte*)(param_1 + 0x3);
 	uVar7 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
 	bVar3 = (byte)uVar7;
 	bVar6 = bVar3 | bVar1;
-	extraout_EDX = uVar7;
 	uVar7 = uVar7 & 0xff | (uint)bVar1;
 	do {
 		pbVar4 = reg(bVar3 | bVar1);
@@ -2676,10 +2672,9 @@ inline void casioemu::ePSCPU::OP_ADDDC_r(byte* param_1)
 	WCHAR local_204[0x100];
 	uint local_4;
 
-	local_4 = g_stack_cookie ^ (uintptr_t)&local_208;
+	local_4 = g_stack_cookie ^ (uint)&local_208;
 	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
 	local_208 = uVar6 | *(byte*)(param_1 + 0x3);
-	extraout_CL = (byte)local_208;
 	uVar6 = uVar6 & 0xff | (uint) * (byte*)(param_1 + 0x3);
 	do {
 		debug_printf("ADDDC r=%x(%s) A", uVar6, Sfr_in_str + uVar6);
@@ -2719,7 +2714,7 @@ inline void casioemu::ePSCPU::OP_ADDDC_r(byte* param_1)
 	PCL = (byte)iVar4;
 	PCM = (byte)((uint)iVar4 >> 0x8);
 	PCH = (undefined)((uint)iVar4 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uintptr_t)&local_208);
+	___security_check_cookie_4(local_4 ^ (uint)&local_208);
 	return;
 }
 
@@ -3061,7 +3056,7 @@ inline void casioemu::ePSCPU::OP_BC(byte* param_1)
 	WCHAR local_204[0x100];
 	uint local_4;
 
-	local_4 = g_stack_cookie ^ (uintptr_t)auStack_20c;
+	local_4 = g_stack_cookie ^ (uint)auStack_20c;
 	bVar1 = *(byte*)(param_1 + 0x3);
 	local_20a = *(char*)(param_1 + 0x1) - 0x8;
 	uVar7 = (uint)local_20a;
@@ -3097,7 +3092,7 @@ inline void casioemu::ePSCPU::OP_BC(byte* param_1)
 	PCM = (byte)((uint)iVar4 >> 0x8);
 	PCL = (byte)iVar4;
 	PCH = (undefined)((uint)iVar4 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_20c);
+	___security_check_cookie_4(local_4 ^ (uint)auStack_20c);
 	return;
 }
 
@@ -3118,7 +3113,7 @@ inline void casioemu::ePSCPU::OP_BS(byte* param_1)
 	WCHAR local_204[0x100];
 	uint local_4;
 
-	local_4 = g_stack_cookie ^ (uintptr_t)auStack_210;
+	local_4 = g_stack_cookie ^ (uint)auStack_210;
 	bVar1 = *(byte*)(param_1 + 0x3);
 	bVar2 = *(byte*)(param_1 + 0x1);
 	uVar7 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
@@ -3162,7 +3157,7 @@ inline void casioemu::ePSCPU::OP_BS(byte* param_1)
 	PCM = (byte)((uint)iVar5 >> 0x8);
 	PCL = (byte)iVar5;
 	PCH = (undefined)((uint)iVar5 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_210);
+	___security_check_cookie_4(local_4 ^ (uint)auStack_210);
 	return;
 }
 

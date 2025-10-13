@@ -15,7 +15,7 @@
 		(ptr)[3])
 
 char* decodeeps(char* rom, int pc, bool& l) {
-	// unsigned int* v6; // edi  // Không dùng, có thể bỏ
+	// unsigned int* v6; // edi  // Không dùng, có th�?b�?
 	// unsigned __int16 v9;      // a
 	// int v11;                  // eax
 	// int v13;                  // [esp+Ch] [ebp-20h]
@@ -318,7 +318,6 @@ char* decodeeps(char* rom, int pc, bool& l) {
 		snprintf(v7, sizeof(v7), "NOP");
 	}
 LABEL_105:
-	// 
 #ifdef _WIN32
 	return _strdup(v7);
 #else

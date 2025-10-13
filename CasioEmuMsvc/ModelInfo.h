@@ -65,8 +65,9 @@ namespace casioemu {
 		bool LARGE_model{};
 		// ML620 style mirroring(1->8) or ML610 style mirroring(1->4)
 		bool ml620_mirroring{};
+		std::map<std::string, std::string> extra;
 		void Write(std::ostream& os) const {
-			Binary::Write(os, std::string("\n\nnx-U16/U8 Emulator Configuration file v51\n\n模拟器配置文件v51\n\ntệp cấu hình giả lập v51\n\n"));
+			Binary::Write(os, std::string("\n\nnx-U16/U8 Emulator Configuration file v52\n\n模拟器配置文件v52\n\ntệp cấu hình giả lập v52\n\n"));
 			Binary::Write(os, csr_mask);
 			Binary::Write(os, hardware_id);
 			Binary::Write(os, real_hardware);
@@ -84,6 +85,7 @@ namespace casioemu {
 			Binary::Write(os, u16_mode);
 			Binary::Write(os, LARGE_model);
 			Binary::Write(os, ml620_mirroring);
+			Binary::Write(os, extra);
 		}
 		void Read(std::istream& is) {
 			{
@@ -126,6 +128,7 @@ namespace casioemu {
 			Binary::Read(is, u16_mode);
 			Binary::Read(is, LARGE_model);
 			Binary::Read(is, ml620_mirroring);
+			Binary::Read(is, extra);
 		}
 	};
 } // namespace casioemu
