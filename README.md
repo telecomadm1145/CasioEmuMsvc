@@ -12,6 +12,17 @@ With debugger and built-in disassembler.
 
 * Build with VS or using `msbuild`
 
-# Feedback
+# Fixes for specific GPUs
+
+You might experience crashes on specific hardwares, try this if upgrading a GPU driver didn't help.
+
+```bat
+set SDL_RENDER_DRIVER=opengl
+CasioEmuMsvc.exe
+```
+
+# Discord&Feedback
 
 https://discord.gg/NM39VPdJTf
+
+mailto:telecomadm1919@gmail.com
