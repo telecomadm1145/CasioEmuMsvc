@@ -108,6 +108,7 @@ void gui_loop() {
             win->open = false;
         }
     }
+    ImGui::Text("V" EMULATOR_VERSION "       CASIOEMUMSVC");
     ImGui::End();
     #endif
 
