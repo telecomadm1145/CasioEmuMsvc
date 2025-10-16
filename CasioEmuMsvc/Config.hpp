@@ -66,3 +66,6 @@ public:                                          \
 public:                       \
 	virtual y Get##x##() = 0; \
 	virtual void Set##x##(y a) = 0;
+
+
+#define EMULATOR_VERSION "0.1.0"
