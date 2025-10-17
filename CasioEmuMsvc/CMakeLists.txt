@@ -41,6 +41,8 @@ find_library(SDL2 SDL2)
 
 find_library(SDL2_image SDL2_image)
 
+find_library(CPUFEATURES_LIBRARY cpufeatures)
+
 add_library(main SHARED)
 
 # Search for all .cpp files in the CasioEmuMsvc directory 
@@ -75,4 +77,4 @@ target_sources(main PRIVATE ${MAIN_SOURCES})
 
 target_compile_definitions(main PRIVATE ASMJIT_STATIC)
 
-target_link_libraries(main PRIVATE SDL2 SDL2_image asmjit::asmjit cpufeatures)
+target_link_libraries(main PRIVATE SDL2 SDL2_image asmjit::asmjit ${CPUFEATURES_LIBRARY})
