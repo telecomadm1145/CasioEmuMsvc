@@ -124,10 +124,14 @@ public:
 		Binary::Read(ifs, mi);
 		v = mi.csr_mask;
 		k = mi.pd_value;
-        strncpy_s(path1, mi.interface_path.c_str(), _TRUNCATE);
-        strncpy_s(path2, mi.rom_path.c_str(), _TRUNCATE);
-        strncpy_s(path3, mi.flash_path.c_str(), _TRUNCATE);
-        strncpy_s(name, mi.model_name.c_str(), _TRUNCATE);
+        strncpy(path1, mi.interface_path.c_str(), sizeof(path1) - 1);
+        path1[sizeof(path1) - 1] = '\0';
+        strncpy(path2, mi.rom_path.c_str(), sizeof(path2) - 1);
+        path2[sizeof(path2) - 1] = '\0';
+        strncpy(path3, mi.flash_path.c_str(), sizeof(path3) - 1);
+        path3[sizeof(path3) - 1] = '\0';
+        strncpy(name, mi.model_name.c_str(), sizeof(name) - 1);
+        name[sizeof(name) - 1] = '\0';
 		color[0] = mi.ink_color.r / 255.0f;
 		color[1] = mi.ink_color.g / 255.0f;
 		color[2] = mi.ink_color.b / 255.0f;
@@ -239,7 +243,8 @@ public:
 			ImGui::PushID(btn.kiko + 20);
 			if (ImGui::Button(btn.keyname.c_str(), {scaleFactor * btn.rect.w, scaleFactor * btn.rect.h})) {
 				btninfo = &btn;
-                strncpy_s(buffer, btn.keyname.c_str(), _TRUNCATE);
+                strncpy(buffer, btn.keyname.c_str(), sizeof(buffer) - 1);
+                buffer[sizeof(buffer) - 1] = '\0';
 				SDL_itoa(btn.kiko, buffer2, 16);
 			}
 			ImGui::PopID();
@@ -478,7 +483,7 @@ namespace casioemu {
 								mod.version = ri.ver;
 								std::array<char, 8> key{};
 								memcpy(key.data(), mod.version.data(), 6);
-                        auto iter = RomNames.find(key);
+                                auto iter = RomNames.find(key);
 								if (iter != RomNames.end())
 									mod.name = iter->second;
 								mod.checksum = tohex(ri.real_sum, 4);
@@ -574,25 +579,30 @@ namespace casioemu {
 			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(padding, buttonHeight * 0.25f));
 			if (ImGui::Button("StartupUI.ImportRomPackage"_lc, ImVec2(buttonWidth, 0))) {
 				SystemDialogs::OpenFileDialog([&](std::filesystem::path f) {
-					std::ifstream ifs{f, std::ios::binary};
-					if (ifs) {
-						RomPackage rp{};
-						Binary::Read(ifs, rp);
-						if (rp.IsEncrypted) {
-							show_password_input = true;
-							current_file = f;
-							current_rp = std::move(rp);
-							password_error = false;
-							std::fill((volatile char*)password, (volatile char*)password + 256, 0);
-						}
-						else {
-							std::string filename = f.stem().string();
-							std::string unique_dirname = create_unique_directory(filename);
-							std::filesystem::path extract_path = "./models/" + unique_dirname;
-							rp.ExtractTo(extract_path);
-							Reload();
-						}
-					}
+					try {
+                        std::ifstream ifs{f, std::ios::binary};
+                        if (!ifs) {
+                            throw std::runtime_error("Cannot open selected file.");
+                        }
+                        RomPackage rp{};
+                        Binary::Read(ifs, rp);
+                        if (rp.IsEncrypted) {
+                            show_password_input = true;
+                            current_file = f;
+                            current_rp = std::move(rp);
+                            password_error = false;
+                            std::fill((volatile char*)password, (volatile char*)password + 256, 0);
+                        } else {
+                            std::string filename = f.stem().string();
+                            std::string unique_dirname = create_unique_directory(filename);
+                            std::filesystem::path extract_path = "./models/" + unique_dirname;
+                            rp.ExtractTo(extract_path);
+                            Reload();
+                        }
+                    } catch (const std::exception& e) {
+                        std::cerr << "Failed to import package: " << e.what() << std::endl;
+                        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Import Error", "The selected file is not a valid or supported ROM package.", nullptr);
+                    }
 				});
 			}
 			ImGui::PopStyleVar();
@@ -638,7 +648,8 @@ namespace casioemu {
 						password_error = false;
 						ImGui::CloseCurrentPopup();
 					}
-					catch (...) {
+					catch (const std::exception& e) {
+                        SDL_Log("Decryption failed: %s", e.what());
 						password_error = true;
 					}
 				}
@@ -841,11 +852,13 @@ namespace casioemu {
 									}
 									catch (const std::exception& e) {
 										std::cerr << "Export failed: " << e.what() << std::endl;
+										SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Export Error", e.what(), nullptr);
 									}
 								});
 						}
 						catch (const std::exception& e) {
 							std::cerr << "Export preparation failed: " << e.what() << std::endl;
+							SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Export Error", e.what(), nullptr);
 						}
 					}
 #else
@@ -874,11 +887,13 @@ namespace casioemu {
 									}
 									catch (const std::exception& e) {
 										std::cerr << "Export failed: " << e.what() << std::endl;
+										SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Export Error", e.what(), nullptr);
 									}
 								});
 						}
 						catch (const std::exception& e) {
 							std::cerr << "Export preparation failed: " << e.what() << std::endl;
+							SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Export Error", e.what(), nullptr);
 						}
 					}
 #endif
