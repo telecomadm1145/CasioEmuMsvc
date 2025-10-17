@@ -21,7 +21,7 @@ void MemBreakPoint::DrawContent() {
 
 		for (int i = c.DisplayStart; i < c.DisplayEnd; i++) {
 			MemBPData_t& data = break_point_hash[i];
-            sprintf_s(buf, sizeof(buf), "%lx", (unsigned long)data.addr);
+            snprintf(buf, sizeof(buf), "%lx", (unsigned long)data.addr);
 			ImGui::PushID(i);
 			if (ImGui::Selectable(buf, selected == i)) {
 				selected = i;

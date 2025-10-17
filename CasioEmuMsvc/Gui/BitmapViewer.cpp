@@ -26,7 +26,7 @@ public:
 		uint32_t addr = static_cast<uint32_t>(strtol(bufaddr, nullptr, 16));
 		addr = addr & 0xfffff;
 		if (ImGui::InputInt("BitmapViewer.Address_2"_lc, (int*)&addr)) {
-            sprintf_s(bufaddr, sizeof(bufaddr), "%08X", addr);
+            snprintf(bufaddr, sizeof(bufaddr), "%08X", addr);
 		}
 		ImGui::SliderInt("BitmapViewer.Width"_lc, &width, 1, 256);
 		ImGui::SliderInt("BitmapViewer.PixelSize"_lc, &size, 1, 256);
@@ -83,7 +83,7 @@ public:
 						ImVec2(x, startPos.y - tickLength),
 						IM_COL32(255, 255, 255, 255));
 					char colLabel[16];
-                    sprintf_s(colLabel, sizeof(colLabel), "%X", col);
+                    snprintf(colLabel, sizeof(colLabel), "%X", col);
 					drawList->AddText(ImVec2(x + 1, startPos.y - tickLength - 12),
 						IM_COL32(255, 255, 255, 255), colLabel);
 				}
@@ -97,7 +97,7 @@ public:
 						ImVec2(endPos.x + tickLength, y),
 						IM_COL32(255, 255, 255, 255));
 					char rowLabel[16];
-                    sprintf_s(rowLabel, sizeof(rowLabel), "%06X", (row + addr) & 0xfffff);
+                    snprintf(rowLabel, sizeof(rowLabel), "%06X", (row + addr) & 0xfffff);
 					drawList->AddText(ImVec2(endPos.x + tickLength, y - 6),
 						IM_COL32(255, 255, 255, 255), rowLabel);
 				}
@@ -163,7 +163,7 @@ public:
 				}
 				addr = newAddr;
 				bitOffset = newBitOffset;
-                sprintf_s(bufaddr, sizeof(bufaddr), "%08X", addr);
+                snprintf(bufaddr, sizeof(bufaddr), "%08X", addr);
 			}
 		}
 

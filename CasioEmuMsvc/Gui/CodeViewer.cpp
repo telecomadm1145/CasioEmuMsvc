@@ -173,13 +173,14 @@ void CodeViewer::PrepareDisasm() {
 				auto size = rom - before;
 				CodeElem ce{};
                 if (size == 2) {
-                    sprintf_s(ce.srcbuf, sizeof(ce.srcbuf), "%04X         ", (*(uint16_t*)before));
+                    snprintf(ce.srcbuf, sizeof(ce.srcbuf), "%04X         ", (*(uint16_t*)before));
                 }
                 else if (size == 4) {
-                    sprintf_s(ce.srcbuf, sizeof(ce.srcbuf), "%04X %04X    ", (*(uint16_t*)before), ((uint16_t*)before)[1]);
+                    snprintf(ce.srcbuf, sizeof(ce.srcbuf), "%04X %04X    ", (*(uint16_t*)before), ((uint16_t*)before)[1]);
                 }
                 else {
-                    strcpy_s(ce.srcbuf, sizeof(ce.srcbuf), "             ");
+                    strncpy(ce.srcbuf, "             ", sizeof(ce.srcbuf) - 1);
+                    ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0'; 
                 }
 				ce.offset = pc;
 				auto s = ss.str();
@@ -189,7 +190,8 @@ void CodeViewer::PrepareDisasm() {
                 {
                     size_t start = 9 + 4;
                     if (start < sizeof(ce.srcbuf)) {
-                        strncpy_s(ce.srcbuf + start, sizeof(ce.srcbuf) - start, s.c_str(), _TRUNCATE);
+                        strncpy(ce.srcbuf + start, s.c_str(), sizeof(ce.srcbuf) - start - 1);
+                        ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0'; 
                     }
                 }
 				codes.push_back(ce);
@@ -210,7 +212,8 @@ void CodeViewer::PrepareDisasm() {
 				ce.is_label = true;
 				if (lb.second) {
                     auto symb = lookup_symbol(lb.first);
-                    strncpy_s(ce.srcbuf, sizeof(ce.srcbuf), symb.c_str(), _TRUNCATE);
+                    strncpy(ce.srcbuf, symb.c_str(), sizeof(ce.srcbuf) - 1);
+                    ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0';
 					ce.offset = 0;
 					labels[lb.first] = std::move(symb);
 					last_label = lb.first;
@@ -219,7 +222,8 @@ void CodeViewer::PrepareDisasm() {
 					if (last_label.has_value()) {
                         char buf[20]{};
                         auto symb = std::string(".l_") + SDL_itoa(lb.first - *last_label, buf, 16);
-                        strncpy_s(ce.srcbuf, sizeof(ce.srcbuf), symb.c_str(), _TRUNCATE);
+                        strncpy(ce.srcbuf, symb.c_str(), sizeof(ce.srcbuf) - 1);
+                        ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0';
 						ce.offset = 0;
 						labels[lb.first] = std::move(symb);
 					}
@@ -235,7 +239,8 @@ void CodeViewer::PrepareDisasm() {
                     ce2.is_label = true;
                     {
                         auto tmp = iter->second + ":";
-                        strncpy_s(ce2.srcbuf, sizeof(ce2.srcbuf), tmp.c_str(), _TRUNCATE);
+                        strncpy(ce2.srcbuf, tmp.c_str(), sizeof(ce2.srcbuf) - 1);
+                        ce2.srcbuf[sizeof(ce2.srcbuf) - 1] = '\0';
                     }
 					ce2.offset = 0;
 					finals.push_back(ce2);
@@ -244,7 +249,8 @@ void CodeViewer::PrepareDisasm() {
                     size_t start = 8 + 13;
                     if (start < sizeof(ce.srcbuf)) {
                         auto& lab = labels[ce.xref_operand];
-                        strncpy_s(&ce.srcbuf[start], sizeof(ce.srcbuf) - start, lab.c_str(), _TRUNCATE);
+                        strncpy(&ce.srcbuf[start], lab.c_str(), sizeof(ce.srcbuf) - start - 1);
+                        ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0';
                     }
                 }
 				finals.push_back(ce);

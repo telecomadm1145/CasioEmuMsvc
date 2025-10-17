@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.6)
+cmake_minimum_required(VERSION 3.10)
 
 project(MY_APP)
 
@@ -75,4 +75,4 @@ target_sources(main PRIVATE ${MAIN_SOURCES})
 
 target_compile_definitions(main PRIVATE ASMJIT_STATIC)
 
-target_link_libraries(main PRIVATE SDL2 SDL2_image asmjit::asmjit)
+target_link_libraries(main PRIVATE SDL2 SDL2_image asmjit::asmjit cpufeatures)

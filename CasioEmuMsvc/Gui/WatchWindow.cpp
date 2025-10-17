@@ -19,30 +19,30 @@
 void WatchWindow::PrepareRX() {
 	auto eps = m_emu->chipset.epscpu;
 	if (eps) {
-        sprintf_s(reg_pc, sizeof(reg_pc), "%05x", eps->PC() >> 1);
+        snprintf(reg_pc, sizeof(reg_pc), "%05x", eps->PC() >> 1);
 		if (eps->FSR & 0x80) {
-            sprintf_s(reg_lr, sizeof(reg_lr), "%05x", (uint32_t)((eps->BSR << 7) | (eps->FSR & 0x7f)));
+            snprintf(reg_lr, sizeof(reg_lr), "%05x", (uint32_t)((eps->BSR << 7) | (eps->FSR & 0x7f)));
 		}
 		else {
-            sprintf_s(reg_lr, sizeof(reg_lr), "%02x(SFR)", (uint32_t)((eps->FSR & 0x7f)));
+            snprintf(reg_lr, sizeof(reg_lr), "%02x(SFR)", (uint32_t)((eps->FSR & 0x7f)));
 		}
-        sprintf_s(reg_ea, sizeof(reg_ea), "%05x", (uint32_t)((eps->BSR1 << 7) | (eps->FSR1 & 0x7f)));
-        sprintf_s(reg_ex1, sizeof(reg_ex1), "%05x", (uint32_t)((eps->BSR2 << 7) | (eps->FSR2 & 0x7f)));
-        sprintf_s(reg_ex2, sizeof(reg_ex2), "%05x", (uint32_t)(((eps->LCDARH & 0x03) * 0x60) | eps->LCDARL));
-        sprintf_s(reg_sp, sizeof(reg_sp), "%04x", eps->STKPTR << 1);
-        sprintf_s(reg_psw, sizeof(reg_psw), "%02x", eps->STATUS);
-        sprintf_s(reg_dsr, sizeof(reg_dsr), "%02x", eps->BSR);
+        snprintf(reg_ea, sizeof(reg_ea), "%05x", (uint32_t)((eps->BSR1 << 7) | (eps->FSR1 & 0x7f)));
+        snprintf(reg_ex1, sizeof(reg_ex1), "%05x", (uint32_t)((eps->BSR2 << 7) | (eps->FSR2 & 0x7f)));
+        snprintf(reg_ex2, sizeof(reg_ex2), "%05x", (uint32_t)(((eps->LCDARH & 0x03) * 0x60) | eps->LCDARL));
+        snprintf(reg_sp, sizeof(reg_sp), "%04x", eps->STKPTR << 1);
+        snprintf(reg_psw, sizeof(reg_psw), "%02x", eps->STATUS);
+        snprintf(reg_dsr, sizeof(reg_dsr), "%02x", eps->BSR);
 	}
 	else {
 		for (int i = 0; i < 16; i++) {
-            sprintf_s((char*)reg_rx[i], sizeof(reg_rx[i]), "%02x", m_emu->chipset.cpu.reg_r[i] & 0x0ff);
+            snprintf((char*)reg_rx[i], sizeof(reg_rx[i]), "%02x", m_emu->chipset.cpu.reg_r[i] & 0x0ff);
 		}
-        sprintf_s(reg_pc, sizeof(reg_pc), "%05x", (uint32_t)(m_emu->chipset.cpu.reg_csr << 16) | m_emu->chipset.cpu.reg_pc);
-        sprintf_s(reg_lr, sizeof(reg_lr), "%05x", (uint32_t)(m_emu->chipset.cpu.reg_lcsr << 16) | m_emu->chipset.cpu.reg_lr);
-        sprintf_s(reg_sp, sizeof(reg_sp), "%04x", m_emu->chipset.cpu.reg_sp | 0);
-        sprintf_s(reg_ea, sizeof(reg_ea), "%04x", m_emu->chipset.cpu.reg_ea | 0);
-        sprintf_s(reg_psw, sizeof(reg_psw), "%02x", m_emu->chipset.cpu.reg_psw | 0);
-        sprintf_s(reg_dsr, sizeof(reg_dsr), "%02x", m_emu->chipset.cpu.reg_dsr | 0);
+        snprintf(reg_pc, sizeof(reg_pc), "%05x", (uint32_t)(m_emu->chipset.cpu.reg_csr << 16) | m_emu->chipset.cpu.reg_pc);
+        snprintf(reg_lr, sizeof(reg_lr), "%05x", (uint32_t)(m_emu->chipset.cpu.reg_lcsr << 16) | m_emu->chipset.cpu.reg_lr);
+        snprintf(reg_sp, sizeof(reg_sp), "%04x", m_emu->chipset.cpu.reg_sp | 0);
+        snprintf(reg_ea, sizeof(reg_ea), "%04x", m_emu->chipset.cpu.reg_ea | 0);
+        snprintf(reg_psw, sizeof(reg_psw), "%02x", m_emu->chipset.cpu.reg_psw | 0);
+        snprintf(reg_dsr, sizeof(reg_dsr), "%02x", m_emu->chipset.cpu.reg_dsr | 0);
 	}
 }
 
@@ -54,7 +54,7 @@ void WatchWindow::ShowRX() {
 		ImGui::TextColored(ImVec4(0, 200, 0, 255), "RXn: ");
 		for (int i = 0; i < 16; i++) {
 			ImGui::SameLine();
-            sprintf_s(id, sizeof(id), "##data%d", i);
+            snprintf(id, sizeof(id), "##data%d", i);
 			ImGui::SetNextItemWidth(char_width * 3);
 			ImGui::TextUnformatted((char*)&reg_rx[i][0]);
 		}
@@ -70,7 +70,7 @@ void WatchWindow::ShowRX() {
 	auto show_sfr = ([&](char* ptr, const char* label, int i, int width = 4) {
 		ImGui::TextColored(ImVec4(0, 200, 0, 255), "%s", label);
 		ImGui::SameLine();
-        sprintf_s(id, sizeof(id), "##sfr%d", i);
+        snprintf(id, sizeof(id), "##sfr%d", i);
 		ImGui::SetNextItemWidth(char_width * width + 5);
 		ImGui::TextUnformatted(ptr);
 	});
@@ -107,7 +107,7 @@ void WatchWindow::ModRX() {
 	ImGui::TextColored(ImVec4(0, 200, 0, 255), "RXn: ");
 	for (int i = 0; i < 16; i++) {
 		ImGui::SameLine();
-        sprintf_s(id, sizeof(id), "##data%d", i);
+        snprintf(id, sizeof(id), "##data%d", i);
 		ImGui::SetNextItemWidth(char_width * 3);
 		ImGui::InputText(id, (char*)&reg_rx[i][0], 3, ImGuiInputTextFlags_CharsHexadecimal);
 	}
@@ -125,7 +125,7 @@ void WatchWindow::ModRX() {
 	auto show_sfr = ([&](char* ptr, const char* label, int i, int width = 4) {
 		ImGui::TextColored(ImVec4(0, 200, 0, 255), "%s", label);
 		ImGui::SameLine();
-        sprintf_s(id, sizeof(id), "##sfr%d", i);
+        snprintf(id, sizeof(id), "##sfr%d", i);
 		ImGui::SetNextItemWidth(char_width * width + 2);
 		ImGui::InputText(id, (char*)ptr, width + 1, ImGuiInputTextFlags_CharsHexadecimal);
 	});

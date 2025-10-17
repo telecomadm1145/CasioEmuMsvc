@@ -13,7 +13,7 @@ void GDBWindow::RenderCore()
     if (m_gdbServer)
     {
         ImGui::Text("GDB Server Status:");
-        ImGui::Text(m_gdbServer->GetStatus().c_str());
+        ImGui::TextUnformatted(m_gdbServer->GetStatus().c_str());
         ImGui::Text("Listening on port %d", m_gdbServer->GetPort());
 
         if (ImGui::Button("Start"))

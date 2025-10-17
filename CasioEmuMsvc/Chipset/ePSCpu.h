@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <cstdarg>
 using byte = uint8_t;
 using uint = uint32_t;
 using ushort = uint16_t;
@@ -123,14 +124,20 @@ namespace casioemu {
 
 		void auto_borrow(char param_1);
 
-		void debug_printf(const wchar_t* format, auto... args) {
-			wprintf(format, args...);
+		void debug_printf(const wchar_t* format, ...) {
+			va_list args;
+			va_start(args, format);
+			vwprintf(format, args);
+			va_end(args);
 			wprintf(L"\n");
-		};
-		void debug_printf(const char* format, auto... args) {
-			printf(format, args...);
+		}
+		void debug_printf(const char* format, ...) {
+			va_list args;
+			va_start(args, format);
+			vprintf(format, args);
+			va_end(args);
 			printf("\n");
-		};
+		}
 
 		casioemu::MMU& mmu;
 		ePSCPU(casioemu::MMU& mmu) : mmu(mmu) {
