@@ -1,4 +1,4 @@
-name: Auto build and release
+name: Auto build and pre-release
 
 on:
   pull_request:
@@ -21,8 +21,13 @@ jobs:
       matrix:
         include:
           - platform: windows
+            platform_arch: x64
             os: windows-latest
-            name: "Windows"
+            name: "Windows-x64"
+          - platform: windows
+            platform_arch: x86
+            os: windows-latest
+            name: "Windows-x86"
           - platform: android
             os: ubuntu-latest
             name: "Android"
@@ -34,7 +39,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4.1.7
       with:
-        fetch-depth: ${{ matrix.platform == 'android' && '0' || '1' }}
+        fetch-depth: 1
         submodules: true
 
     - name: Add MSBuild to PATH
@@ -45,27 +50,19 @@ jobs:
       if: matrix.platform == 'windows'
       run: nuget restore ${{env.SOLUTION_FILE_PATH}}
 
-    - name: Build Solution
+    - name: Build Solution (${{ matrix.platform_arch }})
       if: matrix.platform == 'windows'
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: |
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x64 ${{env.SOLUTION_FILE_PATH}}
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x86 ${{env.SOLUTION_FILE_PATH}}
+        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=${{ matrix.platform_arch }} ${{env.SOLUTION_FILE_PATH}}
 
-    - name: Upload x86 Build Artifact
+    - name: Upload ${{ matrix.platform_arch }} Build Artifact
       if: matrix.platform == 'windows'
       uses: actions/upload-artifact@v4.4.0
       with:
-        name: Release-x86
-        path: Win32\${{env.BUILD_CONFIGURATION}}
-        if-no-files-found: error
-
-    - name: Upload x64 Build Artifact
-      if: matrix.platform == 'windows'
-      uses: actions/upload-artifact@v4.4.0
-      with:
-        name: Release-x64
-        path: x64\${{env.BUILD_CONFIGURATION}}
+        name: Release-${{ matrix.platform_arch }}
+        path: |
+          ${{ matrix.platform_arch == 'x86' && format('Win32\\{0}', env.BUILD_CONFIGURATION) || format('{0}\\{1}', matrix.platform_arch, env.BUILD_CONFIGURATION) }}
         if-no-files-found: error
 
     - name: Clone SDL2 and dependencies

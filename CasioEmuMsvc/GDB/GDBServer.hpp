@@ -1,8 +1,10 @@
 #pragma once
 
+#include "NetCompat.hpp"
 #include <thread>
 #include <atomic>
 #include <string>
+#include <vector>
 
 namespace casioemu {
     class Emulator;
@@ -22,13 +24,13 @@ public:
 
 private:
     void ServerThread();
-    void HandleConnection(int client_socket);
-    void ProcessPacket(int client_socket, const std::string& packet_data);
+    void HandleConnection(socket_t client_socket);
+    void ProcessPacket(socket_t client_socket, const std::string& packet_data);
 
     casioemu::Emulator* m_emulator;
     int m_port;
     std::thread m_thread;
     std::atomic<bool> m_running;
     std::atomic<bool> m_clientConnected;
-    int m_server_socket;
+    socket_t m_server_socket;
 };

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.10...3.22)
 
 project(MY_APP)
 
@@ -34,14 +34,13 @@ include_directories(#${CMAKE_SOURCE_DIR}/SDL_image/include
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Containers
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Gui
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Gui/imgui
+        ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/GDB
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Peripheral
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/StartupUi)
         
 find_library(SDL2 SDL2)
 
 find_library(SDL2_image SDL2_image)
-
-find_library(CPUFEATURES_LIBRARY cpufeatures)
 
 add_library(main SHARED)
 
@@ -53,6 +52,7 @@ file(GLOB MAIN_SOURCES_ROOT "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/*.cpp")
 file(GLOB MAIN_SOURCES_CHIPSET "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Chipset/*.cpp")
 file(GLOB MAIN_SOURCES_CRASH "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/CrashHandler/*.cpp")
 file(GLOB MAIN_SOURCES_EXT "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Ext/*.cpp")
+file(GLOB MAIN_SOURCES_GDB "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/GDB/*.cpp")
 file(GLOB MAIN_SOURCES_GUI "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Gui/*.cpp")
 file(GLOB MAIN_SOURCES_IMGUI "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Gui/imgui/*.cpp")
 file(GLOB MAIN_SOURCES_JIT "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/JitU8/*.cpp")
@@ -65,6 +65,7 @@ set(MAIN_SOURCES
     ${MAIN_SOURCES_CHIPSET}
     ${MAIN_SOURCES_CRASH}
     ${MAIN_SOURCES_EXT}
+    ${MAIN_SOURCES_GDB}
     ${MAIN_SOURCES_GUI}
     ${MAIN_SOURCES_IMGUI}
     ${MAIN_SOURCES_JIT}
@@ -77,4 +78,4 @@ target_sources(main PRIVATE ${MAIN_SOURCES})
 
 target_compile_definitions(main PRIVATE ASMJIT_STATIC)
 
-target_link_libraries(main PRIVATE SDL2 SDL2_image asmjit::asmjit ${CPUFEATURES_LIBRARY})
+target_link_libraries(main PRIVATE SDL2 SDL2_image asmjit::asmjit CpuFeatures::cpu_features)

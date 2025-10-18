@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.10...3.22)
 
 project(GAME)
 
@@ -14,6 +14,8 @@ add_subdirectory(SDL)
 add_subdirectory(SDL_image)
 #add_subdirectory(SDL_mixer)
 #add_subdirectory(SDL_ttf)
+
+add_subdirectory(cpu_features)
 
 # add_subdirectory(lua)
 

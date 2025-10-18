@@ -1,3 +1,6 @@
 [submodule "CasioEmuMsvc/asmjit"]
 	path = CasioEmuMsvc/asmjit
 	url = https://github.com/asmjit/asmjit
+[submodule "cpu_features"]
+	path = cpu_features
+	url = https://github.com/google/cpu_features.git

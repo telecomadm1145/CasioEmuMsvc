@@ -27,6 +27,8 @@
 #include "Localization.h"
 #if _WIN32
 #include <Windows.h>
+#include <mmsystem.h>
+#include <objbase.h>
 #pragma comment(lib, "winmm.lib")
 #endif
 
