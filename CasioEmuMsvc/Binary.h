@@ -84,6 +84,7 @@ public:
 	}
 	static void Read(std::istream& stm, BinaryData auto& dat) {
 		stm.read((char*)&dat, sizeof(dat));
+		// TODO: Throw exception if data is invalid
 	}
 	static void Write(std::ostream& stm, const BinaryClass auto& cls) {
 		cls.Write(stm);
@@ -96,11 +97,11 @@ public:
 		unsigned long long size = 0;
 		Read(stm, size);
 		if (size > 1ULL << 48) {
-			__debugbreak();
+			throw std::runtime_error("Binary data format error: container size is too large.");
 		}
 		vec.reserve(size);
 		for (size_t i = 0; i < size; i++) {
-			if (stm.eof())
+			if (!stm.good())
 				return;
 			ContainerChild data{};
 			Read(stm, data);
@@ -122,10 +123,10 @@ public:
 		unsigned long long size = 0;
 		Read(stm, size);
 		if (size > 1ULL << 48) {
-			__debugbreak();
+			throw std::runtime_error("Binary data format error: container size is too large.");
 		}
 		for (size_t i = 0; i < size; i++) {
-			if (stm.eof())
+			if (!stm.good())
 				return;
 			std::remove_cvref_t<typename ContainerChild::first_type> key{};
 			Read(stm, key);
