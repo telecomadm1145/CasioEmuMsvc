@@ -4,3 +4,9 @@
 [submodule "cpu_features"]
 	path = cpu_features
 	url = https://github.com/google/cpu_features.git
+[submodule "SDL"]
+	path = SDL
+	url = https://github.com/libsdl-org/SDL.git
+[submodule "SDL_image"]
+	path = SDL_image
+	url = https://github.com/libsdl-org/SDL_image.git

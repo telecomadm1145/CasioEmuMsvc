@@ -65,12 +65,6 @@ jobs:
           ${{ matrix.platform_arch == 'x86' && format('Win32\\{0}', env.BUILD_CONFIGURATION) || format('{0}\\{1}', matrix.platform_arch, env.BUILD_CONFIGURATION) }}
         if-no-files-found: error
 
-    - name: Clone SDL2 and dependencies
-      if: matrix.platform == 'android'
-      run: |
-        git clone --depth 1 -b release-2.30.3 https://github.com/libsdl-org/SDL.git
-        git clone --depth 1 -b SDL2 https://github.com/libsdl-org/SDL_image.git
-
     - name: Set up JDK 21
       if: matrix.platform == 'android'
       uses: actions/setup-java@v4
