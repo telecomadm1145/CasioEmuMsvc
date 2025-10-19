@@ -114,28 +114,33 @@ class ModelEditor : public UIWindow {
 	char buffer2[12];
 
 	casioemu::ButtonInfo* btninfo{};
+    bool init_failed = false;
 
 public:
 	ModelEditor(std::filesystem::path path) : UIWindow("Model Editor##114514"), pth(path) {
-
-		std::ifstream ifs(path / "config.bin", std::ios::binary);
-		if (!ifs)
-			PANIC("Cannot open.");
-		Binary::Read(ifs, mi);
-		v = mi.csr_mask;
-		k = mi.pd_value;
-        strncpy(path1, mi.interface_path.c_str(), sizeof(path1) - 1);
-        path1[sizeof(path1) - 1] = '\0';
-        strncpy(path2, mi.rom_path.c_str(), sizeof(path2) - 1);
-        path2[sizeof(path2) - 1] = '\0';
-        strncpy(path3, mi.flash_path.c_str(), sizeof(path3) - 1);
-        path3[sizeof(path3) - 1] = '\0';
-        strncpy(name, mi.model_name.c_str(), sizeof(name) - 1);
-        name[sizeof(name) - 1] = '\0';
-		color[0] = mi.ink_color.r / 255.0f;
-		color[1] = mi.ink_color.g / 255.0f;
-		color[2] = mi.ink_color.b / 255.0f;
-		LoadInterface();
+        try {
+            std::ifstream ifs(path / "config.bin", std::ios::binary);
+            if (!ifs)
+                throw std::runtime_error("Cannot open config.bin.");
+            Binary::Read(ifs, mi);
+            v = mi.csr_mask;
+            k = mi.pd_value;
+            strncpy(path1, mi.interface_path.c_str(), sizeof(path1) - 1);
+            path1[sizeof(path1) - 1] = '\0';
+            strncpy(path2, mi.rom_path.c_str(), sizeof(path2) - 1);
+            path2[sizeof(path2) - 1] = '\0';
+            strncpy(path3, mi.flash_path.c_str(), sizeof(path3) - 1);
+            path3[sizeof(path3) - 1] = '\0';
+            strncpy(name, mi.model_name.c_str(), sizeof(name) - 1);
+            name[sizeof(name) - 1] = '\0';
+            color[0] = mi.ink_color.r / 255.0f;
+            color[1] = mi.ink_color.g / 255.0f;
+            color[2] = mi.ink_color.b / 255.0f;
+            LoadInterface();
+        } catch (const std::exception& e) {
+            std::cerr << "Failed to load ModelEditor: " << e.what() << std::endl;
+            init_failed = true;
+        }
 	}
 	void RenderSprite(const casioemu::SpriteInfo& sprite, ImTextureID texture_id, const ImVec2& texture_size, const ImVec2& render_size) {
 
@@ -209,6 +214,14 @@ public:
 		}
 	}
 	void RenderCore() override {
+        if (init_failed) {
+            ImGui::TextColored({1.0f, 0.0f, 0.0f, 1.0f}, "Failed to load model configuration. The file might be corrupted.");
+            if (ImGui::Button("Close")) {
+                open = false;
+            }
+            return;
+        }
+
 		auto y = ImGui::GetCursorPosY();
 		auto scaleFactor = (400.f / imgSp.src.w);
 		if (sdl_t != 0) {
@@ -392,10 +405,14 @@ namespace casioemu {
 		std::filesystem::path selected_path{};
 		StartupUi() {
 			std::ifstream ifs2{"roms.db", std::ifstream::binary};
-			if (ifs2)
-				Binary::Read(ifs2, RomNames);
-			else {
-				printf("[StartupUI][Warn] \"rom.db\" not found. Names may be inaccurate!\n");
+			if (ifs2) {
+                try {
+				    Binary::Read(ifs2, RomNames);
+                } catch (const std::exception& e) {
+                    std::cerr << "[StartupUI][Warn] Failed to read \"roms.db\": " << e.what() << ". Names may be inaccurate!\n";
+                }
+            } else {
+				printf("[StartupUI][Warn] \"roms.db\" not found. Names may be inaccurate!\n");
 			}
 			Reload();
 		}
@@ -406,108 +423,113 @@ namespace casioemu {
 				models.clear();
 				for (auto& dir : std::filesystem::directory_iterator("models")) {
 					if (dir.is_directory()) {
-						printf("[StartupUI][Info] Checking %s\n", dir.path().string().c_str());
-						auto config = dir.path() / "config.bin";
-						std::ifstream ifs(config, std::ios::in | std::ios::binary);
-						if (!ifs) {
-							printf("[StartupUI][Info] Unable to open %s\n", config.string().c_str());
-							continue;
-						}
-						ModelInfo mi{};
-						Binary::Read(ifs, mi);
-						ifs.close();
-						Model mod{};
-						mod.path = dir;
-						mod.name = mi.model_name;
-						mod.realhw = mi.real_hardware;
-						switch (mi.hardware_id) {
-						case HW_ES_PLUS:
-							mod.type = "ESP";
-							break;
-						case HW_CLASSWIZ:
-							mod.type = "CWX";
-							break;
-						case HW_CLASSWIZ_II:
-							mod.type = "CWII";
-							break;
-						case HW_FX_5800P:
-							mod.type = "Fx5800p";
-							break;
-						case HW_TI:
-							mod.type = "TI";
-							break;
-						case HW_SOLARII:
-							mod.type = "SolarII";
-							break;
-						default:
-							mod.type = "Unknown";
-							break;
-						}
-						{
-							std::ifstream ifs2(dir.path() / mi.rom_path, std::ios::in | std::ios::binary);
-							if (!ifs2)
-								continue;
-							std::vector<byte> rom{std::istreambuf_iterator<char>{ifs2.rdbuf()}, std::istreambuf_iterator<char>{}};
-							ifs2.close();
-							std::vector<byte> flash{};
-							std::ifstream ifs3(dir.path() / mi.flash_path, std::ios::in | std::ios::binary);
-							if (ifs3)
-								flash = {std::istreambuf_iterator<char>{ifs3.rdbuf()}, std::istreambuf_iterator<char>{}};
-							auto ri = rom_info(rom, flash, mi.real_hardware);
-							if (ri.type != 0) {
-								switch (ri.type) {
-								case RomInfo::ES:
-									mod.type = "ES";
-									break;
-								case RomInfo::ESP:
-									mod.type = "ESP";
-									break;
-								case RomInfo::ESP2nd:
-									mod.type = "ESP2nd";
-									break;
-								case RomInfo::CWX:
-									mod.type = "CWX";
-									break;
-								case RomInfo::CWII:
-									mod.type = "CWII";
-									break;
-								case RomInfo::Fx5800p:
-									mod.type = "Fx5800p";
-									break;
-								default:
-									mod.type = "???";
-									break;
-								}
-							}
-							if (ri.ok) {
-								mod.version = ri.ver;
-								std::array<char, 8> key{};
-								memcpy(key.data(), mod.version.data(), 6);
-                                auto iter = RomNames.find(key);
-								if (iter != RomNames.end())
-									mod.name = iter->second;
-								mod.checksum = tohex(ri.real_sum, 4);
-								mod.checksum2 = tohex(ri.desired_sum, 4);
-								mod.sum_good = ri.real_sum == ri.desired_sum ? "OK" : "NG";
-                                // Safely form version key and id
-                                std::array<char, 8> key2{};
-                                std::memset(key2.data(), 0, key2.size());
-                                std::memcpy(key2.data(), mod.version.data(), std::min<std::size_t>(6, mod.version.size()));
-                                mod.id = tohex(*(unsigned long long*)ri.cid, 8);
-								if (ri.type == RomInfo::ES) {
-									auto a = get_pd(mi.pd_value);
-									mod.version += std::string(" (P") + a + ")";
-								}
-							}
-							else {
-								mod.show_sum = false;
-							}
-							printf("[StartupUI][Debug] Model Summary\n"
-								   "[StartupUI][Debug] Name: %s\n"
-								   "[StartupUI][Debug] Type: %s\n",
-								mod.name.c_str(), mod.type.c_str());
-						}
-						models.push_back(mod);
+                        try {
+						    printf("[StartupUI][Info] Checking %s\n", dir.path().string().c_str());
+						    auto config = dir.path() / "config.bin";
+						    std::ifstream ifs(config, std::ios::in | std::ios::binary);
+						    if (!ifs) {
+						    	printf("[StartupUI][Info] Unable to open %s\n", config.string().c_str());
+						    	continue;
+						    }
+						    ModelInfo mi{};
+						    Binary::Read(ifs, mi);
+						    ifs.close();
+						    Model mod{};
+						    mod.path = dir;
+						    mod.name = mi.model_name;
+						    mod.realhw = mi.real_hardware;
+						    switch (mi.hardware_id) {
+						    case HW_ES_PLUS:
+						    	mod.type = "ESP";
+						    	break;
+						    case HW_CLASSWIZ:
+						    	mod.type = "CWX";
+						    	break;
+						    case HW_CLASSWIZ_II:
+						    	mod.type = "CWII";
+						    	break;
+						    case HW_FX_5800P:
+						    	mod.type = "Fx5800p";
+						    	break;
+						    case HW_TI:
+						    	mod.type = "TI";
+						    	break;
+						    case HW_SOLARII:
+						    	mod.type = "SolarII";
+						    	break;
+						    default:
+						    	mod.type = "Unknown";
+						    	break;
+						    }
+						    {
+						    	std::ifstream ifs2(dir.path() / mi.rom_path, std::ios::in | std::ios::binary);
+						    	if (!ifs2)
+						    		continue;
+						    	std::vector<byte> rom{std::istreambuf_iterator<char>{ifs2.rdbuf()}, std::istreambuf_iterator<char>{}};
+						    	ifs2.close();
+						    	std::vector<byte> flash{};
+						    	std::ifstream ifs3(dir.path() / mi.flash_path, std::ios::in | std::ios::binary);
+						    	if (ifs3)
+						    		flash = {std::istreambuf_iterator<char>{ifs3.rdbuf()}, std::istreambuf_iterator<char>{}};
+						    	auto ri = rom_info(rom, flash, mi.real_hardware);
+						    	if (ri.type != 0) {
+						    		switch (ri.type) {
+						    		case RomInfo::ES:
+						    			mod.type = "ES";
+						    			break;
+						    		case RomInfo::ESP:
+						    			mod.type = "ESP";
+						    			break;
+						    		case RomInfo::ESP2nd:
+						    			mod.type = "ESP2nd";
+						    			break;
+						    		case RomInfo::CWX:
+						    			mod.type = "CWX";
+						    			break;
+						    		case RomInfo::CWII:
+						    			mod.type = "CWII";
+						    			break;
+						    		case RomInfo::Fx5800p:
+						    			mod.type = "Fx5800p";
+						    			break;
+						    		default:
+						    			mod.type = "???";
+						    			break;
+						    		}
+						    	}
+						    	if (ri.ok) {
+						    		mod.version = ri.ver;
+						    		std::array<char, 8> key{};
+						    		memcpy(key.data(), mod.version.data(), 6);
+                                    auto iter = RomNames.find(key);
+						    		if (iter != RomNames.end())
+						    			mod.name = iter->second;
+						    		mod.checksum = tohex(ri.real_sum, 4);
+						    		mod.checksum2 = tohex(ri.desired_sum, 4);
+						    		mod.sum_good = ri.real_sum == ri.desired_sum ? "OK" : "NG";
+                                    // Safely form version key and id
+                                    std::array<char, 8> key2{};
+                                    std::memset(key2.data(), 0, key2.size());
+                                    std::memcpy(key2.data(), mod.version.data(), std::min<std::size_t>(6, mod.version.size()));
+                                    mod.id = tohex(*(unsigned long long*)ri.cid, 8);
+						    		if (ri.type == RomInfo::ES) {
+						    			auto a = get_pd(mi.pd_value);
+						    			mod.version += std::string(" (P") + a + ")";
+						    		}
+						    	}
+						    	else {
+						    		mod.show_sum = false;
+						    	}
+						    	printf("[StartupUI][Debug] Model Summary\n"
+						    		   "[StartupUI][Debug] Name: %s\n"
+						    		   "[StartupUI][Debug] Type: %s\n",
+						    		mod.name.c_str(), mod.type.c_str());
+						    }
+						    models.push_back(mod);
+                        } catch (const std::exception& e) {
+                            std::cerr << "[StartupUI][Error] Failed to load model from " << dir.path().string() << ": " << e.what() << std::endl;
+                            continue;
+                        }
 					}
 				}
 				loading = false;
@@ -635,18 +657,21 @@ namespace casioemu {
 #ifdef __ANDROID__
 				ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(padding, buttonHeight * 0.25f));
 #endif
-
 				if (ImGui::Button("Button.Positive"_lc)) {
 					try {
-						current_rp.Decrypt(password);
-						std::string filename = current_file.stem().string();
-						std::string unique_dirname = create_unique_directory(filename);
-						std::filesystem::path extract_path = "./models/" + unique_dirname;
-						current_rp.ExtractTo(extract_path);
-						Reload();
-						show_password_input = false;
-						password_error = false;
-						ImGui::CloseCurrentPopup();
+                        if (password[0] == '\0') {
+                            password_error = true;
+                        } else {
+						    current_rp.Decrypt(password);
+						    std::string filename = current_file.stem().string();
+						    std::string unique_dirname = create_unique_directory(filename);
+						    std::filesystem::path extract_path = "./models/" + unique_dirname;
+						    current_rp.ExtractTo(extract_path);
+						    Reload();
+						    show_password_input = false;
+						    password_error = false;
+						    ImGui::CloseCurrentPopup();
+                        }
 					}
 					catch (const std::exception& e) {
                         SDL_Log("Decryption failed: %s", e.what());
@@ -919,7 +944,11 @@ namespace casioemu {
                     }
 #endif
 					if (ImGui::MenuItem("StartupUI.Edit"_lc)) {
-						windows2->push_back(new ModelEditor(model.path));
+                        try {
+						    windows2->push_back(new ModelEditor(model.path));
+                        } catch(const std::exception& e) {
+                            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Failed to open model editor.", nullptr);
+                        }
 					}
 					if (ImGui::MenuItem("StartupUI.Export"_lc)) {
 						ImGui::EndPopup();
@@ -1009,8 +1038,14 @@ std::string sui_loop() {
 	casioemu::StartupUi ui;
 	{
 		std::ifstream ifs1{"recent.bin", std::ifstream::binary};
-		if (ifs1)
-			Binary::Read(ifs1, ui.recently_used);
+		if (ifs1) {
+            try {
+			    Binary::Read(ifs1, ui.recently_used);
+            } catch (const std::exception& e) {
+                std::cerr << "[StartupUI][Warn] Failed to read \"recent.bin\": " << e.what() << ". Starting with no recent files.\n";
+                ui.recently_used.clear();
+            }
+        }
 	}
 	window2 = SDL_CreateWindow(
 		"CasioEmuMsvc",
