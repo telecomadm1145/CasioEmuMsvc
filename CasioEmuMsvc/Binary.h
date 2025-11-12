@@ -115,8 +115,15 @@ public:
 			Write(stm, data);
 			sz--;
 		}
-		if (sz != 0)
-			__debugbreak();
+        if (sz != 0) {
+            #if defined(_MSC_VER)
+                __debugbreak();
+            #elif defined(__GNUC__) || defined(__clang__)
+                __builtin_trap();
+            #else
+                *(volatile int *)0 = 0;
+            #endif
+        }
 	}
 	static void Read(std::istream& stm, BinaryMap auto& map) {
 		using ContainerChild = ::ContainerChild<decltype(map)>;
@@ -143,8 +150,15 @@ public:
 			Write(stm, kv.second);
 			sz--;
 		}
-		if (sz != 0)
-			__debugbreak();
+        if (sz != 0) {
+            #if defined(_MSC_VER)
+                __debugbreak();
+            #elif defined(__GNUC__) || defined(__clang__)
+                __builtin_trap();
+            #else
+                *(volatile int *)0 = 0;
+            #endif
+        }
 	}
 };
 #pragma warning(pop)
