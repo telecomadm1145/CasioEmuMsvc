@@ -68,4 +68,4 @@ public:                       \
 	virtual void Set##x##(y a) = 0;
 
 
-#define EMULATOR_VERSION "0.1.0"
+#define EMULATOR_VERSION "1.0.0"

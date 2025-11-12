@@ -1032,7 +1032,21 @@ public:
 		ImGui::End();
 	}
 };
+
+void HandleStartupEvent(const SDL_Event& event) {
+    ImGui_ImplSDL2_ProcessEvent(&event);
+}
+
 std::string sui_loop() {
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
+		SDL_Log("SDL_Init failed in StartupUI: %s", SDL_GetError());
+		return "";
+	}
+	if (IMG_Init(IMG_INIT_PNG) != IMG_INIT_PNG) {
+		SDL_Log("IMG_Init failed in StartupUI: %s", IMG_GetError());
+		SDL_Quit();
+		return "";
+	}
 	SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
 	windows2 = new std::vector<UIWindow*>();
 	casioemu::StartupUi ui;
@@ -1057,6 +1071,9 @@ std::string sui_loop() {
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
 	if (renderer2 == nullptr) {
 		SDL_Log("Error creating SDL_Renderer!");
+        if (window2) SDL_DestroyWindow(window2);
+        IMG_Quit();
+        SDL_Quit();
 		return "";
 	}
 	IMGUI_CHECKVERSION();
@@ -1071,146 +1088,126 @@ std::string sui_loop() {
 #ifdef __ANDROID__
 	windows2->push_back(new CopyrightWatermark(windows2));
 #endif
-	// Setup Platform/Renderer backends
 	ImGui_ImplSDL2_InitForSDLRenderer(window2, renderer2);
 	ImGui_ImplSDLRenderer2_Init(renderer2);
-	auto frame_event = SDL_RegisterEvents(1);
-	volatile bool busy = false;
-	volatile bool exited = false;
+    auto frame_event = SDL_RegisterEvents(1);
+	std::atomic<bool> exited = {false};
 	std::thread t3([&]() {
 		SDL_Event se{};
 		se.type = frame_event;
-		se.user.windowID = SDL_GetWindowID(window2);
+		if (window2)
+			se.user.windowID = SDL_GetWindowID(window2);
 		while (!exited) {
-			if (!busy)
+			if (window2)
 				SDL_PushEvent(&se);
-			SDL_Delay(24);
+			SDL_Delay(24); // ~40fps
 		}
 	});
-	t3.detach();
+    bool done = false;
 	bool once = true;
 	std::vector<std::string> languages;
 	int selected_language_index = 0;
-	while (1) {
-		SDL_Event event;
-		while (!SDL_PollEvent(&event)) {
-			SDL_Delay(1);
-		}
-		if (event.type == frame_event) {
-			busy = true;
-			ImGui_ImplSDLRenderer2_NewFrame();
-			ImGui_ImplSDL2_NewFrame();
-			ImGui::NewFrame();
-			ui.Render();
-			for (auto& wind : *windows2) {
-				wind->Render();
-			}
-
-			// 检查是否应该打开语言选择弹窗
-			if (once && !std::filesystem::exists("locale.txt")) {
-				// 仅在首次打开弹窗前，扫描一次locales目录
-				if (languages.empty()) {
-					const std::string locales_dir = "./locales/";
-					if (std::filesystem::exists(locales_dir)) {
-						for (const auto& entry : std::filesystem::directory_iterator(locales_dir)) {
-							if (entry.is_regular_file()) {
-								// 从文件名（如 "en_US.json"）提取语言代码（"en_US"）
-								languages.push_back(entry.path().stem().string());
-							}
-						}
-					}
-					// 如果没有找到任何语言文件，添加一个默认回退选项
-					if (languages.empty()) {
-						languages.push_back("en_US");
-					}
-				}
-
-				ImGui::OpenPopup("LanguageChooser");
-				once = false;
-			}
-
-			// 设置弹窗在屏幕中央显示
-			ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-			ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-			// 定义弹窗的内容和行为
-			if (ImGui::BeginPopupModal("LanguageChooser", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
-				ImGui::Text("Please choose your language to continue");
-				ImGui::Separator();
-				ImGui::Spacing();
-
-				// 只有在语言列表不为空时才显示下拉框
-				if (!languages.empty()) {
-					const char* preview_value = languages[selected_language_index].c_str();
-					if (ImGui::BeginCombo("Language", preview_value)) {
-						for (int n = 0; n < languages.size(); n++) {
-							const bool is_selected = (selected_language_index == n);
-							if (ImGui::Selectable(languages[n].c_str(), is_selected)) {
-								selected_language_index = n;
-							}
-							if (is_selected) {
-								ImGui::SetItemDefaultFocus();
-							}
-						}
-						ImGui::EndCombo();
-					}
-				}
-
-				ImGui::Spacing();
-				ImGui::Separator();
-				ImGui::Spacing();
-
-				if (ImGui::Button("Ok", ImVec2(120, 0))) {
-					// 确保选择是有效的
-					if (!languages.empty() && selected_language_index < languages.size()) {
-						const std::string& selected_lang = languages[selected_language_index];
-
-						// 1. 调用你的语言切换逻辑
-						g_local.ChangeLanguage(selected_lang);
-						if ("Localization.EnableCJK"_l == "1" || "Localization.EnableCJK"_l == "true")
-							RebuildFont_Requested = true;
-
-						// 2. [重要] 创建 locale.txt 文件并保存选择，防止下次启动再次弹出
-						std::ofstream outfile("locale.txt");
-						outfile << selected_lang;
-						outfile.close();
-
-						// 3. 关闭弹窗
-						ImGui::CloseCurrentPopup();
-
-						// 注意：你可能需要在这里提示用户重启程序以使语言完全生效
-					}
-				}
-				ImGui::EndPopup();
-			}
-			ImGui::EndFrame();
-			ImGui::Render();
-			SDL_RenderSetScale(renderer2, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
-			SDL_SetRenderDrawColor(renderer2, 0, 0, 0, 255);
-			SDL_RenderClear(renderer2);
-			ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
-			SDL_RenderPresent(renderer2);
-			busy = false;
-			continue;
-		}
-		switch (event.type) {
-		case SDL_WINDOWEVENT:
-			switch (event.window.event) {
-			case SDL_WINDOWEVENT_CLOSE:
-				goto exit;
-			}
-			break;
-
-		case SDL_MOUSEBUTTONDOWN:
-		case SDL_MOUSEBUTTONUP:
-		case SDL_KEYDOWN:
-		case SDL_KEYUP:
-		case SDL_TEXTINPUT:
-		case SDL_MOUSEMOTION:
-		case SDL_MOUSEWHEEL:
-			ImGui_ImplSDL2_ProcessEvent(&event);
-			break;
-		}
+    bool needs_render = true;
+	while (!done) {
+        SDL_Event event;
+        if (SDL_WaitEvent(&event)) {
+            ImGui_ImplSDL2_ProcessEvent(&event);
+            if (event.type == SDL_QUIT) {
+                done = true;
+            }
+            if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(window2)) {
+                done = true;
+            }
+            if (event.type == frame_event) {
+                needs_render = true;
+            }
+            while (SDL_PollEvent(&event)) {
+                ImGui_ImplSDL2_ProcessEvent(&event);
+                if (event.type == SDL_QUIT) {
+                    done = true;
+                }
+                if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(window2)) {
+                    done = true;
+                }
+                if (event.type == frame_event) {
+                    needs_render = true;
+                }
+            }
+        }
+        if (needs_render) {
+            ImGui_ImplSDLRenderer2_NewFrame();
+            ImGui_ImplSDL2_NewFrame();
+            ImGui::NewFrame();
+            
+            ui.Render();
+            for (auto& wind : *windows2) {
+                wind->Render();
+            }
+            if (once && !std::filesystem::exists("locale.txt")) {
+                if (languages.empty()) {
+                    const std::string locales_dir = "./locales/";
+                    if (std::filesystem::exists(locales_dir)) {
+                        for (const auto& entry : std::filesystem::directory_iterator(locales_dir)) {
+                            if (entry.is_regular_file()) {
+                                languages.push_back(entry.path().stem().string());
+                            }
+                        }
+                    }
+                    if (languages.empty()) {
+                        languages.push_back("en_US");
+                    }
+                }
+                ImGui::OpenPopup("LanguageChooser");
+                once = false;
+            }
+            ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+            ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+            if (ImGui::BeginPopupModal("LanguageChooser", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+                ImGui::Text("Please choose your language to continue");
+                ImGui::Separator();
+                ImGui::Spacing();
+                if (!languages.empty()) {
+                    const char* preview_value = languages[selected_language_index].c_str();
+                    if (ImGui::BeginCombo("Language", preview_value)) {
+                        for (int n = 0; n < languages.size(); n++) {
+                            const bool is_selected = (selected_language_index == n);
+                            if (ImGui::Selectable(languages[n].c_str(), is_selected)) {
+                                selected_language_index = n;
+                            }
+                            if (is_selected) {
+                                ImGui::SetItemDefaultFocus();
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+                }
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+                if (ImGui::Button("Ok", ImVec2(120, 0))) {
+                    if (!languages.empty() && selected_language_index < languages.size()) {
+                        const std::string& selected_lang = languages[selected_language_index];
+                        g_local.ChangeLanguage(selected_lang);
+                        if ("Localization.EnableCJK"_l == "1" || "Localization.EnableCJK"_l == "true")
+                            RebuildFont_Requested = true;
+                        std::ofstream outfile("locale.txt");
+                        outfile << selected_lang;
+                        outfile.close();
+                        ImGui::CloseCurrentPopup();
+                    }
+                }
+                ImGui::EndPopup();
+            }
+            ImGui::EndFrame();
+            ImGui::Render();
+            SDL_RenderSetScale(renderer2, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
+            SDL_SetRenderDrawColor(renderer2, 0, 0, 0, 255);
+            SDL_RenderClear(renderer2);
+            ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
+            SDL_RenderPresent(renderer2);
+            
+            needs_render = false;
+        }
 		if (RebuildFont_Requested) {
 			RebuildFont(RebuildFont_Scale);
 			if (RebuildFont_Scale != 0) {
@@ -1226,20 +1223,21 @@ std::string sui_loop() {
 			ImGui_ImplSDLRenderer2_DestroyDeviceObjects();
 			RebuildFont_Requested = 0;
 		}
-		if (!ui.selected_path.empty())
-			goto exit;
+		if (!ui.selected_path.empty()) {
+			done = true;
+        }
 	}
-exit:
-	exited = true;
+    exited = true;
+    if (t3.joinable()) {
+        t3.join();
+    }
 	ImGui_ImplSDLRenderer2_Shutdown();
 	ImGui_ImplSDL2_Shutdown();
 	ImGui::DestroyContext();
-
 	for (auto& wind : *windows2) {
 		delete wind;
 	}
 	delete windows2;
-
 	SDL_DestroyRenderer(renderer2);
 	SDL_DestroyWindow(window2);
 	std::ofstream ofs{"recent.bin", std::ofstream::binary};
@@ -1248,5 +1246,7 @@ exit:
 	else {
 		std::cout << "[Warn] Cannot write to recent.bin.\n";
 	}
+	IMG_Quit();
+	SDL_Quit();
 	return ui.selected_path.string();
 }

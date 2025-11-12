@@ -5,6 +5,7 @@
 #include <vector>
 #include <cstdio>
 #include <sstream>
+#include <SDL_log.h>
 
 GDBServer::GDBServer(casioemu::Emulator* emu, int port)
     : m_emulator(emu), m_port(port), m_running(false), m_server_socket(INVALID_SOCKET), m_clientConnected(false)
@@ -25,7 +26,7 @@ bool GDBServer::Start()
     WSADATA wsaData;
     int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (result != 0) {
-        std::cerr << "WSAStartup failed: " << result << std::endl;
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "GDBServer: WSAStartup failed: %d", result);
         return false;
     }
 #endif
@@ -33,9 +34,9 @@ bool GDBServer::Start()
     m_server_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (m_server_socket == INVALID_SOCKET) {
 #ifdef _WIN32
-        std::cerr << "Error at socket(): " << WSAGetLastError() << std::endl;
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "GDBServer: Error at socket(): %d", WSAGetLastError());
 #else
-        std::cerr << "Error at socket(): " << strerror(errno) << std::endl;
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "GDBServer: Error at socket(): %s", strerror(errno));
 #endif
 #ifdef _WIN32
         WSACleanup();
@@ -49,7 +50,7 @@ bool GDBServer::Start()
     service.sin_port = htons(m_port);
 
     if (bind(m_server_socket, (sockaddr*)&service, sizeof(service)) == SOCKET_ERROR) {
-        std::cerr << "bind() failed." << std::endl;
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "GDBServer: bind() to port %d failed. Pls check INTERNET permission. Error: %s", m_port, strerror(errno));
         close_socket_helper(m_server_socket);
 #ifdef _WIN32
         WSACleanup();
@@ -58,26 +59,22 @@ bool GDBServer::Start()
     }
 
     if (listen(m_server_socket, 1) == SOCKET_ERROR) {
-        std::cerr << "listen() failed." << std::endl;
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "GDBServer: listen() failed. Error: %s", strerror(errno));
         close_socket_helper(m_server_socket);
 #ifdef _WIN32
         WSACleanup();
 #endif
         return false;
     }
-
     m_running = true;
     m_thread = std::thread(&GDBServer::ServerThread, this);
-
-    std::cout << "GDB Server listening on port " << m_port << std::endl;
-
+    SDL_Log("GDB Server listening on port %d", m_port);
     return true;
 }
 
 void GDBServer::Stop()
 {
     if (!m_running) return;
-
     m_running = false;
     if (m_server_socket != INVALID_SOCKET) {
 #ifdef _WIN32
@@ -88,14 +85,13 @@ void GDBServer::Stop()
         close_socket_helper(m_server_socket);
         m_server_socket = INVALID_SOCKET;
     }
-
     if (m_thread.joinable()) {
         m_thread.join();
     }
-
 #ifdef _WIN32
     WSACleanup();
 #endif
+    SDL_Log("GDB Server stopped.");
 }
 
 void GDBServer::ServerThread()
@@ -106,7 +102,7 @@ void GDBServer::ServerThread()
         if (client_socket == INVALID_SOCKET)
         {
             if (m_running) {
-                 std::cerr << "accept() failed or was interrupted." << std::endl;
+                 SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "GDBServer: accept() failed or was interrupted.");
             }
             break;
         }
@@ -120,7 +116,7 @@ void GDBServer::ServerThread()
 
 void GDBServer::HandleConnection(socket_t client_socket)
 {
-    std::cout << "GDB client connected." << std::endl;
+    SDL_Log("GDB client connected.");
     std::string buffer;
     char c;
     
@@ -168,7 +164,7 @@ void GDBServer::HandleConnection(socket_t client_socket)
             }
         }
     }
-    std::cout << "GDB client disconnected." << std::endl;
+    SDL_Log("GDB client disconnected.");
 }
 
 void GDBServer::ProcessPacket(socket_t client_socket, const std::string& packet_data)
@@ -218,4 +214,11 @@ std::string GDBServer::GetStatus() const
 int GDBServer::GetPort() const
 {
     return m_port;
+}
+
+void GDBServer::SetPort(int port)
+{
+    if (!m_running) {
+        m_port = port;
+    }
 }
