@@ -39,6 +39,7 @@ REQUIRED_PACKAGES=(
     git
     libx11-dev
     libxext-dev
+    libgl1-mesa-dev
 )
 
 PACKAGES_TO_INSTALL=()
