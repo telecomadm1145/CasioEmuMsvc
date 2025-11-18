@@ -1,5 +1,6 @@
 ﻿#include "ConsoleText.h"
 #include <array>
+#include <cstddef>
 
 constexpr std::pair<int, int> comb[] = {
 	{ 768u, 879u },

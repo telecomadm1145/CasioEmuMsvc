@@ -369,3 +369,109 @@ extern "C" {
     }
 }
 #endif
+
+#if !defined(_WIN32) && !defined(__ANDROID__)
+#include <iostream>
+#include <cstdio>
+#include <memory>
+#include <array>
+#include <algorithm>
+
+std::function<void(std::filesystem::path)> SystemDialogs::fileOpenCallback;
+std::function<void(std::filesystem::path)> SystemDialogs::fileSaveCallback;
+std::function<void(std::filesystem::path)> SystemDialogs::folderOpenCallback;
+std::function<void(std::filesystem::path)> SystemDialogs::folderSaveCallback;
+
+bool command_exists(const char* cmd) {
+    std::string check_cmd = "command -v ";
+    check_cmd += cmd;
+    check_cmd += " > /dev/null 2>&1";
+    return system(check_cmd.c_str()) == 0;
+}
+
+std::string exec_and_get_output(const char* cmd) {
+    std::array<char, 128> buffer;
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    if (!pipe) {
+        throw std::runtime_error("popen() failed!");
+    }
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        result += buffer.data();
+    }
+    result.erase(std::remove(result.begin(), result.end(), '\n'), result.end());
+    result.erase(std::remove(result.begin(), result.end(), '\r'), result.end());
+    return result;
+}
+
+void terminal_fallback(const std::string& prompt, const std::function<void(std::filesystem::path)>& callback) {
+    std::cout << "\n[INFO] No graphical file dialog tool (zenity/kdialog) found." << std::endl;
+    std::cout << prompt;
+    std::string path_str;
+    std::getline(std::cin, path_str);
+    if (!path_str.empty()) {
+        callback(std::filesystem::path(path_str));
+    } else {
+        std::cout << "[INFO] Canceled." << std::endl;
+    }
+}
+
+void SystemDialogs::OpenFileDialog(std::function<void(std::filesystem::path)> callback) {
+    std::string cmd;
+    if (command_exists("zenity")) {
+        cmd = "zenity --file-selection";
+    } else if (command_exists("kdialog")) {
+        cmd = "kdialog --getopenfilename";
+    }
+
+    if (!cmd.empty()) {
+        std::string path = exec_and_get_output(cmd.c_str());
+        if (!path.empty()) {
+            callback(path);
+        }
+    } else {
+        terminal_fallback("Please enter the full path to the file: ", callback);
+    }
+}
+
+void SystemDialogs::SaveFileDialog(std::string preferred_name, std::function<void(std::filesystem::path)> callback) {
+    std::string cmd;
+    if (command_exists("zenity")) {
+        cmd = "zenity --file-selection --save --confirm-overwrite --filename=\"" + preferred_name + "\"";
+    } else if (command_exists("kdialog")) {
+        cmd = "kdialog --getsavefilename \"" + preferred_name + "\"";
+    }
+
+    if (!cmd.empty()) {
+        std::string path = exec_and_get_output(cmd.c_str());
+        if (!path.empty()) {
+            callback(path);
+        }
+    } else {
+        terminal_fallback("Please enter the full path to save the file: ", callback);
+    }
+}
+
+void SystemDialogs::OpenFolderDialog(std::function<void(std::filesystem::path)> callback) {
+    std::string cmd;
+    if (command_exists("zenity")) {
+        cmd = "zenity --file-selection --directory";
+    } else if (command_exists("kdialog")) {
+        cmd = "kdialog --getexistingdirectory";
+    }
+
+    if (!cmd.empty()) {
+        std::string path = exec_and_get_output(cmd.c_str());
+        if (!path.empty()) {
+            callback(path);
+        }
+    } else {
+        terminal_fallback("Please enter the full path to the folder: ", callback);
+    }
+}
+
+void SystemDialogs::SaveFolderDialog(std::function<void(std::filesystem::path)> callback) {
+    OpenFolderDialog(callback);
+}
+
+#endif

@@ -247,7 +247,7 @@ void WatchWindow::RenderCore() {
 				ImGui::TableNextColumn();
 				ImGui::Text("%06X", chipset.epscpu->stack[i] << 1);
 				ImGui::TableNextColumn();
-				ImGui::Text("%04X", i);
+				ImGui::Text("%04zX", i);
 				ImGui::TableNextColumn();
 				ImGui::Text("%04X", 0);
 				ImGui::TableNextColumn();

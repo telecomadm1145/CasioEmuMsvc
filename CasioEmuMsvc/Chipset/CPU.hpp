@@ -18,7 +18,7 @@ namespace casioemu {
 
 		template <typename value_type>
 		struct Register : public RegisterStub {
-			Register<value_type>() {
+			Register() {
 				type_size = sizeof(value_type);
 				name = "?";
 			}

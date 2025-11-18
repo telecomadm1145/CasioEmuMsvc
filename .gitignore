@@ -372,5 +372,4 @@ app/release/
 app/build/
 workspace.xml
 
-SDL/
-SDL_image/
+build

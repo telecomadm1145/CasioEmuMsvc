@@ -7,6 +7,8 @@
 #include <functional>
 #include <cstring>
 #include <utility>
+#include <climits>
+#include <cmath>
 struct Color {
 	unsigned char Alpha;
 	unsigned char Red;

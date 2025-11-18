@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10...3.22)
 
-project(MY_APP)
+project(CasioEmuMsvc)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -38,11 +38,11 @@ include_directories(#${CMAKE_SOURCE_DIR}/SDL_image/include
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Peripheral
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/StartupUi)
         
-find_library(SDL2 SDL2)
+# find_library(SDL2 SDL2)
 
-find_library(SDL2_image SDL2_image)
+# find_library(SDL2_image SDL2_image)
 
-add_library(main SHARED)
+# add_library(main SHARED)
 
 # Search for all .cpp files in the CasioEmuMsvc directory 
 # file(GLOB_RECURSE SOURCES ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/*.cpp)
@@ -74,8 +74,41 @@ set(MAIN_SOURCES
     ${MAIN_SOURCES_STARTUP}
 )
 
-target_sources(main PRIVATE ${MAIN_SOURCES})
+# target_sources(main PRIVATE ${MAIN_SOURCES})
 
-target_compile_definitions(main PRIVATE ASMJIT_STATIC)
+if(BUILD_EXECUTABLE)
+    message(STATUS "Building executable")
+    set(TARGET_NAME "CasioEmuMsvc")
+    add_executable(${TARGET_NAME} ${MAIN_SOURCES})
+else()
+    message(STATUS "Building shared library")
+    set(TARGET_NAME "main")
+    add_library(${TARGET_NAME} SHARED ${MAIN_SOURCES})
+endif()
 
-target_link_libraries(main PRIVATE SDL2 SDL2_image asmjit::asmjit CpuFeatures::cpu_features)
+target_compile_definitions(${TARGET_NAME} PRIVATE ASMJIT_STATIC)
+
+if(BUILD_EXECUTABLE)
+    target_link_libraries(${TARGET_NAME} PRIVATE
+        SDL2::SDL2
+        SDL2::image
+        CpuFeatures::cpu_features
+        asmjit::asmjit
+        -lGL
+        -lpthread
+        -ldl
+        -lrt
+        -lm
+)
+else()
+    target_link_libraries(${TARGET_NAME} PRIVATE
+        SDL2::SDL2
+        SDL2::image
+        CpuFeatures::cpu_features
+        asmjit::asmjit
+    )
+endif()
+
+#if(BUILD_EXECUTABLE AND NOT ANDROID)
+#    target_link_options(${TARGET_NAME} PRIVATE "-static")
+#endif()

@@ -15,8 +15,8 @@
 #define FUNCTION_NAME __func__
 #endif
 
-#ifdef __clang__
-#define __debugbreak __builtin_trap
+#if defined(__clang__) || defined(__GNUC__)
+#define __debugbreak() __builtin_trap()
 #endif
 
 #define ENABLE_CRASH_CHECK
