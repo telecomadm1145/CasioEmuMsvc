@@ -119,7 +119,12 @@ class ModelEditor : public UIWindow {
 public:
 	ModelEditor(std::filesystem::path path) : UIWindow("Model Editor##114514"), pth(path) {
         try {
-            std::ifstream ifs(path / "config.bin", std::ios::binary);
+            std::filesystem::path configPath = path / "config.bin";
+            std::error_code ec;
+            if (!std::filesystem::exists(configPath) || !std::filesystem::is_regular_file(configPath, ec)) {
+                 throw std::runtime_error("Cannot open config.bin (not found or is a directory).");
+            }
+            std::ifstream ifs(configPath, std::ios::binary);
             if (!ifs)
                 throw std::runtime_error("Cannot open config.bin.");
             Binary::Read(ifs, mi);
@@ -426,6 +431,12 @@ namespace casioemu {
                         try {
 						    printf("[StartupUI][Info] Checking %s\n", dir.path().string().c_str());
 						    auto config = dir.path() / "config.bin";
+                            std::error_code ec;
+                            if (!std::filesystem::exists(config) || !std::filesystem::is_regular_file(config, ec)) {
+                                printf("[StartupUI][Info] Unable to open %s\n", config.string().c_str());
+                                continue;
+                            }
+
 						    std::ifstream ifs(config, std::ios::in | std::ios::binary);
 						    if (!ifs) {
 						    	printf("[StartupUI][Info] Unable to open %s\n", config.string().c_str());
@@ -462,15 +473,24 @@ namespace casioemu {
 						    	break;
 						    }
 						    {
-						    	std::ifstream ifs2(dir.path() / mi.rom_path, std::ios::in | std::ios::binary);
+                                std::filesystem::path romPath = dir.path() / mi.rom_path;
+                                if (mi.rom_path.empty() || !std::filesystem::exists(romPath) || !std::filesystem::is_regular_file(romPath, ec))
+                                    continue;
+						    	std::ifstream ifs2(romPath, std::ios::in | std::ios::binary);
 						    	if (!ifs2)
 						    		continue;
 						    	std::vector<byte> rom{std::istreambuf_iterator<char>{ifs2.rdbuf()}, std::istreambuf_iterator<char>{}};
 						    	ifs2.close();
 						    	std::vector<byte> flash{};
-						    	std::ifstream ifs3(dir.path() / mi.flash_path, std::ios::in | std::ios::binary);
-						    	if (ifs3)
-						    		flash = {std::istreambuf_iterator<char>{ifs3.rdbuf()}, std::istreambuf_iterator<char>{}};
+
+                                if (!mi.flash_path.empty()) {
+                                    std::filesystem::path flashPath = dir.path() / mi.flash_path;
+                                    if (std::filesystem::exists(flashPath) && std::filesystem::is_regular_file(flashPath, ec)) {
+                                        std::ifstream ifs3(flashPath, std::ios::in | std::ios::binary);
+                                        if (ifs3)
+                                            flash = {std::istreambuf_iterator<char>{ifs3.rdbuf()}, std::istreambuf_iterator<char>{}};
+                                    }
+                                }
 						    	auto ri = rom_info(rom, flash, mi.real_hardware);
 						    	if (ri.type != 0) {
 						    		switch (ri.type) {
