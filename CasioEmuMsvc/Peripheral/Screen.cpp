@@ -37,6 +37,10 @@
 #include <iomanip>
 #include <vector>
 
+#ifndef __ANDROID__
+#include "Theme.h"
+#endif
+
 #ifdef _WIN32
 #include <windows.h>
 #include <wingdi.h>
@@ -191,6 +195,10 @@ namespace casioemu {
 					tick();
 #ifdef __ANDROID__
 					SDL_Delay(10);
+#else
+                    if (GetThemeSettings().lowPerformanceMode) {
+                        SDL_Delay(10);
+                    }
 #endif
 				}
 			});
@@ -213,12 +221,20 @@ namespace casioemu {
 			else
 				ratio = 1 - 5e-4;
 #ifdef __ANDROID__
-			ratio = 0.80;
+            ratio = 0.80;
+#else
+            if (GetThemeSettings().lowPerformanceMode) {
+                ratio = 0.80;
+            }
 #endif
 			if constexpr (hardware_id == HW_TI) {
 				ratio = 1 - 1e-4;
 #ifdef __ANDROID__
-			ratio = 0.80;
+            ratio = 0.80;
+#else
+            if (GetThemeSettings().lowPerformanceMode) {
+                ratio = 0.80;
+            }
 #endif
 				if (!ti_enabled) {
 					for (size_t i = 0; i < 65 * 192; i++) {
@@ -263,7 +279,11 @@ namespace casioemu {
 			else if (hardware_id == HW_EPS6800) {
 				ratio = 1 - 1e-4;
 #ifdef __ANDROID__
-			ratio = 0.80;
+            ratio = 0.80;
+#else
+            if (GetThemeSettings().lowPerformanceMode) {
+                ratio = 0.80;
+            }
 #endif
 				float ink_alpha_on = 255;
 				float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);

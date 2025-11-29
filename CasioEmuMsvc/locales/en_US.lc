@@ -145,6 +145,8 @@ Ui.ForceUpdateLangDesc=Reload default language (usually used to update language 
 Ui.Browse=Browse
 Ui.InjectionFilePath=Injection File Path
 Ui.DisableVibration=Disable Vibration
+Ui.LowPerformanceMode=Low Performance Mode
+Ui.LowPerformanceTooltip=Limit FPS to ~25 to reduce CPU load
 
 Rop.Input=Input
 Rop.InputSize=Input size

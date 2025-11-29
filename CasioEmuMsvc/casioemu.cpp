@@ -37,6 +37,7 @@
 #include <Gui.h>
 #include <Plugin/PluginMan.h>
 #include "GDB/GDBServer.hpp"
+#include "Theme.h"
 
 using namespace casioemu;
 
@@ -239,7 +240,11 @@ int main(int argc, char* argv[]) {
 #ifdef __ANDROID__
 			SDL_Delay(40); // 25fps
 #else
-			SDL_Delay(16); // ~60fps
+            if (GetThemeSettings().lowPerformanceMode) {
+                SDL_Delay(40); // 25fps
+            } else {
+                SDL_Delay(16); // ~60fps
+            }
 #endif
 		}
 	});

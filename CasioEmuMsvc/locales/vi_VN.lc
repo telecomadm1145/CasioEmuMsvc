@@ -141,6 +141,8 @@ Ui.ForceUpdateLangDesc=Tải lại ngôn ngữ mặc định (thường dùng đ
 Ui.Browse=Duyệt
 Ui.InjectionFilePath=Đường dẫn file custom inj
 Ui.DisableVibration=Tắt rung
+Ui.LowPerformanceMode=Chế độ hiệu suất thấp
+Ui.LowPerformanceTooltip=Giới hạn FPS ở mức ~25 để giảm tải CPU
 
 Rop.Input=Đầu vào
 Rop.InputSize=Nhập

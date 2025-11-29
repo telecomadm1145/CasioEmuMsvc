@@ -152,6 +152,8 @@ Ui.ForceUpdateLangDesc=Reload default language (usually used to update language 
 Ui.Browse=Browse
 Ui.InjectionFilePath=Injection File Path
 Ui.DisableVibration=Disable Vibration
+Ui.LowPerformanceMode=Low Performance Mode
+Ui.LowPerformanceTooltip=Limit FPS to ~25 to reduce CPU load
 
 Rop.Input=Input
 Rop.InputSize=Input size
@@ -344,6 +346,8 @@ Ui.ForceUpdateLangDesc=Tải lại ngôn ngữ mặc định (thường dùng đ
 Ui.Browse=Duyệt
 Ui.InjectionFilePath=Đường dẫn file custom inj
 Ui.DisableVibration=Tắt rung
+Ui.LowPerformanceMode=Chế độ hiệu suất thấp
+Ui.LowPerformanceTooltip=Giới hạn FPS ở mức ~25 để giảm tải CPU
 
 Rop.Input=Đầu vào
 Rop.InputSize=Nhập
@@ -538,6 +542,8 @@ Ui.ForceUpdateLangDesc=重新加载默认语言（通常用于在 android 有更
 Ui.Browse=浏览
 Ui.InjectionFilePath=注入文件路径
 Ui.DisableVibration=禁用振动
+Ui.LowPerformanceMode=低性能模式
+Ui.LowPerformanceTooltip=将 FPS 限制在 ~25 以减少 CPU 负载
 
 Rop.LoadToInputArea=加载到输入区
 Rop.LoadedTip=已加载

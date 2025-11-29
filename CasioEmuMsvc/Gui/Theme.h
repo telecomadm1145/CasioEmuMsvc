@@ -8,12 +8,14 @@ struct ThemeSettings {
     char language[30] = "";
     float scale = 1.0f;
     char injectionFilePath[256] = "./hc-inj.txt"; // Default injection file path
+    bool lowPerformanceMode = false;
 
     void Write(std::ostream& stm) const {
         Binary::Write(stm, isDarkMode);
         stm.write(language, sizeof(language));
         Binary::Write(stm, scale);
         stm.write(injectionFilePath, sizeof(injectionFilePath));
+        Binary::Write(stm, lowPerformanceMode);
     }
 
     void Read(std::istream& stm) {
@@ -21,6 +23,9 @@ struct ThemeSettings {
         stm.read(language, sizeof(language));
         Binary::Read(stm, scale);
         stm.read(injectionFilePath, sizeof(injectionFilePath));
+        if (stm.peek() != EOF) {
+            Binary::Read(stm, lowPerformanceMode);
+        }
     }
 };
 

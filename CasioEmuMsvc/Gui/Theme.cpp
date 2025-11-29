@@ -64,6 +64,16 @@ public:
 			g_settings.isDarkMode = false;
 			SaveThemeSettings();
 		}
+#ifndef __ANDROID__
+        if (ImGui::Checkbox("Ui.LowPerformanceMode"_lc, &g_settings.lowPerformanceMode)) {
+            SaveThemeSettings();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted("Ui.LowPerformanceTooltip"_lc);
+            ImGui::EndTooltip();
+        }
+#endif
 #ifdef __ANDROID__
 		ImGui::Checkbox("Ui.DisableVibration"_lc, &setting_DisableVibration);
 #endif
