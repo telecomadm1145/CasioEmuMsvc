@@ -115,6 +115,7 @@ class ModelEditor : public UIWindow {
 
 	casioemu::ButtonInfo* btninfo{};
     bool init_failed = false;
+    std::string selected_sprite_key;
 
 public:
 	ModelEditor(std::filesystem::path path) : UIWindow("Model Editor##114514"), pth(path) {
@@ -232,10 +233,15 @@ public:
 		if (sdl_t != 0) {
 			ImGui::SetCursorPosX(0);
 			RenderSprite2(imgSp, (ImTextureID)sdl_t, imgSz, {400, 400.0f * imgSp.dest.h / imgSp.dest.w});
-			for (auto sp : mi.sprites) {
+			for (auto& sp : mi.sprites) {
 				if (sp.first != "rsd_pixel" && sp.first != "rsd_interface") {
 					ImGui::SetCursorPos({(float)sp.second.dest.x * scaleFactor, (float)sp.second.dest.y * scaleFactor + y});
 					RenderSprite(sp.second, (ImTextureID)sdl_t, imgSz, {scaleFactor * (float)sp.second.dest.w, scaleFactor * (float)sp.second.dest.h});
+                    if (sp.first == selected_sprite_key) {
+                        auto min_p = ImGui::GetItemRectMin();
+                        auto max_p = ImGui::GetItemRectMax();
+                        ImGui::GetWindowDrawList()->AddRect(min_p, max_p, IM_COL32(255, 0, 0, 255), 0.0f, 0, 2.0f);
+                    }
 				}
 			}
 			auto sp2 = mi.sprites["rsd_pixel"];
@@ -269,72 +275,113 @@ public:
 		}
 		ImGui::SetCursorPos({400, y});
 		if (ImGui::BeginChild("Model Info")) {
-			ImGui::TextUnformatted("ModelEditor.Name"_lc);
-			if (ImGui::InputText("##name", name, 260)) {
-				mi.model_name = name;
-			}
-			ImGui::TextUnformatted("ModelEditor.InterfacePath"_lc);
-			if (ImGui::InputText("##path1", path1, 260)) {
-				mi.interface_path = path1;
-			}
-			ImGui::TextUnformatted("ModelEditor.RomPath"_lc);
-			if (ImGui::InputText("##path2", path2, 260)) {
-				mi.rom_path = path2;
-			}
-			ImGui::TextUnformatted("ModelEditor.FlashDumpPath"_lc);
-			if (ImGui::InputText("##path3", path3, 260)) {
-				mi.flash_path = path3;
-			}
-			ImGui::TextUnformatted("ModelEditor.CsrMask"_lc);
-			if (ImGui::SliderInt("##a", &v, 0, 15, "0x%X")) {
-				mi.csr_mask = v;
-			}
-			ImGui::TextUnformatted("ModelEditor.PdValue"_lc);
-			if (ImGui::SliderInt("##q", &k, 0, 15, "0x%X")) {
-				mi.pd_value = k;
-			}
-			ImGui::TextUnformatted("ModelEditor.HardwareType"_lc);
-			ImGui::SetNextItemWidth(80);
-			if (ImGui::BeginCombo("##cb", items[mi.hardware_id])) {
-				for (int n = 0; n < IM_ARRAYSIZE(items); n++) {
-					bool is_selected = (mi.hardware_id == n); // You can store your selection however you want, outside or inside your objects
-					if (ImGui::Selectable(items[n], is_selected)) {
-						mi.hardware_id = n;
-					}
-					if (is_selected)
-						ImGui::SetItemDefaultFocus(); // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
-				}
-				ImGui::EndCombo();
-			}
-			ImGui::Checkbox("ModelEditor.SampleRom"_lc, &mi.is_sample_rom);
-			ImGui::Checkbox("ModelEditor.NewRenderMethod"_lc, &mi.enable_new_screen);
-			ImGui::Checkbox("ModelEditor.RealRom"_lc, &mi.real_hardware);
-			ImGui::Checkbox("ModelEditor.LegacyKO"_lc, &mi.legacy_ko);
-			if (ImGui::ColorEdit3("ModelEditor.InkColor"_lc, color)) {
-				mi.ink_color.r = color[0] * 255;
-				mi.ink_color.g = color[1] * 255;
-				mi.ink_color.b = color[2] * 255;
-			}
-			if (ImGui::Button("Button.Save"_lc)) {
-				std::ofstream ifs(pth / "config.bin", std::ios::binary);
-				if (!ifs)
-					PANIC("Cannot open.");
-				Binary::Write(ifs, mi);
-				this->open = false;
-			}
-			ImGui::Separator();
-			if (btninfo) {
-				if (ImGui::InputText("ModelEditor.KeyName"_lc, buffer, 260)) {
-					btninfo->keyname = buffer;
-				}
-				if (ImGui::InputText("ModelEditor.KIKO"_lc, buffer2, 12)) {
-					btninfo->kiko = SDL_strtol(buffer2, 0, 16);
-				}
-				ImGui::InputInt("X", &btninfo->rect.x);
-				ImGui::InputInt("Y", &btninfo->rect.y);
-				ImGui::InputInt("W", &btninfo->rect.w);
-				ImGui::InputInt("H", &btninfo->rect.h);
-			}
+            if (ImGui::BeginTabBar("ModelEditorTabs")) {
+                if (ImGui::BeginTabItem("General")) {
+                    ImGui::TextUnformatted("ModelEditor.Name"_lc);
+                    if (ImGui::InputText("##name", name, 260)) {
+                        mi.model_name = name;
+                    }
+                    ImGui::TextUnformatted("ModelEditor.InterfacePath"_lc);
+                    if (ImGui::InputText("##path1", path1, 260)) {
+                        mi.interface_path = path1;
+                    }
+                    ImGui::TextUnformatted("ModelEditor.RomPath"_lc);
+                    if (ImGui::InputText("##path2", path2, 260)) {
+                        mi.rom_path = path2;
+                    }
+                    ImGui::TextUnformatted("ModelEditor.FlashDumpPath"_lc);
+                    if (ImGui::InputText("##path3", path3, 260)) {
+                        mi.flash_path = path3;
+                    }
+                    ImGui::TextUnformatted("ModelEditor.CsrMask"_lc);
+                    if (ImGui::SliderInt("##a", &v, 0, 15, "0x%X")) {
+                        mi.csr_mask = v;
+                    }
+                    ImGui::TextUnformatted("ModelEditor.PdValue"_lc);
+                    if (ImGui::SliderInt("##q", &k, 0, 15, "0x%X")) {
+                        mi.pd_value = k;
+                    }
+                    ImGui::TextUnformatted("ModelEditor.HardwareType"_lc);
+                    ImGui::SetNextItemWidth(80);
+                    if (ImGui::BeginCombo("##cb", items[mi.hardware_id])) {
+                        for (int n = 0; n < IM_ARRAYSIZE(items); n++) {
+                            bool is_selected = (mi.hardware_id == n);
+                            if (ImGui::Selectable(items[n], is_selected)) {
+                                mi.hardware_id = n;
+                            }
+                            if (is_selected)
+                                ImGui::SetItemDefaultFocus();
+                        }
+                        ImGui::EndCombo();
+                    }
+                    ImGui::Checkbox("ModelEditor.SampleRom"_lc, &mi.is_sample_rom);
+                    ImGui::Checkbox("ModelEditor.NewRenderMethod"_lc, &mi.enable_new_screen);
+                    ImGui::Checkbox("ModelEditor.RealRom"_lc, &mi.real_hardware);
+                    ImGui::Checkbox("ModelEditor.LegacyKO"_lc, &mi.legacy_ko);
+                    if (ImGui::ColorEdit3("ModelEditor.InkColor"_lc, color)) {
+                        mi.ink_color.r = color[0] * 255;
+                        mi.ink_color.g = color[1] * 255;
+                        mi.ink_color.b = color[2] * 255;
+                    }
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("Buttons")) {
+                    if (btninfo) {
+                        if (ImGui::InputText("ModelEditor.KeyName"_lc, buffer, 260)) {
+                            btninfo->keyname = buffer;
+                        }
+                        if (ImGui::InputText("ModelEditor.KIKO"_lc, buffer2, 12)) {
+                            btninfo->kiko = SDL_strtol(buffer2, 0, 16);
+                        }
+                        ImGui::InputInt("X", &btninfo->rect.x);
+                        ImGui::InputInt("Y", &btninfo->rect.y);
+                        ImGui::InputInt("W", &btninfo->rect.w);
+                        ImGui::InputInt("H", &btninfo->rect.h);
+                    } else {
+                        ImGui::Text("Select a button from the preview to edit.");
+                    }
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("Sprites")) {
+                    ImGui::Text("Sprite List");
+                    ImGui::BeginChild("SpriteList", {0, 150}, true);
+
+                    for (auto& [key, sprite] : mi.sprites) {
+                        if (ImGui::Selectable(key.c_str(), selected_sprite_key == key)) {
+                            selected_sprite_key = key;
+                        }
+                    }
+                    ImGui::EndChild();
+
+                    if (!selected_sprite_key.empty() && mi.sprites.count(selected_sprite_key)) {
+                        auto& sprite = mi.sprites[selected_sprite_key];
+                        ImGui::Text("Selected: %s", selected_sprite_key.c_str());
+                        ImGui::Separator();
+                        ImGui::Text("Source Rect");
+                        ImGui::InputInt("Src X", &sprite.src.x);
+                        ImGui::InputInt("Src Y", &sprite.src.y);
+                        ImGui::InputInt("Src W", &sprite.src.w);
+                        ImGui::InputInt("Src H", &sprite.src.h);
+
+                        ImGui::Text("Dest Rect");
+                        ImGui::InputInt("Dest X", &sprite.dest.x);
+                        ImGui::InputInt("Dest Y", &sprite.dest.y);
+                        ImGui::InputInt("Dest W", &sprite.dest.w);
+                        ImGui::InputInt("Dest H", &sprite.dest.h);
+                    }
+                    ImGui::EndTabItem();
+                }
+                ImGui::EndTabBar();
+            }
+
+            ImGui::Separator();
+            if (ImGui::Button("Button.Save"_lc)) {
+                std::ofstream ifs(pth / "config.bin", std::ios::binary);
+                if (!ifs)
+                    PANIC("Cannot open.");
+                Binary::Write(ifs, mi);
+                this->open = false;
+            }
 		}
 		ImGui::EndChild();
 	}
