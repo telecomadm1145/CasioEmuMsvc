@@ -37,12 +37,16 @@ private:
 	bool need_roll = false;
 	uint32_t selected_addr = -1;
 
+    std::vector<uint8_t> rom_data;
+
 public:
 	uint8_t debug_flags = DEBUG_BREAKPOINT;
 	CodeViewer() : UIWindow("Code") {
-		PrepareDisasm();
+        // Defer disassembly until file is loaded
+		// PrepareDisasm();
 		SetupHooks();
 	}
+    void LoadFile(const std::string& path);
 	void SetupHooks();
 	void PrepareDisasm();
 	bool TryTrigBP(uint8_t seg, uint16_t offset, bool bp_mode = true);

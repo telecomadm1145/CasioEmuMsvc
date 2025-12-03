@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <cstdint>
 /* Have zero padding at first if necessary.
    The number with maximum length is (1 << (binlen - 1)), equal to the smallest
    number. It is a power of 2, thus first digit cannot be hexadecimal.

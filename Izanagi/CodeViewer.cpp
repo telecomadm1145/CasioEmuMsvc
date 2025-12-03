@@ -1,5 +1,6 @@
 #include "CodeViewer.hpp"
 #include "U8Disas.h"
+#include "imgui.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -14,6 +15,43 @@
 #include <string>
 #include <thread>
 #include <unordered_set>
+#include <optional>
+
+#ifndef _TRUNCATE
+#define _TRUNCATE ((size_t)-1)
+#endif
+
+// Safe string copy replacement
+void strncpy_s(char* dest, size_t destsz, const char* src, size_t count) {
+    if (count == _TRUNCATE) {
+        if (destsz > 0) {
+            strncpy(dest, src, destsz - 1);
+            dest[destsz - 1] = '\0';
+        }
+    } else {
+        if (count < destsz) {
+            strncpy(dest, src, count);
+            dest[count] = '\0';
+        } else if (destsz > 0) {
+            strncpy(dest, src, destsz - 1);
+            dest[destsz - 1] = '\0';
+        }
+    }
+}
+
+// Safe sprintf replacement
+template<typename... Args>
+void sprintf_s(char* buffer, size_t sizeOfBuffer, const char* format, Args... args) {
+    snprintf(buffer, sizeOfBuffer, format, args...);
+}
+
+// Safe strcpy replacement
+void strcpy_s(char* dest, size_t destsz, const char* src) {
+    if (destsz > 0) {
+        strncpy(dest, src, destsz - 1);
+        dest[destsz - 1] = '\0';
+    }
+}
 
 uint32_t pc_cache = 0;
 
@@ -56,18 +94,36 @@ inline static std::string lookup_symbol(uint32_t addr) {
 	}
 }
 
+void CodeViewer::LoadFile(const std::string& path) {
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file) return;
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    rom_data.resize(size);
+    if (file.read((char*)rom_data.data(), size)) {
+        src_path = path;
+        PrepareDisasm();
+    }
+}
+
 void CodeViewer::PrepareDisasm() {
+    if (rom_data.empty()) return;
+
 	std::thread t1([this]() {
 #ifndef _DEBUG
 			printf("[UI][Info] Start to disasm ...\n");
 			auto dat = std::unique_ptr<uint8_t>(new uint8_t[0x80100]);
 			std::memset(dat.get(), 0xff, 0x80100);
-			std::memcpy(dat.get(), m_emu->chipset.rom_data.data(), std::min((size_t)0x5e000, m_emu->chipset.rom_data.size()));
-			if (m_emu->chipset.rom_data.size() >= 0x60000) // TODO: fix this hack!!!
-				std::memcpy(dat.get() + 0x70000, m_emu->chipset.rom_data.data() + 0x5e000, 0x2000);
-			uint8_t* beg = dat.get();
+			std::memcpy(dat.get(), rom_data.data(), std::min((size_t)0x80000, rom_data.size()));
+
+            // Hack for specific ROM layout if needed, but for now just load linearly
+			// if (m_emu->chipset.rom_data.size() >= 0x60000) // TODO: fix this hack!!!
+			// 	std::memcpy(dat.get() + 0x70000, m_emu->chipset.rom_data.data() + 0x5e000, 0x2000);
+
+            uint8_t* beg = dat.get();
 			auto rom = beg;
-			auto end = rom + 0x80000;
+			auto end = rom + 0x80000; // Fixed size for now based on previous code
 			printf("[UI][Info] Pass1: decoding opcodes...\n");
 			std::stringstream ss{};
 			while (rom < end) {

@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <vector>
+#include <cmath>
 using word = unsigned short;
 using byte = unsigned char;
 struct RomInfo {
