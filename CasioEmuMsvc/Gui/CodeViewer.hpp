@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Ui.hpp"
 #include <array>
 #include <cstddef>
@@ -37,6 +37,11 @@ private:
 	bool need_roll = false;
 	uint32_t selected_addr = -1;
 
+    // Search related
+    char search_buf[256]{0};
+    int search_mode = 0; // 0: Hex, 1: Instruction
+    int last_found_idx = -1;
+
 public:
 	uint8_t debug_flags = DEBUG_BREAKPOINT;
 	CodeViewer() : UIWindow("Code") {
@@ -55,4 +60,6 @@ public:
 	void RequestStep();
     void AddBreakpoint(uint32_t address);
     void RemoveBreakpoint(uint32_t address);
+    void Search(bool next);
+    void ExportDisassembly();
 };
