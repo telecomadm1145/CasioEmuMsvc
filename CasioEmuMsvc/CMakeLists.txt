@@ -94,7 +94,6 @@ if(BUILD_EXECUTABLE)
         SDL2::image
         CpuFeatures::cpu_features
         asmjit::asmjit
-        -lGL
         -lpthread
         -ldl
         -lrt
