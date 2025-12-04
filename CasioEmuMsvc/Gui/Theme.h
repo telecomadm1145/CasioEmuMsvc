@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <Ui.hpp>
 #include "Binary.h"
 #include <iostream>
@@ -31,6 +31,7 @@ struct ThemeSettings {
 
 UIWindow* MakeThemeWindow();
 
+void SetModernDarkTheme();
 void SaveThemeSettings();
 void LoadThemeSettings();
 const ThemeSettings& GetThemeSettings();
