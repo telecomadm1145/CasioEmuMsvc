@@ -1,3 +1,103 @@
+#ifdef __ANDROID__
+#include <jni.h>
+#include <android/log.h>
+#include <dlfcn.h>
+#include <unwind.h>
+#include <signal.h>
+#include <unistd.h>
+#include <string>
+#include <sstream>
+#include <iomanip>
+#include <vector>
+#include <cstring>
+#include <SDL.h>
+#include <SDL_system.h>
+
+struct BacktraceState {
+    void** current;
+    void** end;
+};
+
+static _Unwind_Reason_Code unwindCallback(struct _Unwind_Context* context, void* arg) {
+    BacktraceState* state = static_cast<BacktraceState*>(arg);
+    uintptr_t pc = _Unwind_GetIP(context);
+    if (pc) {
+        if (state->current == state->end) {
+            return _URC_END_OF_STACK;
+        } else {
+            *state->current++ = reinterpret_cast<void*>(pc);
+        }
+    }
+    return _URC_NO_REASON;
+}
+
+static void android_signal_handler(int signum, siginfo_t* info, void* context) {
+    const size_t max_stack_frames = 64;
+    void* buffer[max_stack_frames];
+
+    BacktraceState state = {buffer, buffer + max_stack_frames};
+    _Unwind_Backtrace(unwindCallback, &state);
+    size_t count = state.current - buffer;
+
+    std::stringstream ss;
+    ss << "Signal " << signum << " caught!\n";
+    ss << "Fault address: " << info->si_addr << "\n";
+    ss << "Stack trace:\n";
+
+    for (size_t i = 0; i < count; ++i) {
+        const void* addr = buffer[i];
+        const char* symbol = "";
+        Dl_info info;
+        if (dladdr(addr, &info) && info.dli_sname) {
+            symbol = info.dli_sname;
+        }
+        ss << "#" << std::setw(2) << i << " " << addr << " " << symbol << "\n";
+    }
+
+    std::string message = ss.str();
+    __android_log_print(ANDROID_LOG_FATAL, "CasioEmu", "%s", message.c_str());
+
+    // Call Java
+    JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+    if (env) {
+        jobject activity = (jobject)SDL_AndroidGetActivity();
+        if (activity) {
+            jclass clazz = env->GetObjectClass(activity);
+            if (clazz) {
+                 jmethodID method = env->GetMethodID(clazz, "onNativeCrash", "(Ljava/lang/String;)V");
+                 if (method) {
+                     jstring jMsg = env->NewStringUTF(message.c_str());
+                     env->CallVoidMethod(activity, method, jMsg);
+                     env->DeleteLocalRef(jMsg);
+                 }
+                 env->DeleteLocalRef(clazz);
+            }
+        }
+    }
+
+    // Hang here so the UI thread can show the dialog
+    while(true) {
+        sleep(1);
+    }
+}
+
+class GlobalCrashHandler {
+public:
+    GlobalCrashHandler() {
+        struct sigaction sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_sigaction = android_signal_handler;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = SA_SIGINFO;
+        sigaction(SIGSEGV, &sa, nullptr);
+        sigaction(SIGFPE, &sa, nullptr);
+        sigaction(SIGILL, &sa, nullptr);
+        sigaction(SIGABRT, &sa, nullptr);
+        sigaction(SIGBUS, &sa, nullptr);
+    }
+} g_crashhandler;
+#endif
+
 ﻿#ifdef _WIN32
 #include <iostream>
 #include <windows.h>

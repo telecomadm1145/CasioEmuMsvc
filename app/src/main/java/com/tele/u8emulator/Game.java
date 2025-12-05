@@ -19,6 +19,10 @@ import android.media.MediaScannerConnection;
 import android.util.Log;
 import android.graphics.Bitmap;
 import android.widget.Toast;
+import android.app.AlertDialog;
+import android.content.ClipboardManager;
+import android.content.ClipData;
+import android.content.DialogInterface;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.File;
@@ -30,7 +34,29 @@ public class Game extends SDLActivity {
     private static Uri pendingUri = null;
     private static byte[] pendingData = null;
     private static int pendingRequestCode = -1;
-    
+
+    public void onNativeCrash(String message) {
+        Log.e(TAG, "Native crash: " + message);
+        runOnUiThread(() -> {
+            new AlertDialog.Builder(this)
+                .setTitle("Crash Detected")
+                .setMessage(message)
+                .setPositiveButton("Copy", (dialog, which) -> {
+                    ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                    ClipData clip = ClipData.newPlainText("Crash Log", message);
+                    clipboard.setPrimaryClip(clip);
+                    Toast.makeText(this, "Copied to clipboard", Toast.LENGTH_SHORT).show();
+                    // Exit cleanly
+                    System.exit(0);
+                })
+                .setNegativeButton("Close", (dialog, which) -> {
+                     System.exit(0);
+                })
+                .setCancelable(false)
+                .show();
+        });
+    }
+
     private static native void onFileSelected(String path, byte[] data);
     private static native void onFileSaved(String path);
     private static native void onFolderSelected(String path);
@@ -95,54 +121,54 @@ public class Game extends SDLActivity {
             values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
             values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CasioEmuAndroid");
             values.put(MediaStore.Images.Media.IS_PENDING, 1);
-            
+
             ContentResolver resolver = getContentResolver();
             Uri imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
-            
+
             if (imageUri == null) {
                 Log.e("SDL", "Failed to create new MediaStore record.");
                 return false;
             }
-            
+
             try {
                 OutputStream stream = resolver.openOutputStream(imageUri);
                 if (stream == null) {
                     Log.e("SDL", "Failed to open output stream.");
                     return false;
                 }
-                
+
                 // Create a bitmap from the buffer
                 Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
                 buffer.rewind();
                 bitmap.copyPixelsFromBuffer(buffer);
-                
+
                 // Compress and save the bitmap
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
                 stream.close();
-                
+
                 values.clear();
                 values.put(MediaStore.Images.Media.IS_PENDING, 0);
                 resolver.update(imageUri, values, null, null);
-                
+
                 runOnUiThread(() -> Toast.makeText(this, "Screenshot saved to Pictures/CasioEmuAndroid folder", Toast.LENGTH_SHORT).show());
-                
+
                 return true;
             } catch (IOException e) {
                 Log.e("SDL", "Error saving bitmap: " + e.getMessage());
                 resolver.delete(imageUri, null, null);
                 return false;
             }
-        } 
+        }
         // Handling for Android 9 and lower
         else {
             try {
                 Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
                 buffer.rewind();
                 bitmap.copyPixelsFromBuffer(buffer);
-                
+
                 File picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
                 File casioDir = new File(picturesDir, "CasioEmuAndroid");
-                
+
                 if (!casioDir.exists()) {
                     boolean dirCreated = casioDir.mkdirs();
                     if (!dirCreated) {
@@ -150,10 +176,10 @@ public class Game extends SDLActivity {
                         casioDir = picturesDir;
                     }
                 }
-                
+
                 File imageFile = new File(casioDir, filename);
                 FileOutputStream fos = new FileOutputStream(imageFile);
-                
+
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
                 fos.flush();
                 fos.close();
@@ -164,9 +190,9 @@ public class Game extends SDLActivity {
                             Log.d("SDL", "Scanned: " + path);
                             Log.d("SDL", "Uri: " + uri);
                         });
-                
+
                 runOnUiThread(() -> Toast.makeText(this, "Screenshot saved to Pictures/CasioEmuAndroid folder", Toast.LENGTH_SHORT).show());
-                
+
                 return true;
             } catch (IOException e) {
                 Log.e("SDL", "Error saving bitmap: " + e.getMessage());
@@ -180,7 +206,7 @@ public class Game extends SDLActivity {
                                          String[] permissions,
                                          int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        
+
         if (requestCode == PermissionManager.PERMISSION_REQUEST_CODE) {
             boolean allGranted = true;
             for (int result : grantResults) {
@@ -204,7 +230,7 @@ public class Game extends SDLActivity {
         } else if (pendingRequestCode != -1) {
             handlePendingRequest();
         }
-        
+
         pendingUri = null;
         pendingData = null;
         pendingRequestCode = -1;
@@ -213,7 +239,7 @@ public class Game extends SDLActivity {
     private void handlePendingRequest() {
         if (pendingRequestCode != -1 && pendingUri != null) {
             String path = getPathFromUri(pendingUri);
-            
+
             switch (pendingRequestCode) {
                 case 1: // Open File
                     byte[] fileData = FileUtils.readFromUri(this, pendingUri);
@@ -239,7 +265,7 @@ public class Game extends SDLActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        
+
         if (resultCode == Activity.RESULT_OK && data != null && data.getData() != null) {
             Uri uri = data.getData();
             Log.d(TAG, "File URI: " + uri.toString());
@@ -261,7 +287,7 @@ public class Game extends SDLActivity {
 
             String path = getPathFromUri(uri);
             Log.d(TAG, "File path: " + path);
-            
+
             switch (requestCode) {
                 case 1: // Open File
                     byte[] fileData = FileUtils.readFromUri(this, uri);
