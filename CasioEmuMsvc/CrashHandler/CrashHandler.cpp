@@ -10,6 +10,7 @@
 #include <iomanip>
 #include <vector>
 #include <cstring>
+#include <cstdio>
 #include <SDL.h>
 #include <SDL_system.h>
 
@@ -55,9 +56,19 @@ static void android_signal_handler(int signum, siginfo_t* info, void* context) {
     }
 
     std::string message = ss.str();
-    __android_log_print(ANDROID_LOG_FATAL, "CasioEmu", "%s", message.c_str());
 
-    // Call Java
+    void* liblog = dlopen("liblog.so", RTLD_NOW);
+    if (liblog) {
+        typedef int (*p_log_print)(int, const char*, const char*, ...);
+        p_log_print log_print = (p_log_print)dlsym(liblog, "__android_log_print");
+        if (log_print) {
+            log_print(ANDROID_LOG_FATAL, "CasioEmu", "%s", message.c_str());
+        }
+        dlclose(liblog);
+    } else {
+        fprintf(stderr, "CasioEmu FATAL: %s\n", message.c_str());
+    }
+
     JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
     if (env) {
         jobject activity = (jobject)SDL_AndroidGetActivity();
@@ -98,7 +109,7 @@ public:
 } g_crashhandler;
 #endif
 
-﻿#ifdef _WIN32
+#ifdef _WIN32
 #include <iostream>
 #include <windows.h>
 #include <dbghelp.h>
