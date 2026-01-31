@@ -373,3 +373,8 @@ app/build/
 workspace.xml
 
 build
+# Sentry Config File
+sentry.properties
+local.properties
+
+.idea/

@@ -30,7 +30,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.nio.ByteBuffer;
+import java.nio.ByteBuffer;import io.sentry.Sentry;
+
 
 public class Game extends SDLActivity {
     private static final String TAG = "Game";
@@ -62,6 +63,15 @@ public class Game extends SDLActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // waiting for view to draw to better represent a captured error with a screenshot
+        findViewById(android.R.id.content).getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+          try {
+            throw new Exception("This app uses Sentry! :)");
+          } catch (Exception e) {
+            Sentry.captureException(e);
+          }
+        });
+
         setImmersiveMode();
     }
 
