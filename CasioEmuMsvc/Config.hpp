@@ -41,6 +41,13 @@
 
 #define DBG
 
+#ifdef min
+#undef min
+#endif 
+#ifdef max
+#undef max
+#endif 
+
 // #define SINGLE_WINDOW
 #if !defined(SINGLE_WINDOW) && defined(__ANDROID__)
 #define SINGLE_WINDOW
@@ -69,3 +76,10 @@ public:                       \
 
 
 #define EMULATOR_VERSION "1.0.0"
+
+// Currently only Sentry for windows and android(java side)
+#ifdef _MSC_VER
+#define ENABLE_SENTRY
+#else
+
+#endif

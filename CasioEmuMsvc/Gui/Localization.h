@@ -134,8 +134,8 @@ private:
 
 	std::string m_basePath = "./locales/";
 	std::string m_currentLocale = "en_US";
-	std::unordered_map<std::string, std::string> m_translations;
-	std::unordered_map<std::string, std::vector<PluralRule>> m_pluralRules;
+	std::unordered_map<std::string, std::string, std::hash<std::string_view>, std::equal_to<>> m_translations;
+	std::unordered_map<std::string, std::vector<PluralRule>, std::hash<std::string_view>, std::equal_to<>> m_pluralRules;
 
 	// Helper method to convert arguments to const char*
 	template <typename T>

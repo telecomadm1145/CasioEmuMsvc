@@ -19,13 +19,14 @@
 */
 #pragma once
 #include "Config.hpp"
-#include <fstream>
-#include <stdexcept>
-#include <vector>
-#include <map>
-#include <type_traits>
 #include <concepts>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <map>
+#include <stdexcept>
+#include <type_traits>
+#include <vector>
 #pragma warning(push)
 #pragma warning(disable : 4267)
 
@@ -115,15 +116,15 @@ public:
 			Write(stm, data);
 			sz--;
 		}
-        if (sz != 0) {
-            #if defined(_MSC_VER)
-                __debugbreak();
-            #elif defined(__GNUC__) || defined(__clang__)
-                __builtin_trap();
-            #else
-                *(volatile int *)0 = 0;
-            #endif
-        }
+		if (sz != 0) {
+#if defined(_MSC_VER)
+			__debugbreak();
+#elif defined(__GNUC__) || defined(__clang__)
+			__builtin_trap();
+#else
+			*(volatile int*)0 = 0;
+#endif
+		}
 	}
 	static void Read(std::istream& stm, BinaryMap auto& map) {
 		using ContainerChild = ::ContainerChild<decltype(map)>;
@@ -150,15 +151,51 @@ public:
 			Write(stm, kv.second);
 			sz--;
 		}
-        if (sz != 0) {
-            #if defined(_MSC_VER)
-                __debugbreak();
-            #elif defined(__GNUC__) || defined(__clang__)
-                __builtin_trap();
-            #else
-                *(volatile int *)0 = 0;
-            #endif
-        }
+		if (sz != 0) {
+#if defined(_MSC_VER)
+			__debugbreak();
+#elif defined(__GNUC__) || defined(__clang__)
+			__builtin_trap();
+#else
+			*(volatile int*)0 = 0;
+#endif
+		}
+	}
+	template <class T>
+	static T Load(const char* path) {
+		std::ifstream f(path, std::ios::binary);
+		if (!f.good())
+			throw std::runtime_error("Failed to open file for reading: " + std::string(path));
+		T dat;
+		Binary::Read(f, dat);
+		return dat;
+	}
+	template <class T>
+	static T LoadOrDefault(const char* path, const T& v) {
+		std::ifstream f(path, std::ios::binary);
+		if (!f.good())
+			return v;
+		T dat;
+		Binary::Read(f, dat);
+		return dat;
+	}
+	template <class T>
+	static T LoadOrInit(const char* path, const T& v) {
+		std::ifstream f(path, std::ios::binary);
+		if (!f.good()) {
+			Save(path, v);
+			return v;
+		}
+		T dat;
+		Binary::Read(f, dat);
+		return dat;
+	}
+	template <class T>
+	static void Save(const char* path, const T& dat) {
+		std::ofstream f(path, std::ios::binary);
+		if (!f.good())
+			throw std::runtime_error("Failed to open file for writing: " + std::string(path));
+		Binary::Write(f, dat);
 	}
 };
 #pragma warning(pop)

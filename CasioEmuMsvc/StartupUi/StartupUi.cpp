@@ -436,6 +436,36 @@ inline std::string tohex(unsigned long long n, int len) {
 	}
 	return retval;
 }
+inline std::string sanitize_path(const std::string& input) {
+	std::string result;
+	for (unsigned char c : input) {
+		// Allow ASCII alphanumeric, underscore, hyphen, dot, and space
+		if ((c >= 'a' && c <= 'z') ||
+			(c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') ||
+			c == '_' || c == '-' || c == '.' || c == ' ') {
+			result += c;
+		}
+		// Replace non-ASCII characters and unsafe characters with underscore
+		else if ((unsigned char)c > 127 || c < 32) {
+			result += '_';
+		}
+	}
+	// Remove leading/trailing spaces and dots
+	size_t start = result.find_first_not_of(" .");
+	size_t end = result.find_last_not_of(" .");
+	if (start != std::string::npos) {
+		result = result.substr(start, end - start + 1);
+	} else {
+		result = "unnamed"; // Fallback if string becomes empty
+	}
+	// Collapse consecutive underscores
+	size_t pos = 0;
+	while ((pos = result.find("__", pos)) != std::string::npos) {
+		result.erase(pos, 1);
+	}
+	return result;
+}
 namespace casioemu {
 	class StartupUi {
 	public:
@@ -613,9 +643,10 @@ namespace casioemu {
             return util::Random::random_string(length);
         }
 		inline std::string create_unique_directory(const std::string& base_name) {
-			std::string dir_name = base_name;
+			std::string sanitized_name = sanitize_path(base_name);
+			std::string dir_name = sanitized_name;
 			while (std::filesystem::exists("./models/" + dir_name)) {
-				dir_name = base_name + "." + generate_random_string(6);
+				dir_name = sanitized_name + "." + generate_random_string(6);
 			}
 			return dir_name;
 		}

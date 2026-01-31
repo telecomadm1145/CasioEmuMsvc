@@ -1,4 +1,5 @@
 ﻿#include "Ui.hpp"
+#include "../GDB/GDBServer.hpp"
 #include "5800FileSystem.h"
 #include "AddressWindow.h"
 #include "BitmapViewer.h"
@@ -7,22 +8,29 @@
 #include "Chipset/MMU.hpp"
 #include "CodeViewer.hpp"
 #include "Editors.h"
+#include "GDBWindow.hpp"
 #include "HwController.h"
 #include "Injector.hpp"
 #include "LabelFile.h"
 #include "LabelViewer.h"
 #include "MemBreakPoint.hpp"
+#include "Random.hpp"
 #include "Theme.h"
 #include "VariableWindow.h"
 #include "WatchWindow.hpp"
-#include "GDBWindow.hpp"
-#include "../GDB/GDBServer.hpp"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_sdl2.h"
 #include "imgui/imgui_impl_sdlrenderer2.h"
 #include <Gui.h>
 #include <SDL.h>
 #include <filesystem>
+#ifdef ENABLE_SENTRY
+#include <sentry.h>
+#endif
+bool show_sentry_feedback = false;
+char sentry_user_comments[1024] = "";
+char sentry_user_email[128] = "";
+char sentry_user_name[128] = "";
 
 char* n_ram_buffer = 0;
 casioemu::MMU* me_mmu = 0;
@@ -38,146 +46,191 @@ MemBreakPoint* membp = 0;
 std::vector<UIWindow*> windows{};
 
 void gui_loop() {
-    if (!m_emu->Running())
-        return;
+	if (!m_emu->Running())
+		return;
 
-    ImGuiIO& io = ImGui::GetIO();
-    
-    #ifdef __ANDROID__
-    UI::Scaling::UpdateUIScale();
-    #endif
+	ImGuiIO& io = ImGui::GetIO();
 
-    ImGui_ImplSDLRenderer2_NewFrame();
-    ImGui_ImplSDL2_NewFrame();
-    ImGui::NewFrame();
-    
-    for (auto win : windows) {
-        win->Render();
-    }
+#ifdef __ANDROID__
+	UI::Scaling::UpdateUIScale();
+#endif
 
-    //#ifndef __ANDROID__
-    //ImGui::Begin("Debug");
-    //if (ImGui::Button("Crash")) {
-    //    throw 0;
-    //}
-    //ImGui::End();
-    //#endif
+	ImGui_ImplSDLRenderer2_NewFrame();
+	ImGui_ImplSDL2_NewFrame();
+	ImGui::NewFrame();
 
-    #ifdef SINGLE_WINDOW
-    ImGui::SetNextWindowBgAlpha(0.0f);
-    ImGui::Begin("Overlay", nullptr, 
-        ImGuiWindowFlags_NoDecoration | 
-        ImGuiWindowFlags_NoDocking | 
-        ImGuiWindowFlags_AlwaysAutoResize | 
-        ImGuiWindowFlags_NoBackground | 
-        ImGuiWindowFlags_NoTitleBar | 
-        ImGuiWindowFlags_NoMove);
+	for (auto win : windows) {
+		win->Render();
+	}
 
-    float safeAreaPadding = UI::Scaling::padding * 1.5f;
-    ImGui::SetWindowPos(ImVec2(safeAreaPadding, safeAreaPadding));
+	ImGui::Begin("Testing");
+	if (ImGui::Button("Crash"_lc)) {
+		throw 0;
+	}
+	// --- 新增：手动反馈选项 ---
+#ifdef ENABLE_SENTRY
+	ImGui::SameLine(); // 放在 Crash 按钮旁边
+	if (ImGui::Button("Send Feedback"_lc)) {
+		// 重置之前的输入内容
+		memset(sentry_user_comments, 0, sizeof(sentry_user_comments));
+		show_sentry_feedback = true;
+	}
+#endif
+	ImGui::End();
+	// --- Sentry 反馈对话框逻辑 ---
+#ifdef ENABLE_SENTRY
+	if (show_sentry_feedback) {
+		// 确保每一帧都调用 OpenPopup，直到它真正打开
+		ImGui::OpenPopup("User Feedback");
+	}
 
-    float displayWidth = ImGui::GetIO().DisplaySize.x;
-    float totalWidth = displayWidth - (safeAreaPadding * 2);
-    float spacingBetweenElements = UI::Scaling::padding * 1.2f;
-    float buttonWidth = (totalWidth - spacingBetweenElements * 2) * 0.25f;
-    float comboWidth = totalWidth - (buttonWidth * 2) - (spacingBetweenElements * 2);
+	// 使用 Modal 窗口确保反馈过程不被打断
+	if (ImGui::BeginPopupModal("User Feedback", &show_sentry_feedback, ImGuiWindowFlags_AlwaysAutoResize)) {
+		ImGui::Text("Help us improve CasioEmuMsvc!");
+		ImGui::Separator();
 
-    static UIWindow* current_filter = 0;
-    ImGui::SetNextItemWidth(comboWidth);
-    if (ImGui::BeginCombo("##cb", current_filter ? current_filter->name : 0)) {
-        for (int n = 0; n < windows.size(); n++) {
-            bool is_selected = (current_filter == windows[n]);
-            if (ImGui::Selectable(windows[n]->name, is_selected))
-                current_filter = windows[n];
-            if (is_selected)
-                ImGui::SetItemDefaultFocus();
-        }
-        ImGui::EndCombo();
-    }
+		ImGui::Text("Email (Optional):");
+		ImGui::InputText("##email", sentry_user_email, IM_ARRAYSIZE(sentry_user_email));
 
-    ImGui::SameLine(0, spacingBetweenElements);
-    ImVec2 buttonSize(buttonWidth, UI::Scaling::buttonHeight * 1.2f);
-    if (ImGui::Button("Open", buttonSize)) {
-        if (current_filter != 0)
-            current_filter->open = true;
-    }
-    
-    ImGui::SameLine(0, spacingBetweenElements);
-    if (ImGui::Button("Close all", buttonSize)) {
-        for (auto& win : windows) {
-            win->open = false;
-        }
-    }
-    ImGui::Text("V" EMULATOR_VERSION "       CASIOEMUMSVC");
-    ImGui::End();
-    #endif
+		ImGui::Text("What happened?");
+		ImGui::InputTextMultiline("##comments", sentry_user_comments, IM_ARRAYSIZE(sentry_user_comments),
+			ImVec2(350, 120), ImGuiInputTextFlags_AllowTabInput);
 
-    ImGui::Render();
-    #ifdef SINGLE_WINDOW
-    ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
-    #else
-    ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
-    SDL_RenderPresent(renderer);
-    #endif
+		if (ImGui::Button("Submit", ImVec2(120, 0))) {
+			auto uuid = Binary::LoadOrInit("uuid.bin", util::Random::getRandomObject<sentry_uuid_t>());
+			char buf[37]{};
+			sentry_uuid_as_string(&uuid, buf);
+			sentry_value_t feedback = sentry_value_new_feedback(buf, sentry_user_email, sentry_user_comments, 0);
+			sentry_capture_feedback(feedback);
+
+			show_sentry_feedback = false;
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+			show_sentry_feedback = false;
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::EndPopup();
+	}
+#endif
+
+#ifdef SINGLE_WINDOW
+	ImGui::SetNextWindowBgAlpha(0.0f);
+	ImGui::Begin("Overlay", nullptr,
+		ImGuiWindowFlags_NoDecoration |
+			ImGuiWindowFlags_NoDocking |
+			ImGuiWindowFlags_AlwaysAutoResize |
+			ImGuiWindowFlags_NoBackground |
+			ImGuiWindowFlags_NoTitleBar |
+			ImGuiWindowFlags_NoMove);
+
+	float safeAreaPadding = UI::Scaling::padding * 1.5f;
+	ImGui::SetWindowPos(ImVec2(safeAreaPadding, safeAreaPadding));
+
+	float displayWidth = ImGui::GetIO().DisplaySize.x;
+	float totalWidth = displayWidth - (safeAreaPadding * 2);
+	float spacingBetweenElements = UI::Scaling::padding * 1.2f;
+	float buttonWidth = (totalWidth - spacingBetweenElements * 2) * 0.25f;
+	float comboWidth = totalWidth - (buttonWidth * 2) - (spacingBetweenElements * 2);
+
+	static UIWindow* current_filter = 0;
+	ImGui::SetNextItemWidth(comboWidth);
+	if (ImGui::BeginCombo("##cb", current_filter ? current_filter->name : 0)) {
+		for (int n = 0; n < windows.size(); n++) {
+			bool is_selected = (current_filter == windows[n]);
+			if (ImGui::Selectable(windows[n]->name, is_selected))
+				current_filter = windows[n];
+			if (is_selected)
+				ImGui::SetItemDefaultFocus();
+		}
+		ImGui::EndCombo();
+	}
+
+	ImGui::SameLine(0, spacingBetweenElements);
+	ImVec2 buttonSize(buttonWidth, UI::Scaling::buttonHeight * 1.2f);
+	if (ImGui::Button("Open", buttonSize)) {
+		if (current_filter != 0)
+			current_filter->open = true;
+	}
+
+	ImGui::SameLine(0, spacingBetweenElements);
+	if (ImGui::Button("Close all", buttonSize)) {
+		for (auto& win : windows) {
+			win->open = false;
+		}
+	}
+	ImGui::Text("V" EMULATOR_VERSION "       CASIOEMUMSVC");
+	ImGui::End();
+#endif
+
+	ImGui::Render();
+#ifdef SINGLE_WINDOW
+	ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
+#else
+	ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
+	SDL_RenderPresent(renderer);
+#endif
 }
 
 CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd, GDBServer* gdbServer) {
-    SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
-    
-    #ifdef SINGLE_WINDOW
-    window = wnd;
-    renderer = rnd;
-    #else
-    #ifdef __ANDROID__
-    window = SDL_CreateWindow("CasioEmuMsvc Debugger", 
-        SDL_WINDOWPOS_CENTERED, 
-        SDL_WINDOWPOS_CENTERED, 
-        (int)UI::Scaling::windowWidth, 
-        (int)UI::Scaling::windowHeight, 
-        SDL_WINDOW_RESIZABLE);
-    #else
-    window = SDL_CreateWindow("CasioEmuMsvc Debugger", 
-        SDL_WINDOWPOS_CENTERED, 
-        SDL_WINDOWPOS_CENTERED, 
-        1280, 720, 
-        SDL_WINDOW_RESIZABLE);
-    #endif
-    renderer = SDL_CreateRenderer(window, -1, 
-        SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
-    #endif
+	SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
 
-    if (renderer == nullptr) {
-        SDL_Log("Error creating SDL_Renderer!");
-        return 0;
-    }
+#ifdef SINGLE_WINDOW
+	window = wnd;
+	renderer = rnd;
+#else
+#ifdef __ANDROID__
+	window = SDL_CreateWindow("CasioEmuMsvc Debugger",
+		SDL_WINDOWPOS_CENTERED,
+		SDL_WINDOWPOS_CENTERED,
+		(int)UI::Scaling::windowWidth,
+		(int)UI::Scaling::windowHeight,
+		SDL_WINDOW_RESIZABLE);
+#else
+	window = SDL_CreateWindow("CasioEmuMsvc Debugger",
+		SDL_WINDOWPOS_CENTERED,
+		SDL_WINDOWPOS_CENTERED,
+		1280, 720,
+		SDL_WINDOW_RESIZABLE);
+#endif
+	renderer = SDL_CreateRenderer(window, -1,
+		SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
+#endif
 
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
-    
-    #ifdef __ANDROID__
-    UI::Scaling::UpdateUIScale();
-    #endif
-    
-    RebuildFont();
-    SetupDefaultTheme();
-    
-    io.WantCaptureKeyboard = true;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+	if (renderer == nullptr) {
+		SDL_Log("Error creating SDL_Renderer!");
+		return 0;
+	}
 
-    ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
-    ImGui_ImplSDLRenderer2_Init(renderer);
-    if (guiCreated)
-        *guiCreated = true;
-    while (!me_mmu)
-        std::this_thread::sleep_for(std::chrono::microseconds(1));
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
 
-    g_labels = parseFile(m_emu->GetModelFilePath("labels"));
+#ifdef __ANDROID__
+	UI::Scaling::UpdateUIScale();
+#endif
 
-    if (m_emu->hardware_id == casioemu::HW_FX_5800P) {
-        windows.push_back(CreateFx5800FileSystem());
-    }
+	RebuildFont();
+	SetupDefaultTheme();
+
+	io.WantCaptureKeyboard = true;
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+	ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
+	ImGui_ImplSDLRenderer2_Init(renderer);
+	if (guiCreated)
+		*guiCreated = true;
+	while (!me_mmu)
+		std::this_thread::sleep_for(std::chrono::microseconds(1));
+
+	g_labels = parseFile(m_emu->GetModelFilePath("labels"));
+
+	if (m_emu->hardware_id == casioemu::HW_FX_5800P) {
+		windows.push_back(CreateFx5800FileSystem());
+	}
 
 	for (auto item : std::initializer_list<UIWindow*>{
 			 new VariableWindow(),
@@ -197,21 +250,21 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd, GDBSe
 		windows.push_back(item);
 	windows.push_back(new GDBWindow(gdbServer));
 
-    #ifdef __ANDROID__
-    for (auto item : windows) {
-        item->open = false;
-    }
-    #endif
+#ifdef __ANDROID__
+	for (auto item : windows) {
+		item->open = false;
+	}
+#endif
 
-    return 0;
+	return 0;
 }
 
 void gui_cleanup() {
-    ImGui_ImplSDLRenderer2_Shutdown();
-    ImGui_ImplSDL2_Shutdown();
-    ImGui::DestroyContext();
+	ImGui_ImplSDLRenderer2_Shutdown();
+	ImGui_ImplSDL2_Shutdown();
+	ImGui::DestroyContext();
 
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
+	SDL_Quit();
 }
