@@ -58,12 +58,6 @@ jobs:
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: |
         msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=${{ matrix.platform_arch }} ${{env.SOLUTION_FILE_PATH}}
-    
-    - name: Install Sentry CLI
-      if: matrix.platform == 'windows'
-      uses: getsentry/action-cli@v2
-      with:
-        version: latest
 
     - name: Upload PDBs to Sentry
       if: matrix.platform == 'windows'
@@ -73,15 +67,17 @@ jobs:
         SENTRY_PROJECT: "native"
         COMMIT_HASH: ${{ github.sha }}
         RELEASE_TAG: "CasioEmuMsvc@${{ github.sha }}"
+      working-directory: |
+          ${{ matrix.platform_arch == 'x86' && format('Win32\\{0}', env.BUILD_CONFIGURATION) || format('{0}\\{1}', matrix.platform_arch, env.BUILD_CONFIGURATION) }}
       run: |
-        echo "Creating Sentry release $RELEASE_TAG"
-        sentry-cli releases new $RELEASE_TAG || echo "Release already exists"
+            $sentry_cli = "${{ github.workspace }}\CasioEmuMsvc\sentry-cli.exe"
 
-        # 上传 Windows PDB
-        sentry-cli upload-dif "Release-*/**/*.pdb" --org $SENTRY_ORG --project $SENTRY_PROJECT --wait
+            echo "Creating Sentry release $RELEASE_TAG"
+            & $sentry_cli releases new $RELEASE_TAG || echo "Release already exists"
 
-        # finalize release
-        sentry-cli releases finalize $RELEASE_TAG
+            & $sentry_cli debug-files upload -o $SENTRY_ORG -p $SENTRY_PROJECT .
+
+            & $sentry_cli releases finalize $RELEASE_TAG
 
     - name: Upload ${{ matrix.platform_arch }} Build Artifact
       if: matrix.platform == 'windows'
