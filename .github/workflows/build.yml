@@ -71,13 +71,7 @@ jobs:
           ${{ matrix.platform_arch == 'x86' && format('Win32\\{0}', env.BUILD_CONFIGURATION) || format('{0}\\{1}', matrix.platform_arch, env.BUILD_CONFIGURATION) }}
       run: |
             $sentry_cli = "${{ github.workspace }}\CasioEmuMsvc\sentry-cli.exe"
-
-            echo "Creating Sentry release $RELEASE_TAG"
-            & $sentry_cli releases new $env:RELEASE_TAG || echo "Release already exists"
-
-            & $sentry_cli debug-files upload -o $env:SENTRY_ORG -p $env:SENTRY_PROJECT .
-
-            & $sentry_cli releases finalize $env:RELEASE_TAG
+            & $sentry_cli debug-files upload -o $env:SENTRY_ORG -p $env:SENTRY_PROJECT *.pdb
 
     - name: Upload ${{ matrix.platform_arch }} Build Artifact
       if: matrix.platform == 'windows'
