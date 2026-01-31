@@ -100,7 +100,7 @@ void gui_loop() {
 			auto uuid = Binary::LoadOrInit("uuid.bin", util::Random::getRandomObject<sentry_uuid_t>());
 			char buf[37]{};
 			sentry_uuid_as_string(&uuid, buf);
-			sentry_value_t feedback = sentry_value_new_feedback(buf, sentry_user_email, sentry_user_comments, 0);
+			sentry_value_t feedback = sentry_value_new_feedback(sentry_user_comments, sentry_user_email, buf, 0);
 			sentry_capture_feedback(feedback);
 
 			show_sentry_feedback = false;
