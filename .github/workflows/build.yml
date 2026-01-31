@@ -73,11 +73,11 @@ jobs:
             $sentry_cli = "${{ github.workspace }}\CasioEmuMsvc\sentry-cli.exe"
 
             echo "Creating Sentry release $RELEASE_TAG"
-            & $sentry_cli releases new $RELEASE_TAG || echo "Release already exists"
+            & $sentry_cli releases new $env:RELEASE_TAG || echo "Release already exists"
 
-            & $sentry_cli debug-files upload -o $SENTRY_ORG -p $SENTRY_PROJECT .
+            & $sentry_cli debug-files upload -o $env:SENTRY_ORG -p $env:SENTRY_PROJECT .
 
-            & $sentry_cli releases finalize $RELEASE_TAG
+            & $sentry_cli releases finalize $env:RELEASE_TAG
 
     - name: Upload ${{ matrix.platform_arch }} Build Artifact
       if: matrix.platform == 'windows'
