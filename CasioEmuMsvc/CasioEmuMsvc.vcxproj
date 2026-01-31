@@ -555,16 +555,6 @@
 	<ItemGroup>
 		<ResourceCompile Include="Resource.rc" />
 	</ItemGroup>
-	<Target Name="UploadSentrySymbols" AfterTargets="Link" Condition="'$(SentryToken)' != ''">
-		<PropertyGroup>
-			<SentryCliPath Condition="'$(SentryCliPath)' == ''">$(ProjectDir)sentry-cli</SentryCliPath>
-		</PropertyGroup>
-
-		<Message Text="Uploading symbols to sentry..." Importance="high" />
-
-		<Exec Command="$(SentryCliPath) --auth-token $(SentryToken) debug-files upload --org $(SentryOrg) --project $(SentryProject) --include-sources &quot;$(OutDir)&quot;"
-			  IgnoreExitCode="true" />
-	</Target>
 	<Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 	<ImportGroup Label="ExtensionTargets">
 		<Import Project="..\packages\sdl2_image.nuget.redist.2.8.2\build\native\sdl2_image.nuget.redist.targets" Condition="Exists('..\packages\sdl2_image.nuget.redist.2.8.2\build\native\sdl2_image.nuget.redist.targets')" />
