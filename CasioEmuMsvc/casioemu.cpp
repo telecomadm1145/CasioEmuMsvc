@@ -420,6 +420,8 @@ int main(int argc, char* argv[]) {
 		SDL_DestroyTexture(bg_txt);
 	}
 	GetAppContext().eventBus.publish("app.stop", {});
+#ifdef ENABLE_SENTRY
 	sentry_close();
+#endif
 	return 0;
 };
