@@ -1,3 +1,4 @@
+R"(placeholder=a
 # Vietnamese (Viet Nam) resources for CasioEmuMsvc
 # Dịch bởi hieuxyz(update/edit)
 Localization.LanguageName=Tiếng Việt
@@ -189,3 +190,5 @@ Files.Back=Quay lại
 Files.Save=Lưu
 Files.Open=Mở
 Files.Cancel=Hủy
+
+placeholder2=a)"
