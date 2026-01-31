@@ -14,6 +14,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "解决方案项", "解决�
 		convert_all_lua_config.ps1 = convert_all_lua_config.ps1
 		GB2UTF8.ps1 = GB2UTF8.ps1
 		LICENSE = LICENSE
+		PRIVACY.md = PRIVACY.md
 		README.md = README.md
 	EndProjectSection
 EndProject

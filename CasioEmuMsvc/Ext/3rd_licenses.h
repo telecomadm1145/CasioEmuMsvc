@@ -731,7 +731,9 @@ freely, subject to the following restrictions:
 
 constexpr auto startup_copyright_warn = R"aaa(
 nx-U8/100 Emulator
-Copyright (C) 2024-2025 telecomadm1145
+Copyright (C) 2024-2026 telecomadm1145
+
+LICENSE
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
@@ -739,7 +741,27 @@ This program is distributed in the hope that it will be useful,but WITHOUT ANY W
 
 You should have received a copy of the GNU General Public License along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-Visit official repo:
+Privacy Policy
+
+This application uses Sentry (provided by Functional Software, Inc.)
+to collect crash reports and diagnostic information for the purpose of
+improving application stability and reliability.
+
+The information collected may include:
+- Crash logs and stack traces
+- Application version and build information
+- Operating system and device information
+- Time of the crash
+
+We do not intentionally collect personally identifiable information.
+
+For more information about Sentry’s data practices, please refer to:
+https://sentry.io/privacy/
+
+Generative AI Usage
+
+Resources (icon, localization text and etc.) might be AI-generated.
+
+Official repo:
 https://github.com/telecomadm1145/CasioEmuMsvc
-for further update.
 )aaa";

@@ -1,3 +1,4 @@
+#if 0
 #ifdef __ANDROID__
 #include <SDL.h>
 #include <SDL_system.h>
@@ -109,6 +110,7 @@ public:
 		sigaction(SIGBUS, &sa, nullptr);
 	}
 } g_crashhandler;
+#endif
 #endif
 
 #ifdef _WIN32
