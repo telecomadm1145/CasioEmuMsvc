@@ -1,553 +1,587 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <ItemGroup Label="ProjectConfigurations">
-    <ProjectConfiguration Include="ASan|Win32">
-      <Configuration>ASan</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="ASan|x64">
-      <Configuration>ASan</Configuration>
-      <Platform>x64</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="Debug|Win32">
-      <Configuration>Debug</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="PatchableRelease|Win32">
-      <Configuration>PatchableRelease</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="PatchableRelease|x64">
-      <Configuration>PatchableRelease</Configuration>
-      <Platform>x64</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="Release|Win32">
-      <Configuration>Release</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="Debug|x64">
-      <Configuration>Debug</Configuration>
-      <Platform>x64</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="Release|x64">
-      <Configuration>Release</Configuration>
-      <Platform>x64</Platform>
-    </ProjectConfiguration>
-  </ItemGroup>
-  <PropertyGroup Label="Globals">
-    <VCProjectVersion>17.0</VCProjectVersion>
-    <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{5347d0d2-ab7b-45c8-8588-b0d36ee0abe3}</ProjectGuid>
-    <RootNamespace>CasioEmuMsvc</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-  </PropertyGroup>
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <CharacterSet>Unicode</CharacterSet>
-    <EnableASAN>false</EnableASAN>
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ASan|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
-    <EnableASAN>false</EnableASAN>
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='PatchableRelease|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
-    <EnableASAN>false</EnableASAN>
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <CharacterSet>Unicode</CharacterSet>
-    <EnableASAN>false</EnableASAN>
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ASan|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
-    <EnableASAN>false</EnableASAN>
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='PatchableRelease|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
-    <EnableASAN>false</EnableASAN>
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-  </PropertyGroup>
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
-  <ImportGroup Label="ExtensionSettings">
-  </ImportGroup>
-  <ImportGroup Label="Shared">
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ASan|Win32'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='PatchableRelease|Win32'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ASan|x64'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='PatchableRelease|x64'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <PropertyGroup Label="UserMacros" />
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src</AdditionalIncludeDirectories>
-      <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
-      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src</AdditionalIncludeDirectories>
-      <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src</AdditionalIncludeDirectories>
-      <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='PatchableRelease|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
-      <WholeProgramOptimization>false</WholeProgramOptimization>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-      <FloatingPointModel>Fast</FloatingPointModel>
-      <CreateHotpatchableImage>false</CreateHotpatchableImage>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src</AdditionalIncludeDirectories>
-      <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>false</EnableCOMDATFolding>
-      <OptimizeReferences>false</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalOptions>/EDITANDCONTINUE %(AdditionalOptions)</AdditionalOptions>
-      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;_DEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src</AdditionalIncludeDirectories>
-      <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
-      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src</AdditionalIncludeDirectories>
-      <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan|x64'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src</AdditionalIncludeDirectories>
-      <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='PatchableRelease|x64'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
-      <WholeProgramOptimization>false</WholeProgramOptimization>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-      <FloatingPointModel>Fast</FloatingPointModel>
-      <CreateHotpatchableImage>false</CreateHotpatchableImage>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src</AdditionalIncludeDirectories>
-      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>false</EnableCOMDATFolding>
-      <OptimizeReferences>false</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalOptions>/EDITANDCONTINUE %(AdditionalOptions)</AdditionalOptions>
-      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClCompile Include="Chipset\ePSCpu.cpp" />
-    <ClCompile Include="Ext\ConsoleText.cpp" />
-    <ClCompile Include="Ext\ePSDisas.cpp" />
-    <ClCompile Include="Ext\GameBuffer.cpp" />
-    <ClCompile Include="JitU8\JitU8.cpp" />
-    <ClCompile Include="Gui\AddressWindow.cpp" />
-    <ClCompile Include="casioemu.cpp" />
-    <ClCompile Include="Chipset\Chipset.cpp" />
-    <ClCompile Include="Chipset\CPU.cpp" />
-    <ClCompile Include="Chipset\CPUArithmetic.cpp" />
-    <ClCompile Include="Chipset\CPUControl.cpp" />
-    <ClCompile Include="Chipset\CPULoadStore.cpp" />
-    <ClCompile Include="Chipset\CPUPushPop.cpp" />
-    <ClCompile Include="Chipset\InterruptSource.cpp" />
-    <ClCompile Include="Chipset\MMU.cpp" />
-    <ClCompile Include="Chipset\MMURegion.cpp" />
-    <ClCompile Include="CrashHandler\CrashHandler.cpp" />
-    <ClCompile Include="Emulator.cpp" />
-    <ClCompile Include="Ext\SysDialog.cpp" />
-    <ClCompile Include="Gui\5800FileSystem.cpp" />
-    <ClCompile Include="Gui\CallAnalysis.cpp" />
-    <ClCompile Include="Gui\Editors.cpp" />
-    <ClCompile Include="Gui\Gui.cpp" />
-    <ClCompile Include="Gui\Hooks.cpp" />
-    <ClCompile Include="Gui\imgui\imgui_demo.cpp" />
-    <ClCompile Include="Gui\Localization.cpp" />
-    <ClCompile Include="Gui\Theme.cpp" />
-    <ClCompile Include="Gui\BitmapViewer.cpp" />
-    <ClCompile Include="Peripheral\ML620Ports.cpp" />
-    <ClCompile Include="Peripheral\ROMWindow.cpp" />
-    <ClCompile Include="Peripheral\Uart.cpp" />
-    <ClCompile Include="Peripheral\Spi.cpp" />
-    <ClCompile Include="Plugin\PluginApi_Impl.cpp" />
-    <ClCompile Include="Plugin\PluginMan.cpp" />
-    <ClCompile Include="StartupUi\StartupUi.cpp" />
-    <ClCompile Include="Gui\CodeViewer.cpp" />
-    <ClCompile Include="Gui\imgui\imgui.cpp" />
-    <ClCompile Include="Gui\imgui\imgui_draw.cpp" />
-    <ClCompile Include="Gui\imgui\imgui_impl_sdl2.cpp" />
-    <ClCompile Include="Gui\imgui\imgui_impl_sdlrenderer2.cpp" />
-    <ClCompile Include="Gui\imgui\imgui_tables.cpp" />
-    <ClCompile Include="Gui\imgui\imgui_widgets.cpp" />
-    <ClCompile Include="Gui\Injector.cpp" />
-    <ClCompile Include="Gui\LabelViewer.cpp" />
-    <ClCompile Include="Gui\MemBreakPoint.cpp" />
-    <ClCompile Include="Gui\HwController.cpp" />
-    <ClCompile Include="Gui\Ui.cpp" />
-    <ClCompile Include="Gui\WatchWindow.cpp" />
-    <ClCompile Include="Gui\FileDialog.cpp" />
-    <ClCompile Include="Ext\LoggerImpl.cpp" />
-    <ClCompile Include="Gui\VariableWindow.cpp" />
-    <ClCompile Include="Gui\GDBWindow.cpp" />
-    <ClCompile Include="Peripheral\5800Flash.cpp" />
-    <ClCompile Include="Peripheral\Audio.cpp" />
-    <ClCompile Include="Peripheral\BatteryBackedRAM.cpp" />
-    <ClCompile Include="Peripheral\BCDCalc.cpp" />
-    <ClCompile Include="Peripheral\ExternalInterrupts.cpp" />
-    <ClCompile Include="Peripheral\Flash.cpp" />
-    <ClCompile Include="Peripheral\IOPorts.cpp" />
-    <ClCompile Include="Peripheral\Keyboard.cpp" />
-    <ClCompile Include="Peripheral\Miscellaneous.cpp" />
-    <ClCompile Include="Peripheral\PowerSupply.cpp" />
-    <ClCompile Include="Peripheral\RealTimeClock.cpp" />
-    <ClCompile Include="Peripheral\Screen.cpp" />
-    <ClCompile Include="Peripheral\StandbyControl.cpp" />
-    <ClCompile Include="Peripheral\Timer.cpp" />
-    <ClCompile Include="Peripheral\TimerBaseCounter.cpp" />
-    <ClCompile Include="Peripheral\WatchdogTimer.cpp" />
-    <ClCompile Include="Ext\Romu.cpp" />
-    <ClCompile Include="Ext\U8Disas.cpp" />
-    <ClCompile Include="Peripheral\VoltageLevelSupervisor.cpp" />
-    <ClCompile Include="Ext\vibration.cpp" />
-    <ClCompile Include="GDB\GDBServer.cpp" />
-    <ClCompile Include="asmjit\src\**\*.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Chipset\ePSCpu.h" />
-    <ClInclude Include="Ext\ConsoleText.h" />
-    <ClInclude Include="Ext\ePSDisas.h" />
-    <ClInclude Include="Ext\GameBuffer.h" />
-    <ClInclude Include="Ext\Random.hpp" />
-    <ClInclude Include="Ext\Unicode.h" />
-    <ClInclude Include="Gui\FileDialog.hpp" />
-    <ClInclude Include="Gui\UIScaling.h" />
-    <ClInclude Include="Ext\3rd_licenses.h" />
-    <ClInclude Include="Gui\AddressWindow.h" />
-    <ClInclude Include="Binary.h" />
-    <ClInclude Include="Chipset\Chipset.hpp" />
-    <ClInclude Include="Chipset\CPU.hpp" />
-    <ClInclude Include="Chipset\InterruptSource.hpp" />
-    <ClInclude Include="Chipset\MMU.hpp" />
-    <ClInclude Include="Chipset\MMURegion.hpp" />
-    <ClInclude Include="Config.hpp" />
-    <ClInclude Include="Containers\ConcurrentObject.h" />
-    <ClInclude Include="Ext\LabelFile.h" />
-    <ClInclude Include="Ext\RomPackage.h" />
-    <ClInclude Include="Ext\SysDialog.h" />
-    <ClInclude Include="Gui\Localization.h" />
-    <ClInclude Include="Gui\PopUpDisplay.h" />
-    <ClInclude Include="Gui\Theme.h" />
-    <ClInclude Include="Gui\BitmapViewer.h" />
-    <ClInclude Include="Peripheral\SD\FakeSdCard.h" />
-    <ClInclude Include="Gui\5800FileSystem.h" />
-    <ClInclude Include="Gui\CallAnalysis.h" />
-    <ClInclude Include="Gui\CwiiHelp.h" />
-    <ClInclude Include="Data\ColourInfo.hpp" />
-    <ClInclude Include="Data\EventCode.hpp" />
-    <ClInclude Include="Data\HardwareId.hpp" />
-    <ClInclude Include="Data\ModelInfo.hpp" />
-    <ClInclude Include="Data\SpriteInfo.hpp" />
-    <ClInclude Include="Emulator.hpp" />
-    <ClInclude Include="Gui\CodeViewer.hpp" />
-    <ClInclude Include="Gui\Editors.h" />
-    <ClInclude Include="Gui\hex.hpp" />
-    <ClInclude Include="Gui\Hooks.h" />
-    <ClInclude Include="Gui\imgui\imconfig.h" />
-    <ClInclude Include="Gui\imgui\imgui.h" />
-    <ClInclude Include="Gui\imgui\imgui_impl_sdl2.h" />
-    <ClInclude Include="Gui\imgui\imgui_impl_sdlrenderer2.h" />
-    <ClInclude Include="Gui\imgui\imgui_internal.h" />
-    <ClInclude Include="Gui\imgui\imstb_rectpack.h" />
-    <ClInclude Include="Gui\imgui\imstb_textedit.h" />
-    <ClInclude Include="Gui\imgui\imstb_truetype.h" />
-    <ClInclude Include="Gui\Injector.hpp" />
-    <ClInclude Include="Gui\LabelViewer.h" />
-    <ClInclude Include="Gui\MemBreakPoint.hpp" />
-    <ClInclude Include="Gui\HwController.h" />
-    <ClInclude Include="Gui\FileDialog.h" />
-    <ClInclude Include="Ext\Memory.h" />
-    <ClInclude Include="Peripheral\ML620Ports.h" />
-    <ClInclude Include="Peripheral\Uart.h" />
-    <ClInclude Include="Plugin\PluginApi.h" />
-    <ClInclude Include="Plugin\PluginMan.h" />
-    <ClInclude Include="resource.h" />
-    <ClInclude Include="Peripheral\Spi.h" />
-    <ClInclude Include="Settings.h" />
-    <ClInclude Include="stringhelper.h" />
-    <ClInclude Include="Gui\Ui.hpp" />
-    <ClInclude Include="Gui\WatchWindow.hpp" />
-    <ClInclude Include="Ext\Logger.hpp" />
-    <ClInclude Include="ModelInfo.h" />
-    <ClInclude Include="Models.h" />
-    <ClInclude Include="Gui\VariableWindow.h" />
-    <ClInclude Include="Gui\GDBWindow.hpp" />
-    <ClInclude Include="Peripheral\5800Flash.h" />
-    <ClInclude Include="Peripheral\Audio.h" />
-    <ClInclude Include="Peripheral\BatteryBackedRAM.hpp" />
-    <ClInclude Include="Peripheral\BCDCalc.hpp" />
-    <ClInclude Include="Peripheral\ExternalInterrupts.hpp" />
-    <ClInclude Include="Peripheral\Flash.hpp" />
-    <ClInclude Include="Peripheral\IOPorts.hpp" />
-    <ClInclude Include="Peripheral\Keyboard.hpp" />
-    <ClInclude Include="Peripheral\Miscellaneous.hpp" />
-    <ClInclude Include="Peripheral\Peripheral.hpp" />
-    <ClInclude Include="Peripheral\PowerSupply.hpp" />
-    <ClInclude Include="Peripheral\RealTimeClock.hpp" />
-    <ClInclude Include="Peripheral\ROMWindow.hpp" />
-    <ClInclude Include="Peripheral\Screen.hpp" />
-    <ClInclude Include="Peripheral\StandbyControl.hpp" />
-    <ClInclude Include="Peripheral\Timer.hpp" />
-    <ClInclude Include="Peripheral\TimerBaseCounter.hpp" />
-    <ClInclude Include="Peripheral\WatchdogTimer.hpp" />
-    <ClInclude Include="Ext\Romu.h" />
-    <ClInclude Include="StartupUi\StartupUi.h" />
-    <ClInclude Include="Ext\U8Disas.h" />
-    <ClInclude Include="Peripheral\VoltageLevelSupervisor.h" />
-    <ClInclude Include="Ext\vibration.h" />
-    <ClInclude Include="Gui\Gui.h" />
-    <ClInclude Include="GDB\GDBServer.hpp" />
-    <ClInclude Include="GDB\NetCompat.hpp" />
-    <ClInclude Include="locales\lang.h" />
-    <ClInclude Include="asmjit\src\**\*.h" />
-    <ClInclude Include="version.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include=".clang-format" />
-    <None Include="locales\en_US.lc">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="locales\zh_CN.lc">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="locales\vi_VN.lc">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="roms.db">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="packages.config" />
-    <None Include="Peripheral\SD\HowToCreateASDCard.md" />
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="icon.ico" />
-  </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="Resource.rc" />
-  </ItemGroup>
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\packages\sdl2_image.nuget.redist.2.8.2\build\native\sdl2_image.nuget.redist.targets" Condition="Exists('..\packages\sdl2_image.nuget.redist.2.8.2\build\native\sdl2_image.nuget.redist.targets')" />
-    <Import Project="..\packages\sdl2_image.nuget.2.8.2\build\native\sdl2_image.nuget.targets" Condition="Exists('..\packages\sdl2_image.nuget.2.8.2\build\native\sdl2_image.nuget.targets')" />
-    <Import Project="..\packages\sdl2_ttf.nuget.redist.2.22.0\build\native\sdl2_ttf.nuget.redist.targets" Condition="Exists('..\packages\sdl2_ttf.nuget.redist.2.22.0\build\native\sdl2_ttf.nuget.redist.targets')" />
-    <Import Project="..\packages\sdl2_ttf.nuget.2.22.0\build\native\sdl2_ttf.nuget.targets" Condition="Exists('..\packages\sdl2_ttf.nuget.2.22.0\build\native\sdl2_ttf.nuget.targets')" />
-    <Import Project="..\packages\sdl2.nuget.redist.2.32.8\build\native\sdl2.nuget.redist.targets" Condition="Exists('..\packages\sdl2.nuget.redist.2.32.8\build\native\sdl2.nuget.redist.targets')" />
-    <Import Project="..\packages\sdl2.nuget.2.32.8\build\native\sdl2.nuget.targets" Condition="Exists('..\packages\sdl2.nuget.2.32.8\build\native\sdl2.nuget.targets')" />
-    <Import Project="..\packages\Unofficial.Sentry.Native.0.10.0\build\native\Unofficial.Sentry.Native.targets" Condition="Exists('..\packages\Unofficial.Sentry.Native.0.10.0\build\native\Unofficial.Sentry.Native.targets')" />
-  </ImportGroup>
-  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
-    <Error Condition="!Exists('..\packages\sdl2_image.nuget.redist.2.8.2\build\native\sdl2_image.nuget.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2_image.nuget.redist.2.8.2\build\native\sdl2_image.nuget.redist.targets'))" />
-    <Error Condition="!Exists('..\packages\sdl2_image.nuget.2.8.2\build\native\sdl2_image.nuget.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2_image.nuget.2.8.2\build\native\sdl2_image.nuget.targets'))" />
-    <Error Condition="!Exists('..\packages\sdl2_ttf.nuget.redist.2.22.0\build\native\sdl2_ttf.nuget.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2_ttf.nuget.redist.2.22.0\build\native\sdl2_ttf.nuget.redist.targets'))" />
-    <Error Condition="!Exists('..\packages\sdl2_ttf.nuget.2.22.0\build\native\sdl2_ttf.nuget.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2_ttf.nuget.2.22.0\build\native\sdl2_ttf.nuget.targets'))" />
-    <Error Condition="!Exists('..\packages\sdl2.nuget.redist.2.32.8\build\native\sdl2.nuget.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2.nuget.redist.2.32.8\build\native\sdl2.nuget.redist.targets'))" />
-    <Error Condition="!Exists('..\packages\sdl2.nuget.2.32.8\build\native\sdl2.nuget.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2.nuget.2.32.8\build\native\sdl2.nuget.targets'))" />
-    <Error Condition="!Exists('..\packages\Unofficial.Sentry.Native.0.10.0\build\native\Unofficial.Sentry.Native.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Unofficial.Sentry.Native.0.10.0\build\native\Unofficial.Sentry.Native.targets'))" />
-  </Target>
+	<ItemGroup Label="ProjectConfigurations">
+		<ProjectConfiguration Include="ASan|Win32">
+			<Configuration>ASan</Configuration>
+			<Platform>Win32</Platform>
+		</ProjectConfiguration>
+		<ProjectConfiguration Include="ASan|x64">
+			<Configuration>ASan</Configuration>
+			<Platform>x64</Platform>
+		</ProjectConfiguration>
+		<ProjectConfiguration Include="Debug|Win32">
+			<Configuration>Debug</Configuration>
+			<Platform>Win32</Platform>
+		</ProjectConfiguration>
+		<ProjectConfiguration Include="PatchableRelease|Win32">
+			<Configuration>PatchableRelease</Configuration>
+			<Platform>Win32</Platform>
+		</ProjectConfiguration>
+		<ProjectConfiguration Include="PatchableRelease|x64">
+			<Configuration>PatchableRelease</Configuration>
+			<Platform>x64</Platform>
+		</ProjectConfiguration>
+		<ProjectConfiguration Include="Release|Win32">
+			<Configuration>Release</Configuration>
+			<Platform>Win32</Platform>
+		</ProjectConfiguration>
+		<ProjectConfiguration Include="Debug|x64">
+			<Configuration>Debug</Configuration>
+			<Platform>x64</Platform>
+		</ProjectConfiguration>
+		<ProjectConfiguration Include="Release|x64">
+			<Configuration>Release</Configuration>
+			<Platform>x64</Platform>
+		</ProjectConfiguration>
+	</ItemGroup>
+	<PropertyGroup Label="Globals">
+		<VCProjectVersion>17.0</VCProjectVersion>
+		<Keyword>Win32Proj</Keyword>
+		<ProjectGuid>{5347d0d2-ab7b-45c8-8588-b0d36ee0abe3}</ProjectGuid>
+		<RootNamespace>CasioEmuMsvc</RootNamespace>
+		<WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+	</PropertyGroup>
+	<Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+		<ConfigurationType>Application</ConfigurationType>
+		<UseDebugLibraries>true</UseDebugLibraries>
+		<PlatformToolset>v143</PlatformToolset>
+		<CharacterSet>Unicode</CharacterSet>
+		<EnableASAN>false</EnableASAN>
+		<OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+		<IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+		<ConfigurationType>Application</ConfigurationType>
+		<UseDebugLibraries>false</UseDebugLibraries>
+		<PlatformToolset>v143</PlatformToolset>
+		<WholeProgramOptimization>true</WholeProgramOptimization>
+		<CharacterSet>Unicode</CharacterSet>
+		<OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+		<IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ASan|Win32'" Label="Configuration">
+		<ConfigurationType>Application</ConfigurationType>
+		<UseDebugLibraries>false</UseDebugLibraries>
+		<PlatformToolset>v143</PlatformToolset>
+		<WholeProgramOptimization>true</WholeProgramOptimization>
+		<CharacterSet>Unicode</CharacterSet>
+		<EnableASAN>false</EnableASAN>
+		<OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+		<IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='PatchableRelease|Win32'" Label="Configuration">
+		<ConfigurationType>Application</ConfigurationType>
+		<UseDebugLibraries>false</UseDebugLibraries>
+		<PlatformToolset>v143</PlatformToolset>
+		<WholeProgramOptimization>true</WholeProgramOptimization>
+		<CharacterSet>Unicode</CharacterSet>
+		<EnableASAN>false</EnableASAN>
+		<OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+		<IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+		<ConfigurationType>Application</ConfigurationType>
+		<UseDebugLibraries>true</UseDebugLibraries>
+		<PlatformToolset>v143</PlatformToolset>
+		<CharacterSet>Unicode</CharacterSet>
+		<EnableASAN>false</EnableASAN>
+		<OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+		<IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+		<ConfigurationType>Application</ConfigurationType>
+		<UseDebugLibraries>false</UseDebugLibraries>
+		<PlatformToolset>v143</PlatformToolset>
+		<WholeProgramOptimization>true</WholeProgramOptimization>
+		<CharacterSet>Unicode</CharacterSet>
+		<OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+		<IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ASan|x64'" Label="Configuration">
+		<ConfigurationType>Application</ConfigurationType>
+		<UseDebugLibraries>false</UseDebugLibraries>
+		<PlatformToolset>v143</PlatformToolset>
+		<WholeProgramOptimization>true</WholeProgramOptimization>
+		<CharacterSet>Unicode</CharacterSet>
+		<EnableASAN>false</EnableASAN>
+		<OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+		<IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='PatchableRelease|x64'" Label="Configuration">
+		<ConfigurationType>Application</ConfigurationType>
+		<UseDebugLibraries>false</UseDebugLibraries>
+		<PlatformToolset>v143</PlatformToolset>
+		<WholeProgramOptimization>true</WholeProgramOptimization>
+		<CharacterSet>Unicode</CharacterSet>
+		<EnableASAN>false</EnableASAN>
+		<OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+		<IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+	</PropertyGroup>
+	<Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+	<ImportGroup Label="ExtensionSettings">
+	</ImportGroup>
+	<ImportGroup Label="Shared">
+	</ImportGroup>
+	<ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+		<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+	</ImportGroup>
+	<ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+		<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+	</ImportGroup>
+	<ImportGroup Condition="'$(Configuration)|$(Platform)'=='ASan|Win32'" Label="PropertySheets">
+		<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+	</ImportGroup>
+	<ImportGroup Condition="'$(Configuration)|$(Platform)'=='PatchableRelease|Win32'" Label="PropertySheets">
+		<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+	</ImportGroup>
+	<ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+		<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+	</ImportGroup>
+	<ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+		<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+	</ImportGroup>
+	<ImportGroup Condition="'$(Configuration)|$(Platform)'=='ASan|x64'" Label="PropertySheets">
+		<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+	</ImportGroup>
+	<ImportGroup Condition="'$(Configuration)|$(Platform)'=='PatchableRelease|x64'" Label="PropertySheets">
+		<Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+	</ImportGroup>
+	<PropertyGroup Label="UserMacros" />
+	<ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+		<ClCompile>
+			<WarningLevel>Level3</WarningLevel>
+			<SDLCheck>true</SDLCheck>
+			<PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
+			<ConformanceMode>true</ConformanceMode>
+			<LanguageStandard>stdcpplatest</LanguageStandard>
+			<LanguageStandard_C>stdc17</LanguageStandard_C>
+			<AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
+			<AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src</AdditionalIncludeDirectories>
+			<ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
+			<DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+		</ClCompile>
+		<Link>
+			<SubSystem>Console</SubSystem>
+			<GenerateDebugInformation>true</GenerateDebugInformation>
+		</Link>
+		<PreBuildEvent>
+			<Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)GitInfo.ps1"</Command>
+		</PreBuildEvent>
+	</ItemDefinitionGroup>
+	<ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+		<ClCompile>
+			<WarningLevel>Level3</WarningLevel>
+			<FunctionLevelLinking>true</FunctionLevelLinking>
+			<IntrinsicFunctions>true</IntrinsicFunctions>
+			<SDLCheck>true</SDLCheck>
+			<PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
+			<ConformanceMode>true</ConformanceMode>
+			<LanguageStandard>stdcpplatest</LanguageStandard>
+			<LanguageStandard_C>stdc17</LanguageStandard_C>
+			<AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
+			<AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src</AdditionalIncludeDirectories>
+			<ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
+			<DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+		</ClCompile>
+		<Link>
+			<SubSystem>Console</SubSystem>
+			<EnableCOMDATFolding>true</EnableCOMDATFolding>
+			<OptimizeReferences>true</OptimizeReferences>
+			<GenerateDebugInformation>true</GenerateDebugInformation>
+		</Link>
+		<PreBuildEvent>
+			<Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)GitInfo.ps1"</Command>
+		</PreBuildEvent>
+	</ItemDefinitionGroup>
+	<ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan|Win32'">
+		<ClCompile>
+			<WarningLevel>Level3</WarningLevel>
+			<FunctionLevelLinking>true</FunctionLevelLinking>
+			<IntrinsicFunctions>true</IntrinsicFunctions>
+			<SDLCheck>true</SDLCheck>
+			<PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
+			<ConformanceMode>true</ConformanceMode>
+			<LanguageStandard>stdcpplatest</LanguageStandard>
+			<LanguageStandard_C>stdc17</LanguageStandard_C>
+			<AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
+			<AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src</AdditionalIncludeDirectories>
+			<ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
+			<DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+		</ClCompile>
+		<Link>
+			<SubSystem>Console</SubSystem>
+			<EnableCOMDATFolding>true</EnableCOMDATFolding>
+			<OptimizeReferences>true</OptimizeReferences>
+			<GenerateDebugInformation>true</GenerateDebugInformation>
+		</Link>
+		<PreBuildEvent>
+			<Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)GitInfo.ps1"</Command>
+		</PreBuildEvent>
+	</ItemDefinitionGroup>
+	<ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='PatchableRelease|Win32'">
+		<ClCompile>
+			<WarningLevel>Level3</WarningLevel>
+			<FunctionLevelLinking>true</FunctionLevelLinking>
+			<IntrinsicFunctions>true</IntrinsicFunctions>
+			<SDLCheck>false</SDLCheck>
+			<PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
+			<ConformanceMode>true</ConformanceMode>
+			<LanguageStandard>stdcpplatest</LanguageStandard>
+			<LanguageStandard_C>stdc17</LanguageStandard_C>
+			<AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
+			<DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+			<WholeProgramOptimization>false</WholeProgramOptimization>
+			<BufferSecurityCheck>false</BufferSecurityCheck>
+			<FloatingPointModel>Fast</FloatingPointModel>
+			<CreateHotpatchableImage>false</CreateHotpatchableImage>
+			<AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src</AdditionalIncludeDirectories>
+			<ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
+		</ClCompile>
+		<Link>
+			<SubSystem>Console</SubSystem>
+			<EnableCOMDATFolding>false</EnableCOMDATFolding>
+			<OptimizeReferences>false</OptimizeReferences>
+			<GenerateDebugInformation>true</GenerateDebugInformation>
+			<AdditionalOptions>/EDITANDCONTINUE %(AdditionalOptions)</AdditionalOptions>
+			<LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+		</Link>
+		<PreBuildEvent>
+			<Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)GitInfo.ps1"</Command>
+		</PreBuildEvent>
+	</ItemDefinitionGroup>
+	<ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+		<ClCompile>
+			<WarningLevel>Level3</WarningLevel>
+			<SDLCheck>true</SDLCheck>
+			<PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;_DEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
+			<ConformanceMode>true</ConformanceMode>
+			<LanguageStandard>stdcpplatest</LanguageStandard>
+			<LanguageStandard_C>stdc17</LanguageStandard_C>
+			<AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
+			<AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src</AdditionalIncludeDirectories>
+			<ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
+			<DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+		</ClCompile>
+		<Link>
+			<SubSystem>Console</SubSystem>
+			<GenerateDebugInformation>true</GenerateDebugInformation>
+		</Link>
+		<PreBuildEvent>
+			<Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)GitInfo.ps1"</Command>
+		</PreBuildEvent>
+	</ItemDefinitionGroup>
+	<ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+		<ClCompile>
+			<WarningLevel>Level3</WarningLevel>
+			<FunctionLevelLinking>true</FunctionLevelLinking>
+			<IntrinsicFunctions>true</IntrinsicFunctions>
+			<SDLCheck>true</SDLCheck>
+			<PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
+			<ConformanceMode>true</ConformanceMode>
+			<LanguageStandard>stdcpplatest</LanguageStandard>
+			<LanguageStandard_C>stdc17</LanguageStandard_C>
+			<AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
+			<AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src</AdditionalIncludeDirectories>
+			<ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
+			<DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+		</ClCompile>
+		<Link>
+			<SubSystem>Console</SubSystem>
+			<EnableCOMDATFolding>true</EnableCOMDATFolding>
+			<OptimizeReferences>true</OptimizeReferences>
+			<GenerateDebugInformation>true</GenerateDebugInformation>
+			<AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+		</Link>
+		<PreBuildEvent>
+			<Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)GitInfo.ps1"</Command>
+		</PreBuildEvent>
+	</ItemDefinitionGroup>
+	<ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan|x64'">
+		<ClCompile>
+			<WarningLevel>Level3</WarningLevel>
+			<FunctionLevelLinking>true</FunctionLevelLinking>
+			<IntrinsicFunctions>true</IntrinsicFunctions>
+			<SDLCheck>true</SDLCheck>
+			<PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
+			<ConformanceMode>true</ConformanceMode>
+			<LanguageStandard>stdcpplatest</LanguageStandard>
+			<LanguageStandard_C>stdc17</LanguageStandard_C>
+			<AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
+			<AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src</AdditionalIncludeDirectories>
+			<ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
+			<DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+		</ClCompile>
+		<Link>
+			<SubSystem>Console</SubSystem>
+			<EnableCOMDATFolding>true</EnableCOMDATFolding>
+			<OptimizeReferences>true</OptimizeReferences>
+			<GenerateDebugInformation>true</GenerateDebugInformation>
+			<AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+		</Link>
+		<PreBuildEvent>
+			<Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)GitInfo.ps1"</Command>
+		</PreBuildEvent>
+	</ItemDefinitionGroup>
+	<ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='PatchableRelease|x64'">
+		<ClCompile>
+			<WarningLevel>Level3</WarningLevel>
+			<FunctionLevelLinking>true</FunctionLevelLinking>
+			<IntrinsicFunctions>true</IntrinsicFunctions>
+			<SDLCheck>false</SDLCheck>
+			<PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
+			<ConformanceMode>true</ConformanceMode>
+			<LanguageStandard>stdcpplatest</LanguageStandard>
+			<LanguageStandard_C>stdc17</LanguageStandard_C>
+			<AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
+			<DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+			<WholeProgramOptimization>false</WholeProgramOptimization>
+			<BufferSecurityCheck>false</BufferSecurityCheck>
+			<FloatingPointModel>Fast</FloatingPointModel>
+			<CreateHotpatchableImage>false</CreateHotpatchableImage>
+			<AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src</AdditionalIncludeDirectories>
+			<InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+			<FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+			<ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
+		</ClCompile>
+		<Link>
+			<SubSystem>Console</SubSystem>
+			<EnableCOMDATFolding>false</EnableCOMDATFolding>
+			<OptimizeReferences>false</OptimizeReferences>
+			<GenerateDebugInformation>true</GenerateDebugInformation>
+			<AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+			<AdditionalOptions>/EDITANDCONTINUE %(AdditionalOptions)</AdditionalOptions>
+			<LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
+		</Link>
+		<PreBuildEvent>
+			<Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)GitInfo.ps1"</Command>
+		</PreBuildEvent>
+	</ItemDefinitionGroup>
+	<ItemGroup>
+		<ClCompile Include="Chipset\ePSCpu.cpp" />
+		<ClCompile Include="Ext\ConsoleText.cpp" />
+		<ClCompile Include="Ext\ePSDisas.cpp" />
+		<ClCompile Include="Ext\GameBuffer.cpp" />
+		<ClCompile Include="JitU8\JitU8.cpp" />
+		<ClCompile Include="Gui\AddressWindow.cpp" />
+		<ClCompile Include="casioemu.cpp" />
+		<ClCompile Include="Chipset\Chipset.cpp" />
+		<ClCompile Include="Chipset\CPU.cpp" />
+		<ClCompile Include="Chipset\CPUArithmetic.cpp" />
+		<ClCompile Include="Chipset\CPUControl.cpp" />
+		<ClCompile Include="Chipset\CPULoadStore.cpp" />
+		<ClCompile Include="Chipset\CPUPushPop.cpp" />
+		<ClCompile Include="Chipset\InterruptSource.cpp" />
+		<ClCompile Include="Chipset\MMU.cpp" />
+		<ClCompile Include="Chipset\MMURegion.cpp" />
+		<ClCompile Include="CrashHandler\CrashHandler.cpp" />
+		<ClCompile Include="Emulator.cpp" />
+		<ClCompile Include="Ext\SysDialog.cpp" />
+		<ClCompile Include="Gui\5800FileSystem.cpp" />
+		<ClCompile Include="Gui\CallAnalysis.cpp" />
+		<ClCompile Include="Gui\Editors.cpp" />
+		<ClCompile Include="Gui\Gui.cpp" />
+		<ClCompile Include="Gui\Hooks.cpp" />
+		<ClCompile Include="Gui\imgui\imgui_demo.cpp" />
+		<ClCompile Include="Gui\Localization.cpp" />
+		<ClCompile Include="Gui\Theme.cpp" />
+		<ClCompile Include="Gui\BitmapViewer.cpp" />
+		<ClCompile Include="Peripheral\ML620Ports.cpp" />
+		<ClCompile Include="Peripheral\ROMWindow.cpp" />
+		<ClCompile Include="Peripheral\Uart.cpp" />
+		<ClCompile Include="Peripheral\Spi.cpp" />
+		<ClCompile Include="Plugin\PluginApi_Impl.cpp" />
+		<ClCompile Include="Plugin\PluginMan.cpp" />
+		<ClCompile Include="StartupUi\StartupUi.cpp" />
+		<ClCompile Include="Gui\CodeViewer.cpp" />
+		<ClCompile Include="Gui\imgui\imgui.cpp" />
+		<ClCompile Include="Gui\imgui\imgui_draw.cpp" />
+		<ClCompile Include="Gui\imgui\imgui_impl_sdl2.cpp" />
+		<ClCompile Include="Gui\imgui\imgui_impl_sdlrenderer2.cpp" />
+		<ClCompile Include="Gui\imgui\imgui_tables.cpp" />
+		<ClCompile Include="Gui\imgui\imgui_widgets.cpp" />
+		<ClCompile Include="Gui\Injector.cpp" />
+		<ClCompile Include="Gui\LabelViewer.cpp" />
+		<ClCompile Include="Gui\MemBreakPoint.cpp" />
+		<ClCompile Include="Gui\HwController.cpp" />
+		<ClCompile Include="Gui\Ui.cpp" />
+		<ClCompile Include="Gui\WatchWindow.cpp" />
+		<ClCompile Include="Gui\FileDialog.cpp" />
+		<ClCompile Include="Ext\LoggerImpl.cpp" />
+		<ClCompile Include="Gui\VariableWindow.cpp" />
+		<ClCompile Include="Gui\GDBWindow.cpp" />
+		<ClCompile Include="Peripheral\5800Flash.cpp" />
+		<ClCompile Include="Peripheral\Audio.cpp" />
+		<ClCompile Include="Peripheral\BatteryBackedRAM.cpp" />
+		<ClCompile Include="Peripheral\BCDCalc.cpp" />
+		<ClCompile Include="Peripheral\ExternalInterrupts.cpp" />
+		<ClCompile Include="Peripheral\Flash.cpp" />
+		<ClCompile Include="Peripheral\IOPorts.cpp" />
+		<ClCompile Include="Peripheral\Keyboard.cpp" />
+		<ClCompile Include="Peripheral\Miscellaneous.cpp" />
+		<ClCompile Include="Peripheral\PowerSupply.cpp" />
+		<ClCompile Include="Peripheral\RealTimeClock.cpp" />
+		<ClCompile Include="Peripheral\Screen.cpp" />
+		<ClCompile Include="Peripheral\StandbyControl.cpp" />
+		<ClCompile Include="Peripheral\Timer.cpp" />
+		<ClCompile Include="Peripheral\TimerBaseCounter.cpp" />
+		<ClCompile Include="Peripheral\WatchdogTimer.cpp" />
+		<ClCompile Include="Ext\Romu.cpp" />
+		<ClCompile Include="Ext\U8Disas.cpp" />
+		<ClCompile Include="Peripheral\VoltageLevelSupervisor.cpp" />
+		<ClCompile Include="Ext\vibration.cpp" />
+		<ClCompile Include="GDB\GDBServer.cpp" />
+		<ClCompile Include="asmjit\src\**\*.cpp" />
+	</ItemGroup>
+	<ItemGroup>
+		<ClInclude Include="Chipset\ePSCpu.h" />
+		<ClInclude Include="Ext\ConsoleText.h" />
+		<ClInclude Include="Ext\ePSDisas.h" />
+		<ClInclude Include="Ext\GameBuffer.h" />
+		<ClInclude Include="Ext\Random.hpp" />
+		<ClInclude Include="Ext\Unicode.h" />
+		<ClInclude Include="Gui\FileDialog.hpp" />
+		<ClInclude Include="Gui\UIScaling.h" />
+		<ClInclude Include="Ext\3rd_licenses.h" />
+		<ClInclude Include="Gui\AddressWindow.h" />
+		<ClInclude Include="Binary.h" />
+		<ClInclude Include="Chipset\Chipset.hpp" />
+		<ClInclude Include="Chipset\CPU.hpp" />
+		<ClInclude Include="Chipset\InterruptSource.hpp" />
+		<ClInclude Include="Chipset\MMU.hpp" />
+		<ClInclude Include="Chipset\MMURegion.hpp" />
+		<ClInclude Include="Config.hpp" />
+		<ClInclude Include="Containers\ConcurrentObject.h" />
+		<ClInclude Include="Ext\LabelFile.h" />
+		<ClInclude Include="Ext\RomPackage.h" />
+		<ClInclude Include="Ext\SysDialog.h" />
+		<ClInclude Include="Gui\Localization.h" />
+		<ClInclude Include="Gui\PopUpDisplay.h" />
+		<ClInclude Include="Gui\Theme.h" />
+		<ClInclude Include="Gui\BitmapViewer.h" />
+		<ClInclude Include="Peripheral\SD\FakeSdCard.h" />
+		<ClInclude Include="Gui\5800FileSystem.h" />
+		<ClInclude Include="Gui\CallAnalysis.h" />
+		<ClInclude Include="Gui\CwiiHelp.h" />
+		<ClInclude Include="Data\ColourInfo.hpp" />
+		<ClInclude Include="Data\EventCode.hpp" />
+		<ClInclude Include="Data\HardwareId.hpp" />
+		<ClInclude Include="Data\ModelInfo.hpp" />
+		<ClInclude Include="Data\SpriteInfo.hpp" />
+		<ClInclude Include="Emulator.hpp" />
+		<ClInclude Include="Gui\CodeViewer.hpp" />
+		<ClInclude Include="Gui\Editors.h" />
+		<ClInclude Include="Gui\hex.hpp" />
+		<ClInclude Include="Gui\Hooks.h" />
+		<ClInclude Include="Gui\imgui\imconfig.h" />
+		<ClInclude Include="Gui\imgui\imgui.h" />
+		<ClInclude Include="Gui\imgui\imgui_impl_sdl2.h" />
+		<ClInclude Include="Gui\imgui\imgui_impl_sdlrenderer2.h" />
+		<ClInclude Include="Gui\imgui\imgui_internal.h" />
+		<ClInclude Include="Gui\imgui\imstb_rectpack.h" />
+		<ClInclude Include="Gui\imgui\imstb_textedit.h" />
+		<ClInclude Include="Gui\imgui\imstb_truetype.h" />
+		<ClInclude Include="Gui\Injector.hpp" />
+		<ClInclude Include="Gui\LabelViewer.h" />
+		<ClInclude Include="Gui\MemBreakPoint.hpp" />
+		<ClInclude Include="Gui\HwController.h" />
+		<ClInclude Include="Gui\FileDialog.h" />
+		<ClInclude Include="Ext\Memory.h" />
+		<ClInclude Include="Peripheral\ML620Ports.h" />
+		<ClInclude Include="Peripheral\Uart.h" />
+		<ClInclude Include="Plugin\PluginApi.h" />
+		<ClInclude Include="Plugin\PluginMan.h" />
+		<ClInclude Include="resource.h" />
+		<ClInclude Include="Peripheral\Spi.h" />
+		<ClInclude Include="Settings.h" />
+		<ClInclude Include="stringhelper.h" />
+		<ClInclude Include="Gui\Ui.hpp" />
+		<ClInclude Include="Gui\WatchWindow.hpp" />
+		<ClInclude Include="Ext\Logger.hpp" />
+		<ClInclude Include="ModelInfo.h" />
+		<ClInclude Include="Models.h" />
+		<ClInclude Include="Gui\VariableWindow.h" />
+		<ClInclude Include="Gui\GDBWindow.hpp" />
+		<ClInclude Include="Peripheral\5800Flash.h" />
+		<ClInclude Include="Peripheral\Audio.h" />
+		<ClInclude Include="Peripheral\BatteryBackedRAM.hpp" />
+		<ClInclude Include="Peripheral\BCDCalc.hpp" />
+		<ClInclude Include="Peripheral\ExternalInterrupts.hpp" />
+		<ClInclude Include="Peripheral\Flash.hpp" />
+		<ClInclude Include="Peripheral\IOPorts.hpp" />
+		<ClInclude Include="Peripheral\Keyboard.hpp" />
+		<ClInclude Include="Peripheral\Miscellaneous.hpp" />
+		<ClInclude Include="Peripheral\Peripheral.hpp" />
+		<ClInclude Include="Peripheral\PowerSupply.hpp" />
+		<ClInclude Include="Peripheral\RealTimeClock.hpp" />
+		<ClInclude Include="Peripheral\ROMWindow.hpp" />
+		<ClInclude Include="Peripheral\Screen.hpp" />
+		<ClInclude Include="Peripheral\StandbyControl.hpp" />
+		<ClInclude Include="Peripheral\Timer.hpp" />
+		<ClInclude Include="Peripheral\TimerBaseCounter.hpp" />
+		<ClInclude Include="Peripheral\WatchdogTimer.hpp" />
+		<ClInclude Include="Ext\Romu.h" />
+		<ClInclude Include="StartupUi\StartupUi.h" />
+		<ClInclude Include="Ext\U8Disas.h" />
+		<ClInclude Include="Peripheral\VoltageLevelSupervisor.h" />
+		<ClInclude Include="Ext\vibration.h" />
+		<ClInclude Include="Gui\Gui.h" />
+		<ClInclude Include="GDB\GDBServer.hpp" />
+		<ClInclude Include="GDB\NetCompat.hpp" />
+		<ClInclude Include="locales\lang.h" />
+		<ClInclude Include="asmjit\src\**\*.h" />
+		<ClInclude Include="version.h" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include=".clang-format" />
+		<None Include="locales\en_US.lc">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Include="locales\zh_CN.lc">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Include="locales\vi_VN.lc">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Include="roms.db">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Include="packages.config" />
+		<None Include="Peripheral\SD\HowToCreateASDCard.md" />
+	</ItemGroup>
+	<ItemGroup>
+		<Image Include="icon.ico" />
+	</ItemGroup>
+	<ItemGroup>
+		<ResourceCompile Include="Resource.rc" />
+	</ItemGroup>
+	<Target Name="UploadSentrySymbols" AfterTargets="Link" Condition="'$(SentryToken)' != ''">
+		<PropertyGroup>
+			<SentryCliPath Condition="'$(SentryCliPath)' == ''">$(ProjectDir)sentry-cli</SentryCliPath>
+		</PropertyGroup>
+
+		<Message Text="Uploading symbols to sentry..." Importance="high" />
+
+		<Exec Command="$(SentryCliPath) --auth-token $(SentryToken) debug-files upload --org $(SentryOrg) --project $(SentryProject) --include-sources &quot;$(OutDir)&quot;"
+			  IgnoreExitCode="true" />
+	</Target>
+	<Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+	<ImportGroup Label="ExtensionTargets">
+		<Import Project="..\packages\sdl2_image.nuget.redist.2.8.2\build\native\sdl2_image.nuget.redist.targets" Condition="Exists('..\packages\sdl2_image.nuget.redist.2.8.2\build\native\sdl2_image.nuget.redist.targets')" />
+		<Import Project="..\packages\sdl2_image.nuget.2.8.2\build\native\sdl2_image.nuget.targets" Condition="Exists('..\packages\sdl2_image.nuget.2.8.2\build\native\sdl2_image.nuget.targets')" />
+		<Import Project="..\packages\sdl2_ttf.nuget.redist.2.22.0\build\native\sdl2_ttf.nuget.redist.targets" Condition="Exists('..\packages\sdl2_ttf.nuget.redist.2.22.0\build\native\sdl2_ttf.nuget.redist.targets')" />
+		<Import Project="..\packages\sdl2_ttf.nuget.2.22.0\build\native\sdl2_ttf.nuget.targets" Condition="Exists('..\packages\sdl2_ttf.nuget.2.22.0\build\native\sdl2_ttf.nuget.targets')" />
+		<Import Project="..\packages\sdl2.nuget.redist.2.32.8\build\native\sdl2.nuget.redist.targets" Condition="Exists('..\packages\sdl2.nuget.redist.2.32.8\build\native\sdl2.nuget.redist.targets')" />
+		<Import Project="..\packages\sdl2.nuget.2.32.8\build\native\sdl2.nuget.targets" Condition="Exists('..\packages\sdl2.nuget.2.32.8\build\native\sdl2.nuget.targets')" />
+		<Import Project="..\packages\Unofficial.Sentry.Native.0.10.0\build\native\Unofficial.Sentry.Native.targets" Condition="Exists('..\packages\Unofficial.Sentry.Native.0.10.0\build\native\Unofficial.Sentry.Native.targets')" />
+	</ImportGroup>
+	<Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+		<Error Condition="!Exists('..\packages\sdl2_image.nuget.redist.2.8.2\build\native\sdl2_image.nuget.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2_image.nuget.redist.2.8.2\build\native\sdl2_image.nuget.redist.targets'))" />
+		<Error Condition="!Exists('..\packages\sdl2_image.nuget.2.8.2\build\native\sdl2_image.nuget.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2_image.nuget.2.8.2\build\native\sdl2_image.nuget.targets'))" />
+		<Error Condition="!Exists('..\packages\sdl2_ttf.nuget.redist.2.22.0\build\native\sdl2_ttf.nuget.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2_ttf.nuget.redist.2.22.0\build\native\sdl2_ttf.nuget.redist.targets'))" />
+		<Error Condition="!Exists('..\packages\sdl2_ttf.nuget.2.22.0\build\native\sdl2_ttf.nuget.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2_ttf.nuget.2.22.0\build\native\sdl2_ttf.nuget.targets'))" />
+		<Error Condition="!Exists('..\packages\sdl2.nuget.redist.2.32.8\build\native\sdl2.nuget.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2.nuget.redist.2.32.8\build\native\sdl2.nuget.redist.targets'))" />
+		<Error Condition="!Exists('..\packages\sdl2.nuget.2.32.8\build\native\sdl2.nuget.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2.nuget.2.32.8\build\native\sdl2.nuget.targets'))" />
+		<Error Condition="!Exists('..\packages\Unofficial.Sentry.Native.0.10.0\build\native\Unofficial.Sentry.Native.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Unofficial.Sentry.Native.0.10.0\build\native\Unofficial.Sentry.Native.targets'))" />
+	</Target>
 </Project>

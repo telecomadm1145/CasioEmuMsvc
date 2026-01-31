@@ -74,8 +74,9 @@ public:                       \
 	virtual y Get##x##() = 0; \
 	virtual void Set##x##(y a) = 0;
 
+#include "git_info.h"
 
-#define EMULATOR_VERSION "1.0.0"
+#define EMULATOR_VERSION GIT_COMMIT_HASH
 
 // Currently only Sentry for windows and android(java side)
 #ifdef _MSC_VER

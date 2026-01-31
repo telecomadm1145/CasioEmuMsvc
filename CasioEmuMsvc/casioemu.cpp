@@ -181,8 +181,8 @@ int main(int argc, char* argv[]) {
 	sentry_options_set_dsn(options, "https://335230bc5e18c7b25464556638c4cfdc@o4510804732018688.ingest.us.sentry.io/4510805048950784");
 	// This is also the default-path. For further information and recommendations:
 	// https://docs.sentry.io/platforms/native/configuration/options/#database-path
-	sentry_options_set_database_path(options, ".sentry-native");
-	sentry_options_set_release(options, "my-project-name@2.3.12");
+	sentry_options_set_database_path(options, ".sentry");
+	sentry_options_set_release(options, "CasioEmuMsvc@" EMULATOR_VERSION);
 	sentry_options_set_debug(options, 1);
 	sentry_init(options);
 #endif
