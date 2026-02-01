@@ -174,7 +174,7 @@ void gui_loop() {
 #endif
 }
 
-CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd, GDBServer* gdbServer) {
+CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 	SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
 
 #ifdef SINGLE_WINDOW
@@ -248,7 +248,6 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd, GDBSe
 		windows.push_back(item);
 	for (auto item : GetEditors())
 		windows.push_back(item);
-	windows.push_back(new GDBWindow(gdbServer));
 
 #ifdef __ANDROID__
 	for (auto item : windows) {

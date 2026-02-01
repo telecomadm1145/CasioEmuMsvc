@@ -1,14 +1,14 @@
 ﻿#include "Config.hpp"
+#include "Ui.hpp"
+#include "imgui_impl_sdl2.h"
+
 #include "Emulator.hpp"
-#include "Ext/AppContext.hpp"
 #include "Localization.h"
 #include "Logger.hpp"
 #include "SDL_events.h"
 #include "SDL_keyboard.h"
 #include "SDL_mouse.h"
 #include "SDL_video.h"
-#include "Ui.hpp"
-#include "imgui_impl_sdl2.h"
 #include <SDL.h>
 #include <SDL_image.h>
 #include <atomic>
@@ -26,147 +26,23 @@
 #include <thread>
 #if _WIN32
 #include <Windows.h>
-#include <mmsystem.h>
-#include <objbase.h>
+#include <timeapi.h>
+#include <combaseapi.h>
 #pragma comment(lib, "winmm.lib")
 #endif
+
 #ifdef __ANDROID__
 #include <unistd.h>
 #endif
-#include "GDB/GDBServer.hpp"
-#include "StartupUi/StartupUi.h"
-#include "Theme.h"
-#include <Gui.h>
-#include <Plugin/PluginMan.h>
 #ifdef ENABLE_SENTRY
 #include <sentry.h>
 #endif
 
+#include "StartupUi/StartupUi.h"
+#include <Gui.h>
+#include <Plugin/PluginMan.h>
+
 using namespace casioemu;
-
-struct TouchState {
-	bool touching = false;
-	float startX = 0.0f;
-	float startY = 0.0f;
-	float currentX = 0.0f;
-	float currentY = 0.0f;
-	Uint32 startTime = 0;
-	SDL_FingerID fingerId = -1;
-	bool dragging = false;
-};
-
-struct TouchSample {
-	float x, y;
-	Uint32 time;
-};
-
-const int TRAIL_BUFFER_SIZE = 512;
-struct TouchTrail {
-	TouchSample samples[TRAIL_BUFFER_SIZE]{};
-	int current_index = 0;
-	int count = 0;
-};
-
-void HandleEvent(const SDL_Event& event, Emulator& emulator, bool guiCreated, TouchState& touchState1, TouchState& touchState2, TouchTrail& trail1, TouchTrail& trail2) {
-	if (guiCreated) {
-		ImGui_ImplSDL2_ProcessEvent(&event);
-	}
-
-	switch (event.type) {
-	case SDL_WINDOWEVENT:
-		if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
-			GetAppContext().eventBus.publish("app.exit_requested", {});
-			emulator.Shutdown();
-		}
-		return;
-	}
-
-	switch (event.type) {
-	case SDL_KEYDOWN:
-	case SDL_KEYUP:
-	case SDL_TEXTINPUT:
-		if (guiCreated && ImGui::GetIO().WantCaptureKeyboard)
-			break;
-		emulator.UIEvent((SDL_Event&)event);
-		break;
-	case SDL_MOUSEMOTION:
-	case SDL_MOUSEBUTTONDOWN:
-	case SDL_MOUSEBUTTONUP:
-	case SDL_MOUSEWHEEL:
-		if (guiCreated && ImGui::GetIO().WantCaptureMouse)
-			break;
-		emulator.UIEvent((SDL_Event&)event);
-		break;
-
-#ifdef __ANDROID__
-	case SDL_FINGERDOWN: {
-		if (guiCreated && ImGui::GetIO().WantCaptureMouse) {
-		}
-		else {
-			emulator.UIEvent((SDL_Event&)event);
-		}
-		int wid, hei;
-		SDL_GetWindowSize(emulator.window, &wid, &hei);
-		float touchX = event.tfinger.x * wid;
-		float touchY = event.tfinger.y * hei;
-
-		if (touchState1.fingerId == -1) {
-			touchState1.fingerId = event.tfinger.fingerId;
-			touchState1.touching = true;
-			touchState1.currentX = touchX;
-			touchState1.currentY = touchY;
-		}
-		else if (touchState2.fingerId == -1) {
-			touchState2.fingerId = event.tfinger.fingerId;
-			touchState2.touching = true;
-			touchState2.currentX = touchX;
-			touchState2.currentY = touchY;
-		}
-	} break;
-
-	case SDL_FINGERUP: {
-		if (guiCreated && ImGui::GetIO().WantCaptureMouse) {
-		}
-		else {
-			emulator.UIEvent((SDL_Event&)event);
-		}
-		if (event.tfinger.fingerId == touchState1.fingerId) {
-			touchState1.fingerId = -1;
-			touchState1.touching = false;
-		}
-		else if (event.tfinger.fingerId == touchState2.fingerId) {
-			touchState2.fingerId = -1;
-			touchState2.touching = false;
-		}
-	} break;
-
-	case SDL_FINGERMOTION: {
-		if (guiCreated && ImGui::GetIO().WantCaptureMouse) {
-		}
-		else {
-			emulator.UIEvent((SDL_Event&)event);
-		}
-		int wid, hei;
-		SDL_GetWindowSize(emulator.window, &wid, &hei);
-		float touchX = event.tfinger.x * wid;
-		float touchY = event.tfinger.y * hei;
-
-		if (event.tfinger.fingerId == touchState1.fingerId) {
-			touchState1.currentX = touchX;
-			touchState1.currentY = touchY;
-			trail1.samples[trail1.current_index] = {touchX, touchY, SDL_GetTicks()};
-			trail1.current_index = (trail1.current_index + 1) % TRAIL_BUFFER_SIZE;
-		}
-		else if (event.tfinger.fingerId == touchState2.fingerId) {
-			touchState2.currentX = touchX;
-			touchState2.currentY = touchY;
-			trail2.samples[trail2.current_index] = {touchX, touchY, SDL_GetTicks()};
-			trail2.current_index = (trail2.current_index + 1) % TRAIL_BUFFER_SIZE;
-		}
-	} break;
-#endif
-	}
-}
 
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
@@ -175,7 +51,7 @@ int main(int argc, char* argv[]) {
 	SetConsoleCP(65001); // Set to UTF8
 	SetConsoleOutputCP(65001);
 	CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-#endif
+#endif //  _WIN32
 #ifdef ENABLE_SENTRY
 	sentry_options_t* options = sentry_options_new();
 	sentry_options_set_dsn(options, "https://335230bc5e18c7b25464556638c4cfdc@o4510804732018688.ingest.us.sentry.io/4510805048950784");
@@ -190,8 +66,8 @@ int main(int argc, char* argv[]) {
 	chdir(SDL_AndroidGetExternalStoragePath());
 #endif
 	g_local.Load();
+
 	std::map<std::string, std::string> argv_map;
-	int gdb_port = 1234;
 	for (int ix = 1; ix != argc; ++ix) {
 		std::string key, value;
 		char* eq_pos = strchr(argv[ix], '=');
@@ -203,29 +79,13 @@ int main(int argc, char* argv[]) {
 			key = "model";
 			value = argv[ix];
 		}
-		if (key == "gdb_port") {
-			try {
-				gdb_port = std::stoi(value);
-			}
-			catch (const std::exception& e) {
-				logger::Info("[argv][Warn] Invalid GDB port value '%s'. Using default %d.\n", value.c_str(), gdb_port);
-			}
-		}
-		else {
-			if (argv_map.find(key) == argv_map.end())
-				argv_map[key] = value;
-			else
-				logger::Info("[argv][Info] #%i: key '%s' already set\n", ix, key.c_str());
-		}
+
+		if (argv_map.find(key) == argv_map.end())
+			argv_map[key] = value;
+		else
+			logger::Info("[argv][Info] #%i: key '%s' already set\n", ix, key.c_str());
 	}
 	bool headless = argv_map.find("headless") != argv_map.end();
-
-	if (argv_map["model"].empty()) {
-		auto s = sui_loop();
-		argv_map["model"] = std::move(s);
-		if (argv_map["model"].empty())
-			return -1;
-	}
 
 	int sdlFlags = SDL_INIT_VIDEO | SDL_INIT_TIMER;
 	if (SDL_Init(sdlFlags) != 0)
@@ -234,55 +94,84 @@ int main(int argc, char* argv[]) {
 	int imgFlags = IMG_INIT_PNG;
 	if (IMG_Init(imgFlags) != imgFlags)
 		PANIC("IMG_Init failed: %s\n", IMG_GetError());
-
 	if (headless && argv_map["model"].empty()) {
 		PANIC("No model path supplied.\n");
+	}
+	if (argv_map["model"].empty()) {
+		auto s = sui_loop();
+		argv_map["model"] = std::move(s);
+		if (argv_map["model"].empty())
+			return -1;
 	}
 
 	Emulator emulator(argv_map);
 	m_emu = &emulator;
 
-	GDBServer gdbServer(&emulator, gdb_port);
+	// static std::atomic<bool> running(true);
 
 	bool guiCreated = false;
 	auto frame_event = SDL_RegisterEvents(1);
-	std::atomic<bool> frame_thread_running = {true};
+	bool busy = false;
+	bool running = true;
 	std::thread t3([&]() {
 		SDL_Event se{};
 		se.type = frame_event;
-		if (emulator.window)
-			se.user.windowID = SDL_GetWindowID(emulator.window);
-		while (frame_thread_running) {
-			if (emulator.window)
+		se.user.windowID = SDL_GetWindowID(emulator.window);
+		while (running) {
+			if (!busy)
 				SDL_PushEvent(&se);
 #ifdef __ANDROID__
-			SDL_Delay(40); // 25fps
+			SDL_Delay(40);
 #else
-			if (GetThemeSettings().lowPerformanceMode) {
-				SDL_Delay(40); // 25fps
-			}
-			else {
-				SDL_Delay(16); // ~60fps
-			}
+			SDL_Delay(1);
 #endif
 		}
 	});
-
+	t3.detach();
 #ifdef DBG
-	test_gui(&guiCreated, emulator.window, emulator.renderer, &gdbServer);
+	test_gui(&guiCreated, emulator.window, emulator.renderer);
 #endif
 	SDL_Surface* background = IMG_Load("background.jpg");
 	SDL_Texture* bg_txt = 0;
 	if (background) {
 		bg_txt = SDL_CreateTextureFromSurface(renderer, background);
-		SDL_FreeSurface(background);
 	}
+
 	SDL_ShowWindow(emulator.window);
-	TouchState touchState1, touchState2;
+
+	struct TouchState {
+		bool touching = false;
+		float startX = 0.0f;
+		float startY = 0.0f;
+		float currentX = 0.0f;
+		float currentY = 0.0f;
+		Uint32 startTime = 0;
+		int fingerId = -1; // 用于区分多点触摸
+
+		bool dragging = false;
+	};
+
+	// 在文件开头添加结构体和缓冲区定义
+	struct TouchSample {
+		float x, y;
+		Uint32 time;
+	};
+
+	const int TRAIL_BUFFER_SIZE = 512;
+	struct TouchTrail {
+		TouchSample samples[TRAIL_BUFFER_SIZE]{};
+		int current_index = 0;
+		int count = 0;
+	};
+
 	TouchTrail trail1, trail2;
 
 	// 在主循环渲染部分添加（在SDL_RenderPresent之前）：
-	const Uint32 TRAIL_DURATION = 500;			 // 轨迹持续500ms
+	const Uint32 TRAIL_DURATION = 500; // 轨迹持续500ms
+
+	TouchState touchState;
+	TouchState touchState2; // 用于第二个手指
+
 	const Uint32 LONG_PRESS_DELAY = 500;		 // 长按延时（毫秒）
 	const float DOUBLE_TAP_MAX_DELAY = 300.0f;	 // 双击最大时间间隔 (毫秒)
 	const float DOUBLE_TAP_MAX_DISTANCE = 20.0f; // 双击最大距离 (像素)
@@ -293,133 +182,401 @@ int main(int argc, char* argv[]) {
 #ifdef _WIN32
 	LoadPlugins();
 #endif
-	GetAppContext().eventBus.publish("app.start", {});
 
 	while (emulator.Running()) {
-		SDL_Event event;
-		if (SDL_WaitEvent(&event)) {
-			HandleEvent(event, emulator, guiCreated, touchState1, touchState2, trail1, trail2);
-			while (SDL_PollEvent(&event)) {
-				HandleEvent(event, emulator, guiCreated, touchState1, touchState2, trail1, trail2);
+		SDL_Event event{};
+		busy = false;
+		if (!SDL_PollEvent(&event))
+			continue;
+		busy = true;
+		if (event.type == frame_event) {
+			SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+			SDL_RenderClear(renderer);
+			if (bg_txt) {
+				int w, h;
+				SDL_GetWindowSize(window, &w, &h);
+				int bg_w, bg_h;
+				SDL_QueryTexture(bg_txt, NULL, NULL, &bg_w, &bg_h);
+
+				float window_aspect = (float)w / h;
+				float bg_aspect = (float)bg_w / bg_h;
+
+				SDL_Rect dst_rect;
+				if (window_aspect > bg_aspect) {
+					dst_rect.w = w;
+					dst_rect.h = (int)(w / bg_aspect);
+					dst_rect.x = 0;
+					dst_rect.y = (h - dst_rect.h) / 2;
+				}
+				else {
+					dst_rect.h = h;
+					dst_rect.w = (int)(h * bg_aspect);
+					dst_rect.x = (w - dst_rect.w) / 2;
+					dst_rect.y = 0;
+				}
+
+				SDL_RenderCopy(renderer, bg_txt, NULL, &dst_rect);
 			}
-		}
-		else {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_WaitEvent failed: %s", SDL_GetError());
-			emulator.Shutdown();
-		}
-
-		GetAppContext().eventBus.publish("frame.begin", {});
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-		SDL_RenderClear(renderer);
-
-		if (bg_txt) {
-			int w, h;
-			SDL_GetWindowSize(window, &w, &h);
-			int bg_w, bg_h;
-			SDL_QueryTexture(bg_txt, NULL, NULL, &bg_w, &bg_h);
-			float window_aspect = (float)w / h;
-			float bg_aspect = (float)bg_w / bg_h;
-			SDL_Rect dst_rect;
-			if (window_aspect > bg_aspect) {
-				dst_rect.w = w;
-				dst_rect.h = (int)(w / bg_aspect);
-				dst_rect.x = 0;
-				dst_rect.y = (h - dst_rect.h) / 2;
-			}
-			else {
-				dst_rect.h = h;
-				dst_rect.w = (int)(h * bg_aspect);
-				dst_rect.x = (w - dst_rect.w) / 2;
-				dst_rect.y = 0;
-			}
-			SDL_RenderCopy(renderer, bg_txt, NULL, &dst_rect);
-		}
-
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 20);
-		SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-		SDL_RenderFillRect(renderer, 0);
-
+			SDL_SetRenderDrawColor(renderer, 0, 0, 0, 20);
+			SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+			SDL_RenderFillRect(renderer, 0);
 #ifdef SINGLE_WINDOW
-		emulator.Frame();
-		gui_loop();
+			emulator.Frame();
+			gui_loop();
 
-		if (touchState1.touching) {
-			// Set color for touch indicator
-			SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-			// Draw horizontal line of the cross
-			SDL_RenderDrawLine(renderer, touchState1.currentX - 10, touchState1.currentY, touchState1.currentX + 10, touchState1.currentY);
-			// Draw vertical line of the cross
-			SDL_RenderDrawLine(renderer, touchState1.currentX, touchState1.currentY - 10, touchState1.currentX, touchState1.currentY + 10);
-		}
+			if (!touchState.touching) {
+				// Set color for touch indicator
+				SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
 
-		if (touchState2.touching) {
-			// Set different color for second touch
-			SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-			// Draw horizontal line of the cross
-			SDL_RenderDrawLine(renderer, touchState2.currentX - 10, touchState2.currentY, touchState2.currentX + 10, touchState2.currentY);
-			// Draw vertical line of the cross
-			SDL_RenderDrawLine(renderer, touchState2.currentX, touchState2.currentY - 10, touchState2.currentX, touchState2.currentY + 10);
-		}
+				// Draw horizontal line of the cross
+				SDL_RenderDrawLine(renderer,
+					touchState.currentX - 10, touchState.currentY,
+					touchState.currentX + 10, touchState.currentY);
 
-		// 渲染第一个触摸轨迹
-		Uint32 current_time = SDL_GetTicks();
-		SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-		for (int i = 0; i < TRAIL_BUFFER_SIZE; i++) {
-			int idx = (trail1.current_index - 1 - i + TRAIL_BUFFER_SIZE) % TRAIL_BUFFER_SIZE;
-			TouchSample& sample = trail1.samples[idx];
-			Uint32 age = current_time - sample.time;
-			if (age > TRAIL_DURATION)
-				continue;
-			float radius = 50.0f * age / TRAIL_DURATION + 5.f;
-			SDL_SetRenderDrawColor(renderer, 255, 255, 255, 120 - 120 * age / TRAIL_DURATION);
-			SDL_Rect rect = {(int)(sample.x - radius / 2), (int)(sample.y - radius / 2), (int)radius, (int)radius};
-			SDL_RenderFillRect(renderer, &rect);
-		}
-
-		// 渲染第二个触摸轨迹
-		for (int i = 0; i < TRAIL_BUFFER_SIZE; i++) {
-			int idx = (trail2.current_index - 1 - i + TRAIL_BUFFER_SIZE) % TRAIL_BUFFER_SIZE;
-			TouchSample& sample = trail2.samples[idx];
-			Uint32 age = current_time - sample.time;
-			if (age > TRAIL_DURATION)
-				continue;
-			float radius = 50.0f * age / TRAIL_DURATION + 5.f;
-			SDL_SetRenderDrawColor(renderer, 255, 255, 255, 120 - 120 * age / TRAIL_DURATION);
-			SDL_Rect rect = {(int)(sample.x - radius / 2), (int)(sample.y - radius / 2), (int)radius, (int)radius};
-			SDL_RenderFillRect(renderer, &rect);
-		}
-#else
-		gui_loop();
-		emulator.Frame();
-#endif
-
-		if (RebuildFont_Requested) {
-			RebuildFont(RebuildFont_Scale);
-			if (RebuildFont_Scale != 0) {
-				ImGuiStyle igs = ImGuiStyle();
-				ImGui::StyleColorsDark(&igs);
-				ImGuiStyle& style = igs;
-				style.WindowRounding = 4.0f;
-				style.Colors[ImGuiCol_WindowBg].w = 0.9f;
-				style.FrameRounding = 4.0f;
-				style.ScaleAllSizes(RebuildFont_Scale);
-				ImGui::GetStyle() = igs;
+				// Draw vertical line of the cross
+				SDL_RenderDrawLine(renderer,
+					touchState.currentX, touchState.currentY - 10,
+					touchState.currentX, touchState.currentY + 10);
 			}
-			ImGui_ImplSDLRenderer2_DestroyDeviceObjects();
-			RebuildFont_Requested = 0;
-		}
-		SDL_RenderPresent(emulator.renderer);
-		GetAppContext().eventBus.publish("frame.end", {});
-	}
 
-	frame_thread_running = false;
+			if (!touchState2.touching) {
+				// Set different color for second touch
+				SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+
+				// Draw horizontal line of the cross
+				SDL_RenderDrawLine(renderer,
+					touchState2.currentX - 10, touchState2.currentY,
+					touchState2.currentX + 10, touchState2.currentY);
+
+				// Draw vertical line of the cross
+				SDL_RenderDrawLine(renderer,
+					touchState2.currentX, touchState2.currentY - 10,
+					touchState2.currentX, touchState2.currentY + 10);
+			}
+			// 渲染第一个触摸轨迹
+			Uint32 current_time = SDL_GetTicks();
+			SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+			for (int i = 0; i < TRAIL_BUFFER_SIZE; i++) {
+				int idx = (trail1.current_index - 1 - i + TRAIL_BUFFER_SIZE) % TRAIL_BUFFER_SIZE;
+				TouchSample& sample = trail1.samples[idx];
+
+				Uint32 age = current_time - sample.time;
+				if (age > TRAIL_DURATION)
+					continue;
+
+				float radius = 50.0f * age / TRAIL_DURATION + 5.f;
+				SDL_SetRenderDrawColor(renderer, 255, 255, 255, 120 - 120 * age / TRAIL_DURATION);
+				SDL_Rect rect = {
+					(int)(sample.x - radius / 2),
+					(int)(sample.y - radius / 2),
+					(int)radius,
+					(int)radius};
+				SDL_RenderFillRect(renderer, &rect);
+			}
+
+			// 渲染第二个触摸轨迹
+			for (int i = 0; i < TRAIL_BUFFER_SIZE; i++) {
+				int idx = (trail2.current_index - 1 - i + TRAIL_BUFFER_SIZE) % TRAIL_BUFFER_SIZE;
+				TouchSample& sample = trail2.samples[idx];
+
+				Uint32 age = current_time - sample.time;
+				if (age > TRAIL_DURATION)
+					continue;
+
+				float radius = 50.0f * age / TRAIL_DURATION + 5.f;
+				SDL_SetRenderDrawColor(renderer, 255, 255, 255, 120 - 120 * age / TRAIL_DURATION);
+				SDL_Rect rect = {
+					(int)(sample.x - radius / 2),
+					(int)(sample.y - radius / 2),
+					(int)radius,
+					(int)radius};
+				SDL_RenderFillRect(renderer, &rect);
+			}
+
+			SDL_RenderPresent(emulator.renderer);
+#else
+			gui_loop();
+			emulator.Frame();
+			SDL_RenderPresent(emulator.renderer);
+#endif
+			if (RebuildFont_Requested) {
+				RebuildFont(RebuildFont_Scale);
+				if (RebuildFont_Scale != 0) {
+					ImGuiStyle igs = ImGuiStyle();
+					ImGui::StyleColorsDark(&igs);
+					ImGuiStyle& style = igs;
+					style.WindowRounding = 4.0f;
+					style.Colors[ImGuiCol_WindowBg].w = 0.9f;
+					style.FrameRounding = 4.0f;
+					style.ScaleAllSizes(RebuildFont_Scale);
+					ImGui::GetStyle() = igs;
+				}
+				ImGui_ImplSDLRenderer2_DestroyDeviceObjects();
+				RebuildFont_Requested = 0;
+			}
+			while (SDL_PollEvent(&event)) {
+				if (event.type != frame_event)
+					goto hld;
+			}
+			continue;
+		}
+
+	hld:
+		int wid, hei;
+		SDL_GetWindowSize(window, &wid, &hei);
+		switch (event.type) {
+		case SDL_WINDOWEVENT:
+			switch (event.window.event) {
+			case SDL_WINDOWEVENT_CLOSE:
+				emulator.Shutdown();
+				std::exit(0);
+				break;
+			case SDL_WINDOWEVENT_RESIZED:
+				break;
+			}
+			break;
+#ifdef __ANDROID__
+		case SDL_FINGERDOWN:
+			if (!touchState.touching) {
+				touchState.touching = true;
+				touchState.startX = event.tfinger.x * wid; // 转换为窗口坐标
+				touchState.startY = event.tfinger.y * hei;
+				touchState.currentX = touchState.startX;
+				touchState.currentY = touchState.startY;
+				touchState.startTime = SDL_GetTicks();
+				touchState.fingerId = event.tfinger.fingerId;
+				touchState.dragging = false; // Reset dragging state
+			}
+			else if (!touchState2.touching) {
+				touchState2.touching = true;
+				touchState2.startX = event.tfinger.x * wid;
+				touchState2.startY = event.tfinger.y * hei;
+				touchState2.currentX = touchState2.startX;
+				touchState2.currentY = touchState2.startY;
+				touchState2.fingerId = event.tfinger.fingerId;
+				touchState2.dragging = false; // Reset dragging state
+				SDL_Event wheelEvent;
+				SDL_memset(&wheelEvent, 0, sizeof(wheelEvent));
+				wheelEvent.type = SDL_MOUSEMOTION;
+				wheelEvent.motion.x = touchState.currentX;
+				wheelEvent.motion.y = touchState.currentY;
+				ImGui_ImplSDL2_ProcessEvent(&wheelEvent);
+			}
+			break;
+		case SDL_FINGERUP:
+			if (touchState.dragging && touchState.fingerId == event.tfinger.fingerId) {
+				float endX = event.tfinger.x * wid;
+				float endY = event.tfinger.y * hei;
+
+				SDL_Event motionEvent;
+				SDL_memset(&motionEvent, 0, sizeof(motionEvent));
+				motionEvent.type = SDL_MOUSEBUTTONUP;
+				motionEvent.button.button = SDL_BUTTON_LEFT;
+				motionEvent.button.x = endX;
+				motionEvent.button.y = endY;
+				ImGui_ImplSDL2_ProcessEvent(&motionEvent);
+				touchState.dragging = false;
+
+				touchState.currentX = endX;
+				touchState.currentY = endY;
+			}
+			if (touchState2.dragging && touchState2.fingerId == event.tfinger.fingerId) {
+				float endX = event.tfinger.x * wid;
+				float endY = event.tfinger.y * hei;
+
+				SDL_Event motionEvent;
+				SDL_memset(&motionEvent, 0, sizeof(motionEvent));
+				motionEvent.type = SDL_MOUSEBUTTONUP;
+				motionEvent.button.button = SDL_BUTTON_LEFT;
+				motionEvent.button.x = endX;
+				motionEvent.button.y = endY;
+				ImGui_ImplSDL2_ProcessEvent(&motionEvent);
+				touchState2.dragging = false;
+
+				touchState2.currentX = endX;
+				touchState2.currentY = endY;
+			}
+			if (touchState.touching && touchState.fingerId == event.tfinger.fingerId) {
+				float endX = event.tfinger.x * wid;
+				float endY = event.tfinger.y * hei;
+				Uint32 endTime = SDL_GetTicks();
+
+				touchState.currentX = endX;
+				touchState.currentY = endY;
+
+				if (endTime - touchState.startTime < LONG_PRESS_DELAY) { // 单击
+					float dist = std::hypot(endX - touchState.startX, endY - touchState.startY);
+					if (dist < 10.0f) { // 避免滑动时触发单击
+						SDL_Event clickEventDown;
+						SDL_memset(&clickEventDown, 0, sizeof(clickEventDown));
+						clickEventDown.type = SDL_MOUSEMOTION;
+						clickEventDown.button.button = SDL_BUTTON_LEFT;
+						clickEventDown.button.x = endX;
+						clickEventDown.button.y = endY;
+						ImGui_ImplSDL2_ProcessEvent(&clickEventDown);
+						SDL_memset(&clickEventDown, 0, sizeof(clickEventDown));
+						clickEventDown.type = SDL_MOUSEBUTTONDOWN;
+						clickEventDown.button.button = SDL_BUTTON_LEFT;
+						clickEventDown.button.x = endX;
+						clickEventDown.button.y = endY;
+						ImGui_ImplSDL2_ProcessEvent(&clickEventDown);
+						SDL_Event clickEventUp;
+						SDL_memset(&clickEventUp, 0, sizeof(clickEventUp));
+						clickEventUp.type = SDL_MOUSEBUTTONUP;
+						clickEventUp.button.button = SDL_BUTTON_LEFT;
+						clickEventUp.button.x = endX;
+						clickEventUp.button.y = endY;
+						ImGui_ImplSDL2_ProcessEvent(&clickEventUp);
+						lastTapTime = endTime;
+						lastTapX = endX;
+						lastTapY = endY;
+					}
+				}
+				else {
+					// 长按（可以添加长按处理逻辑）
+					SDL_Event longPressEvent;
+					SDL_memset(&longPressEvent, 0, sizeof(longPressEvent));
+					longPressEvent.type = SDL_MOUSEMOTION;
+					longPressEvent.button.button = SDL_BUTTON_LEFT;
+					longPressEvent.button.x = endX;
+					longPressEvent.button.y = endY;
+					ImGui_ImplSDL2_ProcessEvent(&longPressEvent);
+					SDL_memset(&longPressEvent, 0, sizeof(longPressEvent));
+					longPressEvent.type = SDL_MOUSEBUTTONDOWN;
+					longPressEvent.button.button = SDL_BUTTON_RIGHT;
+					longPressEvent.button.x = endX;
+					longPressEvent.button.y = endY;
+					ImGui_ImplSDL2_ProcessEvent(&longPressEvent);
+					SDL_memset(&longPressEvent, 0, sizeof(longPressEvent));
+					longPressEvent.type = SDL_MOUSEBUTTONUP;
+					longPressEvent.button.button = SDL_BUTTON_RIGHT;
+					longPressEvent.button.x = endX;
+					longPressEvent.button.y = endY;
+					ImGui_ImplSDL2_ProcessEvent(&longPressEvent);
+				}
+				touchState.touching = false;
+			}
+			if (touchState2.touching && touchState2.fingerId == event.tfinger.fingerId) {
+				float endX = event.tfinger.x * wid;
+				float endY = event.tfinger.y * hei;
+
+				touchState2.currentX = endX;
+				touchState2.currentY = endY;
+				touchState2.touching = false;
+			}
+			break;
+
+		case SDL_FINGERMOTION: {
+			if (touchState.touching && !touchState2.touching &&
+				touchState.fingerId == event.tfinger.fingerId) {
+				// 单指滑动
+				float currentX = event.tfinger.x * wid;
+				float currentY = event.tfinger.y * hei;
+				float deltaX = currentX - touchState.startX;
+				float deltaY = currentY - touchState.startY;
+
+				touchState.currentX = currentX;
+				touchState.currentY = currentY;
+
+				if ((deltaX * deltaX + deltaY * deltaY) > 1.f) {
+					if (!touchState.dragging) {
+						SDL_Event motionEvent;
+						SDL_memset(&motionEvent, 0, sizeof(motionEvent));
+						motionEvent.type = SDL_MOUSEBUTTONDOWN;
+						motionEvent.button.button = SDL_BUTTON_LEFT;
+						motionEvent.button.x = currentX;
+						motionEvent.button.y = currentY;
+						ImGui_ImplSDL2_ProcessEvent(&motionEvent);
+						touchState.dragging = true;
+					}
+
+					// 发送鼠标移动事件
+					SDL_Event motionEvent;
+					SDL_memset(&motionEvent, 0, sizeof(motionEvent));
+					motionEvent.type = SDL_MOUSEMOTION;
+					motionEvent.motion.x = currentX;
+					motionEvent.motion.y = currentY;
+					motionEvent.motion.state = SDL_BUTTON_LMASK; // 按住左键拖动
+					ImGui_ImplSDL2_ProcessEvent(&motionEvent);
+				}
+			}
+			else if (touchState.touching && !touchState.dragging && touchState2.touching &&
+					 touchState.fingerId != touchState2.fingerId && touchState.fingerId == event.tfinger.fingerId) {
+				// 双指缩放
+				float currentY = event.tfinger.y * hei;
+
+				touchState.currentX = event.tfinger.x * wid;
+				touchState.currentY = currentY;
+
+				float delta = (touchState2.currentY - currentY);
+
+				if (std::abs(delta) > 1.0f) {
+					SDL_Event wheelEvent;
+					SDL_memset(&wheelEvent, 0, sizeof(wheelEvent));
+					wheelEvent.type = SDL_MOUSEWHEEL;
+					wheelEvent.wheel.preciseY = delta / 100;
+					wheelEvent.wheel.mouseX = touchState.currentX;
+					wheelEvent.wheel.mouseY = touchState.currentY;
+					ImGui_ImplSDL2_ProcessEvent(&wheelEvent);
+					touchState.startY = currentY;
+				}
+			}
+		}
+			if (touchState.touching && touchState.fingerId == event.tfinger.fingerId) {
+				touchState.currentX = event.tfinger.x * wid;
+				touchState.currentY = event.tfinger.y * hei;
+
+				trail1.samples[trail1.current_index] = {
+					touchState.currentX,
+					touchState.currentY,
+					SDL_GetTicks()};
+				trail1.current_index = (trail1.current_index + 1) % TRAIL_BUFFER_SIZE;
+			}
+
+			if (touchState2.touching && touchState2.fingerId == event.tfinger.fingerId) {
+				touchState2.currentX = event.tfinger.x * wid;
+				touchState2.currentY = event.tfinger.y * hei;
+
+				trail2.samples[trail2.current_index] = {
+					touchState2.currentX,
+					touchState2.currentY,
+					SDL_GetTicks()};
+				trail2.current_index = (trail2.current_index + 1) % TRAIL_BUFFER_SIZE;
+			}
+			break;
+#else
+		case SDL_MOUSEBUTTONDOWN:
+		case SDL_MOUSEBUTTONUP:
+		case SDL_MOUSEMOTION:
+#endif
+		case SDL_KEYDOWN:
+		case SDL_KEYUP:
+		case SDL_TEXTINPUT:
+		case SDL_MOUSEWHEEL:
+#ifdef SINGLE_WINDOW
+			ImGui_ImplSDL2_ProcessEvent(&event);
+			if (ImGui::GetIO().WantCaptureMouse) {
+				break;
+			}
+#else
+			if ((SDL_GetKeyboardFocus() != emulator.window) && guiCreated) {
+				ImGui_ImplSDL2_ProcessEvent(&event);
+				break;
+			}
+#endif
+			[[fallthrough]];
+		default:
+			emulator.UIEvent(event);
+			break;
+		}
+	}
+	running = false;
 	if (t3.joinable()) {
 		t3.join();
 	}
 	if (bg_txt) {
 		SDL_DestroyTexture(bg_txt);
 	}
-	GetAppContext().eventBus.publish("app.stop", {});
 #ifdef ENABLE_SENTRY
 	sentry_close();
 #endif
