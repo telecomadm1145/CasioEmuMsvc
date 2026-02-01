@@ -179,6 +179,23 @@ int main(int argc, char* argv[]) {
 	static float lastTapX = 0;
 	static float lastTapY = 0;
 
+	    auto SendMouseEvent = [](Uint32 type, float x, float y, int button = SDL_BUTTON_LEFT) {
+		SDL_Event event;
+		SDL_memset(&event, 0, sizeof(event));
+		event.type = type;
+		if (type == SDL_MOUSEMOTION) {
+			event.motion.x = x;
+			event.motion.y = y;
+			event.motion.state = (button == SDL_BUTTON_LEFT) ? SDL_BUTTON_LMASK : 0;
+		}
+		else {
+			event.button.button = button;
+			event.button.x = x;
+			event.button.y = y;
+		}
+		ImGui_ImplSDL2_ProcessEvent(&event);
+	};
+
 #ifdef _WIN32
 	LoadPlugins();
 #endif
