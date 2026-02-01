@@ -336,215 +336,159 @@ int main(int argc, char* argv[]) {
 			}
 			break;
 #ifdef __ANDROID__
-		case SDL_FINGERDOWN:
+		case SDL_FINGERDOWN: {
+			float x = event.tfinger.x * wid;
+			float y = event.tfinger.y * hei;
+
+			// Primary Finger
 			if (!touchState.touching) {
 				touchState.touching = true;
-				touchState.startX = event.tfinger.x * wid; // 转换为窗口坐标
-				touchState.startY = event.tfinger.y * hei;
-				touchState.currentX = touchState.startX;
-				touchState.currentY = touchState.startY;
+				touchState.startX = x;
+				touchState.startY = y;
+				touchState.currentX = x;
+				touchState.currentY = y;
 				touchState.startTime = SDL_GetTicks();
 				touchState.fingerId = event.tfinger.fingerId;
-				touchState.dragging = false; // Reset dragging state
+				touchState.dragging = false;
 			}
+			// Secondary Finger (Multitouch)
 			else if (!touchState2.touching) {
 				touchState2.touching = true;
-				touchState2.startX = event.tfinger.x * wid;
-				touchState2.startY = event.tfinger.y * hei;
-				touchState2.currentX = touchState2.startX;
-				touchState2.currentY = touchState2.startY;
+				touchState2.startX = x;
+				touchState2.startY = y;
+				touchState2.currentX = x;
+				touchState2.currentY = y;
 				touchState2.fingerId = event.tfinger.fingerId;
-				touchState2.dragging = false; // Reset dragging state
-				SDL_Event wheelEvent;
-				SDL_memset(&wheelEvent, 0, sizeof(wheelEvent));
-				wheelEvent.type = SDL_MOUSEMOTION;
-				wheelEvent.motion.x = touchState.currentX;
-				wheelEvent.motion.y = touchState.currentY;
-				ImGui_ImplSDL2_ProcessEvent(&wheelEvent);
-			}
-			break;
-		case SDL_FINGERUP:
-			if (touchState.dragging && touchState.fingerId == event.tfinger.fingerId) {
-				float endX = event.tfinger.x * wid;
-				float endY = event.tfinger.y * hei;
-
-				SDL_Event motionEvent;
-				SDL_memset(&motionEvent, 0, sizeof(motionEvent));
-				motionEvent.type = SDL_MOUSEBUTTONUP;
-				motionEvent.button.button = SDL_BUTTON_LEFT;
-				motionEvent.button.x = endX;
-				motionEvent.button.y = endY;
-				ImGui_ImplSDL2_ProcessEvent(&motionEvent);
-				touchState.dragging = false;
-
-				touchState.currentX = endX;
-				touchState.currentY = endY;
-			}
-			if (touchState2.dragging && touchState2.fingerId == event.tfinger.fingerId) {
-				float endX = event.tfinger.x * wid;
-				float endY = event.tfinger.y * hei;
-
-				SDL_Event motionEvent;
-				SDL_memset(&motionEvent, 0, sizeof(motionEvent));
-				motionEvent.type = SDL_MOUSEBUTTONUP;
-				motionEvent.button.button = SDL_BUTTON_LEFT;
-				motionEvent.button.x = endX;
-				motionEvent.button.y = endY;
-				ImGui_ImplSDL2_ProcessEvent(&motionEvent);
 				touchState2.dragging = false;
 
-				touchState2.currentX = endX;
-				touchState2.currentY = endY;
+				// Optional: Send initial motion to setup zooming center
+				SendMouseEvent(SDL_MOUSEMOTION, touchState.currentX, touchState.currentY);
 			}
-			if (touchState.touching && touchState.fingerId == event.tfinger.fingerId) {
-				float endX = event.tfinger.x * wid;
-				float endY = event.tfinger.y * hei;
-				Uint32 endTime = SDL_GetTicks();
+			break;
+		}
 
+		case SDL_FINGERUP: {
+			float endX = event.tfinger.x * wid;
+			float endY = event.tfinger.y * hei;
+			Uint32 endTime = SDL_GetTicks();
+
+			// Handle Primary Finger
+			if (touchState.touching && touchState.fingerId == event.tfinger.fingerId) {
 				touchState.currentX = endX;
 				touchState.currentY = endY;
 
-				if (endTime - touchState.startTime < LONG_PRESS_DELAY) { // 单击
-					float dist = std::hypot(endX - touchState.startX, endY - touchState.startY);
-					if (dist < 10.0f) { // 避免滑动时触发单击
-						SDL_Event clickEventDown;
-						SDL_memset(&clickEventDown, 0, sizeof(clickEventDown));
-						clickEventDown.type = SDL_MOUSEMOTION;
-						clickEventDown.button.button = SDL_BUTTON_LEFT;
-						clickEventDown.button.x = endX;
-						clickEventDown.button.y = endY;
-						ImGui_ImplSDL2_ProcessEvent(&clickEventDown);
-						SDL_memset(&clickEventDown, 0, sizeof(clickEventDown));
-						clickEventDown.type = SDL_MOUSEBUTTONDOWN;
-						clickEventDown.button.button = SDL_BUTTON_LEFT;
-						clickEventDown.button.x = endX;
-						clickEventDown.button.y = endY;
-						ImGui_ImplSDL2_ProcessEvent(&clickEventDown);
-						SDL_Event clickEventUp;
-						SDL_memset(&clickEventUp, 0, sizeof(clickEventUp));
-						clickEventUp.type = SDL_MOUSEBUTTONUP;
-						clickEventUp.button.button = SDL_BUTTON_LEFT;
-						clickEventUp.button.x = endX;
-						clickEventUp.button.y = endY;
-						ImGui_ImplSDL2_ProcessEvent(&clickEventUp);
-						lastTapTime = endTime;
-						lastTapX = endX;
-						lastTapY = endY;
-					}
+				if (touchState.dragging) {
+					// It was a drag operation, just release
+					SendMouseEvent(SDL_MOUSEBUTTONUP, endX, endY, SDL_BUTTON_LEFT);
 				}
 				else {
-					// 长按（可以添加长按处理逻辑）
-					SDL_Event longPressEvent;
-					SDL_memset(&longPressEvent, 0, sizeof(longPressEvent));
-					longPressEvent.type = SDL_MOUSEMOTION;
-					longPressEvent.button.button = SDL_BUTTON_LEFT;
-					longPressEvent.button.x = endX;
-					longPressEvent.button.y = endY;
-					ImGui_ImplSDL2_ProcessEvent(&longPressEvent);
-					SDL_memset(&longPressEvent, 0, sizeof(longPressEvent));
-					longPressEvent.type = SDL_MOUSEBUTTONDOWN;
-					longPressEvent.button.button = SDL_BUTTON_RIGHT;
-					longPressEvent.button.x = endX;
-					longPressEvent.button.y = endY;
-					ImGui_ImplSDL2_ProcessEvent(&longPressEvent);
-					SDL_memset(&longPressEvent, 0, sizeof(longPressEvent));
-					longPressEvent.type = SDL_MOUSEBUTTONUP;
-					longPressEvent.button.button = SDL_BUTTON_RIGHT;
-					longPressEvent.button.x = endX;
-					longPressEvent.button.y = endY;
-					ImGui_ImplSDL2_ProcessEvent(&longPressEvent);
+					// It was NOT a drag, check for Tap or Long Press
+					if (endTime - touchState.startTime < LONG_PRESS_DELAY) {
+						// Short Tap - synthesize full click
+						SendMouseEvent(SDL_MOUSEMOTION, endX, endY);
+						SendMouseEvent(SDL_MOUSEBUTTONDOWN, endX, endY, SDL_BUTTON_LEFT);
+						SendMouseEvent(SDL_MOUSEBUTTONUP, endX, endY, SDL_BUTTON_LEFT);
+					}
+					else {
+						// Long Press - synthesize Right Click
+						SendMouseEvent(SDL_MOUSEMOTION, endX, endY);
+						SendMouseEvent(SDL_MOUSEBUTTONDOWN, endX, endY, SDL_BUTTON_RIGHT);
+						SendMouseEvent(SDL_MOUSEBUTTONUP, endX, endY, SDL_BUTTON_RIGHT);
+					}
 				}
-				touchState.touching = false;
-			}
-			if (touchState2.touching && touchState2.fingerId == event.tfinger.fingerId) {
-				float endX = event.tfinger.x * wid;
-				float endY = event.tfinger.y * hei;
 
-				touchState2.currentX = endX;
-				touchState2.currentY = endY;
+				touchState.touching = false;
+				touchState.dragging = false;
+			}
+
+			// Handle Secondary Finger
+			if (touchState2.touching && touchState2.fingerId == event.tfinger.fingerId) {
+				// Usually just cleanup for the second finger, unless you want specific 2-finger tap logic
+				if (touchState2.dragging) {
+					SendMouseEvent(SDL_MOUSEBUTTONUP, endX, endY, SDL_BUTTON_LEFT);
+				}
 				touchState2.touching = false;
+				touchState2.dragging = false;
 			}
 			break;
+		}
 
 		case SDL_FINGERMOTION: {
-			if (touchState.touching && !touchState2.touching &&
-				touchState.fingerId == event.tfinger.fingerId) {
-				// 单指滑动
-				float currentX = event.tfinger.x * wid;
-				float currentY = event.tfinger.y * hei;
-				float deltaX = currentX - touchState.startX;
-				float deltaY = currentY - touchState.startY;
+			float currentX = event.tfinger.x * wid;
+			float currentY = event.tfinger.y * hei;
 
-				touchState.currentX = currentX;
-				touchState.currentY = currentY;
+			// --- Logic for Primary Finger Interaction ---
+			if (touchState.touching && touchState.fingerId == event.tfinger.fingerId) {
 
-				if ((deltaX * deltaX + deltaY * deltaY) > 1.f) {
-					if (!touchState.dragging) {
-						SDL_Event motionEvent;
-						SDL_memset(&motionEvent, 0, sizeof(motionEvent));
-						motionEvent.type = SDL_MOUSEBUTTONDOWN;
-						motionEvent.button.button = SDL_BUTTON_LEFT;
-						motionEvent.button.x = currentX;
-						motionEvent.button.y = currentY;
-						ImGui_ImplSDL2_ProcessEvent(&motionEvent);
+				// If only one finger is down, handle Dragging
+				if (!touchState2.touching) {
+					float deltaX = currentX - touchState.startX;
+					float deltaY = currentY - touchState.startY;
+					float distSq = deltaX * deltaX + deltaY * deltaY;
+
+					// 1. Detect start of Drag (Threshold: 10 pixels roughly)
+					if (!touchState.dragging && distSq > 100.0f) {
+						SendMouseEvent(SDL_MOUSEBUTTONDOWN, currentX, currentY, SDL_BUTTON_LEFT);
 						touchState.dragging = true;
 					}
 
-					// 发送鼠标移动事件
-					SDL_Event motionEvent;
-					SDL_memset(&motionEvent, 0, sizeof(motionEvent));
-					motionEvent.type = SDL_MOUSEMOTION;
-					motionEvent.motion.x = currentX;
-					motionEvent.motion.y = currentY;
-					motionEvent.motion.state = SDL_BUTTON_LMASK; // 按住左键拖动
-					ImGui_ImplSDL2_ProcessEvent(&motionEvent);
+					// 2. Process Drag
+					if (touchState.dragging) {
+						SendMouseEvent(SDL_MOUSEMOTION, currentX, currentY);
+					}
 				}
-			}
-			else if (touchState.touching && !touchState.dragging && touchState2.touching &&
-					 touchState.fingerId != touchState2.fingerId && touchState.fingerId == event.tfinger.fingerId) {
-				// 双指缩放
-				float currentY = event.tfinger.y * hei;
+				// If two fingers are down, and this is the primary finger moving -> Scroll/Zoom
+				else if (touchState2.touching) {
+					// Calculate relative vertical movement for scrolling
+					float moveY = currentY - touchState.currentY;
 
-				touchState.currentX = event.tfinger.x * wid;
+					// Threshold to prevent micro-jitters
+					if (std::abs(moveY) > 1.0f) {
+						SDL_Event wheelEvent;
+						SDL_memset(&wheelEvent, 0, sizeof(wheelEvent));
+						wheelEvent.type = SDL_MOUSEWHEEL;
+						// Use relative movement, not absolute position difference
+						wheelEvent.wheel.preciseY = moveY / 20.0f; // Scale factor
+						wheelEvent.wheel.mouseX = currentX;
+						wheelEvent.wheel.mouseY = currentY;
+						ImGui_ImplSDL2_ProcessEvent(&wheelEvent);
+					}
+				}
+
+				// Update Primary State & Trail
+				touchState.currentX = currentX;
 				touchState.currentY = currentY;
-
-				float delta = (touchState2.currentY - currentY);
-
-				if (std::abs(delta) > 1.0f) {
-					SDL_Event wheelEvent;
-					SDL_memset(&wheelEvent, 0, sizeof(wheelEvent));
-					wheelEvent.type = SDL_MOUSEWHEEL;
-					wheelEvent.wheel.preciseY = delta / 100;
-					wheelEvent.wheel.mouseX = touchState.currentX;
-					wheelEvent.wheel.mouseY = touchState.currentY;
-					ImGui_ImplSDL2_ProcessEvent(&wheelEvent);
-					touchState.startY = currentY;
-				}
-			}
-		}
-			if (touchState.touching && touchState.fingerId == event.tfinger.fingerId) {
-				touchState.currentX = event.tfinger.x * wid;
-				touchState.currentY = event.tfinger.y * hei;
-
-				trail1.samples[trail1.current_index] = {
-					touchState.currentX,
-					touchState.currentY,
-					SDL_GetTicks()};
+				trail1.samples[trail1.current_index] = {currentX, currentY, SDL_GetTicks()};
 				trail1.current_index = (trail1.current_index + 1) % TRAIL_BUFFER_SIZE;
 			}
 
+			// --- Logic for Secondary Finger Interaction ---
 			if (touchState2.touching && touchState2.fingerId == event.tfinger.fingerId) {
-				touchState2.currentX = event.tfinger.x * wid;
-				touchState2.currentY = event.tfinger.y * hei;
 
-				trail2.samples[trail2.current_index] = {
-					touchState2.currentX,
-					touchState2.currentY,
-					SDL_GetTicks()};
+				// If secondary finger moves while primary is holding, also trigger scroll
+				if (touchState.touching) {
+					float moveY = currentY - touchState2.currentY;
+					if (std::abs(moveY) > 1.0f) {
+						SDL_Event wheelEvent;
+						SDL_memset(&wheelEvent, 0, sizeof(wheelEvent));
+						wheelEvent.type = SDL_MOUSEWHEEL;
+						wheelEvent.wheel.preciseY = moveY / 20.0f;
+						wheelEvent.wheel.mouseX = touchState.currentX; // Use primary as anchor
+						wheelEvent.wheel.mouseY = touchState.currentY;
+						ImGui_ImplSDL2_ProcessEvent(&wheelEvent);
+					}
+				}
+
+				// Update Secondary State & Trail
+				touchState2.currentX = currentX;
+				touchState2.currentY = currentY;
+				trail2.samples[trail2.current_index] = {currentX, currentY, SDL_GetTicks()};
 				trail2.current_index = (trail2.current_index + 1) % TRAIL_BUFFER_SIZE;
 			}
 			break;
+		}
 #else
+		// Desktop handling remains largely the same
 		case SDL_MOUSEBUTTONDOWN:
 		case SDL_MOUSEBUTTONUP:
 		case SDL_MOUSEMOTION:
