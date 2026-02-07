@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -31,6 +32,7 @@ private:
 	std::vector<InjectorData> injectors;
 	std::vector<CustomInjection> customInjections;
 	std::mutex injectionMutex;
+	std::thread reloadThread;
 	bool needsReload;
 	std::atomic<bool> isReloading;
 	std::atomic<bool> isShuttingDown;
