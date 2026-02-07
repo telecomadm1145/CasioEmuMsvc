@@ -32,7 +32,9 @@ Injector::Injector() : UIWindow("Rop"), needsReload(false), isReloading(false), 
 Injector::~Injector() {
 	isShuttingDown.store(true);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	if (reloadThread.joinable()) {
+		reloadThread.join();
+	}
 }
 
 std::string Injector::GetFileModifiedTime(const std::string& filepath) {
@@ -51,7 +53,12 @@ void Injector::AsyncLoadCustomInjections() {
 		if (isShuttingDown.load()) {
 			return;
 		}
-		std::thread t([this]() {
+
+		if (reloadThread.joinable()) {
+			reloadThread.join();
+		}
+
+		reloadThread = std::thread([this]() {
 			try {
 				if (!isShuttingDown.load()) {
 					BackgroundReload();
@@ -61,10 +68,6 @@ void Injector::AsyncLoadCustomInjections() {
 				// Catch exceptions
 			}
 		});
-
-		if (t.joinable()) {
-			t.detach();
-		}
 	}
 	catch (...) {
 		// Thread creation error handling
@@ -473,25 +476,7 @@ void Injector::RenderCustomInjectTab(bool& show_info, std::string& info_msg) {
 			}
 			needsReload = true;
 
-			try {
-				std::thread t([this]() {
-					try {
-						if (!isShuttingDown.load()) {
-							BackgroundReload();
-						}
-					}
-					catch (...) {
-						// Catch exceptions
-					}
-				});
-
-				if (t.joinable()) {
-					t.detach();
-				}
-			}
-			catch (...) {
-				// Thread creation error handling
-			}
+			AsyncLoadCustomInjections();
 
 			info_msg = "Rop.CustomInjectReloading"_l;
 			show_info = true;
@@ -528,26 +513,7 @@ void Injector::RenderCustomInjectTab(bool& show_info, std::string& info_msg) {
 		std::string currentModTime = GetFileModifiedTime(injectionFilePath);
 		if (currentModTime != lastModifiedTime) {
 			needsReload = true;
-
-			try {
-				std::thread t([this]() {
-					try {
-						if (!isShuttingDown.load()) {
-							BackgroundReload();
-						}
-					}
-					catch (...) {
-						// Catch exceptions
-					}
-				});
-
-				if (t.joinable()) {
-					t.detach();
-				}
-			}
-			catch (...) {
-				// Thread creation error handling
-			}
+			AsyncLoadCustomInjections();
 		}
 	}
 }
@@ -633,9 +599,7 @@ void Injector::RenderCore() {
 		injectionFilePath = currentFilePath;
 		needsReload = true;
 		if (!isReloading.load()) {
-			std::thread([this]() {
-				BackgroundReload();
-			}).detach();
+			AsyncLoadCustomInjections();
 		}
 	}
 
