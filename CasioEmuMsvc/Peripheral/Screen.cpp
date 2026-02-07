@@ -18,6 +18,7 @@
 
 */
 #include "Screen.hpp"
+#include "Binary.h"
 #include "Chipset/Chipset.hpp"
 #include "Chipset/MMU.hpp"
 #include "Chipset/MMURegion.hpp"
@@ -209,6 +210,58 @@ namespace casioemu {
 				delete[] screen_buffer;
 			if (screen_buffer1)
 				delete[] screen_buffer1;
+		}
+		void SaveState(std::ostream& os) override {
+			Binary::Write(os, screen_contrast);
+			Binary::Write(os, screen_brightness);
+			Binary::Write(os, screen_scan_report_op1);
+			Binary::Write(os, screen_mode);
+			Binary::Write(os, screen_range);
+			Binary::Write(os, screen_select);
+			Binary::Write(os, screen_offset);
+			Binary::Write(os, screen_refresh_rate);
+			Binary::Write(os, screen_scan_report);
+			Binary::Write(os, screen_power);
+			Binary::Write(os, screen_scan_report_en);
+
+			size_t buffer_size = 0;
+			if constexpr (hardware_id == HW_TI) {
+				buffer_size = 192 * 9;
+			}
+			else {
+				buffer_size = (N_ROW + 1) * ROW_SIZE;
+			}
+			os.write((char*)screen_buffer, buffer_size);
+
+			if constexpr (hardware_id == HW_CLASSWIZ_II) {
+				os.write((char*)screen_buffer1, buffer_size);
+			}
+		}
+		void LoadState(std::istream& is) override {
+			Binary::Read(is, screen_contrast);
+			Binary::Read(is, screen_brightness);
+			Binary::Read(is, screen_scan_report_op1);
+			Binary::Read(is, screen_mode);
+			Binary::Read(is, screen_range);
+			Binary::Read(is, screen_select);
+			Binary::Read(is, screen_offset);
+			Binary::Read(is, screen_refresh_rate);
+			Binary::Read(is, screen_scan_report);
+			Binary::Read(is, screen_power);
+			Binary::Read(is, screen_scan_report_en);
+
+			size_t buffer_size = 0;
+			if constexpr (hardware_id == HW_TI) {
+				buffer_size = 192 * 9;
+			}
+			else {
+				buffer_size = (N_ROW + 1) * ROW_SIZE;
+			}
+			is.read((char*)screen_buffer, buffer_size);
+
+			if constexpr (hardware_id == HW_CLASSWIZ_II) {
+				is.read((char*)screen_buffer1, buffer_size);
+			}
 		}
 		void Initialise() override;
 		void Uninitialise() override;

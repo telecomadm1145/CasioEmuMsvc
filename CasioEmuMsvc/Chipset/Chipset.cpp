@@ -1,4 +1,5 @@
 ﻿#include "Chipset.hpp"
+#include "Binary.h"
 
 #include "5800Flash.h"
 #include "Audio.h"
@@ -926,5 +927,144 @@ namespace casioemu {
 	void Chipset::UIEvent(SDL_Event& event) {
 		for (auto peripheral : peripherals)
 			peripheral->UIEvent(event);
+	}
+
+	void Chipset::SaveState(std::ostream& os) {
+		Binary::Write(os, (int32_t)emulator.hardware_id);
+
+		Binary::Write(os, run_mode);
+		Binary::Write(os, interrupts_active);
+		Binary::Write(os, pending_interrupt_count);
+		Binary::Write(os, data_int_mask);
+		Binary::Write(os, data_int_pending);
+
+		Binary::Write(os, data_BLKCON);
+		Binary::Write(os, data_EXICON);
+
+		Binary::Write(os, data_FCON);
+		Binary::Write(os, data_FCON1);
+		Binary::Write(os, data_LTBR);
+		Binary::Write(os, data_HTBR);
+		Binary::Write(os, data_LTBADJ);
+
+		Binary::Write(os, LSCLK_output);
+		Binary::Write(os, HSCLK_output);
+		Binary::Write(os, ClockDiv);
+		Binary::Write(os, LSCLKMode);
+
+		Binary::Write(os, LSCLKTick);
+		Binary::Write(os, HSCLKTick);
+		Binary::Write(os, SYSCLKTick);
+		Binary::Write(os, LTBCReset);
+		Binary::Write(os, HTBCReset);
+
+		Binary::Write(os, LSCLKTickCounter);
+		Binary::Write(os, HSCLKTickCounter);
+		Binary::Write(os, HSCLKTimeCounter);
+		Binary::Write(os, SYSCLKTickCounter);
+		Binary::Write(os, LSCLKTimeCounter);
+		Binary::Write(os, LSCLKFreqAddition);
+		Binary::Write(os, LSCLKThresh);
+
+		// IO Ports
+		Binary::Write(os, Port0Inputlevel);
+		Binary::Write(os, Port1Inputlevel);
+		Binary::Write(os, Port0Outputlevel);
+		Binary::Write(os, Port1Outputlevel);
+		Binary::Write(os, UserInput_level_Port0);
+		Binary::Write(os, UserInput_level_Port1);
+		Binary::Write(os, UserInput_state_Port0);
+		Binary::Write(os, UserInput_state_Port1);
+
+		Binary::Write(os, SegmentAccess);
+		Binary::Write(os, isMIBlocked);
+
+		Binary::Write(os, tiDiagMode);
+		Binary::Write(os, tiKey);
+
+		// CPU
+		cpu.SaveState(os);
+		// if(epscpu) {
+		//    Binary::Write(os, *epscpu);
+		// }
+
+		for (auto p : peripherals) {
+			p->SaveState(os);
+		}
+	}
+
+	void Chipset::LoadState(std::istream& is) {
+		int32_t hid;
+		Binary::Read(is, hid);
+		if (hid != (int32_t)emulator.hardware_id) {
+			std::cerr << "Snapshot HardwareId mismatch!" << std::endl;
+			return;
+		}
+
+		Binary::Read(is, run_mode);
+		Binary::Read(is, interrupts_active);
+		Binary::Read(is, pending_interrupt_count);
+		Binary::Read(is, data_int_mask);
+		Binary::Read(is, data_int_pending);
+
+		Binary::Read(is, data_BLKCON);
+		Binary::Read(is, data_EXICON);
+
+		Binary::Read(is, data_FCON);
+		Binary::Read(is, data_FCON1);
+		Binary::Read(is, data_LTBR);
+		Binary::Read(is, data_HTBR);
+		Binary::Read(is, data_LTBADJ);
+
+		Binary::Read(is, LSCLK_output);
+		Binary::Read(is, HSCLK_output);
+		Binary::Read(is, ClockDiv);
+		Binary::Read(is, LSCLKMode);
+
+		Binary::Read(is, LSCLKTick);
+		Binary::Read(is, HSCLKTick);
+		Binary::Read(is, SYSCLKTick);
+		Binary::Read(is, LTBCReset);
+		Binary::Read(is, HTBCReset);
+
+		Binary::Read(is, LSCLKTickCounter);
+		Binary::Read(is, HSCLKTickCounter);
+		Binary::Read(is, HSCLKTimeCounter);
+		Binary::Read(is, SYSCLKTickCounter);
+		Binary::Read(is, LSCLKTimeCounter);
+		Binary::Read(is, LSCLKFreqAddition);
+		Binary::Read(is, LSCLKThresh);
+
+		Binary::Read(is, Port0Inputlevel);
+		Binary::Read(is, Port1Inputlevel);
+		Binary::Read(is, Port0Outputlevel);
+		Binary::Read(is, Port1Outputlevel);
+		Binary::Read(is, UserInput_level_Port0);
+		Binary::Read(is, UserInput_level_Port1);
+		Binary::Read(is, UserInput_state_Port0);
+		Binary::Read(is, UserInput_state_Port1);
+
+		Binary::Read(is, SegmentAccess);
+		Binary::Read(is, isMIBlocked);
+
+		Binary::Read(is, tiDiagMode);
+		Binary::Read(is, tiKey);
+
+		cpu.LoadState(is);
+		// if(epscpu) {
+		//	Binary::Read(is, *epscpu);
+		// }
+
+		for (auto p : peripherals) {
+			p->LoadState(is);
+		}
+
+		// Restore interrupt masks
+		if (MaskableInterrupts) {
+			size_t mask = (static_cast<size_t>(1) << (EffectiveMICount + 1)) - (WDT_enabled ? 1 : 2);
+			for (size_t i = 0; i < EffectiveMICount; i++) {
+				MaskableInterrupts[i].SetEnabled(data_int_mask & (static_cast<unsigned long long>(1) << (i + 1)));
+			}
+		}
 	}
 } // namespace casioemu

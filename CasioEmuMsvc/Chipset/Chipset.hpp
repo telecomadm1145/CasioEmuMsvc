@@ -176,6 +176,9 @@ namespace casioemu {
 			return nullptr;
 		}
 
+		void SaveState(std::ostream&);
+		void LoadState(std::istream&);
+
 		friend class CPU;
 	};
 } // namespace casioemu

@@ -3,6 +3,7 @@
 
 #include <SDL.h>
 #include <any>
+#include <iostream>
 
 namespace casioemu {
 	class Emulator;
@@ -36,6 +37,8 @@ namespace casioemu {
 		virtual void Reset() {}
 		virtual void ResetLSCLK() {}
 		virtual void* QueryInterface(const char*) { return 0; }
+		virtual void SaveState(std::ostream&) {}
+		virtual void LoadState(std::istream&) {}
 		virtual ~Peripheral() {}
 	};
 } // namespace casioemu

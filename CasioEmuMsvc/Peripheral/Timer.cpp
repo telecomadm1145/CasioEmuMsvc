@@ -1,4 +1,5 @@
 ﻿#include "Timer.hpp"
+#include "Binary.h"
 
 #include "Chipset/Chipset.hpp"
 #include "Chipset/MMU.hpp"
@@ -25,6 +26,24 @@ namespace casioemu {
 
 	public:
 		using Peripheral::Peripheral;
+
+		void SaveState(std::ostream& os) override {
+			Binary::Write(os, data_counter);
+			Binary::Write(os, data_interval);
+			Binary::Write(os, data_F024);
+			Binary::Write(os, data_control);
+			Binary::Write(os, ext_to_int_counter);
+			Binary::Write(os, TimerFreqDiv);
+		}
+
+		void LoadState(std::istream& is) override {
+			Binary::Read(is, data_counter);
+			Binary::Read(is, data_interval);
+			Binary::Read(is, data_F024);
+			Binary::Read(is, data_control);
+			Binary::Read(is, ext_to_int_counter);
+			Binary::Read(is, TimerFreqDiv);
+		}
 
 		void Initialise();
 		void Reset();
@@ -193,6 +212,30 @@ namespace casioemu {
 		MMURegion TMStart{};
 		uint16_t a{};
 		using Peripheral::Peripheral;
+		void SaveState(std::ostream& os) override {
+			for (auto& unit : Units) {
+				Binary::Write(os, unit.tm_data_d);
+				Binary::Write(os, unit.tm_counter_d);
+				Binary::Write(os, unit.tm_mode_d);
+				Binary::Write(os, unit.tm_int_stat_d);
+				Binary::Write(os, unit.tm_int_clr_d);
+				Binary::Write(os, unit.tm_cnt);
+				Binary::Write(os, unit.started);
+			}
+			Binary::Write(os, a);
+		}
+		void LoadState(std::istream& is) override {
+			for (auto& unit : Units) {
+				Binary::Read(is, unit.tm_data_d);
+				Binary::Read(is, unit.tm_counter_d);
+				Binary::Read(is, unit.tm_mode_d);
+				Binary::Read(is, unit.tm_int_stat_d);
+				Binary::Read(is, unit.tm_int_clr_d);
+				Binary::Read(is, unit.tm_cnt);
+				Binary::Read(is, unit.started);
+			}
+			Binary::Read(is, a);
+		}
 		void Initialise() override {
 			for (auto& unit : Units)
 				unit.Initialise(emulator);

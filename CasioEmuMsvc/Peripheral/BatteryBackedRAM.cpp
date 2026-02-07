@@ -1,4 +1,5 @@
 ﻿#include "BatteryBackedRAM.hpp"
+#include "Binary.h"
 #include "Emulator.hpp"
 #include "MMURegion.hpp"
 #include "Peripheral.hpp"
@@ -42,6 +43,41 @@ namespace casioemu {
 		void* GetPRam() override { return pram_buffer; }
 		void* QueryInterface(const char* name) override {
 			return strcmp(name, typeid(IRam).name()) == 0 ? static_cast<IRam*>(this) : nullptr;
+		}
+
+		void SaveState(std::ostream& os) override {
+			Binary::Write(os, ram_size);
+			os.write((char*)ram_buffer, ram_size);
+			bool has_pram = (pram_buffer != nullptr);
+			Binary::Write(os, has_pram);
+			if (has_pram) {
+				os.write((char*)pram_buffer, 0x8000);
+			}
+		}
+
+		void LoadState(std::istream& is) override {
+			size_t sz;
+			Binary::Read(is, sz);
+			// Assume size match for now as HardwareId check in Chipset should ensure it.
+			if (sz > ram_size) {
+				// Should not happen if ID matches.
+				is.read((char*)ram_buffer, ram_size);
+				is.ignore(sz - ram_size);
+			}
+			else {
+				is.read((char*)ram_buffer, sz);
+			}
+
+			bool has_pram;
+			Binary::Read(is, has_pram);
+			if (has_pram) {
+				if (pram_buffer) {
+					is.read((char*)pram_buffer, 0x8000);
+				}
+				else {
+					is.ignore(0x8000);
+				}
+			}
 		}
 	};
 

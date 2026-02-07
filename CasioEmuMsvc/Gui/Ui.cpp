@@ -15,6 +15,8 @@
 #include "LabelViewer.h"
 #include "MemBreakPoint.hpp"
 #include "Random.hpp"
+#include "SnapshotWindow.hpp"
+#include "../Snapshot.hpp"
 #include "Theme.h"
 #include "VariableWindow.h"
 #include "WatchWindow.hpp"
@@ -36,6 +38,8 @@ char* n_ram_buffer = 0;
 casioemu::MMU* me_mmu = 0;
 SDL_Window* window = 0;
 SDL_Renderer* renderer = 0;
+
+casioemu::SnapshotManager g_snapshotManager;
 
 std::vector<Label> g_labels;
 
@@ -234,6 +238,7 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 
 	for (auto item : std::initializer_list<UIWindow*>{
 			 new VariableWindow(),
+			 new SnapshotWindow(g_snapshotManager),
 			 new HwController(),
 			 new LabelViewer(),
 			 new WatchWindow(),

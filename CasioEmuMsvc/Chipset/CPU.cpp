@@ -1,4 +1,5 @@
 ﻿#include "CPU.hpp"
+#include "Binary.h"
 
 #include "Chipset.hpp"
 #include "Emulator.hpp"
@@ -481,5 +482,71 @@ namespace casioemu {
 #else
 		return "Disabled";
 #endif
+	}
+
+	void CPU::SaveState(std::ostream& os) {
+		for (auto& r : reg_r) Binary::Write(os, r.raw);
+		for (auto& r : reg_cr) Binary::Write(os, r.raw);
+		Binary::Write(os, reg_pc.raw);
+		Binary::Write(os, reg_csr.raw);
+		for (auto& r : reg_elr) Binary::Write(os, r.raw);
+		for (auto& r : reg_ecsr) Binary::Write(os, r.raw);
+		for (auto& r : reg_epsw) Binary::Write(os, r.raw);
+		Binary::Write(os, reg_sp.raw);
+		Binary::Write(os, reg_ea.raw);
+		Binary::Write(os, reg_dsr.raw);
+
+		Binary::Write(os, impl_flags_changed);
+		Binary::Write(os, impl_flags_out);
+		Binary::Write(os, impl_flags_in);
+		Binary::Write(os, impl_shift_buffer);
+		Binary::Write(os, impl_opcode);
+		Binary::Write(os, impl_long_imm);
+		Binary::Write(os, impl_operands);
+		Binary::Write(os, impl_hint);
+		Binary::Write(os, impl_csr_mask);
+
+		Binary::Write(os, fetch_addition);
+
+		Binary::Write(os, impl_last_dsr);
+
+		Binary::Write(os, dsr_mask);
+
+		Binary::Write(os, cpu_run_stat);
+		Binary::Write(os, memory_model);
+		Binary::Write(os, cpu_model);
+	}
+
+	void CPU::LoadState(std::istream& is) {
+		for (auto& r : reg_r) Binary::Read(is, r.raw);
+		for (auto& r : reg_cr) Binary::Read(is, r.raw);
+		Binary::Read(is, reg_pc.raw);
+		Binary::Read(is, reg_csr.raw);
+		for (auto& r : reg_elr) Binary::Read(is, r.raw);
+		for (auto& r : reg_ecsr) Binary::Read(is, r.raw);
+		for (auto& r : reg_epsw) Binary::Read(is, r.raw);
+		Binary::Read(is, reg_sp.raw);
+		Binary::Read(is, reg_ea.raw);
+		Binary::Read(is, reg_dsr.raw);
+
+		Binary::Read(is, impl_flags_changed);
+		Binary::Read(is, impl_flags_out);
+		Binary::Read(is, impl_flags_in);
+		Binary::Read(is, impl_shift_buffer);
+		Binary::Read(is, impl_opcode);
+		Binary::Read(is, impl_long_imm);
+		Binary::Read(is, impl_operands);
+		Binary::Read(is, impl_hint);
+		Binary::Read(is, impl_csr_mask);
+
+		Binary::Read(is, fetch_addition);
+
+		Binary::Read(is, impl_last_dsr);
+
+		Binary::Read(is, dsr_mask);
+
+		Binary::Read(is, cpu_run_stat);
+		Binary::Read(is, memory_model);
+		Binary::Read(is, cpu_model);
 	}
 } // namespace casioemu

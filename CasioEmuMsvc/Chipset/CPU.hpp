@@ -133,6 +133,8 @@ namespace casioemu {
 		bool GetMasterInterruptEnable();
 		std::string GetBacktrace() const;
 
+		void SaveState(std::ostream&);
+		void LoadState(std::istream&);
 
 #ifdef DBG
 		struct StackFrame {
