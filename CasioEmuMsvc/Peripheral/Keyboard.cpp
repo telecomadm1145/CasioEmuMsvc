@@ -13,9 +13,12 @@
 #include <fstream>
 #include <thread>
 #include <unordered_map>
+#include <typeinfo>
+#include <vector>
 
 namespace casioemu {
-	class Keyboard : public Peripheral {
+	class Keyboard : public Peripheral, public IKeyLogger {
+		std::vector<KeyLogEntry> key_log;
 		MMURegion region_ko_mask, region_ko, region_ki, region_input_mode, region_input_filter;
 		uint16_t keyboard_out, keyboard_out_mask;
 		uint8_t keyboard_in, input_mode, input_filter, keyboard_ghost[8], ki_ghost[8];
@@ -43,6 +46,7 @@ namespace casioemu {
 			uint8_t code;
 			bool pressed, stuck;
 			SDL_FingerID pressingFingerId; // ID of the finger currently pressing this button
+			std::string name;
 		} buttons[64];
 
 		// Maps from keycode to an index to (buttons).
@@ -72,6 +76,20 @@ namespace casioemu {
 		void RecalculateGhost();
 		void RecalculateEmuInput(); // Declaration for new function
 		bool AnyFingerPressing();   // Declaration for new function
+
+		void* QueryInterface(const char* name) override {
+			if (std::string(name) == typeid(IKeyLogger).name())
+				return static_cast<IKeyLogger*>(this);
+			return Peripheral::QueryInterface(name);
+		}
+
+		const std::vector<KeyLogEntry>& GetKeyLog() override {
+			return key_log;
+		}
+
+		void ClearKeyLog() override {
+			key_log.clear();
+		}
 	};
 	void Keyboard::Initialise() {
 		renderer = emulator.GetRenderer();
@@ -304,6 +322,7 @@ namespace casioemu {
 
 			Button& button = buttons[button_ix];
 			button = {};
+			button.name = btn.keyname;
 
 			if (code == 0xFF)
 				button.type = Button::BT_POWER;
@@ -626,6 +645,11 @@ namespace casioemu {
 		if (button.type == Button::BT_BUTTON && state_effectively_changed) {
 			if (button.pressed) { // Vibrate only if it results in a pressed state
 				Vibration::vibrate(100);
+				// Log the key press
+				KeyLogEntry entry;
+				entry.key_name = button.name;
+				entry.timestamp = emulator.cycles.cycles_emulated;
+				key_log.push_back(entry);
 			}
 			if (real_hardware) {
 				RecalculateGhost(); // This internally calls RecalculateKI

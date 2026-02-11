@@ -190,4 +190,7 @@ Files.Save=保存
 Files.Open=打开
 Files.Cancel=取消
 
+KeyLogWindow.Title=按键记录
+KeyLogWindow.Clear=清除记录
+
 placeholder2=a)"

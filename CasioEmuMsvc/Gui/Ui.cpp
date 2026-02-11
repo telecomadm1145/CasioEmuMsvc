@@ -9,6 +9,7 @@
 #include "Editors.h"
 #include "HwController.h"
 #include "Injector.hpp"
+#include "KeyLogWindow.hpp"
 #include "LabelFile.h"
 #include "LabelViewer.h"
 #include "MemBreakPoint.hpp"
@@ -248,6 +249,7 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 			 injector = new Injector(),
 			 membp = new Breakpoints(),
 			 CreateAddressWindow(),
+			 new KeyLogWindow(),
 			 // MakeAssemblerUI(),
 			 MakeThemeWindow(),
 			 CreateBitmapViewer()})

@@ -190,4 +190,7 @@ Files.Save=Save
 Files.Open=Open
 Files.Cancel=Cancel
 
+KeyLogWindow.Title=Key Log
+KeyLogWindow.Clear=Clear Log
+
 placeholder2=a)"
