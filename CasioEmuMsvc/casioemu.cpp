@@ -41,8 +41,11 @@
 #include "StartupUi/StartupUi.h"
 #include <Gui.h>
 #include <Plugin/PluginMan.h>
+#include <ThemeManager.h>
 
 using namespace casioemu;
+SDL_Surface* background;
+SDL_Texture* bg_txt;
 
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
@@ -131,10 +134,11 @@ int main(int argc, char* argv[]) {
 #ifdef DBG
 	test_gui(&guiCreated, emulator.window, emulator.renderer);
 #endif
-	SDL_Surface* background = IMG_Load("background.jpg");
-	SDL_Texture* bg_txt = 0;
+	background = IMG_Load("background.jpg");
+	bg_txt = 0;
 	if (background) {
 		bg_txt = SDL_CreateTextureFromSurface(renderer, background);
+		ThemeManager::Instance().ExtractAndApplyAutoTint(bg_txt, renderer);
 	}
 
 	SDL_ShowWindow(emulator.window);
@@ -316,29 +320,16 @@ int main(int argc, char* argv[]) {
 			emulator.Frame();
 			SDL_RenderPresent(emulator.renderer);
 #endif
-			if (RebuildFont_Requested) {
-				RebuildFont(RebuildFont_Scale);
-				if (RebuildFont_Scale != 0) {
-					ImGuiStyle igs = ImGuiStyle();
-					ImGui::StyleColorsDark(&igs);
-					ImGuiStyle& style = igs;
-					style.WindowRounding = 4.0f;
-					style.Colors[ImGuiCol_WindowBg].w = 0.9f;
-					style.FrameRounding = 4.0f;
-					style.ScaleAllSizes(RebuildFont_Scale);
-					ImGui::GetStyle() = igs;
-				}
-				ImGui_ImplSDLRenderer2_DestroyDeviceObjects();
-				RebuildFont_Requested = 0;
-			}
-			if (ReloadBg_Requested) {
+			ThemeManager::Instance().ProcessFontRebuild();
+			if (ThemeManager::Instance().IsBgReloadRequested()) {
 				SDL_DestroyTexture(bg_txt);
 				SDL_FreeSurface(background);
 				background = IMG_Load("background.jpg");
 				if (background) {
 					bg_txt = SDL_CreateTextureFromSurface(renderer, background);
+					ThemeManager::Instance().ExtractAndApplyAutoTint(bg_txt, renderer);
 				}
-				ReloadBg_Requested = 0;
+				ThemeManager::Instance().ClearBgReloadRequest();
 			}
 			while (SDL_PollEvent(&event)) {
 				if (event.type != frame_event)

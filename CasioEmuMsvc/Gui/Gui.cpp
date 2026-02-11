@@ -1,3 +1,2 @@
-﻿int RebuildFont_Requested = 0;
-int ReloadBg_Requested = 0;
-float RebuildFont_Scale = 0;
+﻿// Global theme/font/scaling state has been moved to ThemeManager.
+// This file is intentionally left minimal for backward compatibility.

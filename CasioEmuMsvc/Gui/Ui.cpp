@@ -50,7 +50,7 @@ void gui_loop() {
 	ImGuiIO& io = ImGui::GetIO();
 
 #ifdef __ANDROID__
-	UI::Scaling::UpdateUIScale();
+	ThemeManager::Instance().UpdateUIScale();
 #endif
 
 	ImGui_ImplSDLRenderer2_NewFrame();
@@ -130,12 +130,13 @@ void gui_loop() {
 			ImGuiWindowFlags_NoTitleBar |
 			ImGuiWindowFlags_NoMove);
 
-	float safeAreaPadding = UI::Scaling::padding * 1.5f;
+	auto& tm = ThemeManager::Instance();
+	float safeAreaPadding = tm.padding * 1.5f;
 	ImGui::SetWindowPos(ImVec2(safeAreaPadding, safeAreaPadding));
 
 	float displayWidth = ImGui::GetIO().DisplaySize.x;
 	float totalWidth = displayWidth - (safeAreaPadding * 2);
-	float spacingBetweenElements = UI::Scaling::padding * 1.2f;
+	float spacingBetweenElements = tm.padding * 1.2f;
 	float buttonWidth = (totalWidth - spacingBetweenElements * 2) * 0.25f;
 	float comboWidth = totalWidth - (buttonWidth * 2) - (spacingBetweenElements * 2);
 
@@ -153,7 +154,7 @@ void gui_loop() {
 	}
 
 	ImGui::SameLine(0, spacingBetweenElements);
-	ImVec2 buttonSize(buttonWidth, UI::Scaling::buttonHeight * 1.2f);
+	ImVec2 buttonSize(buttonWidth, tm.buttonHeight * 1.2f);
 	if (ImGui::Button("Open", buttonSize)) {
 		if (current_filter != 0)
 			current_filter->open = true;
@@ -188,8 +189,8 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 	window = SDL_CreateWindow("CasioEmuMsvc Debugger",
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
-		(int)UI::Scaling::windowWidth,
-		(int)UI::Scaling::windowHeight,
+		(int)ThemeManager::Instance().windowWidth,
+		(int)ThemeManager::Instance().windowHeight,
 		SDL_WINDOW_RESIZABLE);
 #else
 	window = SDL_CreateWindow("CasioEmuMsvc Debugger",
@@ -212,11 +213,11 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 	ImGuiIO& io = ImGui::GetIO();
 
 #ifdef __ANDROID__
-	UI::Scaling::UpdateUIScale();
+	ThemeManager::Instance().UpdateUIScale();
 #endif
 
 	RebuildFont();
-	SetupDefaultTheme();
+	// SetupDefaultTheme();
 
 	io.WantCaptureKeyboard = true;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;

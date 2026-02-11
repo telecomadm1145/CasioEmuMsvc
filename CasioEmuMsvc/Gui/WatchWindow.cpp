@@ -51,7 +51,7 @@ void WatchWindow::ShowRX() {
 	if (m_emu->chipset.epscpu) {
 	}
 	else {
-		ImGui::TextColored(ImVec4(0, 200, 0, 255), "RXn: ");
+		ImGui::TextColored(~ImVec4(0, 200, 0, 255), "RXn: ");
 		for (int i = 0; i < 16; i++) {
 			ImGui::SameLine();
             snprintf(id, sizeof(id), "##data%d", i);
@@ -68,7 +68,7 @@ void WatchWindow::ShowRX() {
 		}
 	}
 	auto show_sfr = ([&](char* ptr, const char* label, int i, int width = 4) {
-		ImGui::TextColored(ImVec4(0, 200, 0, 255), "%s", label);
+		ImGui::TextColored(~ImVec4(0, 200, 0, 255), "%s", label);
 		ImGui::SameLine();
         snprintf(id, sizeof(id), "##sfr%d", i);
 		ImGui::SetNextItemWidth(char_width * width + 5);
@@ -104,7 +104,7 @@ void WatchWindow::ShowRX() {
 }
 void WatchWindow::ModRX() {
 	char id[10];
-	ImGui::TextColored(ImVec4(0, 200, 0, 255), "RXn: ");
+	ImGui::TextColored(~ImVec4(0, 200, 0, 255), "RXn: ");
 	for (int i = 0; i < 16; i++) {
 		ImGui::SameLine();
         snprintf(id, sizeof(id), "##data%d", i);
@@ -123,7 +123,7 @@ void WatchWindow::ModRX() {
 	}
 
 	auto show_sfr = ([&](char* ptr, const char* label, int i, int width = 4) {
-		ImGui::TextColored(ImVec4(0, 200, 0, 255), "%s", label);
+		ImGui::TextColored(~ImVec4(0, 200, 0, 255), "%s", label);
 		ImGui::SameLine();
         snprintf(id, sizeof(id), "##sfr%d", i);
 		ImGui::SetNextItemWidth(char_width * width + 2);

@@ -246,6 +246,13 @@
     <ClCompile Include="asmjit\src\**\*.cpp" />
     <ClCompile Include="asmjit\src\**\*.cpp" />
     <ClCompile Include="asmjit\src\**\*.cpp" />
+    <ClCompile Include="Gui\ThemeManager.cpp" />
+    <ClCompile Include="Ext\cam\cam.cc" />
+    <ClCompile Include="Ext\cam\hct.cc" />
+    <ClCompile Include="Ext\cam\hct_solver.cc" />
+    <ClCompile Include="Ext\cam\viewing_conditions.cc" />
+    <ClCompile Include="Ext\cam\utils.cc" />
+    <ClCompile Include="Ext\cam\tones.cc" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Ext\3rd_licenses.h" />
@@ -615,6 +622,13 @@
     <ClInclude Include="asmjit\src\**\*.h" />
     <ClInclude Include="asmjit\src\**\*.h" />
     <ClInclude Include="asmjit\src\**\*.h" />
+    <ClInclude Include="Gui\ThemeManager.h" />
+    <ClInclude Include="Ext\cam\cam.h" />
+    <ClInclude Include="Ext\cam\hct.h" />
+    <ClInclude Include="Ext\cam\hct_solver.h" />
+    <ClInclude Include="Ext\cam\viewing_conditions.h" />
+    <ClInclude Include="Ext\cam\utils.h" />
+    <ClInclude Include="Ext\cam\tones.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

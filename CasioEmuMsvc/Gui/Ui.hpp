@@ -2,11 +2,10 @@
 #include "Chipset/MMU.hpp"
 #include "Emulator.hpp"
 #include "LabelFile.h"
+#include "ThemeManager.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_internal.h"
-#ifdef __ANDROID__
-#include "UIScaling.h"
-#endif
+
 
 class CodeViewer;
 CodeViewer* test_gui(bool* guiCreated, SDL_Window*, SDL_Renderer*);
@@ -25,8 +24,8 @@ public:
 	UIWindow(const char* name) : name(name) {
 #ifdef __ANDROID__
 		inital_size = ImVec2(
-			800 * UI::Scaling::fontScale,
-			800 * UI::Scaling::fontScale);
+			800 * ThemeManager::Instance().fontScale,
+			800 * ThemeManager::Instance().fontScale);
 #else
 		inital_size = ImVec2(800, 800);
 #endif
@@ -42,7 +41,7 @@ public:
 			return;
 #ifdef __ANDROID__
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-			ImVec2(UI::Scaling::padding, UI::Scaling::padding));
+			ImVec2(ThemeManager::Instance().padding, ThemeManager::Instance().padding));
 #endif
 		if (bring_to_front_requested) {
 			ImGui::SetNextWindowFocus();

@@ -13,19 +13,22 @@
 #include "SysDialog.h"
 #include "Ui.hpp"
 #include <Gui.h>
+#include <SDL.h>
 #include <SDL_image.h>
 #include <array>
 #include <filesystem>
 #include <imgui.h>
 #include <iostream>
+
 #ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
+
 #endif
 #include "Ext/Random.hpp"
 
 #ifdef __ANDROID__
-#include "../Gui/UIScaling.h"
+#include "../Gui/ThemeManager.h"
 #include <SDL.h>
 #include <SDL_system.h>
 #include <android/log.h>
@@ -114,39 +117,40 @@ class ModelEditor : public UIWindow {
 	char buffer2[12];
 
 	casioemu::ButtonInfo* btninfo{};
-    bool init_failed = false;
-    std::string selected_sprite_key;
+	bool init_failed = false;
+	std::string selected_sprite_key;
 
 public:
 	ModelEditor(std::filesystem::path path) : UIWindow("Model Editor##114514"), pth(path) {
-        try {
-            std::filesystem::path configPath = path / "config.bin";
-            std::error_code ec;
-            if (!std::filesystem::exists(configPath) || !std::filesystem::is_regular_file(configPath, ec)) {
-                 throw std::runtime_error("Cannot open config.bin (not found or is a directory).");
-            }
-            std::ifstream ifs(configPath, std::ios::binary);
-            if (!ifs)
-                throw std::runtime_error("Cannot open config.bin.");
-            Binary::Read(ifs, mi);
-            v = mi.csr_mask;
-            k = mi.pd_value;
-            strncpy(path1, mi.interface_path.c_str(), sizeof(path1) - 1);
-            path1[sizeof(path1) - 1] = '\0';
-            strncpy(path2, mi.rom_path.c_str(), sizeof(path2) - 1);
-            path2[sizeof(path2) - 1] = '\0';
-            strncpy(path3, mi.flash_path.c_str(), sizeof(path3) - 1);
-            path3[sizeof(path3) - 1] = '\0';
-            strncpy(name, mi.model_name.c_str(), sizeof(name) - 1);
-            name[sizeof(name) - 1] = '\0';
-            color[0] = mi.ink_color.r / 255.0f;
-            color[1] = mi.ink_color.g / 255.0f;
-            color[2] = mi.ink_color.b / 255.0f;
-            LoadInterface();
-        } catch (const std::exception& e) {
-            std::cerr << "Failed to load ModelEditor: " << e.what() << std::endl;
-            init_failed = true;
-        }
+		try {
+			std::filesystem::path configPath = path / "config.bin";
+			std::error_code ec;
+			if (!std::filesystem::exists(configPath) || !std::filesystem::is_regular_file(configPath, ec)) {
+				throw std::runtime_error("Cannot open config.bin (not found or is a directory).");
+			}
+			std::ifstream ifs(configPath, std::ios::binary);
+			if (!ifs)
+				throw std::runtime_error("Cannot open config.bin.");
+			Binary::Read(ifs, mi);
+			v = mi.csr_mask;
+			k = mi.pd_value;
+			strncpy(path1, mi.interface_path.c_str(), sizeof(path1) - 1);
+			path1[sizeof(path1) - 1] = '\0';
+			strncpy(path2, mi.rom_path.c_str(), sizeof(path2) - 1);
+			path2[sizeof(path2) - 1] = '\0';
+			strncpy(path3, mi.flash_path.c_str(), sizeof(path3) - 1);
+			path3[sizeof(path3) - 1] = '\0';
+			strncpy(name, mi.model_name.c_str(), sizeof(name) - 1);
+			name[sizeof(name) - 1] = '\0';
+			color[0] = mi.ink_color.r / 255.0f;
+			color[1] = mi.ink_color.g / 255.0f;
+			color[2] = mi.ink_color.b / 255.0f;
+			LoadInterface();
+		}
+		catch (const std::exception& e) {
+			std::cerr << "Failed to load ModelEditor: " << e.what() << std::endl;
+			init_failed = true;
+		}
 	}
 	void RenderSprite(const casioemu::SpriteInfo& sprite, ImTextureID texture_id, const ImVec2& texture_size, const ImVec2& render_size) {
 
@@ -220,13 +224,13 @@ public:
 		}
 	}
 	void RenderCore() override {
-        if (init_failed) {
-            ImGui::TextColored({1.0f, 0.0f, 0.0f, 1.0f}, "Failed to load model configuration. The file might be corrupted.");
-            if (ImGui::Button("Close")) {
-                open = false;
-            }
-            return;
-        }
+		if (init_failed) {
+			ImGui::TextColored({1.0f, 0.0f, 0.0f, 1.0f}, "Failed to load model configuration. The file might be corrupted.");
+			if (ImGui::Button("Close")) {
+				open = false;
+			}
+			return;
+		}
 
 		auto y = ImGui::GetCursorPosY();
 		auto scaleFactor = (400.f / imgSp.src.w);
@@ -237,11 +241,11 @@ public:
 				if (sp.first != "rsd_pixel" && sp.first != "rsd_interface") {
 					ImGui::SetCursorPos({(float)sp.second.dest.x * scaleFactor, (float)sp.second.dest.y * scaleFactor + y});
 					RenderSprite(sp.second, (ImTextureID)sdl_t, imgSz, {scaleFactor * (float)sp.second.dest.w, scaleFactor * (float)sp.second.dest.h});
-                    if (sp.first == selected_sprite_key) {
-                        auto min_p = ImGui::GetItemRectMin();
-                        auto max_p = ImGui::GetItemRectMax();
-                        ImGui::GetWindowDrawList()->AddRect(min_p, max_p, IM_COL32(255, 0, 0, 255), 0.0f, 0, 2.0f);
-                    }
+					if (sp.first == selected_sprite_key) {
+						auto min_p = ImGui::GetItemRectMin();
+						auto max_p = ImGui::GetItemRectMax();
+						ImGui::GetWindowDrawList()->AddRect(min_p, max_p, IM_COL32(255, 0, 0, 255), 0.0f, 0, 2.0f);
+					}
 				}
 			}
 			auto sp2 = mi.sprites["rsd_pixel"];
@@ -267,121 +271,122 @@ public:
 			ImGui::PushID(btn.kiko + 20);
 			if (ImGui::Button(btn.keyname.c_str(), {scaleFactor * btn.rect.w, scaleFactor * btn.rect.h})) {
 				btninfo = &btn;
-                strncpy(buffer, btn.keyname.c_str(), sizeof(buffer) - 1);
-                buffer[sizeof(buffer) - 1] = '\0';
+				strncpy(buffer, btn.keyname.c_str(), sizeof(buffer) - 1);
+				buffer[sizeof(buffer) - 1] = '\0';
 				SDL_itoa(btn.kiko, buffer2, 16);
 			}
 			ImGui::PopID();
 		}
 		ImGui::SetCursorPos({400, y});
 		if (ImGui::BeginChild("Model Info")) {
-            if (ImGui::BeginTabBar("ModelEditorTabs")) {
-                if (ImGui::BeginTabItem("General")) {
-                    ImGui::TextUnformatted("ModelEditor.Name"_lc);
-                    if (ImGui::InputText("##name", name, 260)) {
-                        mi.model_name = name;
-                    }
-                    ImGui::TextUnformatted("ModelEditor.InterfacePath"_lc);
-                    if (ImGui::InputText("##path1", path1, 260)) {
-                        mi.interface_path = path1;
-                    }
-                    ImGui::TextUnformatted("ModelEditor.RomPath"_lc);
-                    if (ImGui::InputText("##path2", path2, 260)) {
-                        mi.rom_path = path2;
-                    }
-                    ImGui::TextUnformatted("ModelEditor.FlashDumpPath"_lc);
-                    if (ImGui::InputText("##path3", path3, 260)) {
-                        mi.flash_path = path3;
-                    }
-                    ImGui::TextUnformatted("ModelEditor.CsrMask"_lc);
-                    if (ImGui::SliderInt("##a", &v, 0, 15, "0x%X")) {
-                        mi.csr_mask = v;
-                    }
-                    ImGui::TextUnformatted("ModelEditor.PdValue"_lc);
-                    if (ImGui::SliderInt("##q", &k, 0, 15, "0x%X")) {
-                        mi.pd_value = k;
-                    }
-                    ImGui::TextUnformatted("ModelEditor.HardwareType"_lc);
-                    ImGui::SetNextItemWidth(80);
-                    if (ImGui::BeginCombo("##cb", items[mi.hardware_id])) {
-                        for (int n = 0; n < IM_ARRAYSIZE(items); n++) {
-                            bool is_selected = (mi.hardware_id == n);
-                            if (ImGui::Selectable(items[n], is_selected)) {
-                                mi.hardware_id = n;
-                            }
-                            if (is_selected)
-                                ImGui::SetItemDefaultFocus();
-                        }
-                        ImGui::EndCombo();
-                    }
-                    ImGui::Checkbox("ModelEditor.SampleRom"_lc, &mi.is_sample_rom);
-                    ImGui::Checkbox("ModelEditor.NewRenderMethod"_lc, &mi.enable_new_screen);
-                    ImGui::Checkbox("ModelEditor.RealRom"_lc, &mi.real_hardware);
-                    ImGui::Checkbox("ModelEditor.LegacyKO"_lc, &mi.legacy_ko);
-                    if (ImGui::ColorEdit3("ModelEditor.InkColor"_lc, color)) {
-                        mi.ink_color.r = color[0] * 255;
-                        mi.ink_color.g = color[1] * 255;
-                        mi.ink_color.b = color[2] * 255;
-                    }
-                    ImGui::EndTabItem();
-                }
-                if (ImGui::BeginTabItem("Buttons")) {
-                    if (btninfo) {
-                        if (ImGui::InputText("ModelEditor.KeyName"_lc, buffer, 260)) {
-                            btninfo->keyname = buffer;
-                        }
-                        if (ImGui::InputText("ModelEditor.KIKO"_lc, buffer2, 12)) {
-                            btninfo->kiko = SDL_strtol(buffer2, 0, 16);
-                        }
-                        ImGui::InputInt("X", &btninfo->rect.x);
-                        ImGui::InputInt("Y", &btninfo->rect.y);
-                        ImGui::InputInt("W", &btninfo->rect.w);
-                        ImGui::InputInt("H", &btninfo->rect.h);
-                    } else {
-                        ImGui::Text("Select a button from the preview to edit.");
-                    }
-                    ImGui::EndTabItem();
-                }
-                if (ImGui::BeginTabItem("Sprites")) {
-                    ImGui::Text("Sprite List");
-                    ImGui::BeginChild("SpriteList", {0, 150}, true);
+			if (ImGui::BeginTabBar("ModelEditorTabs")) {
+				if (ImGui::BeginTabItem("General")) {
+					ImGui::TextUnformatted("ModelEditor.Name"_lc);
+					if (ImGui::InputText("##name", name, 260)) {
+						mi.model_name = name;
+					}
+					ImGui::TextUnformatted("ModelEditor.InterfacePath"_lc);
+					if (ImGui::InputText("##path1", path1, 260)) {
+						mi.interface_path = path1;
+					}
+					ImGui::TextUnformatted("ModelEditor.RomPath"_lc);
+					if (ImGui::InputText("##path2", path2, 260)) {
+						mi.rom_path = path2;
+					}
+					ImGui::TextUnformatted("ModelEditor.FlashDumpPath"_lc);
+					if (ImGui::InputText("##path3", path3, 260)) {
+						mi.flash_path = path3;
+					}
+					ImGui::TextUnformatted("ModelEditor.CsrMask"_lc);
+					if (ImGui::SliderInt("##a", &v, 0, 15, "0x%X")) {
+						mi.csr_mask = v;
+					}
+					ImGui::TextUnformatted("ModelEditor.PdValue"_lc);
+					if (ImGui::SliderInt("##q", &k, 0, 15, "0x%X")) {
+						mi.pd_value = k;
+					}
+					ImGui::TextUnformatted("ModelEditor.HardwareType"_lc);
+					ImGui::SetNextItemWidth(80);
+					if (ImGui::BeginCombo("##cb", items[mi.hardware_id])) {
+						for (int n = 0; n < IM_ARRAYSIZE(items); n++) {
+							bool is_selected = (mi.hardware_id == n);
+							if (ImGui::Selectable(items[n], is_selected)) {
+								mi.hardware_id = n;
+							}
+							if (is_selected)
+								ImGui::SetItemDefaultFocus();
+						}
+						ImGui::EndCombo();
+					}
+					ImGui::Checkbox("ModelEditor.SampleRom"_lc, &mi.is_sample_rom);
+					ImGui::Checkbox("ModelEditor.NewRenderMethod"_lc, &mi.enable_new_screen);
+					ImGui::Checkbox("ModelEditor.RealRom"_lc, &mi.real_hardware);
+					ImGui::Checkbox("ModelEditor.LegacyKO"_lc, &mi.legacy_ko);
+					if (ImGui::ColorEdit3("ModelEditor.InkColor"_lc, color)) {
+						mi.ink_color.r = color[0] * 255;
+						mi.ink_color.g = color[1] * 255;
+						mi.ink_color.b = color[2] * 255;
+					}
+					ImGui::EndTabItem();
+				}
+				if (ImGui::BeginTabItem("Buttons")) {
+					if (btninfo) {
+						if (ImGui::InputText("ModelEditor.KeyName"_lc, buffer, 260)) {
+							btninfo->keyname = buffer;
+						}
+						if (ImGui::InputText("ModelEditor.KIKO"_lc, buffer2, 12)) {
+							btninfo->kiko = SDL_strtol(buffer2, 0, 16);
+						}
+						ImGui::InputInt("X", &btninfo->rect.x);
+						ImGui::InputInt("Y", &btninfo->rect.y);
+						ImGui::InputInt("W", &btninfo->rect.w);
+						ImGui::InputInt("H", &btninfo->rect.h);
+					}
+					else {
+						ImGui::Text("Select a button from the preview to edit.");
+					}
+					ImGui::EndTabItem();
+				}
+				if (ImGui::BeginTabItem("Sprites")) {
+					ImGui::Text("Sprite List");
+					ImGui::BeginChild("SpriteList", {0, 150}, true);
 
-                    for (auto& [key, sprite] : mi.sprites) {
-                        if (ImGui::Selectable(key.c_str(), selected_sprite_key == key)) {
-                            selected_sprite_key = key;
-                        }
-                    }
-                    ImGui::EndChild();
+					for (auto& [key, sprite] : mi.sprites) {
+						if (ImGui::Selectable(key.c_str(), selected_sprite_key == key)) {
+							selected_sprite_key = key;
+						}
+					}
+					ImGui::EndChild();
 
-                    if (!selected_sprite_key.empty() && mi.sprites.count(selected_sprite_key)) {
-                        auto& sprite = mi.sprites[selected_sprite_key];
-                        ImGui::Text("Selected: %s", selected_sprite_key.c_str());
-                        ImGui::Separator();
-                        ImGui::Text("Source Rect");
-                        ImGui::InputInt("Src X", &sprite.src.x);
-                        ImGui::InputInt("Src Y", &sprite.src.y);
-                        ImGui::InputInt("Src W", &sprite.src.w);
-                        ImGui::InputInt("Src H", &sprite.src.h);
+					if (!selected_sprite_key.empty() && mi.sprites.count(selected_sprite_key)) {
+						auto& sprite = mi.sprites[selected_sprite_key];
+						ImGui::Text("Selected: %s", selected_sprite_key.c_str());
+						ImGui::Separator();
+						ImGui::Text("Source Rect");
+						ImGui::InputInt("Src X", &sprite.src.x);
+						ImGui::InputInt("Src Y", &sprite.src.y);
+						ImGui::InputInt("Src W", &sprite.src.w);
+						ImGui::InputInt("Src H", &sprite.src.h);
 
-                        ImGui::Text("Dest Rect");
-                        ImGui::InputInt("Dest X", &sprite.dest.x);
-                        ImGui::InputInt("Dest Y", &sprite.dest.y);
-                        ImGui::InputInt("Dest W", &sprite.dest.w);
-                        ImGui::InputInt("Dest H", &sprite.dest.h);
-                    }
-                    ImGui::EndTabItem();
-                }
-                ImGui::EndTabBar();
-            }
+						ImGui::Text("Dest Rect");
+						ImGui::InputInt("Dest X", &sprite.dest.x);
+						ImGui::InputInt("Dest Y", &sprite.dest.y);
+						ImGui::InputInt("Dest W", &sprite.dest.w);
+						ImGui::InputInt("Dest H", &sprite.dest.h);
+					}
+					ImGui::EndTabItem();
+				}
+				ImGui::EndTabBar();
+			}
 
-            ImGui::Separator();
-            if (ImGui::Button("Button.Save"_lc)) {
-                std::ofstream ifs(pth / "config.bin", std::ios::binary);
-                if (!ifs)
-                    PANIC("Cannot open.");
-                Binary::Write(ifs, mi);
-                this->open = false;
-            }
+			ImGui::Separator();
+			if (ImGui::Button("Button.Save"_lc)) {
+				std::ofstream ifs(pth / "config.bin", std::ios::binary);
+				if (!ifs)
+					PANIC("Cannot open.");
+				Binary::Write(ifs, mi);
+				this->open = false;
+			}
 		}
 		ImGui::EndChild();
 	}
@@ -456,7 +461,8 @@ inline std::string sanitize_path(const std::string& input) {
 	size_t end = result.find_last_not_of(" .");
 	if (start != std::string::npos) {
 		result = result.substr(start, end - start + 1);
-	} else {
+	}
+	else {
 		result = "unnamed"; // Fallback if string becomes empty
 	}
 	// Collapse consecutive underscores
@@ -488,12 +494,14 @@ namespace casioemu {
 		StartupUi() {
 			std::ifstream ifs2{"roms.db", std::ifstream::binary};
 			if (ifs2) {
-                try {
-				    Binary::Read(ifs2, RomNames);
-                } catch (const std::exception& e) {
-                    std::cerr << "[StartupUI][Warn] Failed to read \"roms.db\": " << e.what() << ". Names may be inaccurate!\n";
-                }
-            } else {
+				try {
+					Binary::Read(ifs2, RomNames);
+				}
+				catch (const std::exception& e) {
+					std::cerr << "[StartupUI][Warn] Failed to read \"roms.db\": " << e.what() << ". Names may be inaccurate!\n";
+				}
+			}
+			else {
 				printf("[StartupUI][Warn] \"roms.db\" not found. Names may be inaccurate!\n");
 			}
 			Reload();
@@ -505,128 +513,129 @@ namespace casioemu {
 				models.clear();
 				for (auto& dir : std::filesystem::directory_iterator("models")) {
 					if (dir.is_directory()) {
-                        try {
-						    printf("[StartupUI][Info] Checking %s\n", dir.path().string().c_str());
-						    auto config = dir.path() / "config.bin";
-                            std::error_code ec;
-                            if (!std::filesystem::exists(config) || !std::filesystem::is_regular_file(config, ec)) {
-                                printf("[StartupUI][Info] Unable to open %s\n", config.string().c_str());
-                                continue;
-                            }
+						try {
+							printf("[StartupUI][Info] Checking %s\n", dir.path().string().c_str());
+							auto config = dir.path() / "config.bin";
+							std::error_code ec;
+							if (!std::filesystem::exists(config) || !std::filesystem::is_regular_file(config, ec)) {
+								printf("[StartupUI][Info] Unable to open %s\n", config.string().c_str());
+								continue;
+							}
 
-						    std::ifstream ifs(config, std::ios::in | std::ios::binary);
-						    if (!ifs) {
-						    	printf("[StartupUI][Info] Unable to open %s\n", config.string().c_str());
-						    	continue;
-						    }
-						    ModelInfo mi{};
-						    Binary::Read(ifs, mi);
-						    ifs.close();
-						    Model mod{};
-						    mod.path = dir;
-						    mod.name = mi.model_name;
-						    mod.realhw = mi.real_hardware;
-						    switch (mi.hardware_id) {
-						    case HW_ES_PLUS:
-						    	mod.type = "ESP";
-						    	break;
-						    case HW_CLASSWIZ:
-						    	mod.type = "CWX";
-						    	break;
-						    case HW_CLASSWIZ_II:
-						    	mod.type = "CWII";
-						    	break;
-						    case HW_FX_5800P:
-						    	mod.type = "Fx5800p";
-						    	break;
-						    case HW_TI:
-						    	mod.type = "TI";
-						    	break;
-						    case HW_SOLARII:
-						    	mod.type = "SolarII";
-						    	break;
-						    default:
-						    	mod.type = "Unknown";
-						    	break;
-						    }
-						    {
-                                std::filesystem::path romPath = dir.path() / mi.rom_path;
-                                if (mi.rom_path.empty() || !std::filesystem::exists(romPath) || !std::filesystem::is_regular_file(romPath, ec))
-                                    continue;
-						    	std::ifstream ifs2(romPath, std::ios::in | std::ios::binary);
-						    	if (!ifs2)
-						    		continue;
-						    	std::vector<byte> rom{std::istreambuf_iterator<char>{ifs2.rdbuf()}, std::istreambuf_iterator<char>{}};
-						    	ifs2.close();
-						    	std::vector<byte> flash{};
+							std::ifstream ifs(config, std::ios::in | std::ios::binary);
+							if (!ifs) {
+								printf("[StartupUI][Info] Unable to open %s\n", config.string().c_str());
+								continue;
+							}
+							ModelInfo mi{};
+							Binary::Read(ifs, mi);
+							ifs.close();
+							Model mod{};
+							mod.path = dir;
+							mod.name = mi.model_name;
+							mod.realhw = mi.real_hardware;
+							switch (mi.hardware_id) {
+							case HW_ES_PLUS:
+								mod.type = "ESP";
+								break;
+							case HW_CLASSWIZ:
+								mod.type = "CWX";
+								break;
+							case HW_CLASSWIZ_II:
+								mod.type = "CWII";
+								break;
+							case HW_FX_5800P:
+								mod.type = "Fx5800p";
+								break;
+							case HW_TI:
+								mod.type = "TI";
+								break;
+							case HW_SOLARII:
+								mod.type = "SolarII";
+								break;
+							default:
+								mod.type = "Unknown";
+								break;
+							}
+							{
+								std::filesystem::path romPath = dir.path() / mi.rom_path;
+								if (mi.rom_path.empty() || !std::filesystem::exists(romPath) || !std::filesystem::is_regular_file(romPath, ec))
+									continue;
+								std::ifstream ifs2(romPath, std::ios::in | std::ios::binary);
+								if (!ifs2)
+									continue;
+								std::vector<byte> rom{std::istreambuf_iterator<char>{ifs2.rdbuf()}, std::istreambuf_iterator<char>{}};
+								ifs2.close();
+								std::vector<byte> flash{};
 
-                                if (!mi.flash_path.empty()) {
-                                    std::filesystem::path flashPath = dir.path() / mi.flash_path;
-                                    if (std::filesystem::exists(flashPath) && std::filesystem::is_regular_file(flashPath, ec)) {
-                                        std::ifstream ifs3(flashPath, std::ios::in | std::ios::binary);
-                                        if (ifs3)
-                                            flash = {std::istreambuf_iterator<char>{ifs3.rdbuf()}, std::istreambuf_iterator<char>{}};
-                                    }
-                                }
-						    	auto ri = rom_info(rom, flash, mi.real_hardware);
-						    	if (ri.type != 0) {
-						    		switch (ri.type) {
-						    		case RomInfo::ES:
-						    			mod.type = "ES";
-						    			break;
-						    		case RomInfo::ESP:
-						    			mod.type = "ESP";
-						    			break;
-						    		case RomInfo::ESP2nd:
-						    			mod.type = "ESP2nd";
-						    			break;
-						    		case RomInfo::CWX:
-						    			mod.type = "CWX";
-						    			break;
-						    		case RomInfo::CWII:
-						    			mod.type = "CWII";
-						    			break;
-						    		case RomInfo::Fx5800p:
-						    			mod.type = "Fx5800p";
-						    			break;
-						    		default:
-						    			mod.type = "???";
-						    			break;
-						    		}
-						    	}
-						    	if (ri.ok) {
-						    		mod.version = ri.ver;
-						    		std::array<char, 8> key{};
-						    		memcpy(key.data(), mod.version.data(), 6);
-                                    auto iter = RomNames.find(key);
-						    		if (iter != RomNames.end())
-						    			mod.name = iter->second;
-						    		mod.checksum = tohex(ri.real_sum, 4);
-						    		mod.checksum2 = tohex(ri.desired_sum, 4);
-						    		mod.sum_good = ri.real_sum == ri.desired_sum ? "OK" : "NG";
-                                    // Safely form version key and id
-                                    std::array<char, 8> key2{};
-                                    std::memset(key2.data(), 0, key2.size());
-                                    std::memcpy(key2.data(), mod.version.data(), std::min<std::size_t>(6, mod.version.size()));
-                                    mod.id = tohex(*(unsigned long long*)ri.cid, 8);
-						    		if (ri.type == RomInfo::ES) {
-						    			auto a = get_pd(mi.pd_value);
-						    			mod.version += std::string(" (P") + a + ")";
-						    		}
-						    	}
-						    	else {
-						    		mod.show_sum = false;
-						    	}
-						    	printf("[StartupUI][Debug] Model Summary\n"
-						    		   "[StartupUI][Debug] Name: %s\n"
-						    		   "[StartupUI][Debug] Type: %s\n",
-						    		mod.name.c_str(), mod.type.c_str());
-						    }
-						    models.push_back(mod);
-                        } catch (const std::exception& e) {
-                            std::cerr << "[StartupUI][Error] Failed to load model from " << dir.path().string() << ": " << e.what() << std::endl;
-                            continue;
-                        }
+								if (!mi.flash_path.empty()) {
+									std::filesystem::path flashPath = dir.path() / mi.flash_path;
+									if (std::filesystem::exists(flashPath) && std::filesystem::is_regular_file(flashPath, ec)) {
+										std::ifstream ifs3(flashPath, std::ios::in | std::ios::binary);
+										if (ifs3)
+											flash = {std::istreambuf_iterator<char>{ifs3.rdbuf()}, std::istreambuf_iterator<char>{}};
+									}
+								}
+								auto ri = rom_info(rom, flash, mi.real_hardware);
+								if (ri.type != 0) {
+									switch (ri.type) {
+									case RomInfo::ES:
+										mod.type = "ES";
+										break;
+									case RomInfo::ESP:
+										mod.type = "ESP";
+										break;
+									case RomInfo::ESP2nd:
+										mod.type = "ESP2nd";
+										break;
+									case RomInfo::CWX:
+										mod.type = "CWX";
+										break;
+									case RomInfo::CWII:
+										mod.type = "CWII";
+										break;
+									case RomInfo::Fx5800p:
+										mod.type = "Fx5800p";
+										break;
+									default:
+										mod.type = "???";
+										break;
+									}
+								}
+								if (ri.ok) {
+									mod.version = ri.ver;
+									std::array<char, 8> key{};
+									memcpy(key.data(), mod.version.data(), 6);
+									auto iter = RomNames.find(key);
+									if (iter != RomNames.end())
+										mod.name = iter->second;
+									mod.checksum = tohex(ri.real_sum, 4);
+									mod.checksum2 = tohex(ri.desired_sum, 4);
+									mod.sum_good = ri.real_sum == ri.desired_sum ? "OK" : "NG";
+									// Safely form version key and id
+									std::array<char, 8> key2{};
+									std::memset(key2.data(), 0, key2.size());
+									std::memcpy(key2.data(), mod.version.data(), std::min<std::size_t>(6, mod.version.size()));
+									mod.id = tohex(*(unsigned long long*)ri.cid, 8);
+									if (ri.type == RomInfo::ES) {
+										auto a = get_pd(mi.pd_value);
+										mod.version += std::string(" (P") + a + ")";
+									}
+								}
+								else {
+									mod.show_sum = false;
+								}
+								printf("[StartupUI][Debug] Model Summary\n"
+									   "[StartupUI][Debug] Name: %s\n"
+									   "[StartupUI][Debug] Type: %s\n",
+									mod.name.c_str(), mod.type.c_str());
+							}
+							models.push_back(mod);
+						}
+						catch (const std::exception& e) {
+							std::cerr << "[StartupUI][Error] Failed to load model from " << dir.path().string() << ": " << e.what() << std::endl;
+							continue;
+						}
 					}
 				}
 				loading = false;
@@ -639,9 +648,9 @@ namespace casioemu {
 		bool not_show_emu = false;
 		bool loading = false;
 
-        inline std::string generate_random_string(size_t length) {
-            return util::Random::random_string(length);
-        }
+		inline std::string generate_random_string(size_t length) {
+			return util::Random::random_string(length);
+		}
 		inline std::string create_unique_directory(const std::string& base_name) {
 			std::string sanitized_name = sanitize_path(base_name);
 			std::string dir_name = sanitized_name;
@@ -655,12 +664,13 @@ namespace casioemu {
 			auto& io = ImGui::GetIO();
 
 #ifdef __ANDROID__
-			UI::Scaling::UpdateUIScale();
-			float scaledWidth = UI::Scaling::windowWidth;
-			float scaledHeight = UI::Scaling::windowHeight;
-			float fontScale = UI::Scaling::fontScale;
-			float padding = UI::Scaling::padding;
-			float buttonHeight = UI::Scaling::buttonHeight;
+			ThemeManager::Instance().UpdateUIScale();
+			auto& tm = ThemeManager::Instance();
+			float scaledWidth = tm.windowWidth;
+			float scaledHeight = tm.windowHeight;
+			float fontScale = tm.fontScale;
+			float padding = tm.padding;
+			float buttonHeight = tm.buttonHeight;
 
 			float contentWidth = scaledWidth * 0.95f;
 			float searchBarWidth = contentWidth * 0.45f;
@@ -696,29 +706,31 @@ namespace casioemu {
 			if (ImGui::Button("StartupUI.ImportRomPackage"_lc, ImVec2(buttonWidth, 0))) {
 				SystemDialogs::OpenFileDialog([&](std::filesystem::path f) {
 					try {
-                        std::ifstream ifs{f, std::ios::binary};
-                        if (!ifs) {
-                            throw std::runtime_error("Cannot open selected file.");
-                        }
-                        RomPackage rp{};
-                        Binary::Read(ifs, rp);
-                        if (rp.IsEncrypted) {
-                            show_password_input = true;
-                            current_file = f;
-                            current_rp = std::move(rp);
-                            password_error = false;
-                            std::fill((volatile char*)password, (volatile char*)password + 256, 0);
-                        } else {
-                            std::string filename = f.stem().string();
-                            std::string unique_dirname = create_unique_directory(filename);
-                            std::filesystem::path extract_path = "./models/" + unique_dirname;
-                            rp.ExtractTo(extract_path);
-                            Reload();
-                        }
-                    } catch (const std::exception& e) {
-                        std::cerr << "Failed to import package: " << e.what() << std::endl;
-                        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Import Error", "The selected file is not a valid or supported ROM package.", nullptr);
-                    }
+						std::ifstream ifs{f, std::ios::binary};
+						if (!ifs) {
+							throw std::runtime_error("Cannot open selected file.");
+						}
+						RomPackage rp{};
+						Binary::Read(ifs, rp);
+						if (rp.IsEncrypted) {
+							show_password_input = true;
+							current_file = f;
+							current_rp = std::move(rp);
+							password_error = false;
+							std::fill((volatile char*)password, (volatile char*)password + 256, 0);
+						}
+						else {
+							std::string filename = f.stem().string();
+							std::string unique_dirname = create_unique_directory(filename);
+							std::filesystem::path extract_path = "./models/" + unique_dirname;
+							rp.ExtractTo(extract_path);
+							Reload();
+						}
+					}
+					catch (const std::exception& e) {
+						std::cerr << "Failed to import package: " << e.what() << std::endl;
+						SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Import Error", "The selected file is not a valid or supported ROM package.", nullptr);
+					}
 				});
 			}
 			ImGui::PopStyleVar();
@@ -753,22 +765,23 @@ namespace casioemu {
 #endif
 				if (ImGui::Button("Button.Positive"_lc)) {
 					try {
-                        if (password[0] == '\0') {
-                            password_error = true;
-                        } else {
-						    current_rp.Decrypt(password);
-						    std::string filename = current_file.stem().string();
-						    std::string unique_dirname = create_unique_directory(filename);
-						    std::filesystem::path extract_path = "./models/" + unique_dirname;
-						    current_rp.ExtractTo(extract_path);
-						    Reload();
-						    show_password_input = false;
-						    password_error = false;
-						    ImGui::CloseCurrentPopup();
-                        }
+						if (password[0] == '\0') {
+							password_error = true;
+						}
+						else {
+							current_rp.Decrypt(password);
+							std::string filename = current_file.stem().string();
+							std::string unique_dirname = create_unique_directory(filename);
+							std::filesystem::path extract_path = "./models/" + unique_dirname;
+							current_rp.ExtractTo(extract_path);
+							Reload();
+							show_password_input = false;
+							password_error = false;
+							ImGui::CloseCurrentPopup();
+						}
 					}
 					catch (const std::exception& e) {
-                        SDL_Log("Decryption failed: %s", e.what());
+						SDL_Log("Decryption failed: %s", e.what());
 						password_error = true;
 					}
 				}
@@ -1032,17 +1045,18 @@ namespace casioemu {
 						}
 					}
 #ifdef _WIN32
-                    if (ImGui::MenuItem("StartupUI.Reveal"_lc)) {
-                        std::wstring wpath = std::filesystem::path(model.path).wstring();
-                        ShellExecuteW(NULL, L"open", L"explorer.exe", wpath.c_str(), NULL, SW_SHOWNORMAL);
-                    }
+					if (ImGui::MenuItem("StartupUI.Reveal"_lc)) {
+						std::wstring wpath = std::filesystem::path(model.path).wstring();
+						ShellExecuteW(NULL, L"open", L"explorer.exe", wpath.c_str(), NULL, SW_SHOWNORMAL);
+					}
 #endif
 					if (ImGui::MenuItem("StartupUI.Edit"_lc)) {
-                        try {
-						    windows2->push_back(new ModelEditor(model.path));
-                        } catch(const std::exception& e) {
-                            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Failed to open model editor.", nullptr);
-                        }
+						try {
+							windows2->push_back(new ModelEditor(model.path));
+						}
+						catch (const std::exception& e) {
+							SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Failed to open model editor.", nullptr);
+						}
 					}
 					if (ImGui::MenuItem("StartupUI.Export"_lc)) {
 						ImGui::EndPopup();
@@ -1128,7 +1142,7 @@ public:
 };
 
 void HandleStartupEvent(const SDL_Event& event) {
-    ImGui_ImplSDL2_ProcessEvent(&event);
+	ImGui_ImplSDL2_ProcessEvent(&event);
 }
 
 std::string sui_loop() {
@@ -1147,13 +1161,14 @@ std::string sui_loop() {
 	{
 		std::ifstream ifs1{"recent.bin", std::ifstream::binary};
 		if (ifs1) {
-            try {
-			    Binary::Read(ifs1, ui.recently_used);
-            } catch (const std::exception& e) {
-                std::cerr << "[StartupUI][Warn] Failed to read \"recent.bin\": " << e.what() << ". Starting with no recent files.\n";
-                ui.recently_used.clear();
-            }
-        }
+			try {
+				Binary::Read(ifs1, ui.recently_used);
+			}
+			catch (const std::exception& e) {
+				std::cerr << "[StartupUI][Warn] Failed to read \"recent.bin\": " << e.what() << ". Starting with no recent files.\n";
+				ui.recently_used.clear();
+			}
+		}
 	}
 	window2 = SDL_CreateWindow(
 		"CasioEmuMsvc",
@@ -1165,9 +1180,10 @@ std::string sui_loop() {
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
 	if (renderer2 == nullptr) {
 		SDL_Log("Error creating SDL_Renderer!");
-        if (window2) SDL_DestroyWindow(window2);
-        IMG_Quit();
-        SDL_Quit();
+		if (window2)
+			SDL_DestroyWindow(window2);
+		IMG_Quit();
+		SDL_Quit();
 		return "";
 	}
 	IMGUI_CHECKVERSION();
@@ -1177,14 +1193,14 @@ std::string sui_loop() {
 	io.WantCaptureKeyboard = true;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-	SetupDefaultTheme();
+	ThemeManager::Instance().ApplyDefaultTheme();
 	ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w = 1.0f;
 #ifdef __ANDROID__
 	windows2->push_back(new CopyrightWatermark(windows2));
 #endif
 	ImGui_ImplSDL2_InitForSDLRenderer(window2, renderer2);
 	ImGui_ImplSDLRenderer2_Init(renderer2);
-    auto frame_event = SDL_RegisterEvents(1);
+	auto frame_event = SDL_RegisterEvents(1);
 	std::atomic<bool> exited = {false};
 	std::thread t3([&]() {
 		SDL_Event se{};
@@ -1197,139 +1213,125 @@ std::string sui_loop() {
 			SDL_Delay(24); // ~40fps
 		}
 	});
-    bool done = false;
+	bool done = false;
 	bool once = true;
 	std::vector<std::string> languages;
 	int selected_language_index = 0;
-    bool needs_render = true;
+	bool needs_render = true;
 	while (!done) {
-        SDL_Event event;
-        if (SDL_WaitEvent(&event)) {
-            ImGui_ImplSDL2_ProcessEvent(&event);
-            if (event.type == SDL_QUIT) {
-                done = true;
-            }
-            if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(window2)) {
-                done = true;
-            }
-            if (event.type == frame_event) {
-                needs_render = true;
-            }
-            while (SDL_PollEvent(&event)) {
-                ImGui_ImplSDL2_ProcessEvent(&event);
-                if (event.type == SDL_QUIT) {
-                    done = true;
-                }
-                if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(window2)) {
-                    done = true;
-                }
-                if (event.type == frame_event) {
-                    needs_render = true;
-                }
-            }
-        }
-        if (needs_render) {
-            ImGui_ImplSDLRenderer2_NewFrame();
-            ImGui_ImplSDL2_NewFrame();
-            ImGui::NewFrame();
-			ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
-			ImGui::SetNextWindowDockID(ImGui::GetCurrentContext()->DockContext.Nodes.Data[0].key,ImGuiCond_FirstUseEver); // TODO: ????????
-            ui.Render();
-			//static std::once_flag size_once;
-			//std::call_once(size_once, []() {
-			//	ImGui::DockBuilderSetNodeSize(ImGui::GetWindowDockID(), ImGui::GetMainViewport()->Size);
-			//});
-            for (auto& wind : *windows2) {
-                wind->Render();
-            }
-            if (once && !std::filesystem::exists("locale.txt")) {
-                if (languages.empty()) {
-                    const std::string locales_dir = "./locales/";
-                    if (std::filesystem::exists(locales_dir)) {
-                        for (const auto& entry : std::filesystem::directory_iterator(locales_dir)) {
-                            if (entry.is_regular_file()) {
-                                languages.push_back(entry.path().stem().string());
-                            }
-                        }
-                    }
-                    if (languages.empty()) {
-                        languages.push_back("en_US");
-                    }
-                }
-                ImGui::OpenPopup("LanguageChooser");
-                once = false;
-            }
-            ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-            ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-            if (ImGui::BeginPopupModal("LanguageChooser", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
-                ImGui::Text("Please choose your language to continue");
-                ImGui::Separator();
-                ImGui::Spacing();
-                if (!languages.empty()) {
-                    const char* preview_value = languages[selected_language_index].c_str();
-                    if (ImGui::BeginCombo("Language", preview_value)) {
-                        for (int n = 0; n < languages.size(); n++) {
-                            const bool is_selected = (selected_language_index == n);
-                            if (ImGui::Selectable(languages[n].c_str(), is_selected)) {
-                                selected_language_index = n;
-                            }
-                            if (is_selected) {
-                                ImGui::SetItemDefaultFocus();
-                            }
-                        }
-                        ImGui::EndCombo();
-                    }
-                }
-                ImGui::Spacing();
-                ImGui::Separator();
-                ImGui::Spacing();
-                if (ImGui::Button("Ok", ImVec2(120, 0))) {
-                    if (!languages.empty() && selected_language_index < languages.size()) {
-                        const std::string& selected_lang = languages[selected_language_index];
-                        g_local.ChangeLanguage(selected_lang);
-                        if ("Localization.EnableCJK"_l == "1" || "Localization.EnableCJK"_l == "true")
-                            RebuildFont_Requested = true;
-                        std::ofstream outfile("locale.txt");
-                        outfile << selected_lang;
-                        outfile.close();
-                        ImGui::CloseCurrentPopup();
-                    }
-                }
-                ImGui::EndPopup();
-            }
-            ImGui::EndFrame();
-            ImGui::Render();
-            SDL_RenderSetScale(renderer2, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
-            SDL_SetRenderDrawColor(renderer2, 0, 0, 0, 255);
-            SDL_RenderClear(renderer2);
-            ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
-            SDL_RenderPresent(renderer2);
-            
-            needs_render = false;
-        }
-		if (RebuildFont_Requested) {
-			RebuildFont(RebuildFont_Scale);
-			if (RebuildFont_Scale != 0) {
-				ImGuiStyle igs = ImGuiStyle();
-				ImGui::StyleColorsDark(&igs);
-				ImGuiStyle& style = igs;
-				style.WindowRounding = 4.0f;
-				style.Colors[ImGuiCol_WindowBg].w = 0.9f;
-				style.FrameRounding = 4.0f;
-				style.ScaleAllSizes(RebuildFont_Scale);
-				ImGui::GetStyle() = igs;
+		SDL_Event event;
+		if (SDL_WaitEvent(&event)) {
+			ImGui_ImplSDL2_ProcessEvent(&event);
+			if (event.type == SDL_QUIT) {
+				done = true;
 			}
-			ImGui_ImplSDLRenderer2_DestroyDeviceObjects();
-			RebuildFont_Requested = 0;
+			if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(window2)) {
+				done = true;
+			}
+			if (event.type == frame_event) {
+				needs_render = true;
+			}
+			while (SDL_PollEvent(&event)) {
+				ImGui_ImplSDL2_ProcessEvent(&event);
+				if (event.type == SDL_QUIT) {
+					done = true;
+				}
+				if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(window2)) {
+					done = true;
+				}
+				if (event.type == frame_event) {
+					needs_render = true;
+				}
+			}
 		}
+		if (needs_render) {
+			ImGui_ImplSDLRenderer2_NewFrame();
+			ImGui_ImplSDL2_NewFrame();
+			ImGui::NewFrame();
+			ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+			ImGui::SetNextWindowDockID(ImGui::GetCurrentContext()->DockContext.Nodes.Data[0].key, ImGuiCond_FirstUseEver); // TODO: ????????
+			ui.Render();
+			// static std::once_flag size_once;
+			// std::call_once(size_once, []() {
+			//	ImGui::DockBuilderSetNodeSize(ImGui::GetWindowDockID(), ImGui::GetMainViewport()->Size);
+			// });
+			for (auto& wind : *windows2) {
+				wind->Render();
+			}
+			if (once && !std::filesystem::exists("locale.txt")) {
+				if (languages.empty()) {
+					const std::string locales_dir = "./locales/";
+					if (std::filesystem::exists(locales_dir)) {
+						for (const auto& entry : std::filesystem::directory_iterator(locales_dir)) {
+							if (entry.is_regular_file()) {
+								languages.push_back(entry.path().stem().string());
+							}
+						}
+					}
+					if (languages.empty()) {
+						languages.push_back("en_US");
+					}
+				}
+				ImGui::OpenPopup("LanguageChooser");
+				once = false;
+			}
+			ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+			ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+			if (ImGui::BeginPopupModal("LanguageChooser", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+				ImGui::Text("Please choose your language to continue");
+				ImGui::Separator();
+				ImGui::Spacing();
+				if (!languages.empty()) {
+					const char* preview_value = languages[selected_language_index].c_str();
+					if (ImGui::BeginCombo("Language", preview_value)) {
+						for (int n = 0; n < languages.size(); n++) {
+							const bool is_selected = (selected_language_index == n);
+							if (ImGui::Selectable(languages[n].c_str(), is_selected)) {
+								selected_language_index = n;
+							}
+							if (is_selected) {
+								ImGui::SetItemDefaultFocus();
+							}
+						}
+						ImGui::EndCombo();
+					}
+				}
+				ImGui::Spacing();
+				ImGui::Separator();
+				ImGui::Spacing();
+				if (ImGui::Button("Ok", ImVec2(120, 0))) {
+					if (!languages.empty() && selected_language_index < languages.size()) {
+						const std::string& selected_lang = languages[selected_language_index];
+						g_local.ChangeLanguage(selected_lang);
+						if ("Localization.EnableCJK"_l == "1" || "Localization.EnableCJK"_l == "true")
+							ThemeManager::Instance().RequestFontRebuild();
+						std::ofstream outfile("locale.txt");
+						outfile << selected_lang;
+						outfile.close();
+						ImGui::CloseCurrentPopup();
+					}
+				}
+				ImGui::EndPopup();
+			}
+			ImGui::EndFrame();
+			ImGui::Render();
+			SDL_RenderSetScale(renderer2, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
+			SDL_SetRenderDrawColor(renderer2, 0, 0, 0, 255);
+			SDL_RenderClear(renderer2);
+			ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
+			SDL_RenderPresent(renderer2);
+
+			needs_render = false;
+		}
+		ThemeManager::Instance().ProcessFontRebuild();
 		if (!ui.selected_path.empty()) {
 			done = true;
-        }
+		}
 	}
-    exited = true;
-    if (t3.joinable()) {
-        t3.join();
-    }
+	exited = true;
+	if (t3.joinable()) {
+		t3.join();
+	}
 	ImGui_ImplSDLRenderer2_Shutdown();
 	ImGui_ImplSDL2_Shutdown();
 	ImGui::DestroyContext();

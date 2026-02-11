@@ -24,7 +24,7 @@
 
 Injector::Injector() : UIWindow("Rop"), needsReload(false), isReloading(false), isShuttingDown(false) {
 	injectors.push_back(InjectorData());
-	injectionFilePath = GetThemeSettings().injectionFilePath;
+	injectionFilePath = ThemeManager::Instance().Settings().injectionFilePath;
 	InitCustomInjectionsFile();
 	AsyncLoadCustomInjections();
 }
@@ -470,7 +470,7 @@ void Injector::RenderCustomInjectTab(bool& show_info, std::string& info_msg) {
 	ImGui::SameLine();
 	if (ImGui::Button("Rop.ReloadCustomInjects"_lc)) {
 		if (!isReloading.load() && !isShuttingDown.load()) {
-			std::string currentFilePath = GetThemeSettings().injectionFilePath;
+			std::string currentFilePath = ThemeManager::Instance().Settings().injectionFilePath;
 			if (currentFilePath != injectionFilePath) {
 				injectionFilePath = currentFilePath;
 			}
@@ -594,7 +594,7 @@ void Injector::RenderCore() {
 	char* base_addr = n_ram_buffer - casioemu::GetRamBaseAddr(m_emu->hardware_id);
 
 	// Check if injection file path has changed in settings
-	std::string currentFilePath = GetThemeSettings().injectionFilePath;
+	std::string currentFilePath = ThemeManager::Instance().Settings().injectionFilePath;
 	if (currentFilePath != injectionFilePath) {
 		injectionFilePath = currentFilePath;
 		needsReload = true;

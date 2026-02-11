@@ -60,7 +60,7 @@ void Breakpoints::DrawContent() {
 
 void Breakpoints::DrawFindContent() {
 	if (target_addr == -1) {
-		ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", "MemBP.NoBPHint"_lc);
+		ImGui::TextColored(~ImVec4(255, 255, 0, 255), "%s", "MemBP.NoBPHint"_lc);
 		return;
 	}
 	int write = break_point_hash[target_addr].enableWrite;
@@ -87,7 +87,7 @@ void Breakpoints::DrawFindContent() {
 		for (auto kv : break_point_hash[target_addr].records) {
 			ImGui::TableNextRow();
 			ImGui::TableSetColumnIndex(0);
-			ImGui::TextColored(ImVec4(0, 200, 0, 200), "%01x:%04x", kv.first >> 16, kv.first & 0x0ffff);
+			ImGui::TextColored(~ImVec4(0, 200, 0, 200), "%01x:%04x", kv.first >> 16, kv.first & 0x0ffff);
 			ImGui::TableSetColumnIndex(1);
 			ImGui::PushID(i++);
 			if (ImGui::Button(

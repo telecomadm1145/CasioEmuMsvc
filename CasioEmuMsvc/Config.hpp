@@ -19,6 +19,8 @@
 #define __debugbreak() __builtin_trap()
 #endif
 
+#define NOOP() ((void)0)
+
 #define ENABLE_CRASH_CHECK
 #ifdef ENABLE_CRASH_CHECK
 #ifndef PANIC

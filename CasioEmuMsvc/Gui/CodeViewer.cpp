@@ -3,12 +3,13 @@
 #include "Chipset/Chipset.hpp"
 #include "Config.hpp"
 #include "Emulator.hpp"
+#include "FileDialog.hpp"
 #include "Hooks.h"
 #include "Logger.hpp"
+#include "SysDialog.h"
 #include "U8Disas.h"
 #include "ePSCpu.h"
 #include "imgui/imgui.h"
-#include "FileDialog.hpp"
 #include <Localization.h>
 #include <algorithm>
 #include <cstdint>
@@ -173,28 +174,28 @@ void CodeViewer::PrepareDisasm() {
 				decode(ss, rom, rom - beg);
 				auto size = rom - before;
 				CodeElem ce{};
-                if (size == 2) {
-                    snprintf(ce.srcbuf, sizeof(ce.srcbuf), "%04X         ", (*(uint16_t*)before));
-                }
-                else if (size == 4) {
-                    snprintf(ce.srcbuf, sizeof(ce.srcbuf), "%04X %04X    ", (*(uint16_t*)before), ((uint16_t*)before)[1]);
-                }
-                else {
-                    strncpy(ce.srcbuf, "             ", sizeof(ce.srcbuf) - 1);
-                    ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0'; 
-                }
+				if (size == 2) {
+					snprintf(ce.srcbuf, sizeof(ce.srcbuf), "%04X         ", (*(uint16_t*)before));
+				}
+				else if (size == 4) {
+					snprintf(ce.srcbuf, sizeof(ce.srcbuf), "%04X %04X    ", (*(uint16_t*)before), ((uint16_t*)before)[1]);
+				}
+				else {
+					strncpy(ce.srcbuf, "             ", sizeof(ce.srcbuf) - 1);
+					ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0';
+				}
 				ce.offset = pc;
 				auto s = ss.str();
-                if (s.size() > 9 && s[8] == '$') {
+				if (s.size() > 9 && s[8] == '$') {
 					ce.xref_operand = SDL_strtol(&s[9], 0, 16);
 				}
-                {
-                    size_t start = 9 + 4;
-                    if (start < sizeof(ce.srcbuf)) {
-                        strncpy(ce.srcbuf + start, s.c_str(), sizeof(ce.srcbuf) - start - 1);
-                        ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0'; 
-                    }
-                }
+				{
+					size_t start = 9 + 4;
+					if (start < sizeof(ce.srcbuf)) {
+						strncpy(ce.srcbuf + start, s.c_str(), sizeof(ce.srcbuf) - start - 1);
+						ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0';
+					}
+				}
 				codes.push_back(ce);
 				ss.str("");
 			}
@@ -212,19 +213,19 @@ void CodeViewer::PrepareDisasm() {
 					continue;
 				ce.is_label = true;
 				if (lb.second) {
-                    auto symb = lookup_symbol(lb.first);
-                    strncpy(ce.srcbuf, symb.c_str(), sizeof(ce.srcbuf) - 1);
-                    ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0';
+					auto symb = lookup_symbol(lb.first);
+					strncpy(ce.srcbuf, symb.c_str(), sizeof(ce.srcbuf) - 1);
+					ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0';
 					ce.offset = 0;
 					labels[lb.first] = std::move(symb);
 					last_label = lb.first;
 				}
 				else {
 					if (last_label.has_value()) {
-                        char buf[20]{};
-                        auto symb = std::string(".l_") + SDL_itoa(lb.first - *last_label, buf, 16);
-                        strncpy(ce.srcbuf, symb.c_str(), sizeof(ce.srcbuf) - 1);
-                        ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0';
+						char buf[20]{};
+						auto symb = std::string(".l_") + SDL_itoa(lb.first - *last_label, buf, 16);
+						strncpy(ce.srcbuf, symb.c_str(), sizeof(ce.srcbuf) - 1);
+						ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0';
 						ce.offset = 0;
 						labels[lb.first] = std::move(symb);
 					}
@@ -236,24 +237,24 @@ void CodeViewer::PrepareDisasm() {
 			for (auto& ce : codes) {
 				auto iter = labels.find(ce.offset);
 				if (iter != labels.end()) {
-                    CodeElem ce2{};
-                    ce2.is_label = true;
-                    {
-                        auto tmp = iter->second + ":";
-                        strncpy(ce2.srcbuf, tmp.c_str(), sizeof(ce2.srcbuf) - 1);
-                        ce2.srcbuf[sizeof(ce2.srcbuf) - 1] = '\0';
-                    }
+					CodeElem ce2{};
+					ce2.is_label = true;
+					{
+						auto tmp = iter->second + ":";
+						strncpy(ce2.srcbuf, tmp.c_str(), sizeof(ce2.srcbuf) - 1);
+						ce2.srcbuf[sizeof(ce2.srcbuf) - 1] = '\0';
+					}
 					ce2.offset = 0;
 					finals.push_back(ce2);
 				}
-                if (ce.xref_operand) {
-                    size_t start = 8 + 13;
-                    if (start < sizeof(ce.srcbuf)) {
-                        auto& lab = labels[ce.xref_operand];
-                        strncpy(&ce.srcbuf[start], lab.c_str(), sizeof(ce.srcbuf) - start - 1);
-                        ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0';
-                    }
-                }
+				if (ce.xref_operand) {
+					size_t start = 8 + 13;
+					if (start < sizeof(ce.srcbuf)) {
+						auto& lab = labels[ce.xref_operand];
+						strncpy(&ce.srcbuf[start], lab.c_str(), sizeof(ce.srcbuf) - start - 1);
+						ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0';
+					}
+				}
 				finals.push_back(ce);
 			}
 			codes = std::move(finals);
@@ -307,7 +308,7 @@ void CodeViewer::DrawContent() {
 			auto bb = it == break_points.end();
 			if (!e.is_label) {
 				if (e.offset == pc_cache) {
-					ImGui::TextColored(ImVec4(0.0, 1.0, 0.0, 1.0), " > ");
+					ImGui::TextColored(~ImVec4(0.0, 1.0, 0.0, 1.0), " > ");
 				}
 				else {
 					if (bb) {
@@ -318,7 +319,7 @@ void CodeViewer::DrawContent() {
 					}
 					else {
 						if (it->second == 1) {
-							ImGui::TextColored(ImVec4(1.0, 0.0, 0.0, 1.0), " x ");
+							ImGui::TextColored(~ImVec4(1.0, 0.0, 0.0, 1.0), " x ");
 							if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) {
 								break_points.erase(line_i);
 							}
@@ -330,7 +331,7 @@ void CodeViewer::DrawContent() {
 					}
 				}
 				ImGui::SameLine();
-				ImGui::TextColored(ImVec4(1.0, 1.0, 0.0, 1.0), "%05x", e.offset);
+				ImGui::TextColored(~ImVec4(1.0, 1.0, 0.0, 1.0), "%05x", e.offset);
 				ImGui::SameLine();
 			}
 			ImGui::PushID(line_i);
@@ -370,83 +371,91 @@ void CodeViewer::JumpTo(uint32_t offset) {
 }
 
 void CodeViewer::Search(bool next) {
-    if (codes.empty()) return;
-    std::string needle = search_buf;
-    if (needle.empty()) return;
+	if (codes.empty())
+		return;
+	std::string needle = search_buf;
+	if (needle.empty())
+		return;
 
-    // Normalize needle for Hex search
-    if (search_mode == 0) { // Hex Pattern
-        std::string hex_needle = "";
-        for (char c : needle) {
-            if (c != ' ') hex_needle += toupper(c);
-        }
-        needle = hex_needle;
-    } else { // Instruction / Opcode
-        // Just make uppercase for case-insensitive search if desired, or keep as is.
-        // Assuming case-insensitive search for instruction mnemonics.
-         std::transform(needle.begin(), needle.end(), needle.begin(), ::toupper);
-    }
+	// Normalize needle for Hex search
+	if (search_mode == 0) { // Hex Pattern
+		std::string hex_needle = "";
+		for (char c : needle) {
+			if (c != ' ')
+				hex_needle += toupper(c);
+		}
+		needle = hex_needle;
+	}
+	else { // Instruction / Opcode
+		   // Just make uppercase for case-insensitive search if desired, or keep as is.
+		   // Assuming case-insensitive search for instruction mnemonics.
+		std::transform(needle.begin(), needle.end(), needle.begin(), ::toupper);
+	}
 
-    int start_idx = next ? (last_found_idx + 1) : 0;
-    if (start_idx >= codes.size()) start_idx = 0;
+	int start_idx = next ? (last_found_idx + 1) : 0;
+	if (start_idx >= codes.size())
+		start_idx = 0;
 
-    // If wrapping around or starting fresh, we loop through all codes starting from start_idx
-    for (size_t i = 0; i < codes.size(); ++i) {
-        int idx = (start_idx + i) % codes.size();
-        const auto& ce = codes[idx];
-        if (ce.is_label) continue;
+	// If wrapping around or starting fresh, we loop through all codes starting from start_idx
+	for (size_t i = 0; i < codes.size(); ++i) {
+		int idx = (start_idx + i) % codes.size();
+		const auto& ce = codes[idx];
+		if (ce.is_label)
+			continue;
 
-        std::string haystack = ce.srcbuf;
+		std::string haystack = ce.srcbuf;
 
-        // Split haystack into Hex part and Instruction part
-        // Format from PrepareDisasm: "%04X         " or "%04X %04X    " followed by instruction
-        // Hex part is roughly first 13 characters.
+		// Split haystack into Hex part and Instruction part
+		// Format from PrepareDisasm: "%04X         " or "%04X %04X    " followed by instruction
+		// Hex part is roughly first 13 characters.
 
-        std::string hex_part = haystack.substr(0, 13);
-        std::string instr_part = (haystack.length() > 13) ? haystack.substr(13) : "";
+		std::string hex_part = haystack.substr(0, 13);
+		std::string instr_part = (haystack.length() > 13) ? haystack.substr(13) : "";
 
-        // Clean hex part
-        std::string hex_clean = "";
-        for (char c : hex_part) {
-            if (isalnum(c)) hex_clean += c;
-        }
+		// Clean hex part
+		std::string hex_clean = "";
+		for (char c : hex_part) {
+			if (isalnum(c))
+				hex_clean += c;
+		}
 
-        bool found = false;
-        if (search_mode == 0) { // Hex Pattern
-             if (hex_clean.find(needle) != std::string::npos) {
-                 found = true;
-             }
-        } else { // Instruction
-             std::transform(instr_part.begin(), instr_part.end(), instr_part.begin(), ::toupper);
-             if (instr_part.find(needle) != std::string::npos) {
-                 found = true;
-             }
-        }
+		bool found = false;
+		if (search_mode == 0) { // Hex Pattern
+			if (hex_clean.find(needle) != std::string::npos) {
+				found = true;
+			}
+		}
+		else { // Instruction
+			std::transform(instr_part.begin(), instr_part.end(), instr_part.begin(), ::toupper);
+			if (instr_part.find(needle) != std::string::npos) {
+				found = true;
+			}
+		}
 
-        if (found) {
-            last_found_idx = idx;
-            cur_col = idx;
-            need_roll = true;
-            return;
-        }
-    }
+		if (found) {
+			last_found_idx = idx;
+			cur_col = idx;
+			need_roll = true;
+			return;
+		}
+	}
 }
 
 void CodeViewer::ExportDisassembly() {
-    char filePath[1024] = {0};
-    if (FileDialog::ShowFileSaveDialog("Export Disassembly", "Text Files (*.txt);;All Files (*.*)", filePath, 1024)) {
-        std::ofstream out(filePath);
-        if (out.is_open()) {
-            for (const auto& ce : codes) {
-                 if (ce.is_label) {
-                     out << ce.srcbuf << "\n";
-                 } else {
-                     out << "  " << ce.srcbuf << "\n";
-                 }
-            }
-            out.close();
-        }
-    }
+	SystemDialogs::SaveFileDialog("asm.txt", [&](std::filesystem::path pth) {
+		std::ofstream out(pth);
+		if (out.is_open()) {
+			for (const auto& ce : codes) {
+				if (ce.is_label) {
+					out << ce.srcbuf << "\n";
+				}
+				else {
+					out << "  " << ce.srcbuf << "\n";
+				}
+			}
+			out.close();
+		}
+	});
 }
 
 void CodeViewer::RenderCore() {
@@ -491,32 +500,32 @@ void CodeViewer::RenderCore() {
 	ImGui::SameLine();
 	ImGui::Separator();
 
-    // Bottom controls
-    // First line: Search
-    ImGui::Text("Search:");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(150);
-    if (ImGui::InputText("##search", search_buf, sizeof(search_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
-         Search(false);
-    }
-    ImGui::SameLine();
-    const char* items[] = { "Hex Pattern", "Instruction" };
-    ImGui::SetNextItemWidth(100);
-    ImGui::Combo("##search_mode", &search_mode, items, IM_ARRAYSIZE(items));
-    ImGui::SameLine();
-    if (ImGui::Button("Find")) {
-        Search(false);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Next")) {
-        Search(true);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Export")) {
-        ExportDisassembly();
-    }
+	// Bottom controls
+	// First line: Search
+	ImGui::Text("CodeViewer.Search"_lc);
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(150);
+	if (ImGui::InputText("##search", search_buf, sizeof(search_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
+		Search(false);
+	}
+	ImGui::SameLine();
+	const char* items[] = {"CodeViewer.Hex"_lc, "CodeViewer.Inst"_lc};
+	ImGui::SetNextItemWidth(100);
+	ImGui::Combo("##search_mode", &search_mode, items, IM_ARRAYSIZE(items));
+	ImGui::SameLine();
+	if (ImGui::Button("CodeViewer.Find"_lc)) {
+		Search(false);
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("CodeViewer.Next"_lc)) {
+		Search(true);
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("CodeViewer.Export"_lc)) {
+		ExportDisassembly();
+	}
 
-    // Second line: Goto and Control
+	// Second line: Goto and Control
 	ImGui::TextUnformatted("CodeViewer.Goto"_lc);
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(ImGui::CalcTextSize("000000").x);
@@ -571,22 +580,19 @@ void CodeViewer::RenderCore() {
 	}
 }
 
-void CodeViewer::RequestStep()
-{
-    stepping = true;
-    m_emu->SetPaused(false);
+void CodeViewer::RequestStep() {
+	stepping = true;
+	m_emu->SetPaused(false);
 }
 
-void CodeViewer::AddBreakpoint(uint32_t address)
-{
-    int idx = 0;
-    LookUp(address, &idx);
-    break_points[idx] = 1;
+void CodeViewer::AddBreakpoint(uint32_t address) {
+	int idx = 0;
+	LookUp(address, &idx);
+	break_points[idx] = 1;
 }
 
-void CodeViewer::RemoveBreakpoint(uint32_t address)
-{
-    int idx = 0;
-    LookUp(address, &idx);
-    break_points.erase(idx);
+void CodeViewer::RemoveBreakpoint(uint32_t address) {
+	int idx = 0;
+	LookUp(address, &idx);
+	break_points.erase(idx);
 }

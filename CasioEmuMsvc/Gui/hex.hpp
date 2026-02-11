@@ -57,6 +57,7 @@
 
 #include "Config.hpp"
 #include "Localization.h"
+#include "ThemeManager.h"
 
 #ifdef _MSC_VER
 #define _PRISizeT "I"
@@ -71,7 +72,7 @@
 #endif
 #ifdef max
 #undef max
-#endif 
+#endif
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -598,12 +599,11 @@ struct MemoryEditor {
 						size_t intxn_end = intersection->second;
 						assert(intxn_start >= line_start_n && intxn_end <= line_end_n);
 
-						auto& color = span.color;
 						auto pos_tmp = ImGui::GetCursorScreenPos();
 						auto line_first_hex_pos = ImVec2(pos_tmp.x + s.GlyphWidth * 6, pos_tmp.y - s.LineHeight);
 						auto start_pos = ImVec2(line_first_hex_pos.x + s.HexCellWidth * (float)(intxn_start % Cols), line_first_hex_pos.y);
 						auto end_pos = ImVec2(line_first_hex_pos.x + s.HexCellWidth * (float)(intxn_end % Cols + 1), line_first_hex_pos.y + s.LineHeight);
-						draw_list->AddRectFilled(start_pos, end_pos, color);
+						draw_list->AddRectFilled(start_pos, end_pos, ~span.color);
 					}
 				}
 
@@ -638,7 +638,7 @@ struct MemoryEditor {
 							if (OptMidColsCount > 0 && n > 0 && (n + 1) < Cols && ((n + 1) % OptMidColsCount) == 0)
 								highlight_width += s.SpacingBetweenMidCols;
 						}
-						draw_list->AddRectFilled(pos, ImVec2(pos.x + highlight_width, pos.y + s.LineHeight), IM_COL32(255, 0, 0, int(ram_edit_ov[(size_t)mem_data + addr])));
+						draw_list->AddRectFilled(pos, ImVec2(pos.x + highlight_width, pos.y + s.LineHeight), ~ImColor{255, 0, 0, int(ram_edit_ov[(size_t)mem_data + addr])});
 						ram_edit_ov[(size_t)mem_data + addr] -= 10;
 					}
 
@@ -853,7 +853,7 @@ struct MemoryEditor {
 		ImU8* mem_data = (ImU8*)mem_data_void;
 		ImGuiStyle& style = ImGui::GetStyle();
 		ImGui::AlignTextToFramePadding();
-        ImGui::Text("%s", "HexEditor.PreviewAs"_lc);
+		ImGui::Text("%s", "HexEditor.PreviewAs"_lc);
 
 		ImGui::SameLine();
 		ImGui::SetNextItemWidth((s.GlyphWidth * 10.0f) + style.FramePadding.x * 2.0f + style.ItemInnerSpacing.x);
@@ -1113,7 +1113,7 @@ struct MemoryEditor {
 		}
 		case ImGuiDataType_COUNT:
 			break;
-		}			  // Switch
+		} // Switch
 		IM_ASSERT(0); // Shouldn't reach
 	}
 };

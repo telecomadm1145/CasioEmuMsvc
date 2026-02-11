@@ -23,6 +23,7 @@
 #include "Chipset/MMURegion.hpp"
 #include "Chipset/ePSCpu.h"
 #include "Emulator.hpp"
+#include "Ext/Random.hpp"
 #include "Gui/HwController.h"
 #include "Logger.hpp"
 #include "ML620Ports.h"
@@ -32,10 +33,10 @@
 #include "Ui.hpp"
 #include <algorithm> // for std::min, std::max
 #include <array>
-#include <ctime>   // for std::time
-#include "Ext/Random.hpp"
+#include <ctime> // for std::time
 #include <iomanip>
 #include <vector>
+
 
 #ifndef __ANDROID__
 #include "Theme.h"
@@ -108,7 +109,7 @@ inline constexpr std::array<uint8_t, 256> generate_lookup_table() {
 constexpr auto bit_lookup_table = generate_lookup_table();
 
 inline void fillRandomData(unsigned char* buf, size_t size) {
-    util::Random::fillRandomBytes(reinterpret_cast<std::uint8_t*>(buf), size);
+	util::Random::fillRandomBytes(reinterpret_cast<std::uint8_t*>(buf), size);
 }
 
 #pragma warning(disable : 4244)
@@ -196,9 +197,9 @@ namespace casioemu {
 #ifdef __ANDROID__
 					SDL_Delay(10);
 #else
-                    if (GetThemeSettings().lowPerformanceMode) {
-                        SDL_Delay(10);
-                    }
+					if (ThemeManager::Instance().Settings().lowPerformanceMode) {
+						SDL_Delay(10);
+					}
 #endif
 				}
 			});
@@ -221,20 +222,20 @@ namespace casioemu {
 			else
 				ratio = 1 - 5e-4;
 #ifdef __ANDROID__
-            ratio = 0.80;
+			ratio = 0.80;
 #else
-            if (GetThemeSettings().lowPerformanceMode) {
-                ratio = 0.80;
-            }
+			if (ThemeManager::Instance().Settings().lowPerformanceMode) {
+				ratio = 0.80;
+			}
 #endif
 			if constexpr (hardware_id == HW_TI) {
 				ratio = 1 - 1e-4;
 #ifdef __ANDROID__
-            ratio = 0.80;
+				ratio = 0.80;
 #else
-            if (GetThemeSettings().lowPerformanceMode) {
-                ratio = 0.80;
-            }
+				if (ThemeManager::Instance().Settings().lowPerformanceMode) {
+					ratio = 0.80;
+				}
 #endif
 				if (!ti_enabled) {
 					for (size_t i = 0; i < 65 * 192; i++) {
@@ -279,11 +280,11 @@ namespace casioemu {
 			else if (hardware_id == HW_EPS6800) {
 				ratio = 1 - 1e-4;
 #ifdef __ANDROID__
-            ratio = 0.80;
+				ratio = 0.80;
 #else
-            if (GetThemeSettings().lowPerformanceMode) {
-                ratio = 0.80;
-            }
+				if (ThemeManager::Instance().Settings().lowPerformanceMode) {
+					ratio = 0.80;
+				}
 #endif
 				float ink_alpha_on = 255;
 				float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);
@@ -1034,8 +1035,8 @@ namespace casioemu {
 			}
 
 			if constexpr (hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) {
-				region_select.Setup(0xF037, 1, "Screen/Select", &screen_select, MMURegion::DefaultRead < uint8_t, 0x04 | 1 >,
-					MMURegion::DefaultWrite < uint8_t, 0x04 | 1 >, emulator);
+				region_select.Setup(0xF037, 1, "Screen/Select", &screen_select, MMURegion::DefaultRead<uint8_t, 0x04 | 1>,
+					MMURegion::DefaultWrite<uint8_t, 0x04 | 1>, emulator);
 
 				region_brightness.Setup(0xF033, 1, "Screen/Brightness", &screen_brightness, MMURegion::DefaultRead<uint8_t, 0x07>,
 					MMURegion::DefaultWrite<uint8_t, 0x07>, emulator);
@@ -1132,10 +1133,10 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		std::tm tm = *std::localtime(&t);
 		std::ostringstream filename;
 
-        filename << "screenshot-"
-                 << std::put_time(&tm, "%Y-%m-%d-%H-%M-%S-")
-                 << util::Random::uniform_uint32(0, 999)
-                 << ".png";
+		filename << "screenshot-"
+				 << std::put_time(&tm, "%Y-%m-%d-%H-%M-%S-")
+				 << util::Random::uniform_uint32(0, 999)
+				 << ".png";
 
 		// Calculate the bounding box of the rendering area from both sprite and pixel rectangles
 		int minX = INT_MAX, minY = INT_MAX, maxX = INT_MIN, maxY = INT_MIN;

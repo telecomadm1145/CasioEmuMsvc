@@ -118,9 +118,8 @@ inline std::string GetCJKFontPath() {
 	return FindBestFont(candidates);
 }
 
-extern int RebuildFont_Requested;
-extern float RebuildFont_Scale;
-extern int ReloadBg_Requested;
+// Theme/font/scaling globals are now managed by ThemeManager.
+// See ThemeManager.h for the unified API.
 
 inline void RebuildFont(float scale = 0.0f) {
 	auto& io = ImGui::GetIO();
@@ -174,16 +173,4 @@ inline void RebuildFont(float scale = 0.0f) {
 	io.Fonts->Build();
 }
 
-inline void SetupDefaultTheme() {
-	ImGui::StyleColorsDark();
-	ImGuiStyle& style = ImGui::GetStyle();
-
-	// 如果是代码编辑器风格，圆角通常小一点会更硬朗
-	style.WindowRounding = 2.0f;
-	style.FrameRounding = 2.0f;
-
-	style.Colors[ImGuiCol_WindowBg].w = 0.95f; // 稍微不透明一点，利于看代码
-#ifdef __ANDROID__
-	style.ScaleAllSizes(3.0f);
-#endif
-}
+// SetupDefaultTheme() has moved to ThemeManager::ApplyDefaultTheme().
