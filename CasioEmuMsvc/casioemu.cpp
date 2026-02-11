@@ -26,8 +26,8 @@
 #include <thread>
 #if _WIN32
 #include <Windows.h>
-#include <timeapi.h>
 #include <combaseapi.h>
+#include <timeapi.h>
 #pragma comment(lib, "winmm.lib")
 #endif
 
@@ -179,7 +179,7 @@ int main(int argc, char* argv[]) {
 	static float lastTapX = 0;
 	static float lastTapY = 0;
 
-	    auto SendMouseEvent = [](Uint32 type, float x, float y, int button = SDL_BUTTON_LEFT) {
+	auto SendMouseEvent = [](Uint32 type, float x, float y, int button = SDL_BUTTON_LEFT) {
 		SDL_Event event;
 		SDL_memset(&event, 0, sizeof(event));
 		event.type = type;
@@ -330,6 +330,15 @@ int main(int argc, char* argv[]) {
 				}
 				ImGui_ImplSDLRenderer2_DestroyDeviceObjects();
 				RebuildFont_Requested = 0;
+			}
+			if (ReloadBg_Requested) {
+				SDL_DestroyTexture(bg_txt);
+				SDL_FreeSurface(background);
+				background = IMG_Load("background.jpg");
+				if (background) {
+					bg_txt = SDL_CreateTextureFromSurface(renderer, background);
+				}
+				ReloadBg_Requested = 0;
 			}
 			while (SDL_PollEvent(&event)) {
 				if (event.type != frame_event)

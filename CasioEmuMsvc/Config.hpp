@@ -15,7 +15,7 @@
 #define FUNCTION_NAME __func__
 #endif
 
-#if defined(__clang__) || defined(__GNUC__)
+#if !defined(_MSC_VER)
 #define __debugbreak() __builtin_trap()
 #endif
 

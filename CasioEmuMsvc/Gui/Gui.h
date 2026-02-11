@@ -120,6 +120,7 @@ inline std::string GetCJKFontPath() {
 
 extern int RebuildFont_Requested;
 extern float RebuildFont_Scale;
+extern int ReloadBg_Requested;
 
 inline void RebuildFont(float scale = 0.0f) {
 	auto& io = ImGui::GetIO();

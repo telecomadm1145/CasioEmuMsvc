@@ -646,7 +646,7 @@ namespace casioemu {
 			std::string sanitized_name = sanitize_path(base_name);
 			std::string dir_name = sanitized_name;
 			while (std::filesystem::exists("./models/" + dir_name)) {
-				dir_name = sanitized_name + "." + generate_random_string(6);
+				dir_name = sanitized_name + "." + generate_random_string(6); // TODO: WTF is this dot for? Just add random string directly
 			}
 			return dir_name;
 		}
@@ -679,11 +679,7 @@ namespace casioemu {
 			float tableHeight = 300.0f;
 			float buttonWidth = 200.0f;
 #endif
-
-			ImGui::SetNextWindowSize({scaledWidth, scaledHeight});
-			ImGui::SetNextWindowPos({});
-			ImGui::Begin("StartupUI.Title"_lc, 0, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoDocking);
-
+			ImGui::Begin("StartupUI.Title"_lc);
 #ifdef __ANDROID__
 			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(padding, padding));
 			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(padding * 1.5f, padding));
@@ -810,7 +806,8 @@ namespace casioemu {
 			if (ImGui::BeginTable("Recently", 4, pretty_table | ImGuiTableFlags_ScrollY, ImVec2(0, tableHeight))) {
 				RenderHeaders();
 				auto i = 114;
-				for (auto& s : recently_used) {
+				auto ru = recently_used;
+				for (auto& s : ru) {
 					auto iter = std::find_if(models.begin(), models.end(), [&](const Model& x) {
 						return x.path == s;
 					});
@@ -860,7 +857,6 @@ namespace casioemu {
 #ifdef __ANDROID__
 			ImGui::PopStyleVar(3);
 #endif
-
 			ImGui::End();
 		}
 		void RenderHeaders() {
@@ -1236,8 +1232,13 @@ std::string sui_loop() {
             ImGui_ImplSDLRenderer2_NewFrame();
             ImGui_ImplSDL2_NewFrame();
             ImGui::NewFrame();
-            
+			ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+			ImGui::SetNextWindowDockID(ImGui::GetCurrentContext()->DockContext.Nodes.Data[0].key,ImGuiCond_FirstUseEver); // TODO: ????????
             ui.Render();
+			//static std::once_flag size_once;
+			//std::call_once(size_once, []() {
+			//	ImGui::DockBuilderSetNodeSize(ImGui::GetWindowDockID(), ImGui::GetMainViewport()->Size);
+			//});
             for (auto& wind : *windows2) {
                 wind->Render();
             }

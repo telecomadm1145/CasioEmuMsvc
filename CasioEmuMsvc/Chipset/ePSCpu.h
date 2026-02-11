@@ -153,13 +153,13 @@ namespace casioemu {
 		void Reset();
 
 		enum {
-			// µÍËÙÕñµ´Æ÷
+			// ä½Žé€ŸæŒ¯è¡å™¨
 			ST_SLOW,
-			// ¸ßËÙÕñµ´Æ÷
+			// é«˜é€ŸæŒ¯è¡å™¨
 			ST_FAST,
-			// Í£Ö¹,µÍËÙÕñµ´Æ÷¼ÌÐø¹¤×÷
+			// åœæ­¢,ä½Žé€ŸæŒ¯è¡å™¨ç»§ç»­å·¥ä½œ
 			ST_STOP,
-			// È«²¿Í£Ö¹
+			// å…¨éƒ¨åœæ­¢
 			ST_SLEEP,
 		} run_stat;
 		// ???
@@ -174,7 +174,7 @@ namespace casioemu {
 		uint8_t DAT_004202b7;
 		uint8_t InstFlags;
 
-		// Õâ¸öº¯ÊýÓ¦¸ÃÊÇÓÃÀ´³õÊ¼»¯µÄ£¨?)
+		// è¿™ä¸ªå‡½æ•°åº”è¯¥æ˜¯ç”¨æ¥åˆå§‹åŒ–çš„ï¼ˆ?)
 		// void FUN_004083f0(void)
 		//{
 		//	_memset(&StackRam, 0x0, 0x2258);
@@ -194,7 +194,7 @@ namespace casioemu {
 		//	return;
 		//}
 
-		// Port&Timer²Ù×÷
+		// Port&Timeræ“ä½œ
 		void InvalidateTimerSetting(uint32_t unk);
 		void UpdateTimerSetting(uint32_t unk);
 		void InvalidatePORTA();
@@ -208,7 +208,7 @@ namespace casioemu {
 
 		using OP_Handler = void (ePSCPU::*)(byte* param_1);
 
-		// ÓÃÀ´ÐÞ¸´ÄÇÒ»Ûçshi
+		// ç”¨æ¥ä¿®å¤é‚£ä¸€å¨shi
 		static constexpr uint32_t g_stack_cookie = 0x11451419;
 		void Sleep(auto){};
 

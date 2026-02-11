@@ -122,7 +122,7 @@ public:
 	/// Add a window to debugger window.
 	/// </summary>
 	/// <param name="wnd">The window, cannot be null.</param>
-	[[nodiscard]] virtual void AddWindow(UIWindow* wnd) = 0;
+	virtual void AddWindow(UIWindow* wnd) = 0;
 	/// <summary>
 	/// When it returns false, a plugin shouldn't be loaded.
 	/// </summary>

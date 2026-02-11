@@ -5,6 +5,8 @@
 
 struct ThemeSettings {
     bool isDarkMode = true;
+	ImGuiStyle igs_light = ImGuiStyle();
+	ImGuiStyle igs_dark = ImGuiStyle();
     char language[30] = "";
     float scale = 1.0f;
     char injectionFilePath[256] = "./hc-inj.txt"; // Default injection file path
@@ -15,7 +17,9 @@ struct ThemeSettings {
         stm.write(language, sizeof(language));
         Binary::Write(stm, scale);
         stm.write(injectionFilePath, sizeof(injectionFilePath));
-        Binary::Write(stm, lowPerformanceMode);
+		Binary::Write(stm, lowPerformanceMode);
+		Binary::Write(stm, igs_light);
+		Binary::Write(stm, igs_dark);
     }
 
     void Read(std::istream& stm) {
@@ -26,6 +30,8 @@ struct ThemeSettings {
         if (stm.peek() != EOF) {
             Binary::Read(stm, lowPerformanceMode);
         }
+		Binary::Read(stm, igs_light);
+		Binary::Read(stm, igs_dark);
     }
 };
 

@@ -31,7 +31,7 @@
 #pragma warning(disable : 4267)
 
 template <class T>
-concept trivial = std::is_trivial<T>::value;
+concept trivial = std::is_trivially_copyable<T>::value;
 template <class T>
 concept trivial_pair = trivial<typename T::first_type> && trivial<typename T::second_type>;
 template <class T>
@@ -41,7 +41,7 @@ concept BinaryClass =
 	requires(T& t, std::ostream& os, std::istream& is) {
 		{ t.Write(os) } -> std::same_as<void>;
 		{ t.Read(is) } -> std::same_as<void>;
-	};
+	} && (!BinaryData<T>);
 template <class T>
 using ContainerChild = std::remove_cvref_t<decltype(*std::declval<T>().cbegin())>;
 template <class T>
@@ -69,7 +69,11 @@ concept BinaryMap =
 		{ m.cbegin() } -> std::convertible_to<typename T::const_iterator>;
 		{ m.cend() } -> std::convertible_to<typename T::const_iterator>;
 	};
-
+template <typename T>
+bool is_mem_equal(const T& a, const T& b) {
+	static_assert(std::is_trivially_copyable_v<T>);
+	return std::memcmp(&a, &b, sizeof(T)) == 0;
+}
 // #define _BIN_DBG
 
 /// <summary>

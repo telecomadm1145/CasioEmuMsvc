@@ -1,5 +1,6 @@
 ﻿#include "Theme.h"
 #include "FileDialog.hpp"
+#include "SysDialog.h"
 #include "Ui.hpp"
 #include <Gui.h>
 #include <Localization.h>
@@ -17,26 +18,6 @@ void SaveThemeSettings() {
 	}
 }
 
-void LoadThemeSettings() {
-	std::ifstream file("./theme.bin", std::ios::binary);
-	if (file.is_open()) {
-		Binary::Read(file, g_settings);
-		file.close();
-
-		if (g_settings.isDarkMode) {
-			ImGui::StyleColorsDark();
-		}
-		else {
-			ImGui::StyleColorsLight();
-		}
-		if (strlen(g_settings.language) > 0) {
-			g_local.ChangeLanguage(g_settings.language);
-		}
-		RebuildFont_Scale = g_settings.scale;
-		RebuildFont_Requested = true;
-	}
-}
-
 const ThemeSettings& GetThemeSettings() {
 	return g_settings;
 }
@@ -51,18 +32,33 @@ public:
 		LoadThemeSettings();
 		strncpy(tempInjectionFilePath, g_settings.injectionFilePath, sizeof(tempInjectionFilePath));
 	}
+	void LoadThemeSettings() {
+		std::ifstream file("./theme.bin", std::ios::binary);
+		if (file.is_open()) {
+			Binary::Read(file, g_settings);
+			file.close();
+
+			if (g_settings.isDarkMode) {
+				SetDarkMode();
+			}
+			else {
+				SetLightMode();
+			}
+			if (strlen(g_settings.language) > 0) {
+				g_local.ChangeLanguage(g_settings.language);
+			}
+			RebuildFont_Scale = g_settings.scale;
+			RebuildFont_Requested = true;
+		}
+	}
 
 	void RenderCore() override {
 		if (ImGui::Button("Ui.DarkMode"_lc)) {
-			ImGui::StyleColorsDark();
-			g_settings.isDarkMode = true;
-			SaveThemeSettings();
+			SetDarkMode();
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Ui.LightMode"_lc)) {
-			ImGui::StyleColorsLight();
-			g_settings.isDarkMode = false;
-			SaveThemeSettings();
+			SetLightMode();
 		}
 #ifndef __ANDROID__
         if (ImGui::Checkbox("Ui.LowPerformanceMode"_lc, &g_settings.lowPerformanceMode)) {
@@ -121,6 +117,12 @@ public:
 		if (ImGui::Button("Ui.Browse"_lc)) {
 			showFileDialog = true;
 		}
+		if (ImGui::Button("UI.ChangeBg"_lc)) {
+			SystemDialogs::OpenFileDialog([](std::filesystem::path pth) {
+				std::filesystem::copy_file(pth, "background.jpg", std::filesystem::copy_options::overwrite_existing);
+			});
+			ReloadBg_Requested = true;
+		}
 
 		if (showFileDialog) {
 			if (FileDialog::ShowFileOpenDialog("Select Injection File", "Text Files (*.txt){.txt},All Files (*.*){.*}",
@@ -128,9 +130,41 @@ public:
 				showFileDialog = false;
 			}
 		}
-
-		if (ImGui::Button("Button.Positive"_lc)) {
+		ImGui::ShowStyleEditor();
+		if (ImGui::Button("Files.Save"_lc)) {
 			strncpy(g_settings.injectionFilePath, tempInjectionFilePath, sizeof(g_settings.injectionFilePath));
+			if (!g_settings.isDarkMode) {
+				std::memcpy(&g_settings.igs_light, &ImGui::GetStyle(), sizeof(ImGuiStyle));
+			}
+			else {
+				std::memcpy(&g_settings.igs_dark, &ImGui::GetStyle(), sizeof(ImGuiStyle));
+			}
+			SaveThemeSettings();
+		}
+	}
+	void SetLightMode() {
+		if (is_mem_equal(g_settings.igs_light, {})) {
+			ImGui::StyleColorsLight();
+			std::memcpy(&g_settings.igs_light, &ImGui::GetStyle(), sizeof(ImGuiStyle));
+			g_settings.isDarkMode = false;
+			SaveThemeSettings();
+		}
+		else {
+			std::memcpy(&ImGui::GetStyle(), &g_settings.igs_light, sizeof(ImGuiStyle));
+			g_settings.isDarkMode = false;
+			SaveThemeSettings();
+		}
+	}
+	void SetDarkMode() {
+		if (is_mem_equal(g_settings.igs_dark, {})) {
+			ImGui::StyleColorsDark();
+			std::memcpy(&g_settings.igs_dark, &ImGui::GetStyle(), sizeof(ImGuiStyle));
+			g_settings.isDarkMode = true;
+			SaveThemeSettings();
+		}
+		else {
+			std::memcpy(&ImGui::GetStyle(), &g_settings.igs_dark, sizeof(ImGuiStyle));
+			g_settings.isDarkMode = true;
 			SaveThemeSettings();
 		}
 	}

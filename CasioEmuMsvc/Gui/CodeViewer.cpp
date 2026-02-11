@@ -291,6 +291,7 @@ bool CodeViewer::TryTrigBP(uint8_t seg, uint16_t offset, bool bp_mode) {
 }
 
 void CodeViewer::ExternalBP() {
+	BringToFront();
 	JumpTo(pc_cache);
 	return;
 }

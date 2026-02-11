@@ -18,7 +18,7 @@ struct MemBPData_t {
 
 void SetMemBp(uint32_t addr, bool write);
 
-class MemBreakPoint : public UIWindow {
+class Breakpoints : public UIWindow {
 
 private:
 	std::vector<MemBPData_t> break_point_hash;
@@ -27,12 +27,18 @@ private:
 
 	bool break_on_cv = false;
 
+	bool break_on_sp = false;
+
+	int reg_compare_mode = 0;
+	
+	int target_sp = 0;
+
 	void DrawFindContent();
 
 	void DrawContent();
 
 public:
-	MemBreakPoint() : UIWindow("Memory") {
+	Breakpoints() : UIWindow("Breakpoints") {
 		SetupHooks();
 	}
 

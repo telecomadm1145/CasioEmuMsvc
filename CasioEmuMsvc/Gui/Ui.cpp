@@ -1,5 +1,4 @@
 ﻿#include "Ui.hpp"
-#include "../GDB/GDBServer.hpp"
 #include "5800FileSystem.h"
 #include "AddressWindow.h"
 #include "BitmapViewer.h"
@@ -8,7 +7,6 @@
 #include "Chipset/MMU.hpp"
 #include "CodeViewer.hpp"
 #include "Editors.h"
-#include "GDBWindow.hpp"
 #include "HwController.h"
 #include "Injector.hpp"
 #include "LabelFile.h"
@@ -41,7 +39,7 @@ std::vector<Label> g_labels;
 
 CodeViewer* code_viewer = 0;
 Injector* injector = 0;
-MemBreakPoint* membp = 0;
+Breakpoints* membp = 0;
 
 std::vector<UIWindow*> windows{};
 
@@ -58,63 +56,69 @@ void gui_loop() {
 	ImGui_ImplSDLRenderer2_NewFrame();
 	ImGui_ImplSDL2_NewFrame();
 	ImGui::NewFrame();
-
+#ifndef __ANDROID__
+	ImGui::SetNextWindowBgAlpha(0.0f);
+	ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+#endif
 	for (auto win : windows) {
+#ifndef __ANDROID__
+		ImGui::SetNextWindowDockID(ImGui::GetCurrentContext()->DockContext.Nodes.Data[0].key, ImGuiCond_FirstUseEver);
+#endif
 		win->Render();
 	}
 
-	ImGui::Begin("Testing");
-	if (ImGui::Button("Crash"_lc)) {
-		throw 0;
-	}
-	// --- 新增：手动反馈选项 ---
-#ifdef ENABLE_SENTRY
-	ImGui::SameLine(); // 放在 Crash 按钮旁边
-	if (ImGui::Button("Send Feedback"_lc)) {
-		// 重置之前的输入内容
-		memset(sentry_user_comments, 0, sizeof(sentry_user_comments));
-		show_sentry_feedback = true;
-	}
-#endif
-	ImGui::End();
-	// --- Sentry 反馈对话框逻辑 ---
-#ifdef ENABLE_SENTRY
-	if (show_sentry_feedback) {
-		// 确保每一帧都调用 OpenPopup，直到它真正打开
-		ImGui::OpenPopup("User Feedback");
-	}
-
-	// 使用 Modal 窗口确保反馈过程不被打断
-	if (ImGui::BeginPopupModal("User Feedback", &show_sentry_feedback, ImGuiWindowFlags_AlwaysAutoResize)) {
-		ImGui::Text("Help us improve CasioEmuMsvc!");
-		ImGui::Separator();
-
-		ImGui::Text("Email (Optional):");
-		ImGui::InputText("##email", sentry_user_email, IM_ARRAYSIZE(sentry_user_email));
-
-		ImGui::Text("What happened?");
-		ImGui::InputTextMultiline("##comments", sentry_user_comments, IM_ARRAYSIZE(sentry_user_comments),
-			ImVec2(350, 120), ImGuiInputTextFlags_AllowTabInput);
-
-		if (ImGui::Button("Submit", ImVec2(120, 0))) {
-			auto uuid = Binary::LoadOrInit("uuid.bin", util::Random::getRandomObject<sentry_uuid_t>());
-			char buf[37]{};
-			sentry_uuid_as_string(&uuid, buf);
-			sentry_value_t feedback = sentry_value_new_feedback(sentry_user_comments, sentry_user_email, buf, 0);
-			sentry_capture_feedback(feedback);
-
-			show_sentry_feedback = false;
-			ImGui::CloseCurrentPopup();
-		}
-
-		ImGui::SameLine();
-		if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-			show_sentry_feedback = false;
-			ImGui::CloseCurrentPopup();
-		}
-		ImGui::EndPopup();
-	}
-#endif
+	//	ImGui::Begin("Testing");
+	//	if (ImGui::Button("Crash"_lc)) {
+	//		throw 0;
+	//	}
+	//	// --- 新增：手动反馈选项 ---
+	// #ifdef ENABLE_SENTRY
+	//	ImGui::SameLine(); // 放在 Crash 按钮旁边
+	//	if (ImGui::Button("Send Feedback"_lc)) {
+	//		// 重置之前的输入内容
+	//		memset(sentry_user_comments, 0, sizeof(sentry_user_comments));
+	//		show_sentry_feedback = true;
+	//	}
+	// #endif
+	//	ImGui::End();
+	//	// --- Sentry 反馈对话框逻辑 ---
+	// #ifdef ENABLE_SENTRY
+	//	if (show_sentry_feedback) {
+	//		// 确保每一帧都调用 OpenPopup，直到它真正打开
+	//		ImGui::OpenPopup("User Feedback");
+	//	}
+	//
+	//	// 使用 Modal 窗口确保反馈过程不被打断
+	//	if (ImGui::BeginPopupModal("User Feedback", &show_sentry_feedback, ImGuiWindowFlags_AlwaysAutoResize)) {
+	//		ImGui::Text("Help us improve CasioEmuMsvc!");
+	//		ImGui::Separator();
+	//
+	//		ImGui::Text("Email (Optional):");
+	//		ImGui::InputText("##email", sentry_user_email, IM_ARRAYSIZE(sentry_user_email));
+	//
+	//		ImGui::Text("What happened?");
+	//		ImGui::InputTextMultiline("##comments", sentry_user_comments, IM_ARRAYSIZE(sentry_user_comments),
+	//			ImVec2(350, 120), ImGuiInputTextFlags_AllowTabInput);
+	//
+	//		if (ImGui::Button("Submit", ImVec2(120, 0))) {
+	//			auto uuid = Binary::LoadOrInit("uuid.bin", util::Random::getRandomObject<sentry_uuid_t>());
+	//			char buf[37]{};
+	//			sentry_uuid_as_string(&uuid, buf);
+	//			sentry_value_t feedback = sentry_value_new_feedback(sentry_user_comments, sentry_user_email, buf, 0);
+	//			sentry_capture_feedback(feedback);
+	//
+	//			show_sentry_feedback = false;
+	//			ImGui::CloseCurrentPopup();
+	//		}
+	//
+	//		ImGui::SameLine();
+	//		if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+	//			show_sentry_feedback = false;
+	//			ImGui::CloseCurrentPopup();
+	//		}
+	//		ImGui::EndPopup();
+	//	}
+	// #endif
 
 #ifdef SINGLE_WINDOW
 	ImGui::SetNextWindowBgAlpha(0.0f);
@@ -161,7 +165,6 @@ void gui_loop() {
 			win->open = false;
 		}
 	}
-	ImGui::Text("V" EMULATOR_VERSION "       CASIOEMUMSVC");
 	ImGui::End();
 #endif
 
@@ -192,7 +195,7 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 	window = SDL_CreateWindow("CasioEmuMsvc Debugger",
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
-		1280, 720,
+		1600, 1080,
 		SDL_WINDOW_RESIZABLE);
 #endif
 	renderer = SDL_CreateRenderer(window, -1,
@@ -225,8 +228,11 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 		*guiCreated = true;
 	while (!me_mmu)
 		std::this_thread::sleep_for(std::chrono::microseconds(1));
-
-	g_labels = parseFile(m_emu->GetModelFilePath("labels"));
+	auto label_file = m_emu->GetModelFilePath("labels.txt");
+	if (std::filesystem::exists(label_file))
+		g_labels = parseFile(label_file);
+	else
+		std::cout << "[Warning] labels.txt doesn't exist. You can consider create one for better debugging experiences. Format: address(0x1234),func name(can be quoted)\n";
 
 	if (m_emu->hardware_id == casioemu::HW_FX_5800P) {
 		windows.push_back(CreateFx5800FileSystem());
@@ -240,7 +246,7 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 			 CreateCallAnalysisWindow(),
 			 code_viewer = new CodeViewer(),
 			 injector = new Injector(),
-			 membp = new MemBreakPoint(),
+			 membp = new Breakpoints(),
 			 CreateAddressWindow(),
 			 // MakeAssemblerUI(),
 			 MakeThemeWindow(),

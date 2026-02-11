@@ -5,14 +5,14 @@
 #include "Gui/Hooks.h"
 #include "Ui.hpp"
 #include "imgui/imgui.h"
+#include <Localization.h>
 #include <cstdint>
 #include <cstdlib>
 #include <stdlib.h>
-#include <Localization.h>
 
-MemBreakPoint* membp_cv = 0;
+Breakpoints* membp_cv = 0;
 
-void MemBreakPoint::DrawContent() {
+void Breakpoints::DrawContent() {
 	ImGuiListClipper c;
 	static int selected = -1;
 	c.Begin(break_point_hash.size());
@@ -21,7 +21,7 @@ void MemBreakPoint::DrawContent() {
 
 		for (int i = c.DisplayStart; i < c.DisplayEnd; i++) {
 			MemBPData_t& data = break_point_hash[i];
-            snprintf(buf, sizeof(buf), "%lx", (unsigned long)data.addr);
+			snprintf(buf, sizeof(buf), "%lx", (unsigned long)data.addr);
 			ImGui::PushID(i);
 			if (ImGui::Selectable(buf, selected == i)) {
 				selected = i;
@@ -30,7 +30,7 @@ void MemBreakPoint::DrawContent() {
 			if (ImGui::BeginPopupContextItem()) {
 				selected = i;
 
-                ImGui::TextUnformatted("MemBP.BPType"_lc);
+				ImGui::TextUnformatted("MemBP.BPType"_lc);
 				if (ImGui::Button("HexEditors.ContextMenu.MonitorRead"_lc)) {
 					target_addr = i;
 					data.enableWrite = 0;
@@ -58,7 +58,7 @@ void MemBreakPoint::DrawContent() {
 	}
 }
 
-void MemBreakPoint::DrawFindContent() {
+void Breakpoints::DrawFindContent() {
 	if (target_addr == -1) {
 		ImGui::TextColored(ImVec4(255, 255, 0, 255), "%s", "MemBP.NoBPHint"_lc);
 		return;
@@ -106,7 +106,7 @@ void MemBreakPoint::DrawFindContent() {
 	}
 }
 
-void MemBreakPoint::SetupHooks() {
+void Breakpoints::SetupHooks() {
 	SetupHook(on_memory_read, [&](casioemu::MMU& sender, MemoryEventArgs& mea) {
 		if (break_on_cv) {
 			if (target_addr == -1) {
@@ -135,10 +135,38 @@ void MemBreakPoint::SetupHooks() {
 			TryTrigBp(mea.offset, 1);
 		}
 	});
+	SetupHook(on_instruction, [&](casioemu::CPU& sender, InstructionEventArgs& iea) {
+		if (break_on_sp) {
+			bool trig = false;
+			switch (reg_compare_mode) {
+			case 1:
+				trig = sender.reg_sp == target_sp;
+				break;
+			case 2:
+				trig = sender.reg_sp != target_sp;
+				break;
+			case 3:
+				trig = sender.reg_sp > target_sp;
+				break;
+			case 4:
+				trig = sender.reg_sp < target_sp;
+				break;
+			case 5:
+				trig = sender.reg_sp >= target_sp;
+				break;
+			case 6:
+				trig = sender.reg_sp <= target_sp;
+				break;
+			}
+			if (trig) {
+				SetDebugbreak();
+			}
+		}
+	});
 	membp_cv = this;
 }
 
-void MemBreakPoint::TryTrigBp(uint32_t addr, bool write) {
+void Breakpoints::TryTrigBp(uint32_t addr, bool write) {
 	if (target_addr == -1) {
 		return;
 	}
@@ -148,29 +176,49 @@ void MemBreakPoint::TryTrigBp(uint32_t addr, bool write) {
 	}
 }
 
-void MemBreakPoint::RenderCore() {
-	static char buf[10] = {0};
-	ImGui::BeginChild("##srcollingmbp", ImVec2(0, break_on_cv ? ImGui::GetWindowHeight() - ImGui::GetTextLineHeightWithSpacing() * 6 : ImGui::GetWindowHeight() / 3));
-	DrawContent();
-	ImGui::EndChild();
-	ImGui::SetNextItemWidth(ImGui::CalcTextSize("F").x * 6);
-	ImGui::InputText(
-		"##addressin",
-		buf, 10, ImGuiInputTextFlags_CharsHexadecimal);
-	ImGui::SameLine();
-	if (ImGui::Button("MemBP.AddAddr"_lc)) {
-		break_point_hash.push_back({.addr = (uint32_t)strtol(buf, nullptr, 16)});
-	}
-	ImGui::Checkbox("MemBP.BreakWhenHit"_lc,
-		&break_on_cv);
-	if (!break_on_cv) {
-		ImGui::BeginChild("##findoutput");
-		DrawFindContent();
-		ImGui::EndChild();
+void Breakpoints::RenderCore() {
+	if (ImGui::BeginTabBar("Breakpoints")) {
+		if (ImGui::BeginTabItem("Memory")) {
+			static char buf[10] = {0};
+			ImGui::BeginChild("##srcollingmbp", ImVec2(0, break_on_cv ? ImGui::GetWindowHeight() - ImGui::GetTextLineHeightWithSpacing() * 6 : ImGui::GetWindowHeight() / 3));
+			DrawContent();
+			ImGui::EndChild();
+			ImGui::SetNextItemWidth(ImGui::CalcTextSize("F").x * 8);
+			ImGui::InputText(
+				"##addressin",
+				buf, 10, ImGuiInputTextFlags_CharsHexadecimal);
+			ImGui::SameLine();
+			if (ImGui::Button("MemBP.AddAddr"_lc)) {
+				break_point_hash.push_back({.addr = (uint32_t)strtol(buf, nullptr, 16)});
+			}
+			ImGui::Checkbox("MemBP.BreakWhenHit"_lc,
+				&break_on_cv);
+			if (!break_on_cv) {
+				ImGui::BeginChild("##findoutput");
+				DrawFindContent();
+				ImGui::EndChild();
+			}
+			ImGui::EndTabItem();
+		}
+		if (ImGui::BeginTabItem("Register")) {
+			static char buf[10] = {0};
+			ImGui::Combo("BP.RegCmpMode"_lc, &reg_compare_mode, "Disabled\0Equal\0Not Equal\0Greater\0Less\0Greater or Equal\0Less or Equal\0");
+			ImGui::Separator();
+			ImGui::SetNextItemWidth(ImGui::CalcTextSize("F").x * 8);
+			if (ImGui::InputText(
+					"##addressin2",
+					buf, 10, ImGuiInputTextFlags_CharsHexadecimal)) {
+				target_sp = (uint16_t)strtol(buf, nullptr, 16);
+			}
+			ImGui::SameLine();
+			ImGui::Checkbox("BP.SPHint"_lc, &break_on_sp);
+			ImGui::EndTabItem();
+		}
+		ImGui::EndTabBar();
 	}
 }
 
-void MemBreakPoint::ExternalAddBp(uint32_t addr, bool write) {
+void Breakpoints::ExternalAddBp(uint32_t addr, bool write) {
 	break_point_hash.push_back({.enableWrite = write, .addr = addr});
 	target_addr = break_point_hash.size() - 1;
 }
