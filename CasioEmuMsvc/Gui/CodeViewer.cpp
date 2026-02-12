@@ -502,7 +502,7 @@ void CodeViewer::RenderCore() {
 
 	// Bottom controls
 	// First line: Search
-	ImGui::Text("CodeViewer.Search"_lc);
+	ImGui::TextUnformatted("CodeViewer.Search"_lc);
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(150);
 	if (ImGui::InputText("##search", search_buf, sizeof(search_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
