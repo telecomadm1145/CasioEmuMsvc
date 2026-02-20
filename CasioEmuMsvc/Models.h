@@ -20,10 +20,13 @@ namespace casioemu {
 		return (hid == HW_FX_5800P || hid == HW_ES_PLUS) ? 0x0E00 : hid == HW_CLASSWIZ ? 0x2000
 																					   : 0x6000;
 	}
+#define ColorA ImColor{40, 150, 40, 255}
+#define ColorB ImColor{40, 40, 150, 255}
+
 	inline std::vector<MemoryEditor::MarkedSpan> GetCommonMemLabels(HardwareId hid) {
 		int i = 0;
 #define SColor \
-	i++ % 2 ? ImColor{40, 120, 40, 255} : ImColor{40, 40, 120, 255}
+	i++ % 2 ? ColorA : ColorB
 		switch (hid) {
 		case HardwareId::HW_CLASSWIZ_II: {
 			size_t v = 0x9188;

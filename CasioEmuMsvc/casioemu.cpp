@@ -29,6 +29,7 @@
 #include <combaseapi.h>
 #include <timeapi.h>
 #pragma comment(lib, "winmm.lib")
+#include "sdl_win32_extra.h"
 #endif
 
 #ifdef __ANDROID__
@@ -46,6 +47,7 @@
 using namespace casioemu;
 SDL_Surface* background;
 SDL_Texture* bg_txt;
+bool low_perf_ext = false;
 
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
@@ -107,6 +109,8 @@ int main(int argc, char* argv[]) {
 			return -1;
 	}
 
+	bool no_dbg = !argv_map["no_dbg"].empty();
+	low_perf_ext = !argv_map["low_perf_ext"].empty();
 	Emulator emulator(argv_map);
 	m_emu = &emulator;
 
@@ -126,21 +130,28 @@ int main(int argc, char* argv[]) {
 #ifdef __ANDROID__
 			SDL_Delay(40);
 #else
-			SDL_Delay(1);
+			if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext)
+				SDL_Delay(24);
+			else
+				SDL_Delay(1);
 #endif
 		}
 	});
 	t3.detach();
 #ifdef DBG
-	test_gui(&guiCreated, emulator.window, emulator.renderer);
-#endif
-	background = IMG_Load("background.jpg");
-	bg_txt = 0;
-	if (background) {
-		bg_txt = SDL_CreateTextureFromSurface(renderer, background);
-		ThemeManager::Instance().ExtractAndApplyAutoTint(bg_txt, renderer);
+	if (!no_dbg) {
+		test_gui(&guiCreated, emulator.window, emulator.renderer);
+		background = IMG_Load("background.jpg");
+		bg_txt = 0;
+		if (background) {
+			bg_txt = SDL_CreateTextureFromSurface(renderer, background);
+			ThemeManager::Instance().ExtractAndApplyAutoTint(bg_txt, renderer);
+		}
 	}
-
+#endif
+#ifdef _WIN32
+	EnableDarkTitleBar(GetSDLWindowHandle(emulator.window));
+#endif
 	SDL_ShowWindow(emulator.window);
 
 	struct TouchState {
@@ -316,20 +327,23 @@ int main(int argc, char* argv[]) {
 
 			SDL_RenderPresent(emulator.renderer);
 #else
-			gui_loop();
+			if (!no_dbg)
+				gui_loop();
 			emulator.Frame();
 			SDL_RenderPresent(emulator.renderer);
 #endif
-			ThemeManager::Instance().ProcessFontRebuild();
-			if (ThemeManager::Instance().IsBgReloadRequested()) {
-				SDL_DestroyTexture(bg_txt);
-				SDL_FreeSurface(background);
-				background = IMG_Load("background.jpg");
-				if (background) {
-					bg_txt = SDL_CreateTextureFromSurface(renderer, background);
-					ThemeManager::Instance().ExtractAndApplyAutoTint(bg_txt, renderer);
+			if (!no_dbg) {
+				ThemeManager::Instance().ProcessFontRebuild();
+				if (ThemeManager::Instance().IsBgReloadRequested()) {
+					SDL_DestroyTexture(bg_txt);
+					SDL_FreeSurface(background);
+					background = IMG_Load("background.jpg");
+					if (background) {
+						bg_txt = SDL_CreateTextureFromSurface(renderer, background);
+						ThemeManager::Instance().ExtractAndApplyAutoTint(bg_txt, renderer);
+					}
+					ThemeManager::Instance().ClearBgReloadRequest();
 				}
-				ThemeManager::Instance().ClearBgReloadRequest();
 			}
 			while (SDL_PollEvent(&event)) {
 				if (event.type != frame_event)
@@ -520,10 +534,11 @@ int main(int argc, char* argv[]) {
 				break;
 			}
 #else
-			if ((SDL_GetKeyboardFocus() != emulator.window) && guiCreated) {
-				ImGui_ImplSDL2_ProcessEvent(&event);
-				break;
-			}
+			if (!no_dbg)
+				if ((SDL_GetKeyboardFocus() != emulator.window) && guiCreated) {
+					ImGui_ImplSDL2_ProcessEvent(&event);
+					break;
+				}
 #endif
 			[[fallthrough]];
 		default:

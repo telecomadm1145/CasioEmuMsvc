@@ -129,8 +129,12 @@ public:
 
 		// Edit the unscaled base style
 		auto& base = settings.isDarkMode ? settings.igs_dark : settings.igs_light;
-		ImGui::ShowStyleEditor(&base);
-
+		ImGuiStyle ims_backup;
+		std::memcpy(&ims_backup, &ImGui::GetStyle(), sizeof(base));
+		std::memcpy(&ImGui::GetStyle(), &base, sizeof(base));
+		ImGui::ShowStyleEditor();
+		std::memcpy(&base, &ImGui::GetStyle(), sizeof(base));
+		std::memcpy(&ImGui::GetStyle(), &ims_backup, sizeof(base));
 		if (ImGui::Button("Files.Save"_lc)) {
 			strncpy(settings.injectionFilePath, tempInjectionFilePath, sizeof(settings.injectionFilePath));
 			// The base style is already edited by ShowStyleEditor above

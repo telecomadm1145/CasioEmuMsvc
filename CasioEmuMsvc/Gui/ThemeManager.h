@@ -103,7 +103,7 @@ public:
 	void SetSeedColor(const ImVec4& color);
 	ImVec4 GetSeedColor() const { return m_settings.seedColor; }
 	ImVec4 ExtractDominantColor(SDL_Texture* texture, SDL_Renderer* renderer);
-	ImVec4 Harmonize(const ImVec4& source, float factor = 0.15f) const;
+	ImVec4 Harmonize(const ImVec4& source, float factor = 0.3f) const;
 
 private:
 	ThemeManager() = default;

@@ -190,4 +190,18 @@ Files.Save=保存
 Files.Open=打开
 Files.Cancel=取消
 
+PopUpScreenBtn=弹出屏幕
+UI.ChangeBg=更改背景
+Theme.Tint=启用色调
+Theme.SeedColor=主色
+Theme.MD=从背景提取
+CodeViewer.Search=搜索：
+CodeViewer.Hex=十六进制
+CodeViewer.Inst=指令
+CodeViewer.Find=查找
+CodeViewer.Next=查找下一个
+CodeViewer.Export=导出...
+BP.RegCmpMode=比较模式
+BP.SPHint=SP
+
 placeholder2=a)"

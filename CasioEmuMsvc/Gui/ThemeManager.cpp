@@ -570,7 +570,7 @@ void ThemeManager::ExtractAndApplyAutoTint(SDL_Texture* bgTexture, SDL_Renderer*
 	// Apply to current style
 	RequestFontRebuild();
 	SaveSettings();
-}// 小工具：把 (source_argb, factorKey) 合成一个 64bit key
+} // 小工具：把 (source_argb, factorKey) 合成一个 64bit key
 static inline uint64_t MakeHarmonizeKey(uint32_t src_argb, uint8_t factorKey) {
 	return (static_cast<uint64_t>(src_argb) << 8) | factorKey;
 }
@@ -617,7 +617,7 @@ ImVec4 ThemeManager::Harmonize(const ImVec4& source, float factor) const {
 		new_h -= 360.0;
 
 	// 保持原来的 chroma 和 tone，只改 hue
-	Hct out_hct(new_h, src_hct.get_chroma(), src_hct.get_tone());
+	Hct out_hct(new_h, src_hct.get_chroma(), src_hct.get_tone() * 0.5 + (m_settings.isDarkMode ? 0 : 70) * 0.5);
 	uint32_t out_argb = static_cast<uint32_t>(out_hct.ToInt());
 
 	ImVec4 result = ArgbToImVec4(out_argb);

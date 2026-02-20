@@ -19,7 +19,7 @@
 #include <filesystem>
 #include <imgui.h>
 #include <iostream>
-
+#include "sdl_win32_extra.h"
 #ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
@@ -1177,6 +1177,9 @@ std::string sui_loop() {
 		1200, 800,
 		SDL_WINDOW_SHOWN | (SDL_WINDOW_RESIZABLE));
 	renderer2 = SDL_CreateRenderer(window2, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
+#ifdef _WIN32
+	EnableDarkTitleBar(GetSDLWindowHandle(window2));
+#endif
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
 	if (renderer2 == nullptr) {
 		SDL_Log("Error creating SDL_Renderer!");

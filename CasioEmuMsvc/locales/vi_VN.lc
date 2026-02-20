@@ -191,4 +191,18 @@ Files.Save=Lưu
 Files.Open=Mở
 Files.Cancel=Hủy
 
+PopUpScreenBtn=Màn hình bật lên
+UI.ChangeBg=Thay đổi nền
+Theme.Tint=Bật lớp phủ màu
+Theme.SeedColor=Màu gốc
+Theme.MD=Trích xuất từ nền
+CodeViewer.Search=Tìm kiếm:
+CodeViewer.Hex=Hệ thập lục phân
+CodeViewer.Inst=Lệnh
+CodeViewer.Find=Tìm
+CodeViewer.Next=Tìm tiếp theo
+CodeViewer.Export=Xuất...
+BP.RegCmpMode=Chế độ so sánh
+BP.SPHint=SP
+
 placeholder2=a)"

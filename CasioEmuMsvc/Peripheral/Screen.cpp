@@ -49,6 +49,7 @@
 #undef min
 #undef max
 #endif
+extern bool low_perf_ext;
 
 #ifdef __ANDROID__
 #include <android/api-level.h>
@@ -197,7 +198,7 @@ namespace casioemu {
 #ifdef __ANDROID__
 					SDL_Delay(10);
 #else
-					if (ThemeManager::Instance().Settings().lowPerformanceMode) {
+					if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext) {
 						SDL_Delay(10);
 					}
 #endif
@@ -224,7 +225,7 @@ namespace casioemu {
 #ifdef __ANDROID__
 			ratio = 0.80;
 #else
-			if (ThemeManager::Instance().Settings().lowPerformanceMode) {
+			if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext) {
 				ratio = 0.80;
 			}
 #endif
@@ -233,7 +234,7 @@ namespace casioemu {
 #ifdef __ANDROID__
 				ratio = 0.80;
 #else
-				if (ThemeManager::Instance().Settings().lowPerformanceMode) {
+				if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext) {
 					ratio = 0.80;
 				}
 #endif
@@ -282,7 +283,7 @@ namespace casioemu {
 #ifdef __ANDROID__
 				ratio = 0.80;
 #else
-				if (ThemeManager::Instance().Settings().lowPerformanceMode) {
+				if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext) {
 					ratio = 0.80;
 				}
 #endif

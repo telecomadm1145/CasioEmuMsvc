@@ -25,6 +25,7 @@
 #ifdef ENABLE_SENTRY
 #include <sentry.h>
 #endif
+#include <sdl_win32_extra.h>
 bool show_sentry_feedback = false;
 char sentry_user_comments[1024] = "";
 char sentry_user_email[128] = "";
@@ -198,6 +199,9 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 		SDL_WINDOWPOS_CENTERED,
 		1600, 1080,
 		SDL_WINDOW_RESIZABLE);
+#endif
+#ifdef _WIN32
+	EnableDarkTitleBar(GetSDLWindowHandle(window));
 #endif
 	renderer = SDL_CreateRenderer(window, -1,
 		SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);

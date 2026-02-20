@@ -423,6 +423,7 @@
     <ClCompile Include="Peripheral\Spi.cpp" />
     <ClCompile Include="Plugin\PluginApi_Impl.cpp" />
     <ClCompile Include="Plugin\PluginMan.cpp" />
+    <ClCompile Include="sdl_win32_extra.cpp" />
     <ClCompile Include="StartupUi\StartupUi.cpp" />
     <ClCompile Include="Gui\CodeViewer.cpp" />
     <ClCompile Include="Gui\imgui\imgui.cpp" />
@@ -475,6 +476,7 @@
     <ClInclude Include="Ext\Random.hpp" />
     <ClInclude Include="Ext\Unicode.h" />
     <ClInclude Include="Gui\FileDialog.hpp" />
+    <ClInclude Include="Gui\RopTool.h" />
     <ClInclude Include="Gui\ThemeManager.h" />
     <ClInclude Include="Gui\UIScaling.h" />
     <ClInclude Include="Ext\3rd_licenses.h" />
@@ -528,6 +530,7 @@
     <ClInclude Include="Plugin\PluginMan.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Peripheral\Spi.h" />
+    <ClInclude Include="sdl_win32_extra.h" />
     <ClInclude Include="Settings.h" />
     <ClInclude Include="stringhelper.h" />
     <ClInclude Include="Gui\Ui.hpp" />

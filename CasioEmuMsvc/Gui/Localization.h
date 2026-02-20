@@ -11,6 +11,8 @@
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+#include <mutex>
+#include <unordered_set>
 
 class LocalizationException : public std::runtime_error {
 	using std::runtime_error::runtime_error;
@@ -76,15 +78,19 @@ public:
 
 	std::string Get(std::string_view key) const {
 		auto iter = m_translations.find(std::string(key));
-		if (iter == m_translations.end())
+		if (iter == m_translations.end()) {
+			ReportMissingKey(key);
 			return std::string(key);
+		}
 		return iter->second;
 	}
 
 	const char* GetCStr(const char* key) const {
 		auto iter = m_translations.find(key);
-		if (iter == m_translations.end())
+		if (iter == m_translations.end()) {
+			ReportMissingKey(key);
 			return key;
+		}
 		return iter->second.c_str();
 	}
 
@@ -136,6 +142,17 @@ private:
 	std::string m_currentLocale = "en_US";
 	std::unordered_map<std::string, std::string, std::hash<std::string_view>, std::equal_to<>> m_translations;
 	std::unordered_map<std::string, std::vector<PluralRule>, std::hash<std::string_view>, std::equal_to<>> m_pluralRules;
+	mutable std::unordered_set<std::string> m_missingKeys;
+	mutable std::mutex m_missingMutex;
+	void ReportMissingKey(std::string_view key) const {
+		std::lock_guard<std::mutex> lock(m_missingMutex);
+
+		if (m_missingKeys.insert(std::string(key)).second) {
+			// 只会在第一次插入成功时进入
+			fprintf(stderr, "[Localization] Missing key: %.*s\n",
+				(int)key.size(), key.data());
+		}
+	}
 
 	// Helper method to convert arguments to const char*
 	template <typename T>

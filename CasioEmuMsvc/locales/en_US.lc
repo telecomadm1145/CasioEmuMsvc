@@ -190,4 +190,18 @@ Files.Save=Save
 Files.Open=Open
 Files.Cancel=Cancel
 
+PopUpScreenBtn=Pop-up Screen
+UI.ChangeBg=Change Background
+Theme.Tint=Enable Tint
+Theme.SeedColor=Seed Color
+Theme.MD=Extract from Background
+CodeViewer.Search=Search:
+CodeViewer.Hex=Hex
+CodeViewer.Inst=Inst
+CodeViewer.Find=Find
+CodeViewer.Next=Find Next
+CodeViewer.Export=Export...
+BP.RegCmpMode=Comparsion Mode
+BP.SPHint=SP
+
 placeholder2=a)"
