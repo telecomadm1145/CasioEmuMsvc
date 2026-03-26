@@ -1,4 +1,4 @@
-﻿// dllmain.cpp : 定义 DLL 应用程序的入口点。
+// dllmain.cpp : 定义 DLL 应用程序的入口点。
 #include "pch.h"
 #include <Python.h>
 #include <sstream>
@@ -10,6 +10,7 @@ IMMU* g_mmu = nullptr;
 IChipset* g_chipset = nullptr;
 IEmulator* g_emulator = nullptr;
 Hooks* g_hooks = nullptr;
+IKeyboard* g_keyboard = nullptr;
 
 // Callback storage
 struct CallbackStorage {
@@ -338,8 +339,64 @@ static PyObject* py_resume_emulation(PyObject* self, PyObject* args) {
 	Py_RETURN_NONE;
 }
 
+// ---- Keyboard Python functions ----
 
-// [Previous Python module methods remain the same]
+static PyObject* py_key_press(PyObject* self, PyObject* args) {
+	int ki, ko;
+	if (!PyArg_ParseTuple(args, "ii", &ki, &ko))
+		return nullptr;
+	if (!g_keyboard) {
+		PyErr_SetString(PyExc_RuntimeError, "Keyboard interface not available");
+		return nullptr;
+	}
+	g_keyboard->Key(ki, ko, true);
+	Py_RETURN_NONE;
+}
+
+static PyObject* py_key_release(PyObject* self, PyObject* args) {
+	int ki, ko;
+	if (!PyArg_ParseTuple(args, "ii", &ki, &ko))
+		return nullptr;
+	if (!g_keyboard) {
+		PyErr_SetString(PyExc_RuntimeError, "Keyboard interface not available");
+		return nullptr;
+	}
+	g_keyboard->Key(ki, ko, false);
+	Py_RETURN_NONE;
+}
+
+static PyObject* py_key_press_code(PyObject* self, PyObject* args) {
+	unsigned int code;
+	if (!PyArg_ParseTuple(args, "I", &code))
+		return nullptr;
+	if (!g_keyboard) {
+		PyErr_SetString(PyExc_RuntimeError, "Keyboard interface not available");
+		return nullptr;
+	}
+	g_keyboard->PressCode(static_cast<uint8_t>(code), true);
+	Py_RETURN_NONE;
+}
+
+static PyObject* py_key_release_code(PyObject* self, PyObject* args) {
+	unsigned int code;
+	if (!PyArg_ParseTuple(args, "I", &code))
+		return nullptr;
+	if (!g_keyboard) {
+		PyErr_SetString(PyExc_RuntimeError, "Keyboard interface not available");
+		return nullptr;
+	}
+	g_keyboard->PressCode(static_cast<uint8_t>(code), false);
+	Py_RETURN_NONE;
+}
+
+static PyObject* py_key_release_all(PyObject* self, PyObject* args) {
+	if (!g_keyboard) {
+		PyErr_SetString(PyExc_RuntimeError, "Keyboard interface not available");
+		return nullptr;
+	}
+	g_keyboard->ReleaseAll();
+	Py_RETURN_NONE;
+}
 
 // Updated method table with new callback methods
 static PyMethodDef EmulatorMethods[] = {
@@ -353,7 +410,7 @@ static PyMethodDef EmulatorMethods[] = {
 	{"pause", py_pause_emulation, METH_NOARGS, "Pause emulation"},
 	{"resume", py_resume_emulation, METH_NOARGS, "Resume emulation"},
 
-	// New callback methods
+	// Callback methods
 	{"set_instruction_callback", py_set_instruction_callback, METH_VARARGS, "Set instruction execution callback"},
 	{"set_call_callback", py_set_call_callback, METH_VARARGS, "Set function call callback"},
 	{"set_return_callback", py_set_return_callback, METH_VARARGS, "Set function return callback"},
@@ -362,6 +419,13 @@ static PyMethodDef EmulatorMethods[] = {
 	{"set_brk_callback", py_set_brk_callback, METH_VARARGS, "Set BRK instruction callback"},
 	{"set_interrupt_callback", py_set_interrupt_callback, METH_VARARGS, "Set interrupt callback"},
 	{"set_reset_callback", py_set_reset_callback, METH_VARARGS, "Set reset callback"},
+
+	// Keyboard methods
+	{"key_press", py_key_press, METH_VARARGS, "Press a key by KI/KO indices: key_press(ki, ko)"},
+	{"key_release", py_key_release, METH_VARARGS, "Release a key by KI/KO indices: key_release(ki, ko)"},
+	{"key_press_code", py_key_press_code, METH_VARARGS, "Press a key by kiko code byte: key_press_code(code)"},
+	{"key_release_code", py_key_release_code, METH_VARARGS, "Release a key by kiko code byte: key_release_code(code)"},
+	{"key_release_all", py_key_release_all, METH_NOARGS, "Release all non-stuck keys"},
 	{nullptr, nullptr, 0, nullptr}
 };
 // Module definition
@@ -567,6 +631,7 @@ extern "C" __declspec(dllexport) void fPluginLoad(PluginApi* api) {
 	g_chipset = api->QueryInterface<IChipset>();
 	g_emulator = api->QueryInterface<IEmulator>();
 	g_hooks = api->QueryInterface<Hooks>();
+	g_keyboard = api->QueryInterface<IKeyboard>();
 	// Set up hooks
 	if (g_hooks) {
 		g_hooks->SetupOnInstructionHook(OnInstructionHandler);

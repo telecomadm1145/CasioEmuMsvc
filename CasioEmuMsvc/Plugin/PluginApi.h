@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "ModelInfo.h"
 #include <cstdint>
 #include <functional>
@@ -87,6 +87,21 @@ public:
 	// Version 1
 	virtual void* GetRom() = 0;
 	virtual size_t GetRomSize() = 0;
+};
+
+/// <summary>
+/// Keyboard automation interface (Version 2).
+/// Obtained via PluginApi::QueryInterface<IKeyboard>().
+/// </summary>
+class IKeyboard {
+public:
+	/// Press or release the button at the given KI/KO bit position.
+	/// ki: KI line index (0-7), ko: KO line index (0-9), pressed: true=press, false=release
+	virtual void Key(int ki, int ko, bool pressed) = 0;
+	/// Release all non-stuck buttons.
+	virtual void ReleaseAll() = 0;
+	/// Press/release by raw kiko code byte (same encoding as ModelInfo::buttons[].kiko).
+	virtual void PressCode(uint8_t code, bool pressed) = 0;
 };
 #ifndef _NO_FUND_API
 class UIWindow {

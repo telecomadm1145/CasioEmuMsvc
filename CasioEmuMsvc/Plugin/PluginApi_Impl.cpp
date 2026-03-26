@@ -1,8 +1,9 @@
-﻿#define _NO_FUND_API
+#define _NO_FUND_API
 #include "PluginApi.h"
 #include <CPU.hpp>
 #include <Chipset.hpp>
 #include <MMU.hpp>
+#include <Keyboard.hpp>
 extern std::vector<UIWindow*> windows;
 
 class PluginApi_Impl : public PluginApi {
@@ -87,6 +88,22 @@ class PluginApi_Impl : public PluginApi {
 			return m_emu->chipset.rom_data.size();
 		}
 	} chipset_impl;
+	class IKeyboard_Impl : public IKeyboard {
+		// Delegates to the keyboard peripheral's IKeyboardAutomation
+		casioemu::IKeyboardAutomation* GetKbd() {
+			return (casioemu::IKeyboardAutomation*)m_emu->chipset.QueryInterface(
+				typeid(casioemu::IKeyboardAutomation).name());
+		}
+		void Key(int ki, int ko, bool pressed) override {
+			if (auto* kbd = GetKbd()) kbd->Key(ki, ko, pressed);
+		}
+		void ReleaseAll() override {
+			if (auto* kbd = GetKbd()) kbd->ReleaseAll();
+		}
+		void PressCode(uint8_t code, bool pressed) override {
+			if (auto* kbd = GetKbd()) kbd->PressCode(code, pressed);
+		}
+	} keyboard_impl;
 	class Hooks_Impl : public Hooks {
 		// 通过 Hooks 继承
 
@@ -175,6 +192,8 @@ class PluginApi_Impl : public PluginApi {
 			return &mmu_impl;
 		if (strcmp(name, typeid(Hooks).name()) == 0)
 			return &hooks_impl;
+		if (strcmp(name, typeid(IKeyboard).name()) == 0)
+			return &keyboard_impl;
 		return m_emu->chipset.QueryInterface(name);
 	}
 };

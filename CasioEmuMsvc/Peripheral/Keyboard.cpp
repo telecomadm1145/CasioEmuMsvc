@@ -1,5 +1,5 @@
-﻿#include <SDL.h>
 #include "Keyboard.hpp"
+#include <SDL.h>
 
 #include "Chipset/Chipset.hpp"
 #include "Chipset/MMU.hpp"
@@ -15,7 +15,7 @@
 #include <unordered_map>
 
 namespace casioemu {
-	class Keyboard : public Peripheral {
+	class Keyboard : public Peripheral, public IKeyboardAutomation {
 		MMURegion region_ko_mask, region_ko, region_ki, region_input_mode, region_input_filter;
 		uint16_t keyboard_out, keyboard_out_mask;
 		uint8_t keyboard_in, input_mode, input_filter, keyboard_ghost[8], ki_ghost[8];
@@ -71,7 +71,53 @@ namespace casioemu {
 		void RecalculateKI();
 		void RecalculateGhost();
 		void RecalculateEmuInput(); // Declaration for new function
-		bool AnyFingerPressing();   // Declaration for new function
+		bool AnyFingerPressing();	// Declaration for new function
+		void* QueryInterface(const char* name) override {
+			if (strcmp(name, typeid(IKeyboardAutomation).name()) == 0) {
+				return (IKeyboardAutomation*)this;
+			}
+			return 0;
+		}
+
+		// 通过 IKeyboardAutomation 继承
+		void Key(int ki, int ko, bool pressed) override {
+			uint8_t ki_bit = (uint8_t)(1 << ki);
+			uint8_t ko_bit = (uint8_t)(1 << ko);
+			for (auto& button : buttons) {
+				if (button.type == Button::BT_BUTTON &&
+					button.ki_bit == ki_bit && button.ko_bit == ko_bit) {
+					if (pressed) {
+						PressButton(button, false, -1);
+					} else {
+						if (button.pressed && !button.stuck) {
+							button.pressed = false;
+							button.pressingFingerId = -1;
+							if (real_hardware) RecalculateGhost();
+							else RecalculateEmuInput();
+						}
+					}
+					return;
+				}
+			}
+		}
+		void PressCode(uint8_t code, bool pressed) override {
+			if (pressed) {
+				PressButtonByCode(code);
+			} else {
+				int button_index;
+				if (code == 0xFF) button_index = 63;
+				else button_index = ((code >> 1) & 0x38) | (code & 0x07);
+				if (button_index < 64) {
+					auto& button = buttons[button_index];
+					if (button.pressed && !button.stuck) {
+						button.pressed = false;
+						button.pressingFingerId = -1;
+						if (real_hardware) RecalculateGhost();
+						else RecalculateEmuInput();
+					}
+				}
+			}
+		}
 	};
 	void Keyboard::Initialise() {
 		renderer = emulator.GetRenderer();
@@ -410,28 +456,25 @@ namespace casioemu {
 
 	void Keyboard::UIEvent(SDL_Event& event) {
 		switch (event.type) {
-		case SDL_FINGERDOWN:
-			{
-				// SDL_Log("Finger down: ID %lld at %f, %f", event.tfinger.fingerId, event.tfinger.x, event.tfinger.y);
-				int window_w, window_h;
-				SDL_GetWindowSize(emulator.window, &window_w, &window_h);
-				PressAt(event.tfinger.x * window_w, event.tfinger.y * window_h, false, event.tfinger.fingerId);
-			}
-			break;
-		case SDL_FINGERUP:
-			{
-				// SDL_Log("Finger up: ID %lld at %f, %f", event.tfinger.fingerId, event.tfinger.x, event.tfinger.y);
-				int window_w, window_h;
-				SDL_GetWindowSize(emulator.window, &window_w, &window_h);
-				ReleaseAt(event.tfinger.x * window_w, event.tfinger.y * window_h, event.tfinger.fingerId);
-			}
-			break;
+		case SDL_FINGERDOWN: {
+			// SDL_Log("Finger down: ID %lld at %f, %f", event.tfinger.fingerId, event.tfinger.x, event.tfinger.y);
+			int window_w, window_h;
+			SDL_GetWindowSize(emulator.window, &window_w, &window_h);
+			PressAt(event.tfinger.x * window_w, event.tfinger.y * window_h, false, event.tfinger.fingerId);
+		} break;
+		case SDL_FINGERUP: {
+			// SDL_Log("Finger up: ID %lld at %f, %f", event.tfinger.fingerId, event.tfinger.x, event.tfinger.y);
+			int window_w, window_h;
+			SDL_GetWindowSize(emulator.window, &window_w, &window_h);
+			ReleaseAt(event.tfinger.x * window_w, event.tfinger.y * window_h, event.tfinger.fingerId);
+		} break;
 		case SDL_MOUSEBUTTONDOWN:
 			// Mouse clicks do not carry finger ID, treat as new press or stick
 			// The PressAt/PressButton will handle if a button is already pressed by a finger
 			if (event.button.button == SDL_BUTTON_LEFT) {
 				PressAt(event.button.x, event.button.y, false, -1);
-			} else if (event.button.button == SDL_BUTTON_RIGHT) {
+			}
+			else if (event.button.button == SDL_BUTTON_RIGHT) {
 				PressAt(event.button.x, event.button.y, true, -1);
 			}
 			break;
@@ -462,14 +505,17 @@ namespace casioemu {
 					}
 				}
 				if (button_released_by_mouse) {
-					if (real_hardware) RecalculateGhost();
-					else RecalculateEmuInput(); // New function to update emu input state
-				} else if (!AnyFingerPressing()) {
-                                    // If no fingers are pressing anything, and a mouse up occurs,
-                                    // it might be a general release action.
-                                    // This is debatable. For now, to minimize impact, only ReleaseAll if no fingers are active.
-                                    // ReleaseAll(); // Original behavior - potentially problematic with multi-touch
-                                }
+					if (real_hardware)
+						RecalculateGhost();
+					else
+						RecalculateEmuInput(); // New function to update emu input state
+				}
+				else if (!AnyFingerPressing()) {
+					// If no fingers are pressing anything, and a mouse up occurs,
+					// it might be a general release action.
+					// This is debatable. For now, to minimize impact, only ReleaseAll if no fingers are active.
+					// ReleaseAll(); // Original behavior - potentially problematic with multi-touch
+				}
 			}
 			// Right mouse up does nothing to button.pressed state typically
 			break;
@@ -519,7 +565,8 @@ namespace casioemu {
 	}
 
 	void Keyboard::RecalculateEmuInput() {
-		if (real_hardware) return; // This function is only for emulated input path
+		if (real_hardware)
+			return; // This function is only for emulated input path
 
 		uint8_t current_keyboard_in_emu = 0;
 		uint8_t current_keyboard_out_emu = 0;
@@ -547,7 +594,8 @@ namespace casioemu {
 			if (EXI0INT < emulator.chipset.EffectiveMICount) {
 				emulator.chipset.MaskableInterrupts[EXI0INT].TryRaise();
 			}
-		} else {
+		}
+		else {
 			keyboard_in_emu = 0;
 			keyboard_out_emu = 0;
 		}
@@ -591,26 +639,29 @@ namespace casioemu {
 			// this action makes it (or keeps it) stuck with the current fingerId (or generic if fingerId is -1).
 			else if (!button.stuck) {
 				button.stuck = true;
-				button.pressed = true; // Sticking implies pressing
+				button.pressed = true;				// Sticking implies pressing
 				button.pressingFingerId = fingerId; // Can be -1 for mouse/key stick
-			} else {
+			}
+			else {
 				// It's already stuck, but by a different finger. This new press (stick or not)
 				// will now also be associated with this fingerId if it's a finger.
 				// The button remains stuck.
-				if(fingerId != -1) button.pressingFingerId = fingerId;
+				if (fingerId != -1)
+					button.pressingFingerId = fingerId;
 				// if fingerId is -1 (mouse/key), and it's already stuck by a finger, the mouse/key press is also on it.
 				// No change to stuck state if already stuck. pressingFingerId might change to this new finger.
 			}
-		} else { // Not a stick press
-			button.stuck = false; // A normal press always unsticks the button.
+		}
+		else {									// Not a stick press
+			button.stuck = false;				// A normal press always unsticks the button.
 			button.pressingFingerId = fingerId; // Assign current finger, or -1 for mouse/key
 		}
-
 
 		if (button.type == Button::BT_POWER && button.pressed && !old_pressed_state) {
 			if (!(emulator.hardware_id == HW_CLASSWIZ && (emulator.chipset.data_FCON & 0x03) == 0x03)) {
 				emulator.chipset.Reset();
-			} else {
+			}
+			else {
 				// printf("[Keyboard][Info] RESETB is BLOCKED.Press Ctrl+F11 to reset.\n");
 			}
 		}
@@ -629,7 +680,8 @@ namespace casioemu {
 			}
 			if (real_hardware) {
 				RecalculateGhost(); // This internally calls RecalculateKI
-			} else {
+			}
+			else {
 				RecalculateEmuInput();
 			}
 		}
@@ -658,7 +710,8 @@ namespace casioemu {
 					button.pressingFingerId = -1; // Clear the finger ID
 					button_effectively_released = true;
 					// SDL_Log("Button code %02X released by finger %lld", button.code, fingerId);
-				} else if (button.pressed && button.pressingFingerId == fingerId && button.stuck) {
+				}
+				else if (button.pressed && button.pressingFingerId == fingerId && button.stuck) {
 					// Finger lifted from a button it was actively holding while stuck.
 					// The button remains pressed because it's stuck.
 					// We can clear the pressingFingerId to indicate no specific finger is actively holding it down anymore.
@@ -673,12 +726,12 @@ namespace casioemu {
 		if (button_effectively_released) {
 			if (real_hardware) {
 				RecalculateGhost();
-			} else {
+			}
+			else {
 				RecalculateEmuInput();
 			}
 		}
 	}
-
 
 	void Keyboard::PressButtonByCode(uint8_t code) {
 		if (code == 0xFF) {
@@ -687,7 +740,7 @@ namespace casioemu {
 		}
 		else {
 			int button_index = ((code >> 1) & 0x38) | (code & 0x07);
-			if (button_index < 63) { // Ensure index is valid
+			if (button_index < 63) {						  // Ensure index is valid
 				PressButton(buttons[button_index], false, 0); // Not passing fingerId
 			}
 			else {
@@ -779,12 +832,14 @@ namespace casioemu {
 	void Keyboard::RecalculateKI() { // This is for real_hardware=true path
 		if (emulator.hardware_id == HW_TI) {
 			auto pp = emulator.chipset.QueryInterface<IPortProvider>();
-			if (!pp) return;
+			if (!pp)
+				return;
 			auto is_on_pressed = false;
 			keyboard_in = 0;
 			for (const auto& button : buttons) { // Iterate const
 				if (button.code == 0x29) {
-					if (button.pressed) is_on_pressed = true;
+					if (button.pressed)
+						is_on_pressed = true;
 					continue;
 				}
 				if (button.type == Button::BT_BUTTON && button.pressed && button.ko_bit & keyboard_out)
@@ -822,9 +877,12 @@ namespace casioemu {
 				keyboard_in |= button.ki_bit;
 		}
 		if (emulator.hardware_id != HW_TI) {
-			if (keyboard_out & ~keyboard_out_mask & (1 << 7) && p0) keyboard_in &= 0x7F;
-			if (keyboard_out & ~keyboard_out_mask & (1 << 8) && p1) keyboard_in &= 0x7F;
-			if (keyboard_out & ~keyboard_out_mask & (1 << 9) && p146) keyboard_in &= 0x7F;
+			if (keyboard_out & ~keyboard_out_mask & (1 << 7) && p0)
+				keyboard_in &= 0x7F;
+			if (keyboard_out & ~keyboard_out_mask & (1 << 8) && p1)
+				keyboard_in &= 0x7F;
+			if (keyboard_out & ~keyboard_out_mask & (1 << 9) && p146)
+				keyboard_in &= 0x7F;
 		}
 	}
 
@@ -840,7 +898,8 @@ namespace casioemu {
 				if (button.type == Button::BT_BUTTON) {
 					had_effect = true;
 				}
-			} else if (button.stuck && button.pressingFingerId != -1) {
+			}
+			else if (button.stuck && button.pressingFingerId != -1) {
 				// If it's stuck AND a finger was last associated with it (e.g. finger held it down while it got stuck),
 				// clear the finger ID as that finger is no longer "actively" pressing it due to ReleaseAll.
 				// The button remains pressed because it's stuck.
@@ -851,7 +910,8 @@ namespace casioemu {
 		if (had_effect) {
 			if (real_hardware) {
 				RecalculateGhost(); // This calls RecalculateKI
-			} else {
+			}
+			else {
 				RecalculateEmuInput();
 			}
 		}
