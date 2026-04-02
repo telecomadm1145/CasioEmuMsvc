@@ -29,6 +29,7 @@ endif()
 include_directories(#${CMAKE_SOURCE_DIR}/SDL_image/include
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Ext
+        ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Ext/cam
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Dcl
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Chipset
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Containers
@@ -52,6 +53,7 @@ file(GLOB MAIN_SOURCES_ROOT "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/*.cpp")
 file(GLOB MAIN_SOURCES_CHIPSET "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Chipset/*.cpp")
 file(GLOB MAIN_SOURCES_CRASH "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/CrashHandler/*.cpp")
 file(GLOB MAIN_SOURCES_EXT "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Ext/*.cpp")
+file(GLOB MAIN_SOURCES_EXT_CAM "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Ext/cam/*.cpp")
 file(GLOB MAIN_SOURCES_GDB "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/GDB/*.cpp")
 file(GLOB MAIN_SOURCES_GUI "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Gui/*.cpp")
 file(GLOB MAIN_SOURCES_IMGUI "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Gui/imgui/*.cpp")
@@ -65,6 +67,7 @@ set(MAIN_SOURCES
     ${MAIN_SOURCES_CHIPSET}
     ${MAIN_SOURCES_CRASH}
     ${MAIN_SOURCES_EXT}
+    ${MAIN_SOURCES_EXT_CAM}
     ${MAIN_SOURCES_GDB}
     ${MAIN_SOURCES_GUI}
     ${MAIN_SOURCES_IMGUI}
