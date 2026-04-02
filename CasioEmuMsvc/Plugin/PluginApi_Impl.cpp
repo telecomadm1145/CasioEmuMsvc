@@ -66,6 +66,12 @@ class PluginApi_Impl : public PluginApi {
 		std::string GetModelFilePath(std::string relative_path) override {
 			return m_emu->GetModelFilePath(relative_path);
 		}
+		const char* GetRunningModelName() override {
+			return m_emu->ModelDefinition.model_name.c_str();
+		}
+		const char* GetRunningRomPath() override {
+			return m_emu->ModelDefinition.rom_path.c_str();
+		}
 	} emu_impl;
 	class IChipset_Impl : public IChipset {
 		// 通过 IChipset 继承

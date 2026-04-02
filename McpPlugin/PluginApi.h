@@ -2,6 +2,7 @@
 #include "ModelInfo.h"
 #include <cstdint>
 #include <functional>
+#include <mutex>
 #include <imgui.h>
 #ifdef _NO_FUND_API
 #include "Hooks.h"
@@ -54,10 +55,6 @@ public:
 	virtual std::string GetModelFilePath(std::string relative_path) = 0;
 	virtual void* GetRenderer() = 0;
 	virtual void* GetInterfaceTexture() = 0;
-
-	// New methods for extended status info
-	virtual const char* GetRunningModelName() = 0;
-	virtual const char* GetRunningRomPath() = 0;
 };
 
 class ICPU {
@@ -78,6 +75,10 @@ public:
 };
 class IChipset {
 public:
+	/// <summary>
+	/// Raise an interrupt.
+	/// </summary>
+	/// <param name="index"></param>
 	virtual void RaiseInterrupt(int index) = 0;
 	virtual void Tick() = 0;
 	enum struct RunStatus {
@@ -87,10 +88,6 @@ public:
 	};
 	virtual void SetStatus(RunStatus status) = 0;
 	virtual RunStatus GetStatus() = 0;
-
-	// Version 1
-	virtual void* GetRom() = 0;
-	virtual size_t GetRomSize() = 0;
 };
 
 /// <summary>
@@ -113,7 +110,7 @@ public:
 	UIWindow(const char* name) : name(name) {}
 	const char* name{};
 	bool open = true;
-	ImVec2 inital_size{800, 800};
+	ImVec2 inital_size{ 800, 800 };
 	ImGuiWindowFlags flags{};
 	virtual void Render() {
 		if (!open)
@@ -141,7 +138,7 @@ public:
 	/// Add a window to debugger window.
 	/// </summary>
 	/// <param name="wnd">The window, cannot be null.</param>
-	virtual void AddWindow(UIWindow* wnd) = 0;
+	[[nodiscard]] virtual void AddWindow(UIWindow* wnd) = 0;
 	/// <summary>
 	/// When it returns false, a plugin shouldn't be loaded.
 	/// </summary>
@@ -153,18 +150,14 @@ public:
 	/// <summary>
 	/// Check if the STL is the same.
 	/// </summary>
-	virtual void AssertFundamentalSTL(size_t a, size_t b, size_t c, size_t d) {
-		if (a != sizeof(std::string) || b != sizeof(std::vector<int>) || c != sizeof(std::map<int, int>) || d != sizeof(std::mutex)) {
-			PANIC("STL size mismatch.");
-		}
-	}
+	virtual void AssertFundamentalSTL(size_t a, size_t b, size_t c, size_t d) = 0;
 	[[nodiscard]] virtual void* QueryInterface(const char* name) = 0;
 	template <class T>
 	[[nodiscard]] T* QueryInterface() {
 		return reinterpret_cast<T*>(QueryInterface(typeid(T).name()));
 	}
 };
-#define PLUGINASSERTSTL(x) x.AssertFundamentalSTL(sizeof(std::string), sizeof(std::vector<int>), sizeof(std::map<int, int>), sizeof(std::mutex))
+#define PLUGINASSERTSTL(x) x->AssertFundamentalSTL(sizeof(std::string), sizeof(std::vector<int>), sizeof(std::map<int, int>), sizeof(std::mutex))
 
 /// <summary>
 /// The plugin DLL's entry point.

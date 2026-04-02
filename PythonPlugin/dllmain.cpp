@@ -447,11 +447,28 @@ class PythonConsole : public UIWindow {
 public:
 	PythonConsole() : UIWindow("Python Console") {
 		memset(m_inputBuffer, 0, sizeof(m_inputBuffer));
-		m_history.push_back("");  // Current input line
 		InitPythonTypes();
+		m_output << "Python " << Py_GetVersion() << " Console\n";
+		m_output << "Type command and press Enter to evaluate. "
+					"The 'emulator' module is imported by default as 'emulator' and 'emu'.\n";
 	}
 
 	void RenderCore() override {
+		// Reorder: Output at top, Input at bottom
+		ImVec2 childSize = ImGui::GetContentRegionAvail();
+		childSize.y -= ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
+
+		ImGui::BeginChild("ScrollingRegion", childSize, true, ImGuiWindowFlags_HorizontalScrollbar);
+		ImGui::TextUnformatted(m_output.str().c_str());
+		if (m_scrollToBottom) {
+			ImGui::SetScrollHereY(1.0f);
+			m_scrollToBottom = false;
+		}
+		ImGui::EndChild();
+
+		ImGui::Separator();
+
+		bool reclaim_focus = false;
 		ImGui::PushItemWidth(-1);
 		if (ImGui::InputText("##input", m_inputBuffer, sizeof(m_inputBuffer),
 			ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackHistory,
@@ -461,26 +478,14 @@ public:
 			}, (void*)this))
 		{
 			ExecuteCommand();
+			reclaim_focus = true;
 		}
 		ImGui::PopItemWidth();
 
-		//ImGui::BeginChild("ScrollingRegion", ImVec2(0, 0), true);
-
-		// 获取子区域的可用空间并设置给InputTextMultiline
-		ImVec2 textSize = ImGui::GetContentRegionAvail();
-		ImGui::InputTextMultiline(
-			"##aaa",
-			(char*)m_output.str().c_str(),
-			m_output.str().capacity(),
-			textSize, // 使用可用区域尺寸
-			ImGuiInputTextFlags_ReadOnly
-		);
-
-		//if (m_scrollToBottom) {
-		//	ImGui::SetScrollHereY(1.0f);
-		//	m_scrollToBottom = false;
-		//}
-		//ImGui::EndChild();
+		ImGui::SetItemDefaultFocus();
+		if (reclaim_focus) {
+			ImGui::SetKeyboardFocusHere(-1); // Auto-focus back on input
+		}
 	}
 
 private:
@@ -517,6 +522,10 @@ private:
 		Py_RETURN_NONE;
 	}
 
+	static PyObject* ConsoleOutput_flush(PyObject* self, PyObject* args) {
+		Py_RETURN_NONE; // No-op, just to satisfy Python's expectations
+	}
+
 	static PyMethodDef ConsoleOutput_methods[];
 	static PyTypeObject ConsoleOutputType;
 	static void InitPythonTypes() {
@@ -535,41 +544,87 @@ private:
 	void ExecuteCommand() {
 		if (strlen(m_inputBuffer) > 0) {
 			// Add to history
-			m_history.insert(m_history.end() - 1, m_inputBuffer);
+			m_history.push_back(m_inputBuffer);
 
-			// Output the command
-			m_output << ">>> " << m_inputBuffer << "\n";
+			std::string cmd = m_inputBuffer;
+			if (cmd == "clear") {
+				m_output.str("");
+				m_output.clear();
+			} else {
+				// Output the command
+				m_output << ">>> " << m_inputBuffer << "\n";
 
-			// Redirect Python stdout/stderr to our output stream
-			PyObject* sysModule = PyImport_ImportModule("sys");
-			if (sysModule) {
-				// Backup original streams
-				PyObject* oldStdout = PyObject_GetAttrString(sysModule, "stdout");
-				PyObject* oldStderr = PyObject_GetAttrString(sysModule, "stderr");
+				// Redirect Python stdout/stderr to our output stream
+				PyObject* sysModule = PyImport_ImportModule("sys");
+				if (sysModule) {
+					// Backup original streams
+					PyObject* oldStdout = PyObject_GetAttrString(sysModule, "stdout");
+					PyObject* oldStderr = PyObject_GetAttrString(sysModule, "stderr");
 
-				// Create redirection objects
-				ConsoleOutput* stdoutObj = PyObject_New(ConsoleOutput, &ConsoleOutputType);
-				stdoutObj->console = this;
-				ConsoleOutput* stderrObj = PyObject_New(ConsoleOutput, &ConsoleOutputType);
-				stderrObj->console = this;
+					// Create redirection objects
+					ConsoleOutput* stdoutObj = PyObject_New(ConsoleOutput, &ConsoleOutputType);
+					stdoutObj->console = this;
+					ConsoleOutput* stderrObj = PyObject_New(ConsoleOutput, &ConsoleOutputType);
+					stderrObj->console = this;
 
-				// Replace standard streams
-				PyObject_SetAttrString(sysModule, "stdout", (PyObject*)stdoutObj);
-				PyObject_SetAttrString(sysModule, "stderr", (PyObject*)stderrObj);
+					// Replace standard streams
+					PyObject_SetAttrString(sysModule, "stdout", (PyObject*)stdoutObj);
+					PyObject_SetAttrString(sysModule, "stderr", (PyObject*)stderrObj);
 
-				// Execute Python code
-				PyRun_SimpleString(m_inputBuffer);
+					if (cmd == "help") {
+						m_output << "CasioEmu Python Console Built-in Help\n";
+						m_output << "-------------------------------------\n";
+						m_output << "The 'emulator' module is imported by default as 'emu'.\n";
+						m_output << "Available API functions:\n";
 
-				// Restore original streams
-				PyObject_SetAttrString(sysModule, "stdout", oldStdout);
-				PyObject_SetAttrString(sysModule, "stderr", oldStderr);
+						m_output << "\n--- Memory & Registers ---\n";
+						m_output << "  emu.read_memory(address: int) -> int\n";
+						m_output << "  emu.write_memory(address: int, value: int)\n";
+						m_output << "  emu.read_register(reg_name: str) -> int\n";
 
-				// Cleanup
-				Py_XDECREF(oldStdout);
-				Py_XDECREF(oldStderr);
-				Py_XDECREF(stdoutObj);
-				Py_XDECREF(stderrObj);
-				Py_DECREF(sysModule);
+						m_output << "\n--- Emulator Control ---\n";
+						m_output << "  emu.pause()\n";
+						m_output << "  emu.resume()\n";
+						m_output << "  emu.raise_interrupt(interrupt_index: int)\n";
+						m_output << "  emu.get_solar_voltage() -> float\n";
+						m_output << "  emu.get_battery_voltage() -> float\n";
+
+						m_output << "\n--- Keyboard ---\n";
+						m_output << "  emu.key_press(ki: int, ko: int)\n";
+						m_output << "  emu.key_release(ki: int, ko: int)\n";
+						m_output << "  emu.key_press_code(code: int)\n";
+						m_output << "  emu.key_release_code(code: int)\n";
+						m_output << "  emu.key_release_all()\n";
+
+						m_output << "\n--- Hooks ---\n";
+						m_output << "  emu.set_instruction_callback(cb(pc_before, pc_after))  # cb returns object with 'should_break' bool\n";
+						m_output << "  emu.set_call_callback(cb(pc, lr))\n";
+						m_output << "  emu.set_return_callback(cb(pc, lr))\n";
+						m_output << "  emu.set_memory_read_callback(cb(offset, value))  # cb returns object with 'handled' bool\n";
+						m_output << "  emu.set_memory_write_callback(cb(offset, value)) # cb returns object with 'handled' bool\n";
+						m_output << "  emu.set_brk_callback(cb(index))                  # cb returns object with 'handled' bool\n";
+						m_output << "  emu.set_interrupt_callback(cb(index))            # cb returns object with 'handled' bool\n";
+						m_output << "  emu.set_reset_callback(cb())\n";
+
+						m_output << "\nSpecial UI commands:\n";
+						m_output << "  clear - Clear the console screen\n";
+						m_output << "  help  - Show this help message\n";
+					} else {
+						// Execute Python code
+						PyRun_SimpleString(m_inputBuffer);
+					}
+
+					// Restore original streams
+					PyObject_SetAttrString(sysModule, "stdout", oldStdout);
+					PyObject_SetAttrString(sysModule, "stderr", oldStderr);
+
+					// Cleanup
+					Py_XDECREF(oldStdout);
+					Py_XDECREF(oldStderr);
+					Py_XDECREF(stdoutObj);
+					Py_XDECREF(stderrObj);
+					Py_DECREF(sysModule);
+				}
 			}
 			// Clear input and scroll to bottom
 			memset(m_inputBuffer, 0, sizeof(m_inputBuffer));
@@ -584,7 +639,7 @@ private:
 			const int prev_history_pos = m_historyPos;
 			if (data->EventKey == ImGuiKey_UpArrow) {
 				if (m_historyPos == -1)
-					m_historyPos = m_history.size() - 1;
+					m_historyPos = m_history.empty() ? -1 : m_history.size() - 1;
 				else if (m_historyPos > 0)
 					m_historyPos--;
 			}
@@ -607,6 +662,7 @@ private:
 };
 PyMethodDef PythonConsole::ConsoleOutput_methods[] = {
 	{"write", PythonConsole::ConsoleOutput_write, METH_VARARGS, "Write output to console"},
+	{"flush", PythonConsole::ConsoleOutput_flush, METH_NOARGS, "Flush output to console"},
 	{nullptr, nullptr, 0, nullptr}
 };
 
@@ -651,6 +707,12 @@ extern "C" __declspec(dllexport) void fPluginLoad(PluginApi* api) {
 	PyConfig_InitPythonConfig(&config);
 	status = PyConfig_SetBytesString(&config, &config.program_name, "");
 	Py_InitializeFromConfig(&config);
+
+	// Pre-import emulator to make it available immediately in the console context
+	PyRun_SimpleString(
+		"import emulator\n"
+		"emu = emulator\n"
+	);
 
 	// Add the console window
 	api->AddWindow(new PythonConsole());
