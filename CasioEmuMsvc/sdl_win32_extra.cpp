@@ -25,6 +25,6 @@ void EnableDarkTitleBar(void* hwnd) {
 #else
 void EnableDarkTitleBar(void* hwnd) {
 }
-void* GetSDLWindowHandle(SDL_Window* window) {
+void* GetSDLWindowHandle(struct SDL_Window* window) {
 }
 #endif // _WIN32
