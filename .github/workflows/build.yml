@@ -68,7 +68,7 @@ jobs:
         COMMIT_HASH: ${{ github.sha }}
         RELEASE_TAG: "CasioEmuMsvc@${{ github.sha }}"
       working-directory: |
-          ${{ matrix.platform_arch == 'x86' && format('Win32\{0}', env.BUILD_CONFIGURATION) || format('{0}\{1}', matrix.platform_arch, env.BUILD_CONFIGURATION) }}
+          ${{ matrix.platform_arch == 'x86' && format('Win32\\{0}', env.BUILD_CONFIGURATION) || format('{0}\\{1}', matrix.platform_arch, env.BUILD_CONFIGURATION) }}
       run: |
             $sentry_cli = "${{ github.workspace }}\CasioEmuMsvc\sentry-cli.exe"
             & $sentry_cli debug-files upload -o $env:SENTRY_ORG -p $env:SENTRY_PROJECT .
@@ -79,8 +79,8 @@ jobs:
       with:
         name: Release-${{ matrix.platform_arch }}
         path: |
-          ${{ matrix.platform_arch == 'x86' && format('Win32\{0}', env.BUILD_CONFIGURATION) || format('{0}\{1}', matrix.platform_arch, env.BUILD_CONFIGURATION) }}
-        if-no-files-found: warn
+          ${{ matrix.platform_arch == 'x86' && format('Win32\\{0}', env.BUILD_CONFIGURATION) || format('{0}\\{1}', matrix.platform_arch, env.BUILD_CONFIGURATION) }}
+        if-no-files-found: error
 
     - name: Set up JDK 21
       if: matrix.platform == 'android'
@@ -120,10 +120,11 @@ jobs:
       with:
         name: Release-Linux-x64
         path: build/CasioEmuMsvc/CasioEmuMsvc
-        if-no-files-found: warn
+        if-no-files-found: error
 
   release:
     name: Create Release
+    needs: build
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/stable'
 
@@ -137,16 +138,6 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         path: ./artifacts
-
-    - name: Check if any artifacts exist
-      id: check_artifacts
-      run: |
-        if [ -z "$(ls -A ./artifacts)" ]; then
-          echo "No artifacts found"
-          exit 1
-        else
-          echo "Artifacts found"
-        fi
 
     - name: Generate Release Details
       id: release_details
