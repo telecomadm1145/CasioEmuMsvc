@@ -1,6 +1,3 @@
-/*
-	JitU8 编译优化
-*/
 #include "CPU.hpp"
 #include "MMU.hpp"
 #include "asmjit/src/asmjit/asmjit.h"

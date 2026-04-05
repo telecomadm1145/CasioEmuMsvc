@@ -393,7 +393,6 @@
     <ClCompile Include="Ext\ePSDisas.cpp" />
     <ClCompile Include="Ext\GameBuffer.cpp" />
     <ClCompile Include="Gui\ThemeManager.cpp" />
-    <ClCompile Include="JitU8\JitU8.cpp" />
     <ClCompile Include="Gui\AddressWindow.cpp" />
     <ClCompile Include="casioemu.cpp" />
     <ClCompile Include="Chipset\Chipset.cpp" />

@@ -51,6 +51,12 @@ int main(int argc, const char** argv) {
             package.ExtractTo(directoryPath);
             std::cout << "ROM package extracted successfully.\n";
         }
+        else if (command == "extract_rom") {
+            ReadFile(filePath, package);
+            WriteFile("rom.bin", package.RomData);
+            WriteFile("flash.bin", package.FlashData);
+            WriteFile("interface.bin", package.InterfaceData);
+        }
         else {
             throw std::runtime_error("Invalid command. Use 'p' for pack or 'u' for unpack.");
         }
