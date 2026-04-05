@@ -1,12 +1,55 @@
 #define _NO_FUND_API
 #include "PluginApi.h"
+#include "PluginMan.h"
 #include <CPU.hpp>
 #include <Chipset.hpp>
 #include <MMU.hpp>
 #include <Keyboard.hpp>
+#include "SysDialog.h"
+#include "FileDialog.hpp"
+#include <SDL.h>
+
 extern std::vector<UIWindow*> windows;
+extern SDL_Window* window;
 
 class PluginApi_Impl : public PluginApi {
+
+	class IPlatformHost_Impl : public IPlatformHost {
+	public:
+		const char* GetInternalStoragePath() override {
+#ifdef __ANDROID__
+			return SDL_AndroidGetInternalStoragePath();
+#else
+			return ".";
+#endif
+		}
+		const char* GetExternalStoragePath() override {
+#ifdef __ANDROID__
+			return SDL_AndroidGetExternalStoragePath();
+#else
+			return ".";
+#endif
+		}
+		bool ShowFileOpenDialog(const char* title, const char* filters, char* selectedFilePath, size_t pathBufferSize) override {
+			return FileDialog::ShowFileOpenDialog(title, filters, selectedFilePath, pathBufferSize);
+		}
+		void OpenSystemFileDialog(std::function<void(std::string)> callback) override {
+			SystemDialogs::OpenFileDialog([callback](std::filesystem::path p) {
+				callback(p.string());
+			});
+		}
+		void SaveSystemFileDialog(const char* preferred_name, std::function<void(std::string)> callback) override {
+			SystemDialogs::SaveFileDialog(preferred_name, [callback](std::filesystem::path p) {
+				callback(p.string());
+			});
+		}
+		void ShowMessageBox(const char* title, const char* message, int type) override {
+			Uint32 flags = SDL_MESSAGEBOX_INFORMATION;
+			if (type == 1) flags = SDL_MESSAGEBOX_WARNING;
+			if (type == 2) flags = SDL_MESSAGEBOX_ERROR;
+			SDL_ShowSimpleMessageBox(flags, title, message, window);
+		}
+	} platform_impl;
 
 	class IMMU_Impl : public IMMU {
 		uint8_t ReadData(size_t addr) override {
@@ -81,10 +124,10 @@ class PluginApi_Impl : public PluginApi {
 		RunStatus GetStatus() override {
 			return RunStatus(m_emu->chipset.run_mode);
 		}
-		void* GetRom() {
+		void* GetRom() override {
 			return m_emu->chipset.rom_data.data();
 		}
-		size_t GetRomSize() {
+		size_t GetRomSize() override {
 			return m_emu->chipset.rom_data.size();
 		}
 	} chipset_impl;
@@ -149,8 +192,7 @@ class PluginApi_Impl : public PluginApi {
 
 		// 注册中断断点 hook，传入的 handler 只需要处理 InterruptEventArgs
 		void SetupOnBrkHook(std::function<void(InterruptEventArgs&)> handler) override {
-			SetupHook(on_brk,
-				[handler](casioemu::Chipset& /*chipset*/, InterruptEventArgs& args) {
+			SetupHook(on_brk,[handler](casioemu::Chipset& /*chipset*/, InterruptEventArgs& args) {
 					handler(args);
 				});
 		}
@@ -177,11 +219,20 @@ class PluginApi_Impl : public PluginApi {
 	void AddWindow(UIWindow* wnd) override {
 		windows.push_back(wnd);
 	}
-	bool RegisterPlugin(const char* id, const char* name, int version) override {
-		std::cout << name << " loaded.\n";
+	bool RegisterPlugin(const char* id, const char* name, const char* version, const char* author, const char* desc) override {
+		std::cout << (name ? name : "Unknown") << " loaded.\n";
+		g_loadedPlugins.push_back({
+			id ? id : "",
+			name ? name : "",
+			version ? version : "",
+			author ? author : "",
+			desc ? desc : ""
+		});
 		return true;
 	}
 	void* QueryInterface(const char* name) override {
+		if (strcmp(name, typeid(IPlatformHost).name()) == 0)
+			return &platform_impl;
 		if (strcmp(name, typeid(IEmulator).name()) == 0)
 			return &emu_impl;
 		if (strcmp(name, typeid(ICPU).name()) == 0)
@@ -195,6 +246,9 @@ class PluginApi_Impl : public PluginApi {
 		if (strcmp(name, typeid(IKeyboard).name()) == 0)
 			return &keyboard_impl;
 		return m_emu->chipset.QueryInterface(name);
+	}
+	void* GetImGuiContext() override {
+		return ImGui::GetCurrentContext();
 	}
 };
 PluginApi* g_pluginapi = new PluginApi_Impl();

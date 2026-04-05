@@ -1,12 +1,11 @@
 cmake_minimum_required(VERSION 3.10...3.22)
 
 project(CasioEmuMsvc)
-
+#set(CMAKE_MESSAGE_LOG_LEVEL NOTICE)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fms-extensions")
 # set(CMAKE_CXX_EXTENSIONS OFF)
-
 set(ASMJIT_STATIC ON CACHE BOOL "Build AsmJit as a static library")
 set(ASMJIT_BUILD_TEST OFF CACHE BOOL "Disable AsmJit tests")
 set(ASMJIT_BUILD_EXAMPLES OFF CACHE BOOL "Disable AsmJit examples")
@@ -37,6 +36,7 @@ include_directories(#${CMAKE_SOURCE_DIR}/SDL_image/include
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Gui/imgui
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/GDB
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Peripheral
+        ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Plugin
         ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/StartupUi)
         
 # find_library(SDL2 SDL2)
@@ -94,7 +94,7 @@ target_compile_definitions(${TARGET_NAME} PRIVATE ASMJIT_STATIC)
 if(BUILD_EXECUTABLE)
     target_link_libraries(${TARGET_NAME} PRIVATE
         SDL2::SDL2
-        SDL2::image
+        SDL2_image::SDL2_image
         CpuFeatures::cpu_features
         asmjit::asmjit
         -lpthread
@@ -105,10 +105,13 @@ if(BUILD_EXECUTABLE)
 else()
     target_link_libraries(${TARGET_NAME} PRIVATE
         SDL2::SDL2
-        SDL2::image
+        SDL2_image::SDL2_image
         CpuFeatures::cpu_features
         asmjit::asmjit
     )
+    if(ANDROID)
+        target_link_libraries(${TARGET_NAME} PRIVATE log)
+    endif()
 endif()
 
 #if(BUILD_EXECUTABLE AND NOT ANDROID)

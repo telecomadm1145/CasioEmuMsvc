@@ -16,6 +16,7 @@
 #include "Theme.h"
 #include "VariableWindow.h"
 #include "WatchWindow.hpp"
+#include "PluginLogWindow.hpp"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_sdl2.h"
 #include "imgui/imgui_impl_sdlrenderer2.h"
@@ -255,7 +256,8 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 			 CreateAddressWindow(),
 			 // MakeAssemblerUI(),
 			 MakeThemeWindow(),
-			 CreateBitmapViewer()})
+			 CreateBitmapViewer(),
+			 new PluginLogWindow()})
 		windows.push_back(item);
 	for (auto item : GetEditors())
 		windows.push_back(item);
