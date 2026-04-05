@@ -439,6 +439,7 @@
     <ClCompile Include="Gui\WatchWindow.cpp" />
     <ClCompile Include="Gui\FileDialog.cpp" />
     <ClCompile Include="Gui\VariableWindow.cpp" />
+    <ClCompile Include="Gui\PluginLogWindow.cpp" />
     <ClCompile Include="Peripheral\5800Flash.cpp" />
     <ClCompile Include="Peripheral\Audio.cpp" />
     <ClCompile Include="Peripheral\BatteryBackedRAM.cpp" />
@@ -538,6 +539,7 @@
     <ClInclude Include="ModelInfo.h" />
     <ClInclude Include="Models.h" />
     <ClInclude Include="Gui\VariableWindow.h" />
+    <ClInclude Include="Gui\PluginLogWindow.hpp" />
     <ClInclude Include="Peripheral\5800Flash.h" />
     <ClInclude Include="Peripheral\Audio.h" />
     <ClInclude Include="Peripheral\BatteryBackedRAM.hpp" />

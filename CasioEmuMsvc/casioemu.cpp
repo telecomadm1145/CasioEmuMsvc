@@ -211,7 +211,7 @@ int main(int argc, char* argv[]) {
 		ImGui_ImplSDL2_ProcessEvent(&event);
 	};
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__ANDROID__)
 	LoadPlugins();
 #endif
 

@@ -14,6 +14,8 @@ import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 import android.provider.MediaStore;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.content.pm.ApplicationInfo;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -26,13 +28,20 @@ import android.app.AlertDialog;
 import android.content.ClipboardManager;
 import android.content.ClipData;
 import android.content.DialogInterface;
+import android.system.Os;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipEntry;
+import java.util.LinkedHashSet;
+import java.util.Enumeration;
 import io.sentry.Sentry;
-
 
 public class Game extends SDLActivity {
     private static final String TAG = "Game";
@@ -65,6 +74,10 @@ public class Game extends SDLActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setImmersiveMode();
+        checkAndExtractPluginAssets();
+        try {
+            Os.setenv("TMPDIR", getCacheDir().getAbsolutePath(), true);
+        } catch (Exception e) {}
     }
 
     @Override
@@ -73,6 +86,99 @@ public class Game extends SDLActivity {
         if (hasFocus) {
             setImmersiveMode();
         }
+    }
+
+    public static void checkAndExtractPluginAssets() {
+        Game activity = (Game) SDLActivity.mSingleton;
+        PackageManager pm = activity.getPackageManager();
+        Intent pluginIntent = new Intent("com.tele.u8emulator.PLUGIN");
+        List<ResolveInfo> resolveInfos = pm.queryIntentActivities(pluginIntent, 0);
+        File pluginsDir = new File(activity.getCacheDir(), "plugins_so");
+        if (!pluginsDir.exists()) pluginsDir.mkdirs();
+        File loadOrderFile = new File(pluginsDir, "load_order.txt");
+        if (loadOrderFile.exists()) loadOrderFile.delete();
+        File infoFile = new File(pluginsDir, "plugins_info.txt");
+        LinkedHashSet<String> loadOrder = new LinkedHashSet<>();
+        StringBuilder infoBuilder = new StringBuilder();
+
+        for (ResolveInfo info : resolveInfos) {
+            try {
+                ApplicationInfo appInfo = pm.getApplicationInfo(info.activityInfo.packageName, PackageManager.GET_META_DATA);
+                Bundle metaData = appInfo.metaData;
+                ZipFile zipFile = new ZipFile(appInfo.sourceDir);
+                String targetAbi = Build.SUPPORTED_ABIS[0];
+                String libPrefix = "lib/" + targetAbi + "/";
+                List<String> extractedSos = new ArrayList<>();
+                Enumeration<? extends ZipEntry> entries = zipFile.entries();
+                while (entries.hasMoreElements()) {
+                    ZipEntry entry = entries.nextElement();
+                    String name = entry.getName();
+                    if (name.startsWith(libPrefix) && name.endsWith(".so")) {
+                        String soName = new File(name).getName();
+                        if (soName.contains("libc++_shared")) continue;
+                        File outFile = new File(pluginsDir, soName);
+                        InputStream in = zipFile.getInputStream(entry);
+                        FileOutputStream out = new FileOutputStream(outFile);
+                        byte[] buffer = new byte[8192];
+                        int read;
+                        while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
+                        in.close(); out.close();
+                        extractedSos.add(soName);
+                    }
+                }
+                zipFile.close();
+                String pName = "Unknown Plugin", pAuthor = "Unknown", pVer = "1.0", pDesc = "No description";
+                
+                if (metaData != null) {
+                    pName = metaData.getString("casioemu.plugin.name", pName);
+                    pAuthor = metaData.getString("casioemu.plugin.author", pAuthor);
+                    Object v = metaData.get("casioemu.plugin.version");
+                    if (v != null) pVer = v.toString();
+                    pDesc = metaData.getString("casioemu.plugin.desc", pDesc);
+                    String initClassName = metaData.getString("casioemu.plugin.init_class");
+                    if (initClassName != null && !initClassName.isEmpty()) {
+                        Context pluginContext = activity.createPackageContext(appInfo.packageName, Context.CONTEXT_INCLUDE_CODE | Context.CONTEXT_IGNORE_SECURITY);
+                        ClassLoader pluginLoader = pluginContext.getClassLoader();
+                        Class<?> initClass = pluginLoader.loadClass(initClassName);
+                        java.lang.reflect.Method initMethod = initClass.getMethod("init", Context.class, Context.class, String.class);
+                        initMethod.invoke(null, activity, pluginContext, activity.getCacheDir().getAbsolutePath());
+                    }
+                    String deps = metaData.getString("casioemu.plugin.dependencies");
+                    if (deps != null && !deps.isEmpty()) {
+                        for (String dep : deps.split(",")) loadOrder.add(dep.trim());
+                    }
+                    String mainLib = metaData.getString("casioemu.plugin.main_lib");
+                    if (mainLib != null && !mainLib.isEmpty()) {
+                        loadOrder.add(mainLib.trim());
+                    } else {
+                        for (String so : extractedSos) loadOrder.add(so);
+                    }
+                } else {
+                    for (String so : extractedSos) loadOrder.add(so);
+                }
+                infoBuilder.append("Name: ").append(pName).append("\n");
+                infoBuilder.append("Author: ").append(pAuthor).append("\n");
+                infoBuilder.append("Version: ").append(pVer).append("\n");
+                infoBuilder.append("Description: ").append(pDesc).append("\n");
+                infoBuilder.append("Package: ").append(appInfo.packageName).append("\n");
+                infoBuilder.append("---\n");
+                
+            } catch (Exception e) {
+                Log.e(TAG, "Error processing plugin: " + e.getMessage());
+            }
+        }
+        
+        try {
+            FileOutputStream fos = new FileOutputStream(loadOrderFile);
+            for (String so : loadOrder) {
+                fos.write((so + "\n").getBytes());
+            }
+            fos.close();
+            FileOutputStream fosInfo = new FileOutputStream(infoFile);
+            fosInfo.write(infoBuilder.toString().getBytes());
+            fosInfo.close();
+            Os.setenv("CASIOEMU_PLUGINS_DIR", pluginsDir.getAbsolutePath(), true);
+        } catch (Exception e) {}
     }
 
     public void onNativeCrash(String message) {
