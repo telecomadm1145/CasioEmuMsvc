@@ -94,7 +94,7 @@ target_compile_definitions(${TARGET_NAME} PRIVATE ASMJIT_STATIC)
 if(BUILD_EXECUTABLE)
     target_link_libraries(${TARGET_NAME} PRIVATE
         SDL2::SDL2
-        SDL2_image::SDL2_image
+        SDL2_image::SDL2_image-static
         CpuFeatures::cpu_features
         asmjit::asmjit
         -lpthread
