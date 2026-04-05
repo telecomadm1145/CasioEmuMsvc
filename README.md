@@ -2,7 +2,7 @@
 
 # CasioEmuMsvc
 
-**CasioEmuMsvc** is a high-performance emulator designed for the **nX-U16/100** and **nX-U8/100** MCU series. Beyond simple emulation, it serves as a comprehensive development tool featuring a real-time debugger and a built-in disassembler.
+**CasioEmuMsvc** is a high-performance(?) emulator designed for the **nX-U16/100** and **nX-U8/100** MCU series. Beyond simple emulation, it serves as a comprehensive development tool featuring a real-time debugger and a built-in disassembler.
 
 ## 🌟 Key Features
 
@@ -24,7 +24,7 @@ Before you begin, ensure you have the following installed:
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/your-repo/CasioEmuMsvc.git
+git clone https://github.com/telecomadm1145/CasioEmuMsvc.git
 cd CasioEmuMsvc
 
 ```
@@ -72,7 +72,7 @@ We value your feedback. Please reach out via the following channels for suggesti
 
 # CasioEmuMsvc
 
-**CasioEmuMsvc** 是一个针对 **nX-U16/100** 及 **nX-U8/100** 系列 MCU（微控制器）的高性能模拟器。它不仅是一个运行环境，更是一个集成了实时调试器和反汇编器的开发辅助工具。
+**CasioEmuMsvc** 是一个针对 **nX-U16/100** 及 **nX-U8/100** 系列 MCU（微控制器）的高性能(?)模拟器。它不仅是一个运行环境，更是一个集成了实时调试器和反汇编器的开发辅助工具。
 
 ## 🌟 主要特性
 
@@ -94,7 +94,7 @@ We value your feedback. Please reach out via the following channels for suggesti
 
 1. **克隆仓库**
 ```bash
-git clone https://github.com/your-repo/CasioEmuMsvc.git
+git clone https://github.com/telecomadm1145/CasioEmuMsvc.git
 cd CasioEmuMsvc
 
 ```
@@ -164,7 +164,7 @@ Trước khi bắt đầu, hãy đảm bảo bạn đã cài đặt:
 
 1. **Sao chép kho lưu trữ (Clone repo)**
 ```bash
-git clone https://github.com/your-repo/CasioEmuMsvc.git
+git clone https://github.com/telecomadm1145/CasioEmuMsvc.git
 cd CasioEmuMsvc
 
 ```
