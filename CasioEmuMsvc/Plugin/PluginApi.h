@@ -1,5 +1,11 @@
 #pragma once
+#ifdef CASIOEMU_PLUGIN_API
+namespace casioemu {
+	struct ModelInfo;
+}
+#else
 #include "ModelInfo.h"
+#endif
 #include <cstdint>
 #include <functional>
 #include <imgui.h>
@@ -168,11 +174,7 @@ public:
 	/// <summary>
 	/// Check if the STL is the same.
 	/// </summary>
-	virtual void AssertFundamentalSTL(size_t a, size_t b, size_t c, size_t d) {
-		if (a != sizeof(std::string) || b != sizeof(std::vector<int>) || c != sizeof(std::map<int, int>) || d != sizeof(std::mutex)) {
-			PANIC("STL size mismatch.");
-		}
-	}
+	virtual void AssertFundamentalSTL(size_t a, size_t b, size_t c, size_t d) = 0;
 	[[nodiscard]] virtual void* QueryInterface(const char* name) = 0;
 	template <class T>
 	[[nodiscard]] T* QueryInterface() {
@@ -181,7 +183,7 @@ public:
 	virtual void* GetImGuiContext() = 0;
 };
 
-#define PLUGINASSERTSTL(x) x.AssertFundamentalSTL(sizeof(std::string), sizeof(std::vector<int>), sizeof(std::map<int, int>), sizeof(std::mutex))
+#define PLUGINASSERTSTL(x) x->AssertFundamentalSTL(sizeof(std::string), sizeof(std::vector<int>), sizeof(std::map<int, int>), sizeof(std::mutex))
 
 /// <summary>
 /// The plugin DLL's entry point.

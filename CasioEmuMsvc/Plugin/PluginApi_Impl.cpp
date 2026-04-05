@@ -250,5 +250,10 @@ class PluginApi_Impl : public PluginApi {
 	void* GetImGuiContext() override {
 		return ImGui::GetCurrentContext();
 	}
+	void AssertFundamentalSTL(size_t a, size_t b, size_t c, size_t d) override {
+		if (a != sizeof(std::string) || b != sizeof(std::vector<int>) || c != sizeof(std::map<int, int>) || d != sizeof(std::mutex)) {
+			PANIC("STL size mismatch.");
+		}
+	}
 };
 PluginApi* g_pluginapi = new PluginApi_Impl();
