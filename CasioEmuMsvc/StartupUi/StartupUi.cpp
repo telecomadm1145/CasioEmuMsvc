@@ -26,6 +26,7 @@
 
 #endif
 #include "Ext/Random.hpp"
+#include "DiscordRPC.h"
 
 #ifdef __ANDROID__
 #include "../Gui/ThemeManager.h"
@@ -1326,6 +1327,7 @@ std::string sui_loop() {
 
 			needs_render = false;
 		}
+		DiscordRPC::Update();
 		ThemeManager::Instance().ProcessFontRebuild();
 		if (!ui.selected_path.empty()) {
 			done = true;

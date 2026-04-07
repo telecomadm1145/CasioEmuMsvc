@@ -26,18 +26,18 @@ else()
 endif()
 
 include_directories(#${CMAKE_SOURCE_DIR}/SDL_image/include
-        ${CMAKE_SOURCE_DIR}/CasioEmuMsvc
-        ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Ext
-        ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Ext/cam
-        ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Dcl
-        ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Chipset
-        ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Containers
-        ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Gui
-        ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Gui/imgui
-        ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/GDB
-        ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Peripheral
-        ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Plugin
-        ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/StartupUi)
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/Ext
+        ${CMAKE_CURRENT_SOURCE_DIR}/Ext/cam
+        ${CMAKE_CURRENT_SOURCE_DIR}/Dcl
+        ${CMAKE_CURRENT_SOURCE_DIR}/Chipset
+        ${CMAKE_CURRENT_SOURCE_DIR}/Containers
+        ${CMAKE_CURRENT_SOURCE_DIR}/Gui
+        ${CMAKE_CURRENT_SOURCE_DIR}/Gui/imgui
+        ${CMAKE_CURRENT_SOURCE_DIR}/GDB
+        ${CMAKE_CURRENT_SOURCE_DIR}/Peripheral
+        ${CMAKE_CURRENT_SOURCE_DIR}/Plugin
+        ${CMAKE_CURRENT_SOURCE_DIR}/StartupUi)
         
 # find_library(SDL2 SDL2)
 
@@ -46,22 +46,22 @@ include_directories(#${CMAKE_SOURCE_DIR}/SDL_image/include
 # add_library(main SHARED)
 
 # Search for all .cpp files in the CasioEmuMsvc directory 
-# file(GLOB_RECURSE SOURCES ${CMAKE_SOURCE_DIR}/CasioEmuMsvc/*.cpp)
+# file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 
 # Use individual directories instead of all to avoid asmjit's file testing
-file(GLOB MAIN_SOURCES_ROOT "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/*.cpp")
+file(GLOB MAIN_SOURCES_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 file(GLOB MAIN_SOURCES_ROOT_C "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/*.c")
-file(GLOB MAIN_SOURCES_CHIPSET "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Chipset/*.cpp")
-file(GLOB MAIN_SOURCES_CRASH "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/CrashHandler/*.cpp")
-file(GLOB MAIN_SOURCES_EXT "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Ext/*.cpp")
-file(GLOB MAIN_SOURCES_EXT_CAM "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Ext/cam/*.cc")
-file(GLOB MAIN_SOURCES_GDB "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/GDB/*.cpp")
-file(GLOB MAIN_SOURCES_GUI "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Gui/*.cpp")
-file(GLOB MAIN_SOURCES_IMGUI "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Gui/imgui/*.cpp")
-file(GLOB MAIN_SOURCES_JIT "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/JitU8/*.cpp")
-file(GLOB MAIN_SOURCES_PERIPHERAL "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Peripheral/*.cpp")
-file(GLOB MAIN_SOURCES_PLUGIN "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Plugin/*.cpp")
-file(GLOB MAIN_SOURCES_STARTUP "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/StartupUi/*.cpp")
+file(GLOB MAIN_SOURCES_CHIPSET "${CMAKE_CURRENT_SOURCE_DIR}/Chipset/*.cpp")
+file(GLOB MAIN_SOURCES_CRASH "${CMAKE_CURRENT_SOURCE_DIR}/CrashHandler/*.cpp")
+file(GLOB MAIN_SOURCES_EXT "${CMAKE_CURRENT_SOURCE_DIR}/Ext/*.cpp")
+file(GLOB MAIN_SOURCES_EXT_CAM "${CMAKE_CURRENT_SOURCE_DIR}/Ext/cam/*.cc")
+file(GLOB MAIN_SOURCES_GDB "${CMAKE_CURRENT_SOURCE_DIR}/GDB/*.cpp")
+file(GLOB MAIN_SOURCES_GUI "${CMAKE_CURRENT_SOURCE_DIR}/Gui/*.cpp")
+file(GLOB MAIN_SOURCES_IMGUI "${CMAKE_CURRENT_SOURCE_DIR}/Gui/imgui/*.cpp")
+file(GLOB MAIN_SOURCES_JIT "${CMAKE_CURRENT_SOURCE_DIR}/JitU8/*.cpp")
+file(GLOB MAIN_SOURCES_PERIPHERAL "${CMAKE_CURRENT_SOURCE_DIR}/Peripheral/*.cpp")
+file(GLOB MAIN_SOURCES_PLUGIN "${CMAKE_CURRENT_SOURCE_DIR}/Plugin/*.cpp")
+file(GLOB MAIN_SOURCES_STARTUP "${CMAKE_CURRENT_SOURCE_DIR}/StartupUi/*.cpp")
 
 set(MAIN_SOURCES
     ${MAIN_SOURCES_ROOT}
@@ -93,22 +93,47 @@ endif()
 
 target_compile_definitions(${TARGET_NAME} PRIVATE ASMJIT_STATIC)
 
+if(WIN32)
+    #target_link_options(${TARGET_NAME} PRIVATE "-mconsole")
+    target_link_options(${TARGET_NAME} PRIVATE 
+        "-static-libgcc" 
+        "-static-libstdc++" 
+        "-static"
+    )
+    target_compile_definitions(${TARGET_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+
 if(BUILD_EXECUTABLE)
     target_link_libraries(${TARGET_NAME} PRIVATE
         SDL2::SDL2
         SDL2_image::SDL2_image-static
-        CpuFeatures::cpu_features
+        #CpuFeatures::cpu_features
         asmjit::asmjit
-        -lpthread
-        -ldl
-        -lrt
-        -lm
-)
+    )
+    if(WIN32)
+        target_link_libraries(${TARGET_NAME} PRIVATE
+            SDL2::SDL2main
+            winmm
+            dwmapi
+            dbghelp
+            imm32
+        )
+        set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
+    else()
+        target_link_libraries(${TARGET_NAME} PRIVATE
+            -Wl,--start-group
+            -lpthread
+            -ldl
+            -lrt
+            -lm
+            -Wl,--end-group
+        )
+    endif()
 else()
     target_link_libraries(${TARGET_NAME} PRIVATE
         SDL2::SDL2
         SDL2_image::SDL2_image
-        CpuFeatures::cpu_features
+        #CpuFeatures::cpu_features
         asmjit::asmjit
     )
     if(ANDROID)
@@ -116,6 +141,40 @@ else()
     endif()
 endif()
 
-#if(BUILD_EXECUTABLE AND NOT ANDROID)
-#    target_link_options(${TARGET_NAME} PRIVATE "-static")
-#endif()
+if(NOT ANDROID AND NOT IOS)
+    target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/discord-rpc/include)
+    target_link_libraries(${TARGET_NAME} PRIVATE discord-rpc)
+endif()
+
+file(GLOB LOCALE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/locales/*.lc")
+
+if(ANDROID)
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/app/src/main/assets/locales)
+    foreach(FILE_PATH ${LOCALE_FILES})
+        add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${FILE_PATH}
+            ${CMAKE_SOURCE_DIR}/app/src/main/assets/locales/)
+    endforeach()
+elseif(BUILD_EXECUTABLE)
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${TARGET_NAME}>/locales)
+    foreach(FILE_PATH ${LOCALE_FILES})
+        add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${FILE_PATH}
+            $<TARGET_FILE_DIR:${TARGET_NAME}>/locales/)
+    endforeach()
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_SOURCE_DIR}/roms.db
+        $<TARGET_FILE_DIR:${TARGET_NAME}>/roms.db || ${CMAKE_COMMAND} -E true)
+endif()
+
+
+if(NOT WIN32 AND NOT ANDROID AND NOT IOS)
+    if(BUILD_EXECUTABLE)
+        target_link_options(${TARGET_NAME} PRIVATE "-static")
+    endif()
+endif()

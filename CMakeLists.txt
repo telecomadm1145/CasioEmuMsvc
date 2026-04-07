@@ -25,9 +25,17 @@ add_subdirectory(SDL_image)
 #add_subdirectory(SDL_mixer)
 #add_subdirectory(SDL_ttf)
 
-add_subdirectory(cpu_features)
+#set(TEMP_BUILD_EXECUTABLE ${BUILD_EXECUTABLE})
+#set(BUILD_EXECUTABLE OFF CACHE BOOL "" FORCE)
+#add_subdirectory(cpu_features)
+#set(BUILD_EXECUTABLE ${TEMP_BUILD_EXECUTABLE} CACHE BOOL "" FORCE)
 
 # add_subdirectory(lua)
+
+if(NOT ANDROID AND NOT IOS)
+    set(BUILD_EXAMPLES OFF CACHE BOOL "Disable discord-rpc examples" FORCE)
+    add_subdirectory(discord-rpc)
+endif()
 
 # Your game and its CMakeLists.txt are in a subfolder named "src"
 add_subdirectory(CasioEmuMsvc)

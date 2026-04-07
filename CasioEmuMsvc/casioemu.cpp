@@ -1,5 +1,4 @@
-#include "Config.hpp"
-#include "DiscordRPC.h"
+﻿#include "Config.hpp"
 #include "Ui.hpp"
 #include "imgui_impl_sdl2.h"
 
@@ -44,17 +43,12 @@
 #include <Gui.h>
 #include <Plugin/PluginMan.h>
 #include <ThemeManager.h>
+#include "DiscordRPC.h"
 
 using namespace casioemu;
 SDL_Surface* background;
 SDL_Texture* bg_txt;
 bool low_perf_ext = false;
-
-// discord rich presence — set your app id at https://discord.com/developers/applications
-static const char* DISCORD_APP_ID = "1492135114086420600";
-static discord_rpc::DiscordRPC* g_discord = nullptr;
-static Uint32 g_discord_last_update = 0;
-static int64_t g_discord_start_time = 0;
 
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
@@ -78,6 +72,9 @@ int main(int argc, char* argv[]) {
 	chdir(SDL_AndroidGetExternalStoragePath());
 #endif
 	g_local.Load();
+	
+	DiscordRPC::Init();
+  DiscordRPC::UpdatePresence("");
 
 	std::map<std::string, std::string> argv_map;
 	for (int ix = 1; ix != argc; ++ix) {
@@ -112,8 +109,10 @@ int main(int argc, char* argv[]) {
 	if (argv_map["model"].empty()) {
 		auto s = sui_loop();
 		argv_map["model"] = std::move(s);
-		if (argv_map["model"].empty())
+		if (argv_map["model"].empty()) {
+      DiscordRPC::Shutdown();
 			return -1;
+	  }
 	}
 
 	bool no_dbg = !argv_map["no_dbg"].empty();
@@ -121,21 +120,9 @@ int main(int argc, char* argv[]) {
 	Emulator emulator(argv_map);
 	m_emu = &emulator;
 
-	g_discord_start_time = (int64_t)std::time(nullptr);
-	g_discord = new discord_rpc::DiscordRPC(DISCORD_APP_ID);
-	try {
-		if (g_discord->Connect()) {
-			discord_rpc::RichPresence rp;
-			rp.details = "CasioEmuMsvc";
-			rp.state = "Emulating " + std::string(emulator.ModelDefinition.model_name);
-			rp.startTimestamp = g_discord_start_time;
-			rp.largeImageKey = "casio_logo";
-			rp.largeImageText = "CasioEmuMsvc - Calculator Emulator";
-			g_discord->UpdatePresence(rp);
-		}
-	} catch (...) {}
-
 	// static std::atomic<bool> running(true);
+	
+	DiscordRPC::UpdatePresence(emulator.ModelDefinition.model_name);
 
 	bool guiCreated = false;
 	auto frame_event = SDL_RegisterEvents(1);
@@ -238,7 +225,8 @@ int main(int argc, char* argv[]) {
 
 	while (emulator.Running()) {
 		SDL_Event event{};
-		busy = false;
+		busy = false;	
+		DiscordRPC::Update();
 		if (!SDL_PollEvent(&event))
 			continue;
 		busy = true;
@@ -364,25 +352,6 @@ int main(int argc, char* argv[]) {
 						ThemeManager::Instance().ExtractAndApplyAutoTint(bg_txt, renderer);
 					}
 					ThemeManager::Instance().ClearBgReloadRequest();
-				}
-			}
-			if (g_discord) {
-				Uint32 now_ticks = SDL_GetTicks();
-				if (now_ticks - g_discord_last_update > 30000) {
-					g_discord_last_update = now_ticks;
-					if (!g_discord->IsConnected())
-						g_discord->TryReconnect();
-					if (g_discord->IsConnected()) {
-						discord_rpc::RichPresence rp;
-						rp.details = "CasioEmuMsvc";
-						rp.state = "Emulating " + std::string(emulator.ModelDefinition.model_name);
-						if (emulator.GetPaused())
-							rp.state += " (Paused)";
-						rp.startTimestamp = g_discord_start_time;
-						rp.largeImageKey = "casio_logo";
-						rp.largeImageText = "CasioEmuMsvc - Calculator Emulator";
-						g_discord->UpdatePresence(rp);
-					}
 				}
 			}
 			while (SDL_PollEvent(&event)) {
@@ -590,18 +559,12 @@ int main(int argc, char* argv[]) {
 	if (t3.joinable()) {
 		t3.join();
 	}
-
-	if (g_discord) {
-		g_discord->ClearPresence();
-		g_discord->Disconnect();
-		delete g_discord;
-		g_discord = nullptr;
-	}
 	if (bg_txt) {
 		SDL_DestroyTexture(bg_txt);
 	}
 #ifdef ENABLE_SENTRY
 	sentry_close();
 #endif
+  DiscordRPC::Shutdown();
 	return 0;
 };

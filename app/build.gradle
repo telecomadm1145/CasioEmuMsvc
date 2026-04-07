@@ -1,5 +1,5 @@
 plugins {
-    id 'io.sentry.android.gradle' version '6.0.0'
+    id 'io.sentry.android.gradle' version '6.4.0'
 }
 
 def buildAsLibrary = project.hasProperty('BUILD_AS_LIBRARY');
@@ -32,6 +32,16 @@ android {
              }
         }
     }
+    
+    splits {
+        abi {
+            enable true
+            reset()
+            include "armeabi-v7a", "arm64-v8a"
+            universalApk true
+        }
+    }
+    
     signingConfigs {
         release {
             storeFile file("hieuxyz.keystore")
@@ -61,9 +71,18 @@ android {
     }
     
     applicationVariants.all { variant ->
-        tasks["merge${variant.name.capitalize()}Assets"]
-            .dependsOn("externalNativeBuild${variant.name.capitalize()}")
+        variant.outputs.all { output ->
+            def abiName = output.getFilter(com.android.build.OutputFile.ABI)
+            if (abiName == null) {
+                abiName = "universal"
+            }
+            outputFileName = "u8emulator-${variant.name}-${abiName}-v${variant.versionName}.apk"
+        }
+        variant.mergeAssetsProvider.configure {
+            dependsOn("externalNativeBuild${variant.name.capitalize()}")
+        }
     }
+
     if (!project.hasProperty('EXCLUDE_NATIVE_LIBS')) {
         sourceSets.main {
             jniLibs.srcDir 'libs'

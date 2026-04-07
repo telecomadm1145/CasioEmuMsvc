@@ -1,12 +1,12 @@
 [submodule "CasioEmuMsvc/asmjit"]
 	path = CasioEmuMsvc/asmjit
 	url = https://github.com/asmjit/asmjit
-[submodule "cpu_features"]
-	path = cpu_features
-	url = https://github.com/google/cpu_features.git
 [submodule "SDL"]
 	path = SDL
 	url = https://github.com/libsdl-org/SDL.git
 [submodule "SDL_image"]
 	path = SDL_image
 	url = https://github.com/libsdl-org/SDL_image.git
+[submodule "discord-rpc"]
+	path = discord-rpc
+	url = https://github.com/hieuxyz00/discord-rpc.git

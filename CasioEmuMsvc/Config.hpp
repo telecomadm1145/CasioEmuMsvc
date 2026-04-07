@@ -15,8 +15,13 @@
 #define FUNCTION_NAME __func__
 #endif
 
-#if !defined(_MSC_VER)
-#define __debugbreak() __builtin_trap()
+#ifndef __debugbreak
+    #if defined(_MSC_VER)
+    #elif defined(__GNUC__) || defined(__clang__)
+        #define __debugbreak __builtin_trap
+    #else
+        #define __debugbreak() ((void)0)
+    #endif
 #endif
 
 #define NOOP() ((void)0)
@@ -86,3 +91,5 @@ public:                       \
 #else
 
 #endif
+
+#define DISCORD_APP_ID "1494244788055179344"
