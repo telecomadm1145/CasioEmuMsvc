@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="ASan|Win32">
@@ -396,6 +396,7 @@
     <ClCompile Include="JitU8\JitU8.cpp" />
     <ClCompile Include="Gui\AddressWindow.cpp" />
     <ClCompile Include="casioemu.cpp" />
+    <ClCompile Include="DiscordRPC.cpp" />
     <ClCompile Include="Chipset\Chipset.cpp" />
     <ClCompile Include="Chipset\CPU.cpp" />
     <ClCompile Include="Chipset\CPUArithmetic.cpp" />
@@ -489,6 +490,7 @@
     <ClInclude Include="Chipset\MMU.hpp" />
     <ClInclude Include="Chipset\MMURegion.hpp" />
     <ClInclude Include="Config.hpp" />
+    <ClInclude Include="DiscordRPC.h" />
     <ClInclude Include="Containers\ConcurrentObject.h" />
     <ClInclude Include="Ext\LabelFile.h" />
     <ClInclude Include="Ext\RomPackage.h" />
