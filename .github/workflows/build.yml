@@ -1,8 +1,6 @@
 name: Auto build and pre-release
 
 on:
-  pull_request:
-    branches: [ "stable" ]
   workflow_dispatch:
   push:
     branches: [ "stable" ]
