@@ -62,8 +62,6 @@ public:
 	virtual std::string GetModelFilePath(std::string relative_path) = 0;
 	virtual void* GetRenderer() = 0;
 	virtual void* GetInterfaceTexture() = 0;
-
-	// New methods for extended status info
 	virtual const char* GetRunningModelName() = 0;
 	virtual const char* GetRunningRomPath() = 0;
 };

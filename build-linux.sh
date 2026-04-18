@@ -40,6 +40,8 @@ REQUIRED_PACKAGES=(
     libx11-dev
     libxext-dev
     libgl1-mesa-dev
+    libcurl4-openssl-dev
+    zlib1g-dev
 )
 
 PACKAGES_TO_INSTALL=()

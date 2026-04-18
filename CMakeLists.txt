@@ -12,6 +12,17 @@ else()
     set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared libraries" FORCE)
 endif()
 
+if(POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif()
+if(MSVC)
+    if(BUILD_EXECUTABLE)
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    else()
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    endif()
+endif()
+
 # armeabi-v7a requires cpufeatures library
 #include(AndroidNdkModules)
 #android_ndk_import_module_cpufeatures()

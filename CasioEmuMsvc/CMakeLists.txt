@@ -25,6 +25,14 @@ else()
     message(WARNING "Target asmjit::asmjit NOT FOUND after add_subdirectory")
 endif()
 
+if(NOT ANDROID AND NOT IOS)
+    set(SENTRY_BUILD_SHARED_LIBS OFF CACHE BOOL "Disable Sentry shared lib" FORCE)
+    set(SENTRY_BUILD_RUNTIMESTATIC ${BUILD_EXECUTABLE} CACHE BOOL "Static runtime for Sentry (MSVC /MT)" FORCE)
+    set(SENTRY_BUILD_TESTS OFF CACHE BOOL "Disable Sentry tests" FORCE)
+    set(SENTRY_BUILD_EXAMPLES OFF CACHE BOOL "Disable Sentry examples" FORCE)
+    add_subdirectory(${CMAKE_SOURCE_DIR}/sentry-native sentry-native-build)
+endif()
+
 include_directories(#${CMAKE_SOURCE_DIR}/SDL_image/include
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/Ext
@@ -95,12 +103,18 @@ target_compile_definitions(${TARGET_NAME} PRIVATE ASMJIT_STATIC)
 
 if(WIN32)
     #target_link_options(${TARGET_NAME} PRIVATE "-mconsole")
-    target_link_options(${TARGET_NAME} PRIVATE 
-        "-static-libgcc" 
-        "-static-libstdc++" 
-        "-static"
-    )
+    if(NOT MSVC)
+        target_link_options(${TARGET_NAME} PRIVATE
+            "-static-libgcc"
+            "-static-libstdc++"
+            "-static"
+        )
+    endif()
     target_compile_definitions(${TARGET_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+
+if(MSVC)
+    target_compile_options(${TARGET_NAME} PRIVATE /utf-8)
 endif()
 
 if(BUILD_EXECUTABLE)
@@ -120,6 +134,7 @@ if(BUILD_EXECUTABLE)
         )
         set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
     else()
+        
         target_link_libraries(${TARGET_NAME} PRIVATE
             -Wl,--start-group
             -lpthread
@@ -143,7 +158,7 @@ endif()
 
 if(NOT ANDROID AND NOT IOS)
     target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/discord-rpc/include)
-    target_link_libraries(${TARGET_NAME} PRIVATE discord-rpc)
+    target_link_libraries(${TARGET_NAME} PRIVATE discord-rpc sentry::sentry)
 endif()
 
 file(GLOB LOCALE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/locales/*.lc")
@@ -179,6 +194,16 @@ endif()
 
 if(NOT WIN32 AND NOT ANDROID AND NOT IOS)
     if(BUILD_EXECUTABLE)
-        target_link_options(${TARGET_NAME} PRIVATE "-static")
+        target_link_options(${TARGET_NAME} PRIVATE "-static-libgcc" "-static-libstdc++")
+    endif()
+endif()
+
+if(NOT ANDROID AND NOT IOS)
+    if(TARGET crashpad_handler)
+        add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:crashpad_handler>
+            $<TARGET_FILE_DIR:${TARGET_NAME}>/
+        )
     endif()
 endif()

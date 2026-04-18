@@ -41,6 +41,8 @@ REQUIRED_PACKAGES=(
     libx11
     libxext
     mesa
+    curl
+    zlib
 )
 
 PACKAGES_TO_INSTALL=()

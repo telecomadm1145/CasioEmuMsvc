@@ -85,11 +85,9 @@ public:                       \
 
 #define EMULATOR_VERSION GIT_COMMIT_HASH
 
-// Currently only Sentry for windows and android(java side)
-#ifdef _MSC_VER
+#if !defined(__ANDROID__) && !defined(DISABLE_SENTRY)
 #define ENABLE_SENTRY
-#else
-
+#define SENTRY_BUILD_STATIC 1
 #endif
 
 #define DISCORD_APP_ID "1494244788055179344"

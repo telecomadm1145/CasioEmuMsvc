@@ -38,7 +38,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v6
       with:
-        submodules: true
+        submodules: recursive
 
     - name: Configure CMake
       if: matrix.platform == 'windows'
@@ -131,7 +131,11 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: Release-Linux-x64
-        path: build/CasioEmuMsvc/CasioEmuMsvc
+        path: |
+          build/CasioEmuMsvc/CasioEmuMsvc
+          build/CasioEmuMsvc/crashpad_handler
+          build/CasioEmuMsvc/locales/
+          build/CasioEmuMsvc/roms.db
         if-no-files-found: error
 
   release:
@@ -169,7 +173,7 @@ jobs:
         mkdir -p release_assets
         
         if ls ./artifacts/**/*.apk 1> /dev/null 2>&1; then
-          find ./artifacts -name "*.apk" -exec cp {} release_assets/ \;
+          find ./artifacts -name "*.apk" -type f -exec cp {} release_assets/ \;
         fi
         
         # Package Windows x86 build
@@ -187,9 +191,9 @@ jobs:
         fi
         
         # Package Linux x64 build
-        if [ -f "./artifacts/Release-Linux-x64/CasioEmuMsvc" ]; then
+        if [ -d "./artifacts/Release-Linux-x64" ]; then
           cd "./artifacts/Release-Linux-x64"
-          zip "../../release_assets/linux-x64-${{ env.COMMIT_HASH }}.zip" CasioEmuMsvc
+          zip -r "../../release_assets/linux-x64-${{ env.COMMIT_HASH }}.zip" .
           cd ../..
         fi
         
