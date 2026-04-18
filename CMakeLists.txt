@@ -21,6 +21,10 @@ endif()
 add_subdirectory(SDL)
 
 # Compilation of companion libraries
+set(SDL2IMAGE_AVIF OFF CACHE BOOL "Disable AVIF" FORCE)
+set(SDL2IMAGE_WEBP OFF CACHE BOOL "Disable WEBP" FORCE)
+set(SDL2IMAGE_JXL OFF CACHE BOOL "Disable JXL" FORCE)
+set(SDL2IMAGE_TIF OFF CACHE BOOL "Disable TIFF" FORCE)
 add_subdirectory(SDL_image)
 #add_subdirectory(SDL_mixer)
 #add_subdirectory(SDL_ttf)
