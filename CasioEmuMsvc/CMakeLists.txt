@@ -50,6 +50,7 @@ include_directories(#${CMAKE_SOURCE_DIR}/SDL_image/include
 
 # Use individual directories instead of all to avoid asmjit's file testing
 file(GLOB MAIN_SOURCES_ROOT "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/*.cpp")
+file(GLOB MAIN_SOURCES_ROOT_C "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/*.cpp")
 file(GLOB MAIN_SOURCES_CHIPSET "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Chipset/*.cpp")
 file(GLOB MAIN_SOURCES_CRASH "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/CrashHandler/*.cpp")
 file(GLOB MAIN_SOURCES_EXT "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/Ext/*.cpp")
@@ -64,6 +65,7 @@ file(GLOB MAIN_SOURCES_STARTUP "${CMAKE_SOURCE_DIR}/CasioEmuMsvc/StartupUi/*.cpp
 
 set(MAIN_SOURCES
     ${MAIN_SOURCES_ROOT}
+    ${MAIN_SOURCES_ROOT_C}
     ${MAIN_SOURCES_CHIPSET}
     ${MAIN_SOURCES_CRASH}
     ${MAIN_SOURCES_EXT}
