@@ -284,6 +284,11 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='PatchableRelease|Win32'">Create</PrecompiledHeader>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CasioEmuMsvc\CasioEmuMsvc.vcxproj">
+      <Project>{5347d0d2-ab7b-45c8-8588-b0d36ee0abe3}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
