@@ -392,10 +392,10 @@
     <ClCompile Include="Ext\ConsoleText.cpp" />
     <ClCompile Include="Ext\ePSDisas.cpp" />
     <ClCompile Include="Ext\GameBuffer.cpp" />
+    <ClCompile Include="Ext\DiscordRPC.cpp" />
     <ClCompile Include="Gui\ThemeManager.cpp" />
     <ClCompile Include="Gui\AddressWindow.cpp" />
     <ClCompile Include="casioemu.cpp" />
-    <ClCompile Include="DiscordRPC.cpp" />
     <ClCompile Include="Chipset\Chipset.cpp" />
     <ClCompile Include="Chipset\CPU.cpp" />
     <ClCompile Include="Chipset\CPUArithmetic.cpp" />
@@ -481,6 +481,7 @@
     <ClInclude Include="Ext\GameBuffer.h" />
     <ClInclude Include="Ext\Random.hpp" />
     <ClInclude Include="Ext\Unicode.h" />
+    <ClInclude Include="Ext\DiscordRPC.h" />
     <ClInclude Include="Gui\FileDialog.hpp" />
     <ClInclude Include="Gui\RopTool.h" />
     <ClInclude Include="Gui\ThemeManager.h" />
@@ -494,7 +495,6 @@
     <ClInclude Include="Chipset\MMU.hpp" />
     <ClInclude Include="Chipset\MMURegion.hpp" />
     <ClInclude Include="Config.hpp" />
-    <ClInclude Include="DiscordRPC.h" />
     <ClInclude Include="Containers\ConcurrentObject.h" />
     <ClInclude Include="Ext\LabelFile.h" />
     <ClInclude Include="Ext\RomPackage.h" />

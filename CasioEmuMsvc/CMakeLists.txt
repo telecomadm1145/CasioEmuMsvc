@@ -157,6 +157,10 @@ if(ANDROID)
             ${FILE_PATH}
             ${CMAKE_SOURCE_DIR}/app/src/main/assets/locales/)
     endforeach()
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_SOURCE_DIR}/roms.db
+        ${CMAKE_SOURCE_DIR}/app/src/main/assets/roms.db || ${CMAKE_COMMAND} -E true)
 elseif(BUILD_EXECUTABLE)
     add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${TARGET_NAME}>/locales)

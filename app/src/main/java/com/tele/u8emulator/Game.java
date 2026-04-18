@@ -74,6 +74,7 @@ public class Game extends SDLActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setImmersiveMode();
+        extractAssets();
         checkAndExtractPluginAssets();
         try {
             Os.setenv("TMPDIR", getCacheDir().getAbsolutePath(), true);
@@ -85,6 +86,53 @@ public class Game extends SDLActivity {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
             setImmersiveMode();
+        }
+    }
+    
+    private void extractAssets() {
+        File externalDir = getExternalFilesDir(null);
+        if (externalDir == null) return;
+        try {
+            File romsDb = new File(externalDir, "roms.db");
+            if (!romsDb.exists()) {
+                InputStream in = getAssets().open("roms.db");
+                FileOutputStream out = new FileOutputStream(romsDb);
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, read);
+                }
+                in.close();
+                out.close();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to extract roms.db: " + e.getMessage());
+        }
+
+        try {
+            File localesDir = new File(externalDir, "locales");
+            if (!localesDir.exists()) {
+                localesDir.mkdirs();
+            }
+            String[] locales = getAssets().list("locales");
+            if (locales != null) {
+                for (String locale : locales) {
+                    File localeFile = new File(localesDir, locale);
+                    if (!localeFile.exists()) {
+                        InputStream in = getAssets().open("locales/" + locale);
+                        FileOutputStream out = new FileOutputStream(localeFile);
+                        byte[] buffer = new byte[8192];
+                        int read;
+                        while ((read = in.read(buffer)) != -1) {
+                            out.write(buffer, 0, read);
+                        }
+                        in.close();
+                        out.close();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to extract locales: " + e.getMessage());
         }
     }
 

@@ -6,8 +6,6 @@ on:
     branches: [ "stable" ]
 
 env:
-  # MSBuild configs
-  SOLUTION_FILE_PATH: .
   BUILD_CONFIGURATION: Release
 
 permissions:
@@ -38,24 +36,19 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4.1.7
+      uses: actions/checkout@v6
       with:
-        fetch-depth: 1
         submodules: true
 
-    - name: Add MSBuild to PATH
-      if: matrix.platform == 'windows'
-      uses: microsoft/setup-msbuild@v2
-
-    - name: Restore NuGet packages
-      if: matrix.platform == 'windows'
-      run: nuget restore ${{env.SOLUTION_FILE_PATH}}
-
-    - name: Build Solution (${{ matrix.platform_arch }})
+    - name: Configure CMake
       if: matrix.platform == 'windows'
       working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: |
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=${{ matrix.platform_arch }} ${{env.SOLUTION_FILE_PATH}}
+      run: cmake -S . -B build -A ${{ matrix.platform_arch == 'x86' && 'Win32' || 'x64' }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} -DBUILD_EXECUTABLE=ON
+
+    - name: Build with CMake
+      if: matrix.platform == 'windows'
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: cmake --build build --config ${{ env.BUILD_CONFIGURATION }} --parallel
 
     - name: Upload PDBs to Sentry
       if: matrix.platform == 'windows'
@@ -65,24 +58,22 @@ jobs:
         SENTRY_PROJECT: "native"
         COMMIT_HASH: ${{ github.sha }}
         RELEASE_TAG: "CasioEmuMsvc@${{ github.sha }}"
-      working-directory: |
-          ${{ matrix.platform_arch == 'x86' && format('Win32\\{0}', env.BUILD_CONFIGURATION) || format('{0}\\{1}', matrix.platform_arch, env.BUILD_CONFIGURATION) }}
+      working-directory: build/CasioEmuMsvc/${{ env.BUILD_CONFIGURATION }}
       run: |
             $sentry_cli = "${{ github.workspace }}\CasioEmuMsvc\sentry-cli.exe"
             & $sentry_cli debug-files upload -o $env:SENTRY_ORG -p $env:SENTRY_PROJECT .
 
     - name: Upload ${{ matrix.platform_arch }} Build Artifact
       if: matrix.platform == 'windows'
-      uses: actions/upload-artifact@v4.4.0
+      uses: actions/upload-artifact@v7
       with:
         name: Release-${{ matrix.platform_arch }}
-        path: |
-          ${{ matrix.platform_arch == 'x86' && format('Win32\\{0}', env.BUILD_CONFIGURATION) || format('{0}\\{1}', matrix.platform_arch, env.BUILD_CONFIGURATION) }}
+        path: build/CasioEmuMsvc/${{ env.BUILD_CONFIGURATION }}
         if-no-files-found: error
 
     - name: Set up JDK 21
       if: matrix.platform == 'android'
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         java-version: '21'
         distribution: 'temurin'
@@ -96,13 +87,36 @@ jobs:
       if: matrix.platform == 'android'
       run: ./gradlew assembleRelease
 
-    - name: Upload APK
+    - name: Rename APK
       if: matrix.platform == 'android'
-      uses: actions/upload-artifact@v4
+      run: |
+        SHORT_HASH=$(git rev-parse --short HEAD)
+        for apk in app/build/outputs/apk/release/*.apk; do
+          if [ -f "$apk" ]; then
+            mv "$apk" "${apk%.apk}-${SHORT_HASH}.apk"
+          fi
+        done
+
+    - name: Upload Universal APK
+      if: matrix.platform == 'android'
+      uses: actions/upload-artifact@v7
       with:
-        name: app-release
-        path: app/build/outputs/apk/release/app-release.apk
-        compression-level: 0
+        path: app/build/outputs/apk/release/*-universal-*.apk
+        archive: false
+
+    - name: Upload arm64-v8a APK
+      if: matrix.platform == 'android'
+      uses: actions/upload-artifact@v7
+      with:
+        path: app/build/outputs/apk/release/*-arm64-v8a-*.apk
+        archive: false
+
+    - name: Upload armeabi-v7a APK
+      if: matrix.platform == 'android'
+      uses: actions/upload-artifact@v7
+      with:
+        path: app/build/outputs/apk/release/*-armeabi-v7a-*.apk
+        archive: false
 
     - name: Grant execute permission to build script
       if: matrix.platform == 'linux'
@@ -114,7 +128,7 @@ jobs:
 
     - name: Upload Linux Build Artifact
       if: matrix.platform == 'linux'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: Release-Linux-x64
         path: build/CasioEmuMsvc/CasioEmuMsvc
@@ -128,12 +142,12 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4.1.7
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
 
     - name: Download All Artifacts
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         path: ./artifacts
 
@@ -154,9 +168,8 @@ jobs:
       run: |
         mkdir -p release_assets
         
-        # Copy and rename Android APK
-        if [ -f "./artifacts/app-release/app-release.apk" ]; then
-          cp "./artifacts/app-release/app-release.apk" "release_assets/app-android-${{ env.COMMIT_HASH }}.apk"
+        if ls ./artifacts/**/*.apk 1> /dev/null 2>&1; then
+          find ./artifacts -name "*.apk" -exec cp {} release_assets/ \;
         fi
         
         # Package Windows x86 build
@@ -183,7 +196,7 @@ jobs:
         ls -la release_assets/
 
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v2.2.2
+      uses: softprops/action-gh-release@v3
       with:
         tag_name: ${{ env.RELEASE_TAG }}
         name: '🚧 Auto Build ${{ env.RELEASE_TAG }} (Pre-release)'
