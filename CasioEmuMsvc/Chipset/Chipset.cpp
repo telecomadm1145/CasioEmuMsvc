@@ -1,4 +1,4 @@
-﻿#include "Chipset.hpp"
+#include "Chipset.hpp"
 
 #include "5800Flash.h"
 #include "Audio.h"
@@ -35,6 +35,7 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <iostream>
 
 namespace casioemu {
 	void* Chipset::QueryInterface(const char* name) {
@@ -926,5 +927,37 @@ namespace casioemu {
 	void Chipset::UIEvent(SDL_Event& event) {
 		for (auto peripheral : peripherals)
 			peripheral->UIEvent(event);
+	}
+
+	void Chipset::SaveStateAll(std::ostream& os) {
+		for (auto& peripheral : peripherals)
+			peripheral->SaveState(os);
+		Binary::Write(os, cpu.reg_r);
+		Binary::Write(os, cpu.reg_cr);
+		Binary::Write(os, cpu.reg_psw);
+		Binary::Write(os, cpu.reg_pc);
+		Binary::Write(os, cpu.reg_csr);
+		Binary::Write(os, cpu.reg_epsw);
+		Binary::Write(os, cpu.reg_elr);
+		Binary::Write(os, cpu.reg_ecsr);
+		Binary::Write(os, cpu.reg_sp);
+		Binary::Write(os, cpu.reg_ea);
+		Binary::Write(os, cpu.reg_dsr);
+	}
+
+	void Chipset::LoadStateAll(std::istream& is) {
+		for (auto& peripheral : peripherals)
+			peripheral->LoadState(is);
+		Binary::Read(is, cpu.reg_r);
+		Binary::Read(is, cpu.reg_cr);
+		Binary::Read(is, cpu.reg_psw);
+		Binary::Read(is, cpu.reg_pc);
+		Binary::Read(is, cpu.reg_csr);
+		Binary::Read(is, cpu.reg_epsw);
+		Binary::Read(is, cpu.reg_elr);
+		Binary::Read(is, cpu.reg_ecsr);
+		Binary::Read(is, cpu.reg_sp);
+		Binary::Read(is, cpu.reg_ea);
+		Binary::Read(is, cpu.reg_dsr);
 	}
 } // namespace casioemu

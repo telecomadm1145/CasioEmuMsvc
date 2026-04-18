@@ -1,4 +1,4 @@
-﻿/*
+/*
 
 		Screen peripheral implement.
 		Copyright (C) 2024 telecomadm1145/Xyzst/user202729/LBPHacker/hieuxyz
@@ -35,6 +35,7 @@
 #include <array>
 #include <ctime> // for std::time
 #include <iomanip>
+#include <iostream>
 #include <vector>
 
 
@@ -216,6 +217,38 @@ namespace casioemu {
 		void Uninitialise() override;
 		void Frame() override;
 		void Reset() override;
+		void SaveState(std::ostream& os) override {
+			size_t bufSize = (hardware_id == HW_TI) ? (192 * 9) : (N_ROW + 1) * ROW_SIZE;
+			if (screen_buffer)
+				os.write(reinterpret_cast<const char*>(screen_buffer), bufSize);
+			uint8_t hasBuf1 = (screen_buffer1 != nullptr) ? 1 : 0;
+			os.write(reinterpret_cast<const char*>(&hasBuf1), 1);
+			if (screen_buffer1)
+				os.write(reinterpret_cast<const char*>(screen_buffer1), bufSize);
+			os.write(reinterpret_cast<const char*>(&screen_contrast), 1);
+			os.write(reinterpret_cast<const char*>(&screen_brightness), 1);
+			os.write(reinterpret_cast<const char*>(&screen_mode), 1);
+			os.write(reinterpret_cast<const char*>(&screen_range), 1);
+			os.write(reinterpret_cast<const char*>(&screen_offset), 1);
+			os.write(reinterpret_cast<const char*>(&screen_refresh_rate), 1);
+			os.write(reinterpret_cast<const char*>(&screen_power), 1);
+		}
+		void LoadState(std::istream& is) override {
+			size_t bufSize = (hardware_id == HW_TI) ? (192 * 9) : (N_ROW + 1) * ROW_SIZE;
+			if (screen_buffer)
+				is.read(reinterpret_cast<char*>(screen_buffer), bufSize);
+			uint8_t hasBuf1 = 0;
+			is.read(reinterpret_cast<char*>(&hasBuf1), 1);
+			if (hasBuf1 && screen_buffer1)
+				is.read(reinterpret_cast<char*>(screen_buffer1), bufSize);
+			is.read(reinterpret_cast<char*>(&screen_contrast), 1);
+			is.read(reinterpret_cast<char*>(&screen_brightness), 1);
+			is.read(reinterpret_cast<char*>(&screen_mode), 1);
+			is.read(reinterpret_cast<char*>(&screen_range), 1);
+			is.read(reinterpret_cast<char*>(&screen_offset), 1);
+			is.read(reinterpret_cast<char*>(&screen_refresh_rate), 1);
+			is.read(reinterpret_cast<char*>(&screen_power), 1);
+		}
 		void tick() {
 			float ratio = 0;
 			if constexpr (hardware_id == HW_ES_PLUS)

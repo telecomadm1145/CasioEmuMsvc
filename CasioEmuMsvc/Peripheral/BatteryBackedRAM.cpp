@@ -1,4 +1,4 @@
-﻿#include "BatteryBackedRAM.hpp"
+#include "BatteryBackedRAM.hpp"
 #include "Emulator.hpp"
 #include "MMURegion.hpp"
 #include "Peripheral.hpp"
@@ -7,6 +7,7 @@
 #include <SDL.h>
 #include <cstring>
 #include <fstream>
+#include <iostream>
 #include <algorithm>
 #include "Ext/Random.hpp"
 
@@ -42,6 +43,20 @@ namespace casioemu {
 		void* GetPRam() override { return pram_buffer; }
 		void* QueryInterface(const char* name) override {
 			return strcmp(name, typeid(IRam).name()) == 0 ? static_cast<IRam*>(this) : nullptr;
+		}
+		void SaveState(std::ostream& os) override {
+			os.write(reinterpret_cast<const char*>(ram_buffer), ram_size);
+			uint8_t hasPram = (pram_buffer != nullptr) ? 1 : 0;
+			os.write(reinterpret_cast<const char*>(&hasPram), 1);
+			if (pram_buffer)
+				os.write(reinterpret_cast<const char*>(pram_buffer), 0x8000);
+		}
+		void LoadState(std::istream& is) override {
+			is.read(reinterpret_cast<char*>(ram_buffer), ram_size);
+			uint8_t hasPram = 0;
+			is.read(reinterpret_cast<char*>(&hasPram), 1);
+			if (hasPram && pram_buffer)
+				is.read(reinterpret_cast<char*>(pram_buffer), 0x8000);
 		}
 	};
 

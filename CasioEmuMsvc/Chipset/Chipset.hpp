@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Config.hpp"
 
 #include "InterruptSource.hpp"
@@ -8,6 +8,7 @@
 #include "Peripheral/IOPorts.hpp"
 #include <SDL.h>
 #include <forward_list>
+#include <iosfwd>
 #include <string>
 #include <vector>
 
@@ -167,6 +168,8 @@ namespace casioemu {
 		void EmulatorTick();
 		void Frame();
 		void UIEvent(SDL_Event& event);
+		void SaveStateAll(std::ostream& os);
+		void LoadStateAll(std::istream& is);
 
 		template <typename T>
 		T* QueryInterface() {

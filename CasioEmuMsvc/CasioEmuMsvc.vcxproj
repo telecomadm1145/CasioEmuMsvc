@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="ASan|Win32">
@@ -461,6 +461,11 @@
     <ClCompile Include="Peripheral\VoltageLevelSupervisor.cpp" />
     <ClCompile Include="Ext\vibration.cpp" />
     <ClCompile Include="asmjit\src\**\*.cpp" />
+    <ClCompile Include="Snapshot.cpp" />
+    <ClCompile Include="Gui\SnapshotWindow.cpp" />
+    <ClCompile Include="miniz.c" />
+    <ClCompile Include="miniz_tdef.c" />
+    <ClCompile Include="miniz_tinfl.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Chipset\ePSCpu.h" />
@@ -540,6 +545,11 @@
     <ClInclude Include="Models.h" />
     <ClInclude Include="Gui\VariableWindow.h" />
     <ClInclude Include="Gui\PluginLogWindow.hpp" />
+    <ClInclude Include="miniz_export.h" />
+    <ClInclude Include="Snapshot.h" />
+    <ClInclude Include="Compress.h" />
+    <ClInclude Include="miniz.h" />
+    <ClInclude Include="Gui\SnapshotWindow.h" />
     <ClInclude Include="Peripheral\5800Flash.h" />
     <ClInclude Include="Peripheral\Audio.h" />
     <ClInclude Include="Peripheral\BatteryBackedRAM.hpp" />

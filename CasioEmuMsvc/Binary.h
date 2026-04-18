@@ -130,6 +130,23 @@ public:
 #endif
 		}
 	}
+	template <class T, size_t N>
+		requires BinaryData<T> || BinaryClass<T> || std::is_array_v<T>
+	static void Write(std::ostream& stm, const T (&arr)[N]) {
+		for (size_t i = 0; i < N; i++) {
+			Write(stm, arr[i]);
+		}
+	}
+
+	template <class T, size_t N>
+		requires BinaryData<T> || BinaryClass<T> || std::is_array_v<T>
+	static void Read(std::istream& stm, T (&arr)[N]) {
+		for (size_t i = 0; i < N; i++) {
+			if (!stm.good())
+				return;
+			Read(stm, arr[i]);
+		}
+	}
 	static void Read(std::istream& stm, BinaryMap auto& map) {
 		using ContainerChild = ::ContainerChild<decltype(map)>;
 		unsigned long long size = 0;

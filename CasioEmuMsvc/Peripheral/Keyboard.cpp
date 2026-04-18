@@ -11,6 +11,7 @@
 #include <ML620Ports.h>
 #include <chrono>
 #include <fstream>
+#include <iostream>
 #include <thread>
 #include <unordered_map>
 
@@ -77,6 +78,26 @@ namespace casioemu {
 				return (IKeyboardAutomation*)this;
 			}
 			return 0;
+		}
+		void SaveState(std::ostream& os) override {
+			os.write(reinterpret_cast<const char*>(&keyboard_out), sizeof(keyboard_out));
+			os.write(reinterpret_cast<const char*>(&keyboard_out_mask), sizeof(keyboard_out_mask));
+			os.write(reinterpret_cast<const char*>(&keyboard_in), sizeof(keyboard_in));
+			os.write(reinterpret_cast<const char*>(&input_mode), sizeof(input_mode));
+			os.write(reinterpret_cast<const char*>(&input_filter), sizeof(input_filter));
+			os.write(reinterpret_cast<const char*>(&keyboard_in_emu), sizeof(keyboard_in_emu));
+			os.write(reinterpret_cast<const char*>(&keyboard_out_emu), sizeof(keyboard_out_emu));
+			os.write(reinterpret_cast<const char*>(&keyboard_ready_emu), sizeof(keyboard_ready_emu));
+		}
+		void LoadState(std::istream& is) override {
+			is.read(reinterpret_cast<char*>(&keyboard_out), sizeof(keyboard_out));
+			is.read(reinterpret_cast<char*>(&keyboard_out_mask), sizeof(keyboard_out_mask));
+			is.read(reinterpret_cast<char*>(&keyboard_in), sizeof(keyboard_in));
+			is.read(reinterpret_cast<char*>(&input_mode), sizeof(input_mode));
+			is.read(reinterpret_cast<char*>(&input_filter), sizeof(input_filter));
+			is.read(reinterpret_cast<char*>(&keyboard_in_emu), sizeof(keyboard_in_emu));
+			is.read(reinterpret_cast<char*>(&keyboard_out_emu), sizeof(keyboard_out_emu));
+			is.read(reinterpret_cast<char*>(&keyboard_ready_emu), sizeof(keyboard_ready_emu));
 		}
 
 		// 通过 IKeyboardAutomation 继承

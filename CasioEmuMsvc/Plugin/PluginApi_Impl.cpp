@@ -1,12 +1,12 @@
 #define _NO_FUND_API
+#include "FileDialog.hpp"
 #include "PluginApi.h"
 #include "PluginMan.h"
+#include "SysDialog.h"
 #include <CPU.hpp>
 #include <Chipset.hpp>
-#include <MMU.hpp>
 #include <Keyboard.hpp>
-#include "SysDialog.h"
-#include "FileDialog.hpp"
+#include <MMU.hpp>
 #include <SDL.h>
 
 extern std::vector<UIWindow*> windows;
@@ -45,8 +45,10 @@ class PluginApi_Impl : public PluginApi {
 		}
 		void ShowMessageBox(const char* title, const char* message, int type) override {
 			Uint32 flags = SDL_MESSAGEBOX_INFORMATION;
-			if (type == 1) flags = SDL_MESSAGEBOX_WARNING;
-			if (type == 2) flags = SDL_MESSAGEBOX_ERROR;
+			if (type == 1)
+				flags = SDL_MESSAGEBOX_WARNING;
+			if (type == 2)
+				flags = SDL_MESSAGEBOX_ERROR;
 			SDL_ShowSimpleMessageBox(flags, title, message, window);
 		}
 	} platform_impl;
@@ -144,13 +146,16 @@ class PluginApi_Impl : public PluginApi {
 				typeid(casioemu::IKeyboardAutomation).name());
 		}
 		void Key(int ki, int ko, bool pressed) override {
-			if (auto* kbd = GetKbd()) kbd->Key(ki, ko, pressed);
+			if (auto* kbd = GetKbd())
+				kbd->Key(ki, ko, pressed);
 		}
 		void ReleaseAll() override {
-			if (auto* kbd = GetKbd()) kbd->ReleaseAll();
+			if (auto* kbd = GetKbd())
+				kbd->ReleaseAll();
 		}
 		void PressCode(uint8_t code, bool pressed) override {
-			if (auto* kbd = GetKbd()) kbd->PressCode(code, pressed);
+			if (auto* kbd = GetKbd())
+				kbd->PressCode(code, pressed);
 		}
 	} keyboard_impl;
 	class Hooks_Impl : public Hooks {
@@ -198,9 +203,9 @@ class PluginApi_Impl : public PluginApi {
 
 		// 注册中断断点 hook，传入的 handler 只需要处理 InterruptEventArgs
 		void SetupOnBrkHook(std::function<void(InterruptEventArgs&)> handler) override {
-			SetupHook(on_brk,[handler](casioemu::Chipset& /*chipset*/, InterruptEventArgs& args) {
-					handler(args);
-				});
+			SetupHook(on_brk, [handler](casioemu::Chipset& /*chipset*/, InterruptEventArgs& args) {
+				handler(args);
+			});
 		}
 
 		// 注册中断 hook，传入的 handler 只需要处理 InterruptEventArgs
@@ -227,13 +232,11 @@ class PluginApi_Impl : public PluginApi {
 	}
 	bool RegisterPlugin(const char* id, const char* name, const char* version, const char* author, const char* desc) override {
 		std::cout << (name ? name : "Unknown") << " loaded.\n";
-		g_loadedPlugins.push_back({
-			id ? id : "",
+		g_loadedPlugins.push_back({id ? id : "",
 			name ? name : "",
-			version ? version : "",
-			author ? author : "",
-			desc ? desc : ""
-		});
+			/*version ? version :*/ "",
+			/*author ? author :*/ "",
+			/*desc ? desc :*/ ""}); // Hack: 兼容性问题
 		return true;
 	}
 	void* QueryInterface(const char* name) override {

@@ -1,4 +1,4 @@
-﻿#include "Timer.hpp"
+#include "Timer.hpp"
 
 #include "Chipset/Chipset.hpp"
 #include "Chipset/MMU.hpp"
@@ -6,6 +6,7 @@
 #include "Logger.hpp"
 
 #include <cmath>
+#include <iostream>
 
 namespace casioemu {
 	// ML61X
@@ -30,6 +31,20 @@ namespace casioemu {
 		void Reset();
 		void Tick();
 		void Uninitialise();
+		void SaveState(std::ostream& os) override {
+			os.write(reinterpret_cast<const char*>(&data_counter), sizeof(data_counter));
+			os.write(reinterpret_cast<const char*>(&data_interval), sizeof(data_interval));
+			os.write(reinterpret_cast<const char*>(&data_F024), sizeof(data_F024));
+			os.write(reinterpret_cast<const char*>(&data_control), sizeof(data_control));
+			os.write(reinterpret_cast<const char*>(&ext_to_int_counter), sizeof(ext_to_int_counter));
+		}
+		void LoadState(std::istream& is) override {
+			is.read(reinterpret_cast<char*>(&data_counter), sizeof(data_counter));
+			is.read(reinterpret_cast<char*>(&data_interval), sizeof(data_interval));
+			is.read(reinterpret_cast<char*>(&data_F024), sizeof(data_F024));
+			is.read(reinterpret_cast<char*>(&data_control), sizeof(data_control));
+			is.read(reinterpret_cast<char*>(&ext_to_int_counter), sizeof(ext_to_int_counter));
+		}
 	};
 	void Timer::Initialise() {
 		if (enabled)

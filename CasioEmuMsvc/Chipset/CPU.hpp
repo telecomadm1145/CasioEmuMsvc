@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include "Binary.h"
 #include "Config.hpp"
 #include "Logger.hpp"
 
@@ -50,6 +51,12 @@ namespace casioemu {
 
 			Register<value_type>& operator-=(value_type value) {
 				return *this = raw - value;
+			}
+			void Write(std::ostream& stm) const {
+				Binary::Write(stm, raw);
+			}
+			void Read(std::istream& stm) {
+				Binary::Read(stm, raw);
 			}
 		};
 
@@ -133,7 +140,6 @@ namespace casioemu {
 		bool GetMasterInterruptEnable();
 		std::string GetBacktrace() const;
 
-
 #ifdef DBG
 		struct StackFrame {
 			bool lr_pushed;
@@ -181,7 +187,7 @@ namespace casioemu {
 		static OpcodeSource opcode_sources[];
 		OpcodeSource** opcode_dispatch;
 
-		typedef RegisterStub CPU::*RegisterStubPointer;
+		typedef RegisterStub CPU::* RegisterStubPointer;
 		typedef RegisterStub (CPU::*RegisterStubArrayPointer)[];
 		struct RegisterRecord {
 			std::string name;
