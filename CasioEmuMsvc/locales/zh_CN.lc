@@ -206,4 +206,31 @@ BP.SPHint=SP
 
 DiscordRPC.ChoosingModel=正在选择机型...
 
+SnapshotWindow.Title=快照
+SnapshotWindow.Save=保存快照
+SnapshotWindow.SnapshotPrefix=快照
+SnapshotWindow.Load=加载
+SnapshotWindow.Delete=删除
+SnapshotWindow.ExportNode=导出节点
+SnapshotWindow.ExportSubtree=导出子树
+SnapshotWindow.ExportAll=导出全部
+SnapshotWindow.Import=导入...
+SnapshotWindow.Label=标签
+SnapshotWindow.LabelHint=(下一个保存快照的标签)
+SnapshotWindow.NodePrefix=节点
+SnapshotWindow.SaveChild=在此保存子快照
+SnapshotWindow.ChildOf=子节点
+SnapshotWindow.LoadThis=加载此快照
+SnapshotWindow.DeleteWithChildren=删除 (+ 子节点)
+SnapshotWindow.NoSnapshots=暂无快照。\n使用“保存快照”来创建一个。
+SnapshotWindow.SelectToSeeDetails=选择一个快照查看详情。
+SnapshotWindow.NoPreview=[无预览]
+SnapshotWindow.ID=ID:        %u
+SnapshotWindow.ParentID=父 ID:      %u
+SnapshotWindow.LabelFmt=标签:      %s
+SnapshotWindow.SavedFmt=保存时间:   %s
+SnapshotWindow.StateFmt=状态:      %zu 字节 (压缩后 %zu)
+SnapshotWindow.PreviewFmt=预览:      %zu 字节
+SnapshotWindow.ErrorTitle=快照错误
+
 placeholder2=a)"

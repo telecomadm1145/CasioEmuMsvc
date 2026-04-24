@@ -206,4 +206,31 @@ BP.SPHint=SP
 
 DiscordRPC.ChoosingModel=Choosing a model...
 
+SnapshotWindow.Title=Snapshots
+SnapshotWindow.Save=Save Snapshot
+SnapshotWindow.SnapshotPrefix=Snapshot
+SnapshotWindow.Load=Load
+SnapshotWindow.Delete=Delete
+SnapshotWindow.ExportNode=Export Node
+SnapshotWindow.ExportSubtree=Export Subtree
+SnapshotWindow.ExportAll=Export All
+SnapshotWindow.Import=Import...
+SnapshotWindow.Label=Label
+SnapshotWindow.LabelHint=(label for next saved snapshot)
+SnapshotWindow.NodePrefix=Node
+SnapshotWindow.SaveChild=Save child snapshot here
+SnapshotWindow.ChildOf=Child of
+SnapshotWindow.LoadThis=Load this snapshot
+SnapshotWindow.DeleteWithChildren=Delete (+ children)
+SnapshotWindow.NoSnapshots=No snapshots yet.\nUse 'Save Snapshot' to create one.
+SnapshotWindow.SelectToSeeDetails=Select a snapshot to see details.
+SnapshotWindow.NoPreview=[No preview]
+SnapshotWindow.ID=ID:        %u
+SnapshotWindow.ParentID=Parent ID: %u
+SnapshotWindow.LabelFmt=Label:     %s
+SnapshotWindow.SavedFmt=Saved:     %s
+SnapshotWindow.StateFmt=State:     %zu bytes (compressed %zu)
+SnapshotWindow.PreviewFmt=Preview:   %zu bytes
+SnapshotWindow.ErrorTitle=Snapshot Error
+
 placeholder2=a)"

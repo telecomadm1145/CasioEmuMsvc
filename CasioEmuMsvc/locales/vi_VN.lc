@@ -207,4 +207,31 @@ BP.SPHint=SP
 
 DiscordRPC.ChoosingModel=Đang chọn model...
 
+SnapshotWindow.Title=Ảnh chụp (Snapshot)
+SnapshotWindow.Save=Lưu Snapshot
+SnapshotWindow.SnapshotPrefix=Snapshot
+SnapshotWindow.Load=Tải
+SnapshotWindow.Delete=Xóa
+SnapshotWindow.ExportNode=Xuất Node
+SnapshotWindow.ExportSubtree=Xuất Cây con
+SnapshotWindow.ExportAll=Xuất Tất cả
+SnapshotWindow.Import=Nhập...
+SnapshotWindow.Label=Nhãn
+SnapshotWindow.LabelHint=(nhãn cho snapshot tiếp theo)
+SnapshotWindow.NodePrefix=Node
+SnapshotWindow.SaveChild=Lưu snapshot con ở đây
+SnapshotWindow.ChildOf=Con của
+SnapshotWindow.LoadThis=Tải snapshot này
+SnapshotWindow.DeleteWithChildren=Xóa (+ các con)
+SnapshotWindow.NoSnapshots=Chưa có snapshot nào.\nDùng 'Lưu Snapshot' để tạo.
+SnapshotWindow.SelectToSeeDetails=Chọn một snapshot để xem chi tiết.
+SnapshotWindow.NoPreview=[Không có bản xem trước]
+SnapshotWindow.ID=ID:        %u
+SnapshotWindow.ParentID=ID Cha:    %u
+SnapshotWindow.LabelFmt=Nhãn:      %s
+SnapshotWindow.SavedFmt=Đã lưu:    %s
+SnapshotWindow.StateFmt=Trạng thái: %zu byte (đã nén %zu)
+SnapshotWindow.PreviewFmt=Xem trước: %zu byte
+SnapshotWindow.ErrorTitle=Lỗi Snapshot
+
 placeholder2=a)"
