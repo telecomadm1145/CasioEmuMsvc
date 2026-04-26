@@ -1,3 +1,8 @@
+// ???
+#include <SDL_rect.h>
+#include "ModelInfo.h"
+// 
+
 #include "StartupUi.h"
 #include "3rd_licenses.h"
 #include "Binary.h"
@@ -13,9 +18,6 @@
 #include "sdl_win32_extra.h"
 #include <Gui.h>
 #include <SDL.h>
-
-// Should be after SDL.h, otherwise it will cause compilation errors
-#include "ModelInfo.h"
 #include <SDL_image.h>
 #include <array>
 #include <filesystem>
