@@ -41,57 +41,52 @@
 #include <sentry.h>
 #endif
 
+#include "DiscordRPC.h"
 #include "StartupUi/StartupUi.h"
 #include <Gui.h>
 #include <Plugin/PluginMan.h>
 #include <ThemeManager.h>
-#include "DiscordRPC.h"
 
 using namespace casioemu;
 SDL_Surface* background;
 SDL_Texture* bg_txt;
 bool low_perf_ext = false;
 
-// ---------------------------------------------------------------------------
-// Renderer fallback helpers
-// ---------------------------------------------------------------------------
 // Driver chain tried in order after a crash: default (auto) → opengl → software
 static const char* kRendererDrivers[] = {"default", "opengl", "software"};
-static const int   kRendererDriverCount = 3;
-static const char* kCrashLockFile   = "crash.lock";
-static const char* kRendererHintFile = "renderer_hint.cfg";
+static const int kRendererDriverCount = 3;
+static const char* kCrashLockFile = ".crash.switch_renderer";
+static const char* kRendererHintFile = ".renderer_hint.cfg";
 
-// Read the persisted driver name, return "default" if absent/invalid.
 static std::string ReadRendererHint() {
 	std::ifstream f(kRendererHintFile);
-	if (!f.is_open()) return "default";
+	if (!f.is_open())
+		return "default";
 	std::string s;
 	std::getline(f, s);
-	// Validate
 	for (int i = 0; i < kRendererDriverCount; ++i)
-		if (s == kRendererDrivers[i]) return s;
+		if (s == kRendererDrivers[i])
+			return s;
 	return "default";
 }
 
-// Persist the chosen driver for next session.
 static void WriteRendererHint(const std::string& driver) {
 	std::ofstream f(kRendererHintFile, std::ios::trunc);
-	if (f.is_open()) f << driver;
+	if (f.is_open())
+		f << driver;
 }
 
-// Advance to the next driver in the fallback chain.
 static std::string NextRendererDriver(const std::string& current) {
 	for (int i = 0; i < kRendererDriverCount - 1; ++i)
-		if (current == kRendererDrivers[i]) return kRendererDrivers[i + 1];
-	return kRendererDrivers[kRendererDriverCount - 1]; // already at end → software
+		if (current == kRendererDrivers[i])
+			return kRendererDrivers[i + 1];
+	return kRendererDrivers[kRendererDriverCount - 1];
 }
 
-// Create the crash sentinel file.
 static void TouchCrashLock() {
 	std::ofstream f(kCrashLockFile, std::ios::trunc);
 }
 
-// Remove the crash sentinel file (call on clean exit).
 static void RemoveCrashLock() {
 	std::filesystem::remove(kCrashLockFile);
 }
@@ -119,36 +114,34 @@ int main(int argc, char* argv[]) {
 #endif
 	g_local.Load();
 
-	// -----------------------------------------------------------------------
-	// Renderer crash-fallback: detect previous crash and apply driver hint
-	// -----------------------------------------------------------------------
+#ifndef __ANDROID__
 	std::string rendererDriver = ReadRendererHint();
 	bool previouslyCrashed = std::filesystem::exists(kCrashLockFile);
 	if (previouslyCrashed) {
-		// Advance to next fallback driver
 		rendererDriver = NextRendererDriver(rendererDriver);
 		WriteRendererHint(rendererDriver);
 		printf("[Startup][Warn] Previous session crashed. Switching renderer to: %s\n", rendererDriver.c_str());
 
-		// Inform the user via SDL message box (shown before the window opens)
 		char msg[256];
 		snprintf(msg, sizeof(msg),
 			"The previous session crashed.\n"
 			"Automatically switching to the '%s' renderer backend.\n"
-			"If crashes persist, try updating your GPU drivers.",
+			"If crashes persist, try updating your GPU drivers.\n"
+			"If you think this is a error, delete .renderer_hint.cfg to reset to default.",
 			rendererDriver.c_str());
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "CasioEmuMsvc - Renderer Fallback", msg, nullptr);
+
+		RemoveCrashLock();
 	}
 	if (rendererDriver != "default") {
 		// SDL_RENDER_DRIVER is checked by SDL when creating a renderer
 		SDL_SetHint(SDL_HINT_RENDER_DRIVER, rendererDriver.c_str());
 		printf("[Startup][Info] Renderer hint set to: %s\n", rendererDriver.c_str());
 	}
-	// Write the crash sentinel — removed on clean exit below
-	TouchCrashLock();
+#endif
 
 	DiscordRPC::Init();
-  DiscordRPC::UpdatePresence("");
+	DiscordRPC::UpdatePresence("");
 
 	std::map<std::string, std::string> argv_map;
 	for (int ix = 1; ix != argc; ++ix) {
@@ -184,9 +177,9 @@ int main(int argc, char* argv[]) {
 		auto s = sui_loop();
 		argv_map["model"] = std::move(s);
 		if (argv_map["model"].empty()) {
-      DiscordRPC::Shutdown();
+			DiscordRPC::Shutdown();
 			return -1;
-	  }
+		}
 	}
 
 	bool no_dbg = !argv_map["no_dbg"].empty();
@@ -195,7 +188,7 @@ int main(int argc, char* argv[]) {
 	m_emu = &emulator;
 
 	// static std::atomic<bool> running(true);
-	
+
 	DiscordRPC::UpdatePresence(emulator.ModelDefinition.model_name);
 
 	bool guiCreated = false;
@@ -299,7 +292,7 @@ int main(int argc, char* argv[]) {
 
 	while (emulator.Running()) {
 		SDL_Event event{};
-		busy = false;	
+		busy = false;
 		DiscordRPC::Update();
 		if (!SDL_PollEvent(&event))
 			continue;
@@ -640,10 +633,6 @@ int main(int argc, char* argv[]) {
 	sentry_close();
 #endif
 	DiscordRPC::Shutdown();
-
-	// Clean exit: remove crash sentinel and reset renderer hint to default
-	RemoveCrashLock();
-	WriteRendererHint("default");
 
 	return 0;
 };
