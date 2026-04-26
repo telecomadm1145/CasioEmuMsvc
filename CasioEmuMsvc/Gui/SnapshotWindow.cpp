@@ -34,7 +34,7 @@ static std::string FormatTimestamp(int64_t ts) {
 // ============================================================
 
 SnapshotWindow::SnapshotWindow()
-    : UIWindow("SnapshotWindow.Title"_lc) {
+    : UIWindow("Snapshot"/*"SnapshotWindow.Title"_lc*/) { // Reminder here: don't localize ImGui window titles as they are linked to imgui presistent storage key
     inital_size = ImVec2(880, 560);
     memset(m_LabelBuf, 0, sizeof(m_LabelBuf));
 }
