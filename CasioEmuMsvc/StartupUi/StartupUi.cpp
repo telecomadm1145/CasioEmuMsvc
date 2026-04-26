@@ -6,7 +6,6 @@
 #include "Gui/imgui/imgui_impl_sdl2.h"
 #include "Gui/imgui/imgui_impl_sdlrenderer2.h"
 #include "Localization.h"
-#include "ModelInfo.h"
 #include "RomPackage.h"
 #include "Romu.h"
 #include "SysDialog.h"
@@ -14,6 +13,9 @@
 #include "sdl_win32_extra.h"
 #include <Gui.h>
 #include <SDL.h>
+
+// Should be after SDL.h, otherwise it will cause compilation errors
+#include "ModelInfo.h"
 #include <SDL_image.h>
 #include <array>
 #include <filesystem>
@@ -32,7 +34,6 @@
 #endif
 #include "DiscordRPC.h"
 #include "Ext/Random.hpp"
-
 
 #ifdef __ANDROID__
 #include "../Gui/ThemeManager.h"
