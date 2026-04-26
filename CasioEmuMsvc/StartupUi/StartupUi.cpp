@@ -1,4 +1,4 @@
-﻿#include "StartupUi.h"
+#include "StartupUi.h"
 #include "3rd_licenses.h"
 #include "Binary.h"
 #include "Config.hpp"
@@ -23,7 +23,11 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
-
+#include <shlobj.h>
+#include <objbase.h>
+#include <shobjidl.h>
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "shell32.lib")
 #endif
 #include "Ext/Random.hpp"
 #include "DiscordRPC.h"
@@ -473,6 +477,169 @@ inline std::string sanitize_path(const std::string& input) {
 	}
 	return result;
 }
+#ifdef _WIN32
+static bool CreateDesktopShortcut(const std::filesystem::path& model_path, const std::string& shortcut_name, const std::string& icon_path_str) {
+	// Get the desktop path
+	wchar_t desktopPath[MAX_PATH];
+	if (FAILED(SHGetFolderPathW(NULL, CSIDL_DESKTOPDIRECTORY, NULL, 0, desktopPath))) {
+		std::cerr << "[Shortcut] Failed to get desktop path\n";
+		return false;
+	}
+
+	// Get the executable path
+	wchar_t exePath[MAX_PATH];
+	GetModuleFileNameW(NULL, exePath, MAX_PATH);
+
+	// Get the working directory (exe directory)
+	std::filesystem::path exe_dir = std::filesystem::path(exePath).parent_path();
+
+	// Build the argument: the model path (absolute)
+	std::filesystem::path abs_model = std::filesystem::absolute(model_path);
+	std::wstring arguments = L"\"" + abs_model.wstring() + L"\"";
+
+	// Build shortcut file path
+	std::wstring sanitized_name(shortcut_name.begin(), shortcut_name.end());
+	std::wstring lnkPath = std::wstring(desktopPath) + L"\\" + sanitized_name + L".lnk";
+
+	IShellLinkW* psl = nullptr;
+	HRESULT hr = CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, IID_IShellLinkW, (void**)&psl);
+	if (FAILED(hr)) {
+		std::cerr << "[Shortcut] CoCreateInstance failed\n";
+		return false;
+	}
+
+	psl->SetPath(exePath);
+	psl->SetArguments(arguments.c_str());
+	psl->SetWorkingDirectory(exe_dir.wstring().c_str());
+	psl->SetDescription(L"CasioEmu Model Shortcut");
+
+	// Set custom icon if provided
+	if (!icon_path_str.empty()) {
+		std::filesystem::path icon_abs = std::filesystem::absolute(icon_path_str);
+		if (std::filesystem::exists(icon_abs)) {
+			psl->SetIconLocation(icon_abs.wstring().c_str(), 0);
+		}
+	}
+
+	IPersistFile* ppf = nullptr;
+	hr = psl->QueryInterface(IID_IPersistFile, (void**)&ppf);
+	if (SUCCEEDED(hr)) {
+		hr = ppf->Save(lnkPath.c_str(), TRUE);
+		ppf->Release();
+	}
+	psl->Release();
+
+	if (FAILED(hr)) {
+		std::cerr << "[Shortcut] Failed to save shortcut\n";
+		return false;
+	}
+	return true;
+}
+#elif defined(__ANDROID__)
+static bool CreateDesktopShortcut(const std::filesystem::path& model_path, const std::string& shortcut_name, const std::string& icon_path_str) {
+	JNIEnv* env = nullptr;
+	if (!GetJNIEnv(&env)) {
+		std::cerr << "[Shortcut] Failed to get JNI environment\n";
+		return false;
+	}
+
+	jobject activity = (jobject)SDL_AndroidGetActivity();
+	if (!activity) {
+		std::cerr << "[Shortcut] Failed to get Android activity\n";
+		return false;
+	}
+
+	jclass gameClass = env->FindClass("com/tele/u8emulator/Game");
+	if (!gameClass) {
+		env->DeleteLocalRef(activity);
+		std::cerr << "[Shortcut] Failed to find Game class\n";
+		return false;
+	}
+
+	jmethodID method = env->GetStaticMethodID(gameClass, "createModelShortcut",
+		"(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
+	if (!method) {
+		env->DeleteLocalRef(gameClass);
+		env->DeleteLocalRef(activity);
+		std::cerr << "[Shortcut] Failed to find createModelShortcut method\n";
+		return false;
+	}
+
+	std::filesystem::path abs_model = std::filesystem::absolute(model_path);
+	jstring jModelPath = env->NewStringUTF(abs_model.string().c_str());
+	jstring jName = env->NewStringUTF(shortcut_name.c_str());
+	jstring jIconPath = env->NewStringUTF(icon_path_str.c_str());
+
+	env->CallStaticVoidMethod(gameClass, method, jModelPath, jName, jIconPath);
+
+	env->DeleteLocalRef(jIconPath);
+	env->DeleteLocalRef(jName);
+	env->DeleteLocalRef(jModelPath);
+	env->DeleteLocalRef(gameClass);
+	env->DeleteLocalRef(activity);
+	return true;
+}
+#elif defined(__linux__)
+static bool CreateDesktopShortcut(const std::filesystem::path& model_path, const std::string& shortcut_name, const std::string& icon_path_str) {
+	// Get the desktop directory
+	std::filesystem::path desktop_dir;
+	const char* xdg_desktop = std::getenv("XDG_DESKTOP_DIR");
+	if (xdg_desktop) {
+		desktop_dir = xdg_desktop;
+	} else {
+		const char* home = std::getenv("HOME");
+		if (!home) {
+			std::cerr << "[Shortcut] HOME environment variable not set\n";
+			return false;
+		}
+		desktop_dir = std::filesystem::path(home) / "Desktop";
+	}
+
+	if (!std::filesystem::exists(desktop_dir)) {
+		std::filesystem::create_directories(desktop_dir);
+	}
+
+	// Get executable path
+	std::filesystem::path exe_path = std::filesystem::canonical("/proc/self/exe");
+	std::filesystem::path abs_model = std::filesystem::absolute(model_path);
+
+	std::string sanitized = shortcut_name;
+	for (auto& c : sanitized) {
+		if (c == '/' || c == '\\') c = '_';
+	}
+
+	std::filesystem::path shortcut_file = desktop_dir / (sanitized + ".desktop");
+
+	std::ofstream ofs(shortcut_file);
+	if (!ofs) {
+		std::cerr << "[Shortcut] Failed to create .desktop file\n";
+		return false;
+	}
+
+	ofs << "[Desktop Entry]\n";
+	ofs << "Type=Application\n";
+	ofs << "Name=" << shortcut_name << "\n";
+	ofs << "Exec=\"" << exe_path.string() << "\" \"" << abs_model.string() << "\"\n";
+	ofs << "Path=" << exe_path.parent_path().string() << "\n";
+	if (!icon_path_str.empty()) {
+		std::filesystem::path icon_abs = std::filesystem::absolute(icon_path_str);
+		if (std::filesystem::exists(icon_abs)) {
+			ofs << "Icon=" << icon_abs.string() << "\n";
+		}
+	}
+	ofs << "Terminal=false\n";
+	ofs << "Categories=Game;Emulator;\n";
+	ofs.close();
+
+	// Make executable
+	std::filesystem::permissions(shortcut_file,
+		std::filesystem::perms::owner_exec | std::filesystem::perms::group_exec | std::filesystem::perms::others_exec,
+		std::filesystem::perm_options::add);
+
+	return true;
+}
+#endif
+
 namespace casioemu {
 	class StartupUi {
 	public:
@@ -648,6 +815,10 @@ namespace casioemu {
 		const char* current_filter = "##";
 		bool not_show_emu = false;
 		bool loading = false;
+		bool show_shortcut_popup = false;
+		std::filesystem::path shortcut_model_path{};
+		char shortcut_name[260]{};
+		char shortcut_icon[260]{};
 
 		inline std::string generate_random_string(size_t length) {
 			return util::Random::random_string(length);
@@ -868,6 +1039,66 @@ namespace casioemu {
 				}
 			}
 
+			// Shortcut creation popup
+			if (show_shortcut_popup) {
+				ImGui::OpenPopup("StartupUI.CreateShortcutTitle"_lc);
+				show_shortcut_popup = false;
+			}
+
+			ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+			ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+			if (ImGui::BeginPopupModal("StartupUI.CreateShortcutTitle"_lc, NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+				ImGui::TextUnformatted("StartupUI.ShortcutNameHint"_lc);
+				ImGui::SetNextItemWidth(300);
+				ImGui::InputText("##shortcut_name", shortcut_name, sizeof(shortcut_name));
+
+				ImGui::TextUnformatted("StartupUI.ShortcutIconHint"_lc);
+				ImGui::SetNextItemWidth(300);
+				ImGui::InputText("##shortcut_icon", shortcut_icon, sizeof(shortcut_icon));
+				ImGui::SameLine();
+				if (ImGui::Button("...##icon_browse")) {
+					SystemDialogs::OpenFileDialog([&](std::filesystem::path f) {
+						strncpy(shortcut_icon, f.string().c_str(), sizeof(shortcut_icon) - 1);
+						shortcut_icon[sizeof(shortcut_icon) - 1] = '\0';
+					});
+				}
+				ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "StartupUI.ShortcutIconOptional"_lc);
+
+				ImGui::Spacing();
+				ImGui::Separator();
+				ImGui::Spacing();
+
+				if (ImGui::Button("Button.Positive"_lc, ImVec2(120, 0))) {
+					std::string name_str = shortcut_name;
+					std::string icon_str = shortcut_icon;
+					if (!name_str.empty()) {
+						try {
+							bool ok = CreateDesktopShortcut(shortcut_model_path, name_str, icon_str);
+							if (ok) {
+								SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,
+									"StartupUI.CreateShortcutTitle"_lc,
+									"StartupUI.ShortcutCreated"_lc, nullptr);
+							} else {
+								SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+									"StartupUI.CreateShortcutTitle"_lc,
+									"StartupUI.ShortcutFailed"_lc, nullptr);
+							}
+						} catch (const std::exception& e) {
+							std::cerr << "[Shortcut] Error: " << e.what() << std::endl;
+							SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+								"StartupUI.CreateShortcutTitle"_lc,
+								"StartupUI.ShortcutFailed"_lc, nullptr);
+						}
+						ImGui::CloseCurrentPopup();
+					}
+				}
+				ImGui::SameLine();
+				if (ImGui::Button("Button.Negative"_lc, ImVec2(120, 0))) {
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::EndPopup();
+			}
+
 #ifdef __ANDROID__
 			ImGui::PopStyleVar(3);
 #endif
@@ -1058,6 +1289,13 @@ namespace casioemu {
 						catch (const std::exception& e) {
 							SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Failed to open model editor.", nullptr);
 						}
+					}
+					if (ImGui::MenuItem("StartupUI.CreateShortcut"_lc)) {
+						strncpy(shortcut_name, model.name.c_str(), sizeof(shortcut_name) - 1);
+						shortcut_name[sizeof(shortcut_name) - 1] = '\0';
+						shortcut_icon[0] = '\0';
+						shortcut_model_path = model.path;
+						show_shortcut_popup = true;
 					}
 					if (ImGui::MenuItem("StartupUI.Export"_lc)) {
 						ImGui::EndPopup();

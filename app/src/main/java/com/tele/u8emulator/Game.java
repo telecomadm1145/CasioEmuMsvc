@@ -16,10 +16,14 @@ import android.provider.MediaStore;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.ShortcutInfo;
+import android.content.pm.ShortcutManager;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.BitmapFactory;
+import android.graphics.drawable.Icon;
 import android.media.MediaScannerConnection;
 import android.util.Log;
 import android.graphics.Bitmap;
@@ -68,6 +72,18 @@ public class Game extends SDLActivity {
             getWindow().setAttributes(attributes);
         }
         SDLActivity.onNativeResize();
+    }
+
+    @Override
+    protected String[] getArguments() {
+        Intent intent = getIntent();
+        if (intent != null) {
+            String modelPath = intent.getStringExtra("model_path");
+            if (modelPath != null && !modelPath.isEmpty()) {
+                return new String[]{ modelPath };
+            }
+        }
+        return new String[0];
     }
 
     @Override
@@ -267,6 +283,83 @@ public class Game extends SDLActivity {
 
     public static void nativeVibrate(long milliseconds) {
         ((Game) SDLActivity.mSingleton).vibrate(milliseconds);
+    }
+
+    public static void createModelShortcut(String modelPath, String shortcutName, String iconPath) {
+        Activity activity = SDLActivity.mSingleton;
+        if (activity == null) {
+            Log.e(TAG, "createModelShortcut: activity is null");
+            return;
+        }
+
+        activity.runOnUiThread(() -> {
+            try {
+                Intent launchIntent = new Intent(activity, Game.class);
+                launchIntent.setAction(Intent.ACTION_MAIN);
+                launchIntent.putExtra("model_path", modelPath);
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    ShortcutManager shortcutManager = activity.getSystemService(ShortcutManager.class);
+                    if (shortcutManager != null && shortcutManager.isRequestPinShortcutSupported()) {
+                        Icon icon = null;
+                        if (iconPath != null && !iconPath.isEmpty()) {
+                            File iconFile = new File(iconPath);
+                            if (iconFile.exists()) {
+                                Bitmap bmp = BitmapFactory.decodeFile(iconPath);
+                                if (bmp != null) {
+                                    // Scale to reasonable size for shortcut icon
+                                    Bitmap scaled = Bitmap.createScaledBitmap(bmp, 192, 192, true);
+                                    icon = Icon.createWithBitmap(scaled);
+                                    if (scaled != bmp) bmp.recycle();
+                                }
+                            }
+                        }
+                        if (icon == null) {
+                            icon = Icon.createWithResource(activity, activity.getApplicationInfo().icon);
+                        }
+
+                        ShortcutInfo shortcutInfo = new ShortcutInfo.Builder(activity, "model_" + modelPath.hashCode())
+                                .setShortLabel(shortcutName)
+                                .setLongLabel(shortcutName)
+                                .setIcon(icon)
+                                .setIntent(launchIntent)
+                                .build();
+
+                        shortcutManager.requestPinShortcut(shortcutInfo, null);
+                    } else {
+                        Toast.makeText(activity, "Pinned shortcuts not supported", Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    // Fallback for pre-Oreo
+                    Intent shortcutIntent = new Intent("com.android.launcher.action.INSTALL_SHORTCUT");
+                    shortcutIntent.putExtra(Intent.EXTRA_SHORTCUT_NAME, shortcutName);
+                    shortcutIntent.putExtra(Intent.EXTRA_SHORTCUT_INTENT, launchIntent);
+                    shortcutIntent.putExtra("duplicate", false);
+
+                    if (iconPath != null && !iconPath.isEmpty()) {
+                        File iconFile = new File(iconPath);
+                        if (iconFile.exists()) {
+                            Bitmap bmp = BitmapFactory.decodeFile(iconPath);
+                            if (bmp != null) {
+                                shortcutIntent.putExtra(Intent.EXTRA_SHORTCUT_ICON, bmp);
+                            }
+                        }
+                    }
+                    if (!shortcutIntent.hasExtra(Intent.EXTRA_SHORTCUT_ICON)) {
+                        shortcutIntent.putExtra(Intent.EXTRA_SHORTCUT_ICON_RESOURCE,
+                                Intent.ShortcutIconResource.fromContext(activity, activity.getApplicationInfo().icon));
+                    }
+
+                    activity.sendBroadcast(shortcutIntent);
+                }
+
+                Toast.makeText(activity, "Shortcut created: " + shortcutName, Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to create shortcut: " + e.getMessage());
+                Toast.makeText(activity, "Failed to create shortcut", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private String getPathFromUri(Uri uri) {
