@@ -1,4 +1,4 @@
-﻿#include "Config.hpp"
+#include "Config.hpp"
 #include "Ui.hpp"
 #include "imgui_impl_sdl2.h"
 
@@ -17,6 +17,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <iterator>
 #include <map>
@@ -50,6 +52,50 @@ SDL_Surface* background;
 SDL_Texture* bg_txt;
 bool low_perf_ext = false;
 
+// ---------------------------------------------------------------------------
+// Renderer fallback helpers
+// ---------------------------------------------------------------------------
+// Driver chain tried in order after a crash: default (auto) → opengl → software
+static const char* kRendererDrivers[] = {"default", "opengl", "software"};
+static const int   kRendererDriverCount = 3;
+static const char* kCrashLockFile   = "crash.lock";
+static const char* kRendererHintFile = "renderer_hint.cfg";
+
+// Read the persisted driver name, return "default" if absent/invalid.
+static std::string ReadRendererHint() {
+	std::ifstream f(kRendererHintFile);
+	if (!f.is_open()) return "default";
+	std::string s;
+	std::getline(f, s);
+	// Validate
+	for (int i = 0; i < kRendererDriverCount; ++i)
+		if (s == kRendererDrivers[i]) return s;
+	return "default";
+}
+
+// Persist the chosen driver for next session.
+static void WriteRendererHint(const std::string& driver) {
+	std::ofstream f(kRendererHintFile, std::ios::trunc);
+	if (f.is_open()) f << driver;
+}
+
+// Advance to the next driver in the fallback chain.
+static std::string NextRendererDriver(const std::string& current) {
+	for (int i = 0; i < kRendererDriverCount - 1; ++i)
+		if (current == kRendererDrivers[i]) return kRendererDrivers[i + 1];
+	return kRendererDrivers[kRendererDriverCount - 1]; // already at end → software
+}
+
+// Create the crash sentinel file.
+static void TouchCrashLock() {
+	std::ofstream f(kCrashLockFile, std::ios::trunc);
+}
+
+// Remove the crash sentinel file (call on clean exit).
+static void RemoveCrashLock() {
+	std::filesystem::remove(kCrashLockFile);
+}
+
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
 	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE);
@@ -72,7 +118,35 @@ int main(int argc, char* argv[]) {
 	chdir(SDL_AndroidGetExternalStoragePath());
 #endif
 	g_local.Load();
-	
+
+	// -----------------------------------------------------------------------
+	// Renderer crash-fallback: detect previous crash and apply driver hint
+	// -----------------------------------------------------------------------
+	std::string rendererDriver = ReadRendererHint();
+	bool previouslyCrashed = std::filesystem::exists(kCrashLockFile);
+	if (previouslyCrashed) {
+		// Advance to next fallback driver
+		rendererDriver = NextRendererDriver(rendererDriver);
+		WriteRendererHint(rendererDriver);
+		printf("[Startup][Warn] Previous session crashed. Switching renderer to: %s\n", rendererDriver.c_str());
+
+		// Inform the user via SDL message box (shown before the window opens)
+		char msg[256];
+		snprintf(msg, sizeof(msg),
+			"The previous session crashed.\n"
+			"Automatically switching to the '%s' renderer backend.\n"
+			"If crashes persist, try updating your GPU drivers.",
+			rendererDriver.c_str());
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "CasioEmuMsvc - Renderer Fallback", msg, nullptr);
+	}
+	if (rendererDriver != "default") {
+		// SDL_RENDER_DRIVER is checked by SDL when creating a renderer
+		SDL_SetHint(SDL_HINT_RENDER_DRIVER, rendererDriver.c_str());
+		printf("[Startup][Info] Renderer hint set to: %s\n", rendererDriver.c_str());
+	}
+	// Write the crash sentinel — removed on clean exit below
+	TouchCrashLock();
+
 	DiscordRPC::Init();
   DiscordRPC::UpdatePresence("");
 
@@ -565,6 +639,11 @@ int main(int argc, char* argv[]) {
 #ifdef ENABLE_SENTRY
 	sentry_close();
 #endif
-  DiscordRPC::Shutdown();
+	DiscordRPC::Shutdown();
+
+	// Clean exit: remove crash sentinel and reset renderer hint to default
+	RemoveCrashLock();
+	WriteRendererHint("default");
+
 	return 0;
 };
