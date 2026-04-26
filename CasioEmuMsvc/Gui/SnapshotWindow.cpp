@@ -10,6 +10,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include "Localization.h"
 
 // ============================================================
 // Helpers
@@ -33,7 +34,7 @@ static std::string FormatTimestamp(int64_t ts) {
 // ============================================================
 
 SnapshotWindow::SnapshotWindow()
-    : UIWindow("Snapshots") {
+    : UIWindow("Snapshot"/*"SnapshotWindow.Title"_lc*/) { // Reminder here: don't localize ImGui window titles as they are linked to imgui presistent storage key
     inital_size = ImVec2(880, 560);
     memset(m_LabelBuf, 0, sizeof(m_LabelBuf));
 }
@@ -82,10 +83,10 @@ void SnapshotWindow::RenderToolbar() {
 
     // --- Save button ---
     if (!hasEmu) ImGui::BeginDisabled();
-    if (ImGui::Button("Save Snapshot")) {
+    if (ImGui::Button("SnapshotWindow.Save"_lc)) {
         try {
             std::string lbl(m_LabelBuf);
-            if (lbl.empty()) lbl = "Snapshot " + std::to_string(m_Manager.Nodes.size() + 1);
+            if (lbl.empty()) lbl = std::string("SnapshotWindow.SnapshotPrefix"_lc) + std::to_string(m_Manager.Nodes.size() + 1);
             uint32_t newId = m_Manager.SaveSnapshot(*::m_emu, m_SelectedId, lbl);
             m_SelectedId = newId;
             TryLoadPreview(newId);
@@ -100,7 +101,7 @@ void SnapshotWindow::RenderToolbar() {
     // --- Load button ---
     bool hasSelected = (m_SelectedId != 0 && hasEmu);
     if (!hasSelected) ImGui::BeginDisabled();
-    if (ImGui::Button("Load")) {
+    if (ImGui::Button("SnapshotWindow.Load"_lc)) {
         try {
             m_Manager.LoadSnapshot(*::m_emu, m_SelectedId);
         } catch (const std::exception& e) {
@@ -112,7 +113,7 @@ void SnapshotWindow::RenderToolbar() {
 
     // --- Delete button ---
     if (!hasSelected) ImGui::BeginDisabled();
-    if (ImGui::Button("Delete")) {
+    if (ImGui::Button("SnapshotWindow.Delete"_lc)) {
         if (m_SelectedId != 0) {
             m_Manager.DeleteNode(m_SelectedId);
             m_SelectedId = 0;
@@ -127,7 +128,7 @@ void SnapshotWindow::RenderToolbar() {
 
     // --- Export selected ---
     if (!hasSelected) ImGui::BeginDisabled();
-    if (ImGui::Button("Export Node")) {
+    if (ImGui::Button("SnapshotWindow.ExportNode"_lc)) {
         if (m_SelectedId != 0) {
             uint32_t exportId = m_SelectedId;
             SystemDialogs::SaveFileDialog("snapshot.snapshot", [this, exportId](std::filesystem::path path) {
@@ -141,7 +142,7 @@ void SnapshotWindow::RenderToolbar() {
 
     // --- Export subtree ---
     if (!hasSelected) ImGui::BeginDisabled();
-    if (ImGui::Button("Export Subtree")) {
+    if (ImGui::Button("SnapshotWindow.ExportSubtree"_lc)) {
         if (m_SelectedId != 0) {
             uint32_t exportId = m_SelectedId;
             SystemDialogs::SaveFileDialog("snapshot.snapshot", [this, exportId](std::filesystem::path path) {
@@ -154,7 +155,7 @@ void SnapshotWindow::RenderToolbar() {
     ImGui::SameLine();
 
     // --- Export all ---
-    if (ImGui::Button("Export All")) {
+    if (ImGui::Button("SnapshotWindow.ExportAll"_lc)) {
         SystemDialogs::SaveFileDialog("snapshots.snapshot", [this](std::filesystem::path path) {
             try { m_Manager.ExportAll(path); }
             catch (const std::exception& e) { ShowError(e.what()); }
@@ -163,7 +164,7 @@ void SnapshotWindow::RenderToolbar() {
     ImGui::SameLine();
 
     // --- Import ---
-    if (ImGui::Button("Import...")) {
+    if (ImGui::Button("SnapshotWindow.Import"_lc)) {
         SystemDialogs::OpenFileDialog([this](std::filesystem::path path) {
             try { m_Manager.ImportFromFile(path); }
             catch (const std::exception& e) { ShowError(e.what()); }
@@ -174,9 +175,9 @@ void SnapshotWindow::RenderToolbar() {
 
     // --- Label input ---
     ImGui::SetNextItemWidth(320);
-    ImGui::InputText("Label##snap_label", m_LabelBuf, sizeof(m_LabelBuf));
+    ImGui::InputText("SnapshotWindow.Label"_lc, m_LabelBuf, sizeof(m_LabelBuf));
     ImGui::SameLine();
-    ImGui::TextDisabled("(label for next saved snapshot)");
+    ImGui::TextDisabled("%s", "SnapshotWindow.LabelHint"_lc);
     ImGui::Separator();
 }
 
@@ -194,7 +195,7 @@ void SnapshotWindow::RenderTreeNode(uint32_t parentId, int depth) {
             if (c.ParentId == node.Id && c.Id != node.Id) { hasChildren = true; break; }
 
         std::string displayLabel = node.Label.empty()
-            ? ("Node " + std::to_string(node.Id))
+            ? (std::string("SnapshotWindow.NodePrefix"_lc) + std::to_string(node.Id))
             : node.Label;
         displayLabel += "  [" + FormatTimestamp(node.Timestamp) + "]";
 
@@ -213,11 +214,11 @@ void SnapshotWindow::RenderTreeNode(uint32_t parentId, int depth) {
 
         // Right-click context menu
         if (ImGui::BeginPopupContextItem()) {
-            if (ImGui::MenuItem("Save child snapshot here")) {
+            if (ImGui::MenuItem("SnapshotWindow.SaveChild"_lc)) {
                 if (::m_emu) {
                     try {
                         std::string lbl(m_LabelBuf);
-                        if (lbl.empty()) lbl = "Child of " + std::to_string(node.Id);
+                        if (lbl.empty()) lbl = std::string("SnapshotWindow.ChildOf"_lc) + std::to_string(node.Id);
                         uint32_t newId = m_Manager.SaveSnapshot(*::m_emu, node.Id, lbl);
                         m_SelectedId = newId;
                         TryLoadPreview(newId);
@@ -225,14 +226,14 @@ void SnapshotWindow::RenderTreeNode(uint32_t parentId, int depth) {
                     } catch (const std::exception& e) { ShowError(e.what()); }
                 }
             }
-            if (ImGui::MenuItem("Load this snapshot")) {
+            if (ImGui::MenuItem("SnapshotWindow.LoadThis"_lc)) {
                 if (::m_emu) {
                     try { m_Manager.LoadSnapshot(*::m_emu, node.Id); }
                     catch (const std::exception& e) { ShowError(e.what()); }
                 }
             }
             ImGui::Separator();
-            if (ImGui::MenuItem("Delete (+ children)")) {
+            if (ImGui::MenuItem("SnapshotWindow.DeleteWithChildren"_lc)) {
                 m_Manager.DeleteNode(node.Id);
                 if (m_SelectedId == node.Id) { m_SelectedId = 0; m_Preview.Free(); }
                 ImGui::EndPopup();
@@ -252,7 +253,7 @@ void SnapshotWindow::RenderTreeNode(uint32_t parentId, int depth) {
 void SnapshotWindow::RenderTree() {
     ImGui::BeginChild("##snap_tree", ImVec2(380, 0), true);
     if (m_Manager.Nodes.empty()) {
-        ImGui::TextDisabled("No snapshots yet.\nUse 'Save Snapshot' to create one.");
+        ImGui::TextDisabled("%s", "SnapshotWindow.NoSnapshots"_lc);
     } else {
         RenderTreeNode(0, 0);
     }
@@ -272,7 +273,7 @@ void SnapshotWindow::RenderDetails() {
         if (n.Id == m_SelectedId) { sel = &n; break; }
 
     if (!sel) {
-        ImGui::TextDisabled("Select a snapshot to see details.");
+        ImGui::TextDisabled("%s", "SnapshotWindow.SelectToSeeDetails"_lc);
         ImGui::EndChild();
         return;
     }
@@ -287,19 +288,19 @@ void SnapshotWindow::RenderDetails() {
         ImGui::Image(reinterpret_cast<ImTextureID>(m_Preview.Tex),
                      ImVec2(imgW * scale, imgH * scale));
     } else {
-        ImGui::TextDisabled("[No preview]");
+        ImGui::TextDisabled("%s", "SnapshotWindow.NoPreview"_lc);
     }
 
     ImGui::Separator();
 
-    ImGui::Text("ID:        %u", sel->Id);
-    ImGui::Text("Parent ID: %u", sel->ParentId);
-    ImGui::Text("Label:     %s", sel->Label.c_str());
-    ImGui::Text("Saved:     %s", FormatTimestamp(sel->Timestamp).c_str());
-    ImGui::Text("State:     %zu bytes (compressed %zu)",
+    ImGui::Text("SnapshotWindow.ID"_lc, sel->Id);
+    ImGui::Text("SnapshotWindow.ParentID"_lc, sel->ParentId);
+    ImGui::Text("SnapshotWindow.LabelFmt"_lc, sel->Label.c_str());
+    ImGui::Text("SnapshotWindow.SavedFmt"_lc, FormatTimestamp(sel->Timestamp).c_str());
+    ImGui::Text("SnapshotWindow.StateFmt"_lc,
                 static_cast<size_t>(sel->UncompressedStateSize),
                 sel->CompressedState.size());
-    ImGui::Text("Preview:   %zu bytes", sel->PreviewPng.size());
+    ImGui::Text("SnapshotWindow.PreviewFmt"_lc, sel->PreviewPng.size());
 
     ImGui::EndChild();
 }
@@ -313,12 +314,12 @@ void SnapshotWindow::RenderCore() {
 
     // Error popup
     if (m_ShowError) {
-        ImGui::OpenPopup("Snapshot Error");
+        ImGui::OpenPopup("SnapshotWindow.ErrorTitle"_lc);
         m_ShowError = false;
     }
-    if (ImGui::BeginPopupModal("Snapshot Error", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (ImGui::BeginPopupModal("SnapshotWindow.ErrorTitle"_lc, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::TextWrapped("%s", m_ErrorMsg.c_str());
-        if (ImGui::Button("OK", ImVec2(120, 0))) ImGui::CloseCurrentPopup();
+        if (ImGui::Button("Button.Positive"_lc, ImVec2(120, 0))) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
 
