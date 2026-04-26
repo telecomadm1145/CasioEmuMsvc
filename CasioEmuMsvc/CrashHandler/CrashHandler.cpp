@@ -1,11 +1,11 @@
 #ifdef _WIN32
+#include <windows.h>
+
 #include <TlHelp32.h>
 #include <algorithm>
 #include <dbghelp.h>
 #include <fstream>
 #include <iostream>
-#include <windows.h>
-
 
 #pragma comment(lib, "dbghelp.lib")
 #include "Config.hpp"
