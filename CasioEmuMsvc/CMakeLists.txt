@@ -92,7 +92,12 @@ set(MAIN_SOURCES
 if(BUILD_EXECUTABLE)
     message(STATUS "Building executable")
     set(TARGET_NAME "CasioEmuMsvc")
-    add_executable(${TARGET_NAME} ${MAIN_SOURCES})
+    
+    if(WIN32)
+        set(WIN_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/Resource.rc)
+    endif()
+
+    add_executable(${TARGET_NAME} ${MAIN_SOURCES} ${WIN_RESOURCES})
 else()
     message(STATUS "Building shared library")
     set(TARGET_NAME "main")
