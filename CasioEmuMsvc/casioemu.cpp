@@ -228,6 +228,7 @@ int main(int argc, char* argv[]) {
 	EnableDarkTitleBar(GetSDLWindowHandle(emulator.window));
 #endif
 	SDL_ShowWindow(emulator.window);
+	SDL_RaiseWindow(emulator.window);
 
 	struct TouchState {
 		bool touching = false;
