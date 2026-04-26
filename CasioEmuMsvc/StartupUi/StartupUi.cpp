@@ -6,12 +6,12 @@
 #include "Gui/imgui/imgui_impl_sdl2.h"
 #include "Gui/imgui/imgui_impl_sdlrenderer2.h"
 #include "Localization.h"
-#include <SDL.h>
 #include "ModelInfo.h"
 #include "RomPackage.h"
 #include "Romu.h"
 #include "SysDialog.h"
 #include "Ui.hpp"
+#include "sdl_win32_extra.h"
 #include <Gui.h>
 #include <SDL.h>
 #include <SDL_image.h>
@@ -19,18 +19,20 @@
 #include <filesystem>
 #include <imgui.h>
 #include <iostream>
-#include "sdl_win32_extra.h"
+
 #ifdef _WIN32
-#include <windows.h>
+#include <objbase.h>
 #include <shellapi.h>
 #include <shlobj.h>
-#include <objbase.h>
 #include <shobjidl.h>
+#include <windows.h>
+
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "shell32.lib")
 #endif
-#include "Ext/Random.hpp"
 #include "DiscordRPC.h"
+#include "Ext/Random.hpp"
+
 
 #ifdef __ANDROID__
 #include "../Gui/ThemeManager.h"
@@ -586,7 +588,8 @@ static bool CreateDesktopShortcut(const std::filesystem::path& model_path, const
 	const char* xdg_desktop = std::getenv("XDG_DESKTOP_DIR");
 	if (xdg_desktop) {
 		desktop_dir = xdg_desktop;
-	} else {
+	}
+	else {
 		const char* home = std::getenv("HOME");
 		if (!home) {
 			std::cerr << "[Shortcut] HOME environment variable not set\n";
@@ -605,7 +608,8 @@ static bool CreateDesktopShortcut(const std::filesystem::path& model_path, const
 
 	std::string sanitized = shortcut_name;
 	for (auto& c : sanitized) {
-		if (c == '/' || c == '\\') c = '_';
+		if (c == '/' || c == '\\')
+			c = '_';
 	}
 
 	std::filesystem::path shortcut_file = desktop_dir / (sanitized + ".desktop");
@@ -1062,7 +1066,7 @@ namespace casioemu {
 						shortcut_icon[sizeof(shortcut_icon) - 1] = '\0';
 					});
 				}
-				ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "StartupUI.ShortcutIconOptional"_lc);
+				ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", "StartupUI.ShortcutIconOptional"_lc); // Make Clang happy.
 
 				ImGui::Spacing();
 				ImGui::Separator();
@@ -1078,12 +1082,14 @@ namespace casioemu {
 								SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,
 									"StartupUI.CreateShortcutTitle"_lc,
 									"StartupUI.ShortcutCreated"_lc, nullptr);
-							} else {
+							}
+							else {
 								SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
 									"StartupUI.CreateShortcutTitle"_lc,
 									"StartupUI.ShortcutFailed"_lc, nullptr);
 							}
-						} catch (const std::exception& e) {
+						}
+						catch (const std::exception& e) {
 							std::cerr << "[Shortcut] Error: " << e.what() << std::endl;
 							SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
 								"StartupUI.CreateShortcutTitle"_lc,
