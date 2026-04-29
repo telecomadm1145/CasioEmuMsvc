@@ -5,6 +5,18 @@ project(GAME)
 set(SDL_TEST OFF CACHE BOOL "Disable building the SDL_test library" FORCE)
 option(BUILD_EXECUTABLE "Build a statically linked executable" OFF)
 
+if(NOT DEFINED BUILD_EXECUTABLE)
+    if(ANDROID OR IOS)
+        set(BUILD_EXECUTABLE OFF)
+        message(STATUS "Auto-setting BUILD_EXECUTABLE: OFF (Mobile platform)")
+    else()
+        set(BUILD_EXECUTABLE ON)
+        message(STATUS "Auto-setting BUILD_EXECUTABLE: ON (Desktop platform)")
+    endif()
+endif()
+
+set(BUILD_EXECUTABLE ${BUILD_EXECUTABLE} CACHE BOOL "Build the project as an executable")
+
 if(BUILD_EXECUTABLE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
     message(STATUS "Executable build enabled. Subprojects will be built as static libraries.")
