@@ -67,13 +67,11 @@
     <ClCompile Include="Ext\vibration.cpp" />
     <ClCompile Include="Plugin\PluginMan.cpp" />
     <ClCompile Include="Plugin\PluginApi_Impl.cpp" />
-    <ClCompile Include="JitU8\JitU8.cpp" />
     <ClCompile Include="asmjit\src\**\*.cpp" />
     <ClCompile Include="Ext\ConsoleText.cpp" />
     <ClCompile Include="Ext\GameBuffer.cpp" />
     <ClCompile Include="Chipset\ePSCpu.cpp" />
     <ClCompile Include="Ext\ePSDisas.cpp" />
-    <ClCompile Include="asmjit\src\**\*.cpp" />
     <ClCompile Include="Gui\ThemeManager.cpp" />
     <ClCompile Include="Ext\cam\cam.cc" />
     <ClCompile Include="Ext\cam\hct.cc" />
@@ -82,6 +80,20 @@
     <ClCompile Include="Ext\cam\utils.cc" />
     <ClCompile Include="Ext\cam\tones.cc" />
     <ClCompile Include="sdl_win32_extra.cpp" />
+    <ClCompile Include="Ext\DiscordRPC.cpp" />
+    <ClCompile Include="Snapshot.cpp" />
+    <ClCompile Include="Gui\SnapshotWindow.cpp" />
+    <ClCompile Include="miniz.c" />
+    <ClCompile Include="miniz_tdef.c" />
+    <ClCompile Include="miniz_tinfl.c" />
+    <ClCompile Include="..\discord-rpc\src\connection_unix.cpp" />
+    <ClCompile Include="..\discord-rpc\src\connection_win.cpp" />
+    <ClCompile Include="..\discord-rpc\src\discord_register_linux.cpp" />
+    <ClCompile Include="..\discord-rpc\src\discord_register_win.cpp" />
+    <ClCompile Include="..\discord-rpc\src\discord_rpc.cpp" />
+    <ClCompile Include="..\discord-rpc\src\dllmain.cpp" />
+    <ClCompile Include="..\discord-rpc\src\rpc_connection.cpp" />
+    <ClCompile Include="..\discord-rpc\src\serialization.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Ext\3rd_licenses.h" />
@@ -174,11 +186,9 @@
     <ClInclude Include="Ext\Unicode.h" />
     <ClInclude Include="Gui\FileDialog.hpp" />
     <ClInclude Include="Gui\UIScaling.h" />
-    <ClInclude Include="asmjit\src\**\*.h" />
     <ClInclude Include="Chipset\ePSCpu.h" />
     <ClInclude Include="Ext\ePSDisas.h" />
     <ClInclude Include="version.h" />
-    <ClInclude Include="asmjit\src\**\*.h" />
     <ClInclude Include="Ext\Random.hpp" />
     <ClInclude Include="Gui\ThemeManager.h" />
     <ClInclude Include="Ext\cam\cam.h" />
@@ -187,9 +197,14 @@
     <ClInclude Include="Ext\cam\viewing_conditions.h" />
     <ClInclude Include="Ext\cam\utils.h" />
     <ClInclude Include="Ext\cam\tones.h" />
-    <ClInclude Include="asmjit\src\**\*.h" />
     <ClInclude Include="sdl_win32_extra.h" />
     <ClInclude Include="Gui\RopTool.h" />
+    <ClInclude Include="Ext\DiscordRPC.h" />
+    <ClInclude Include="miniz_export.h" />
+    <ClInclude Include="Snapshot.h" />
+    <ClInclude Include="Compress.h" />
+    <ClInclude Include="miniz.h" />
+    <ClInclude Include="Gui\SnapshotWindow.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

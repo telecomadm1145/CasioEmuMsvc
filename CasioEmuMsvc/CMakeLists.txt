@@ -33,20 +33,22 @@ if(NOT ANDROID AND NOT IOS)
     add_subdirectory(${CMAKE_SOURCE_DIR}/sentry-native sentry-native-build)
 endif()
 
-include_directories(#${CMAKE_SOURCE_DIR}/SDL_image/include
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/Ext
-        ${CMAKE_CURRENT_SOURCE_DIR}/Ext/cam
-        ${CMAKE_CURRENT_SOURCE_DIR}/Dcl
-        ${CMAKE_CURRENT_SOURCE_DIR}/Chipset
-        ${CMAKE_CURRENT_SOURCE_DIR}/Containers
-        ${CMAKE_CURRENT_SOURCE_DIR}/Gui
-        ${CMAKE_CURRENT_SOURCE_DIR}/Gui/imgui
-        ${CMAKE_CURRENT_SOURCE_DIR}/GDB
-        ${CMAKE_CURRENT_SOURCE_DIR}/Peripheral
-        ${CMAKE_CURRENT_SOURCE_DIR}/Plugin
-        ${CMAKE_CURRENT_SOURCE_DIR}/StartupUi)
-        
+# Collect project include directories into a variable; will be applied to the target only (not globally)
+set(PROJECT_INCLUDE_DIRS
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ext
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ext/cam
+    ${CMAKE_CURRENT_SOURCE_DIR}/Dcl
+    ${CMAKE_CURRENT_SOURCE_DIR}/Chipset
+    ${CMAKE_CURRENT_SOURCE_DIR}/Containers
+    ${CMAKE_CURRENT_SOURCE_DIR}/Gui
+    ${CMAKE_CURRENT_SOURCE_DIR}/Gui/imgui
+    ${CMAKE_CURRENT_SOURCE_DIR}/GDB
+    ${CMAKE_CURRENT_SOURCE_DIR}/Peripheral
+    ${CMAKE_CURRENT_SOURCE_DIR}/Plugin
+    ${CMAKE_CURRENT_SOURCE_DIR}/StartupUi
+)
+
 # find_library(SDL2 SDL2)
 
 # find_library(SDL2_image SDL2_image)
@@ -104,6 +106,9 @@ else()
     add_library(${TARGET_NAME} SHARED ${MAIN_SOURCES})
 endif()
 
+# Apply include dirs to target (scoped) to reduce global includes and compiler parsing
+target_include_directories(${TARGET_NAME} PRIVATE ${PROJECT_INCLUDE_DIRS})
+
 target_compile_definitions(${TARGET_NAME} PRIVATE ASMJIT_STATIC)
 
 if(WIN32)
@@ -119,7 +124,8 @@ if(WIN32)
 endif()
 
 if(MSVC)
-    target_compile_options(${TARGET_NAME} PRIVATE /utf-8)
+    # Ensure UTF-8 and increase compiler heap and object limits for large translation units
+    target_compile_options(${TARGET_NAME} PRIVATE /utf-8 /Zm200 /bigobj)
 endif()
 
 if(BUILD_EXECUTABLE)
