@@ -12,6 +12,7 @@
 #include "imgui/imgui.h"
 #include <Localization.h>
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -23,11 +24,130 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_set>
+#include <vector>
 casioemu::Emulator* m_emu = nullptr;
 
 uint32_t pc_cache = 0;
+
+static bool IsRegister(std::string_view s) {
+	// Casio fx-9860G (nX-U8/100) 的常见寄存器列表
+	static const char* const regs[] = {
+		"R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15",
+		"ER0", "ER2", "ER4", "ER6", "ER8", "ER10", "ER12", "ER14",
+		"XR0", "XR4", "XR8", "XR12",
+		"QR0", "QR8",
+		"CR0", "CR1", "CR2", "CR3", "CR4", "CR5", "CR6", "CR7", "CR8", "CR9", "CR10", "CR11", "CR12", "CR13", "CR14", "CR15",
+		"CER0", "CER2", "CER4", "CER6", "CER8", "CER10", "CER12", "CER14",
+		"CXR0", "CXR4", "CXR8", "CXR12",
+		"CQR0", "CQR8",
+		"SP", "EA", "PC", "PSW", "EPSW", "ECSR", "ELR", "LR"};
+	for (const char* r : regs) {
+		if (s == r)
+			return true;
+	}
+	return false;
+}
+
+static bool IsImmediate(std::string_view word) {
+	if (word.empty())
+		return false;
+	// 如果是以数字、$开头，或者是形如 -5 的负数，则认定为立即数或地址
+	if (std::isdigit(word[0]) || word[0] == '$')
+		return true;
+	if (word.length() > 1 && word[0] == '-' && (std::isdigit(word[1]) || (word[1] >= 'A' && word[1] <= 'F')))
+		return true;
+
+	// 如果全部为 16 进制字符 (U8Disas 格式化出来的通常是大写 A-F)
+	for (char c : word) {
+		if (!std::isxdigit(c))
+			return false;
+	}
+	return true;
+}
+
+static void RenderSyntaxHighlight(const char* text, bool is_label) {
+	if (is_label) {
+		// 标号整体着色为高亮黄
+		ImGui::TextColored(~ImVec4(1.0f, 1.0f, 0.4f, 1.0f), "%s", text);
+		return;
+	}
+
+	std::string_view sv(text);
+	if (sv.empty()) {
+		ImGui::TextUnformatted("");
+		return;
+	}
+
+	// 定义语法高亮的主题颜色
+	ImVec4 col_hex = ~ImVec4(0.5f, 0.5f, 0.5f, 1.0f);	// 机器码：灰色
+	ImVec4 col_mnem = ~ImVec4(0.3f, 0.8f, 1.0f, 1.0f);	// 助记符：亮蓝
+	ImVec4 col_reg = ~ImVec4(1.0f, 0.6f, 0.6f, 1.0f);	// 寄存器：粉红
+	ImVec4 col_imm = ~ImVec4(0.6f, 1.0f, 0.6f, 1.0f);	// 立即数：亮绿
+	ImVec4 col_punct = ~ImVec4(0.8f, 0.8f, 0.8f, 1.0f); // 标点符：浅灰
+	ImVec4 col_def = ~ImVec4(0.9f, 0.9f, 0.9f, 1.0f);	// 默认符：白色
+
+	struct Token {
+		ImVec4 color;
+		std::string_view text;
+	};
+	std::vector<Token> tokens;
+
+	// 前13个字符在你的 U8Disas 生成规则里，必然是机器码的 Hex 区域（固定填充空格）
+	size_t hex_len = std::min<size_t>(13, sv.length());
+	if (hex_len > 0) {
+		tokens.push_back({col_hex, sv.substr(0, hex_len)});
+		sv.remove_prefix(hex_len);
+	}
+
+	bool first_word = true;
+	size_t i = 0;
+	while (i < sv.length()) {
+		if (std::isspace(sv[i])) {
+			size_t start = i;
+			while (i < sv.length() && std::isspace(sv[i]))
+				i++;
+			tokens.push_back({col_def, sv.substr(start, i - start)});
+		}
+		else if (std::isalpha(sv[i]) || sv[i] == '$' || sv[i] == '-' || std::isdigit(sv[i]) || sv[i] == '_' || sv[i] == '.') {
+			// 提取词语
+			size_t start = i;
+			while (i < sv.length() && (std::isalnum(sv[i]) || sv[i] == '$' || sv[i] == '_' || sv[i] == '-' || sv[i] == '.'))
+				i++;
+			std::string_view word = sv.substr(start, i - start);
+
+			ImVec4 color = col_def;
+			if (first_word && std::isalpha(word[0])) { // 第一段非空字母视作指令助记符
+				color = col_mnem;
+				first_word = false;
+			}
+			else if (IsRegister(word)) {
+				color = col_reg;
+			}
+			else if (IsImmediate(word)) {
+				color = col_imm;
+			}
+			tokens.push_back({color, word});
+		}
+		else {
+			// 提取标点符号 (比如 , [ ] + :)
+			size_t start = i;
+			while (i < sv.length() && !std::isalnum(sv[i]) && !std::isspace(sv[i]) && sv[i] != '$' && sv[i] != '-' && sv[i] != '_' && sv[i] != '.')
+				i++;
+			tokens.push_back({col_punct, sv.substr(start, i - start)});
+		}
+	}
+
+	// 一次性紧凑渲染所有 Token
+	for (size_t t = 0; t < tokens.size(); t++) {
+		ImGui::TextColored(tokens[t].color, "%.*s", (int)tokens[t].text.length(), tokens[t].text.data());
+		if (t + 1 < tokens.size()) {
+			ImGui::SameLine(0, 0); // 并行绘制，消除元素间隙
+		}
+	}
+}
 
 CodeElem CodeViewer::LookUp(uint32_t offset, int* idx) {
 	auto it = std::find_if(
@@ -300,6 +420,7 @@ void CodeViewer::ExternalBP() {
 void CodeViewer::DrawContent() {
 	ImGuiListClipper c;
 	c.Begin(max_row, ImGui::GetTextLineHeight());
+	hovered_line = -1;
 	while (c.Step()) {
 		first_col = c.DisplayStart;
 		for (int line_i = c.DisplayStart; line_i < c.DisplayEnd; line_i++) {
@@ -336,10 +457,23 @@ void CodeViewer::DrawContent() {
 			}
 			ImGui::PushID(line_i);
 			bool selected = (last_found_idx == line_i);
-			if (ImGui::Selectable(e.srcbuf, selected)) {
+
+			// 记录当前光标位置，实现控件叠加绘制
+			ImVec2 pos = ImGui::GetCursorPos();
+
+			// 绘制占位背景，响应用户点击逻辑（但不使用默认文本显示）
+			if (ImGui::Selectable("##sel", selected, ImGuiSelectableFlags_AllowItemOverlap)) {
 				if (e.xref_operand)
 					JumpTo(e.xref_operand);
 			}
+			if (!e.is_label && ImGui::IsItemHovered()) {
+				hovered_line = line_i;
+			}
+
+			// 光标回到本行的原点位置，准备绘制分色的文本内容
+			ImGui::SetCursorPos(pos);
+			RenderSyntaxHighlight(e.srcbuf, e.is_label);
+
 			ImGui::PopID();
 		}
 	}
@@ -457,7 +591,210 @@ void CodeViewer::ExportDisassembly() {
 		}
 	});
 }
+static void ExtractMnemAndOps(const char* src, std::string& mnem, std::string& ops) {
+	std::string_view sv(src);
+	mnem.clear();
+	ops.clear();
 
+	if (sv.length() <= 13)
+		return; // 跳过前面固定长度的 Hex 区域
+	sv.remove_prefix(13);
+	while (!sv.empty() && std::isspace(sv.front()))
+		sv.remove_prefix(1);
+
+	// 提取指令名（遇到空格停止匹配指令名）
+	size_t end = 0;
+	while (end < sv.length() && std::isalpha(sv[end]))
+		end++;
+	mnem = std::string(sv.substr(0, end));
+	for (char& c : mnem)
+		c = std::toupper(c);
+
+	// 提取剩下的部分作为操作数
+	sv.remove_prefix(end);
+	while (!sv.empty() && std::isspace(sv.front()))
+		sv.remove_prefix(1);
+	ops = std::string(sv);
+}
+static std::string GetInstructionHelp(const std::string& mnem, const std::string& ops) {
+	if (mnem.empty())
+		return "CodeViewer.Help.Unknown"_lc;
+
+	std::string help;
+
+	// 1. 基础指令解析
+	if (mnem == "MOV")
+		help = "CodeViewer.Help.MOV"_lc;
+	else if (mnem == "L")
+		help = "CodeViewer.Help.L"_lc;
+	else if (mnem == "ST")
+		help = "CodeViewer.Help.ST"_lc;
+	else if (mnem == "ADD")
+		help = "CodeViewer.Help.ADD"_lc;
+	else if (mnem == "ADDC")
+		help = "CodeViewer.Help.ADDC"_lc;
+	else if (mnem == "SUB")
+		help = "CodeViewer.Help.SUB"_lc;
+	else if (mnem == "SUBC")
+		help = "CodeViewer.Help.SUBC"_lc;
+	else if (mnem == "CMP")
+		help = "CodeViewer.Help.CMP"_lc;
+	else if (mnem == "CMPC")
+		help = "CodeViewer.Help.CMPC"_lc;
+	else if (mnem == "AND")
+		help = "CodeViewer.Help.AND"_lc;
+	else if (mnem == "OR")
+		help = "CodeViewer.Help.OR"_lc;
+	else if (mnem == "XOR")
+		help = "CodeViewer.Help.XOR"_lc;
+	else if (mnem == "SLL")
+		help = "CodeViewer.Help.SLL"_lc;
+	else if (mnem == "SLLC")
+		help = "CodeViewer.Help.SLLC"_lc;
+	else if (mnem == "SRL")
+		help = "CodeViewer.Help.SRL"_lc;
+	else if (mnem == "SRLC")
+		help = "CodeViewer.Help.SRLC"_lc;
+	else if (mnem == "SRA")
+		help = "CodeViewer.Help.SRA"_lc;
+	else if (mnem == "PUSH")
+		help = "CodeViewer.Help.PUSH"_lc;
+	else if (mnem == "POP")
+		help = "CodeViewer.Help.POP"_lc;
+	else if (mnem == "MUL")
+		help = "CodeViewer.Help.MUL"_lc;
+	else if (mnem == "DIV")
+		help = "CodeViewer.Help.DIV"_lc;
+	else if (mnem == "LEA")
+		help = "CodeViewer.Help.LEA"_lc;
+	else if (mnem == "DAA")
+		help = "CodeViewer.Help.DAA"_lc;
+	else if (mnem == "DAS")
+		help = "CodeViewer.Help.DAS"_lc;
+	else if (mnem == "NEG")
+		help = "CodeViewer.Help.NEG"_lc;
+	else if (mnem == "SB")
+		help = "CodeViewer.Help.SB"_lc;
+	else if (mnem == "RB")
+		help = "CodeViewer.Help.RB"_lc;
+	else if (mnem == "TB")
+		help = "CodeViewer.Help.TB"_lc;
+	else if (mnem == "EI")
+		help = "CodeViewer.Help.EI"_lc;
+	else if (mnem == "DI")
+		help = "CodeViewer.Help.DI"_lc;
+	else if (mnem == "SC")
+		help = "CodeViewer.Help.SC"_lc;
+	else if (mnem == "RC")
+		help = "CodeViewer.Help.RC"_lc;
+	else if (mnem == "CPLC")
+		help = "CodeViewer.Help.CPLC"_lc;
+	else if (mnem == "SWI")
+		help = "CodeViewer.Help.SWI"_lc;
+	else if (mnem == "BRK")
+		help = "CodeViewer.Help.BRK"_lc;
+	else if (mnem == "RT")
+		help = "CodeViewer.Help.RT"_lc;
+	else if (mnem == "RTI")
+		help = "CodeViewer.Help.RTI"_lc;
+	else if (mnem == "INC")
+		help = "CodeViewer.Help.INC"_lc;
+	else if (mnem == "DEC")
+		help = "CodeViewer.Help.DEC"_lc;
+	else if (mnem == "NOP")
+		help = "CodeViewer.Help.NOP"_lc;
+	else if (mnem == "EXTBW")
+		help = "CodeViewer.Help.EXTBW"_lc;
+	else if (mnem == "BL")
+		help = "CodeViewer.Help.BL"_lc;
+	else if (mnem.front() == 'B') {
+		if (mnem == "B") {
+			help = "CodeViewer.Help.B"_lc;
+		}
+		else {
+			help = "CodeViewer.Help.BCond"_lc;
+			std::string cond = mnem.substr(1);
+			help += " (";
+			if (cond == "GE")
+				help += "CodeViewer.Help.CondGE"_lc;
+			else if (cond == "LT")
+				help += "CodeViewer.Help.CondLT"_lc;
+			else if (cond == "GT")
+				help += "CodeViewer.Help.CondGT"_lc;
+			else if (cond == "LE")
+				help += "CodeViewer.Help.CondLE"_lc;
+			else if (cond == "GES")
+				help += "CodeViewer.Help.CondGES"_lc;
+			else if (cond == "LTS")
+				help += "CodeViewer.Help.CondLTS"_lc;
+			else if (cond == "GTS")
+				help += "CodeViewer.Help.CondGTS"_lc;
+			else if (cond == "LES")
+				help += "CodeViewer.Help.CondLES"_lc;
+			else if (cond == "NE")
+				help += "CodeViewer.Help.CondNE"_lc;
+			else if (cond == "EQ")
+				help += "CodeViewer.Help.CondEQ"_lc;
+			else if (cond == "NV")
+				help += "CodeViewer.Help.CondNV"_lc;
+			else if (cond == "OV")
+				help += "CodeViewer.Help.CondOV"_lc;
+			else if (cond == "PS")
+				help += "CodeViewer.Help.CondPS"_lc;
+			else if (cond == "NS")
+				help += "CodeViewer.Help.CondNS"_lc;
+			else
+				help += cond;
+			help += ")";
+		}
+	}
+	else {
+		help = "CodeViewer.Help.NoHelp"_lc;
+	}
+
+	// 2. 寻址模式解析（针对 L, ST, INC, DEC, LEA 等可能包含内存操作的指令）
+	if (ops.find("[") != std::string::npos) {
+		help += "\n\n";
+		help += "CodeViewer.Help.AddrTitle"_lc;
+		help += " ";
+		if (ops.find("[EA+]") != std::string::npos) {
+			help += "CodeViewer.Help.AddrEAPlus"_lc;
+		}
+		else if (ops.find("[EA]") != std::string::npos) {
+			help += "CodeViewer.Help.AddrEA"_lc;
+		}
+		else {
+			size_t brk_start = ops.find("[");
+			size_t reg_start = ops.find("ER");
+			if (reg_start != std::string::npos && reg_start < brk_start) {
+				// 例如：ER12[disp], ER14[disp] -> 寄存器相对寻址
+				help += "CodeViewer.Help.AddrRegDisp"_lc;
+			}
+			else if (reg_start != std::string::npos && reg_start > brk_start) {
+				// 例如：[ER0] -> 寄存器间接寻址
+				help += "CodeViewer.Help.AddrRegInd"_lc;
+			}
+			else {
+				// 例如：[disp] -> 绝对地址寻址
+				help += "CodeViewer.Help.AddrAbs"_lc;
+			}
+		}
+	}
+	else if ((mnem == "L" || mnem == "ST") && !ops.empty() && ops.find(",") != std::string::npos) {
+		// 如果 L 或 ST 后面没有括号，但是有操作数，可能是 DSR: 或者 直接绝对地址 / 立即数加载
+		size_t comma = ops.find(",");
+		std::string src_op = ops.substr(comma + 1);
+		if (src_op.find("R") == std::string::npos) { // 没有使用寄存器作为源，通常是立即数或地址
+			help += "\n\n";
+			help += "CodeViewer.Help.AddrTitle"_lc;
+			help += " ";
+			help += "CodeViewer.Help.AddrImmOrAbs"_lc;
+		}
+	}
+
+	return help;
+}
+static int s(bool x) { return x ? 1 : 0; }
 void CodeViewer::RenderCore() {
 	int h = ImGui::GetTextLineHeight() + 4;
 	int w = ImGui::CalcTextSize("F").x;
@@ -494,37 +831,67 @@ void CodeViewer::RenderCore() {
 	}
 	ImGui::TextUnformatted(header.c_str());
 	ImGui::Separator();
-	ImGui::BeginChild("##scrolling", ImVec2(0, -50)); // Adjusted to make space for bottom controls
+	ImGui::BeginChild("##scrolling", ImVec2(0, -30 * (1 + s(search_activated) + s(help_activated) * 1.6))); // Adjusted to make space for bottom controls
 	DrawContent();
 	ImGui::EndChild();
-	ImGui::SameLine();
+	// ImGui::SameLine(); // ？？？
 	ImGui::Separator();
-
+	if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
+		if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F, false)) {
+			search_activated = true;
+			search_focus = true;
+		}
+		if (search_activated && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+			search_activated = false;
+		}
+	}
 	// Bottom controls
 	// First line: Search
-	ImGui::TextUnformatted("CodeViewer.Search"_lc);
-	ImGui::SameLine();
-	ImGui::SetNextItemWidth(150);
-	if (ImGui::InputText("##search", search_buf, sizeof(search_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
-		Search(false);
+	if (search_activated) {
+		ImGui::TextUnformatted("CodeViewer.Search"_lc);
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(150);
+		if (search_focus) {
+			ImGui::SetKeyboardFocusHere();
+			search_focus = false;
+		}
+		if (ImGui::InputText("##search", search_buf, sizeof(search_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
+			Search(false);
+		}
+		ImGui::SameLine();
+		const char* items[] = {"CodeViewer.Hex"_lc, "CodeViewer.Inst"_lc};
+		ImGui::SetNextItemWidth(100);
+		ImGui::Combo("##search_mode", &search_mode, items, IM_ARRAYSIZE(items));
+		ImGui::SameLine();
+		if (ImGui::Button("CodeViewer.Find"_lc)) {
+			Search(false);
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("CodeViewer.Next"_lc)) {
+			Search(true);
+		}
 	}
-	ImGui::SameLine();
-	const char* items[] = {"CodeViewer.Hex"_lc, "CodeViewer.Inst"_lc};
-	ImGui::SetNextItemWidth(100);
-	ImGui::Combo("##search_mode", &search_mode, items, IM_ARRAYSIZE(items));
-	ImGui::SameLine();
-	if (ImGui::Button("CodeViewer.Find"_lc)) {
-		Search(false);
-	}
-	ImGui::SameLine();
-	if (ImGui::Button("CodeViewer.Next"_lc)) {
-		Search(true);
-	}
-	ImGui::SameLine();
-	if (ImGui::Button("CodeViewer.Export"_lc)) {
-		ExportDisassembly();
-	}
+	if (help_activated) {
+		ImGui::BeginChild("##help_panel", ImVec2(0, 30*1.5)); // 高度稍微增加以适应多行说明
 
+		std::string help_text = "CodeViewer.Help.DefaultPrompt"_lc;
+		if (hovered_line >= 0 && hovered_line < codes.size() && !codes[hovered_line].is_label) {
+			std::string mnem, ops;
+			ExtractMnemAndOps(codes[hovered_line].srcbuf, mnem, ops);
+			help_text = GetInstructionHelp(mnem, ops);
+		}
+
+		// 自动换行显示帮助内容
+		ImGui::TextWrapped("%s", help_text.c_str());
+
+		// 靠右放置一个关闭按钮
+		ImGui::SameLine(ImGui::GetWindowWidth() - 30);
+		if (ImGui::Button("X")) {
+			help_activated = false;
+		}
+
+		ImGui::EndChild();
+	}
 	// Second line: Goto and Control
 	ImGui::TextUnformatted("CodeViewer.Goto"_lc);
 	ImGui::SameLine();
@@ -578,6 +945,12 @@ void CodeViewer::RenderCore() {
 	if (ImGui::Button("CodeViewer.GotoPC"_lc)) {
 		JumpTo(pc_cache);
 	}
+	ImGui::SameLine();
+	if (ImGui::Button("CodeViewer.Export"_lc)) {
+		ExportDisassembly();
+	}
+	ImGui::SameLine();
+	ImGui::Checkbox("CodeViewer.ShowHelp"_lc, &help_activated);
 }
 
 void CodeViewer::RequestStep() {

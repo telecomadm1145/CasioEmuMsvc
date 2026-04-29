@@ -8,6 +8,7 @@
 struct CallAnalysis : public UIWindow {
 	bool is_call_recoding = false;
 	bool check_caller = false;
+	std::string message;
 	char caller[260]{};
 	uint32_t caller_v{};
 	bool check_callee = false;
@@ -67,6 +68,14 @@ struct CallAnalysis : public UIWindow {
 		}
 	}
 	void RenderCore() override {
+		if (message.size()) {
+			if (ImGui::Button("CallAnalysis.Close"_lc)) {
+				message.clear();
+				return;
+			}
+			ImGui::TextUnformatted(message.c_str());
+			return;
+		}
 		if (is_call_recoding) {
 			if (ImGui::Button("CallAnalysis.Stop"_lc)) {
 				is_call_recoding = false;
@@ -100,7 +109,7 @@ struct CallAnalysis : public UIWindow {
 					viewing_calls.clear();
 					return;
 				}
-				if (ImGui::BeginTable("##records", 10, pretty_table)) {
+				if (ImGui::BeginTable("##records2", 10, pretty_table)) {
 					ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 40);
 					ImGui::TableSetupColumn("CallAnalysis.Function"_lc,
 						ImGuiTableColumnFlags_WidthFixed, 80);
@@ -138,7 +147,7 @@ struct CallAnalysis : public UIWindow {
 						ImGui::TableNextColumn();
 						ImGui::PushID(i++);
 						if (ImGui::Button("CallAnalysis.Stacktrace"_lc)) {
-							SDL_ShowSimpleMessageBox(0, "CasioEmuMsvc", func.stack.c_str(), 0);
+							message = func.stack;
 						}
 						ImGui::PopID();
 					}

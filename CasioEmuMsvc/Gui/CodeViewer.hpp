@@ -35,6 +35,10 @@ private:
 
 	bool is_loaded = false;
 	bool need_roll = false;
+	bool search_activated = false;
+	bool help_activated = true;
+	bool search_focus = false;
+	int hovered_line = 0;
 	uint32_t selected_addr = -1;
 
 	// Search related
