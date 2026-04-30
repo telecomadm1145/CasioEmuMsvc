@@ -18,7 +18,7 @@ extern SDL_Window* window;
 extern SDL_Renderer* renderer;
 extern std::vector<Label> g_labels;
 
-void SetDebugbreak(void);
+void SetDebugbreak(void); 
 class UIWindow {
 public:
 	UIWindow(const char* name) : name(name) {
@@ -62,6 +62,13 @@ public:
 	}
 	virtual void RenderCore() = 0;
 	virtual ~UIWindow() {}
+
+
 };
+
+// protected:
+//	// syntax: prompt_if_error(func)(...);
+//	auto prompt_if_error(auto f) {
+//	}
 
 inline constexpr ImGuiTableFlags pretty_table = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Resizable;

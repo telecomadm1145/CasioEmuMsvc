@@ -172,5 +172,3 @@ inline void RebuildFont(float scale = 0.0f) {
 
 	io.Fonts->Build();
 }
-
-// SetupDefaultTheme() has moved to ThemeManager::ApplyDefaultTheme().
