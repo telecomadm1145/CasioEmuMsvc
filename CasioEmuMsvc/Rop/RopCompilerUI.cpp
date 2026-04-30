@@ -450,7 +450,7 @@ private:
 			ImGui::TextColored(ImVec4(0.25f, 0.95f, 0.35f, 1.0f), "OK");
 		}
 		else {
-			ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f), "RopCompiler.Error"_lc);
+			ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f), "%s", "RopCompiler.Error"_lc);
 		}
 
 		// Show database load error if any
