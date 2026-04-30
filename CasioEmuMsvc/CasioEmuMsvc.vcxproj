@@ -165,7 +165,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -191,7 +191,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -219,7 +219,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -252,7 +252,7 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <FloatingPointModel>Fast</FloatingPointModel>
       <CreateHotpatchableImage>false</CreateHotpatchableImage>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DisableSpecificWarnings>
       </DisableSpecificWarnings>
@@ -279,7 +279,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;../discord-rpc/include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;../discord-rpc/include</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -305,7 +305,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -334,7 +334,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -368,7 +368,7 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <FloatingPointModel>Fast</FloatingPointModel>
       <CreateHotpatchableImage>false</CreateHotpatchableImage>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
       <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
@@ -396,6 +396,7 @@
     <ClCompile Include="..\discord-rpc\src\dllmain.cpp" />
     <ClCompile Include="..\discord-rpc\src\rpc_connection.cpp" />
     <ClCompile Include="..\discord-rpc\src\serialization.cpp" />
+    <ClCompile Include="..\ImGuiColorTextEdit\TextEditor.cpp" />
     <ClCompile Include="Chipset\ePSCpu.cpp" />
     <ClCompile Include="Ext\cam\cam.cc" />
     <ClCompile Include="Ext\cam\hct.cc" />
@@ -436,7 +437,10 @@
     <ClCompile Include="Peripheral\Spi.cpp" />
     <ClCompile Include="Plugin\PluginApi_Impl.cpp" />
     <ClCompile Include="Plugin\PluginMan.cpp" />
-    <ClCompile Include="Rop\Compiler.cpp" />
+    <ClCompile Include="Rop\Compiler.h">
+      <FileType>CppHeader</FileType>
+    </ClCompile>
+    <ClCompile Include="Rop\RopCompilerUI.cpp" />
     <ClCompile Include="sdl_win32_extra.cpp" />
     <ClCompile Include="StartupUi\StartupUi.cpp" />
     <ClCompile Include="Gui\CodeViewer.cpp" />
@@ -483,6 +487,7 @@
     <ClCompile Include="miniz_tinfl.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\ImGuiColorTextEdit\TextEditor.h" />
     <ClInclude Include="Chipset\ePSCpu.h" />
     <ClInclude Include="Ext\cam\cam.h" />
     <ClInclude Include="Ext\cam\hct.h" />
@@ -494,6 +499,7 @@
     <ClInclude Include="Ext\ePSDisas.h" />
     <ClInclude Include="Ext\GameBuffer.h" />
     <ClInclude Include="Ext\Random.hpp" />
+    <ClInclude Include="Ext\TextEditor.h" />
     <ClInclude Include="Ext\Unicode.h" />
     <ClInclude Include="Ext\DiscordRPC.h" />
     <ClInclude Include="Gui\FileDialog.hpp" />
@@ -551,6 +557,7 @@
     <ClInclude Include="Plugin\PluginMan.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Peripheral\Spi.h" />
+    <ClInclude Include="Rop\RopCompilerUI.h" />
     <ClInclude Include="sdl_win32_extra.h" />
     <ClInclude Include="Settings.h" />
     <ClInclude Include="stringhelper.h" />

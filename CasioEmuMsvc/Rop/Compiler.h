@@ -1304,7 +1304,9 @@ namespace lc::details {
 } // namespace lc::details
 
 namespace lc {
-	using Praser = details::Parser;
+	using Parser = details::Parser;
 	using CommandDatabase = details::CommandDatabase;
 	using Compiler = details::Compiler;
+	using CompilerState = details::CompilerState;
+	using Diagnostic = details::Diagnostic;
 }
