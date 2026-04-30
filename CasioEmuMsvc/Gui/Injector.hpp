@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Emulator.hpp"
 #include "Ui.hpp"
 #include <map>

@@ -1,4 +1,4 @@
-﻿#include "WatchWindow.hpp"
+#include "WatchWindow.hpp"
 #include "Chipset/CPU.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Chipset/ePSCpu.h"
@@ -156,27 +156,7 @@ void WatchWindow::UpdateRX() {
 	m_emu->chipset.cpu.reg_sp = (uint16_t)strtol((char*)reg_sp, nullptr, 16);
 	m_emu->chipset.cpu.reg_psw = (uint16_t)strtol((char*)reg_psw, nullptr, 16);
 }
-inline static std::string lookup_symbol(uint32_t addr) {
-	auto iter = std::lower_bound(g_labels.begin(), g_labels.end(), addr,
-		[](const Label& label, uint32_t addr) { return label.address < addr; });
 
-	if (iter == g_labels.end() || iter->address > addr) {
-		if (iter != g_labels.begin())
-			--iter;
-		else {
-			char buf[20];
-			return SDL_ltoa(addr, buf, 16);
-		}
-	}
-
-	if (addr == iter->address) {
-		return iter->name;
-	}
-	else {
-		char buf[20];
-		return iter->name + "+" + SDL_ltoa(addr - iter->address, buf, 16);
-	}
-}
 void WatchWindow::RenderCore() {
 	char_width = ImGui::CalcTextSize("F").x;
 	casioemu::Chipset& chipset = m_emu->chipset;
@@ -272,7 +252,7 @@ void WatchWindow::RenderCore() {
 			for (auto& frame : reverse_view{*stack}) {
 				ImGui::TableNextRow();
 				ImGui::TableNextColumn();
-				ImGui::TextUnformatted(lookup_symbol(frame.new_pc).c_str());
+				ImGui::TextUnformatted(lookup_symbol(frame.new_pc, g_labels).c_str());
 				ImGui::TableNextColumn();
 				ImGui::Text("%06X", frame.new_pc);
 				ImGui::TableNextColumn();
@@ -287,7 +267,7 @@ void WatchWindow::RenderCore() {
 						ImGui::TextUnformatted("WatchWindow.LrDestroyed"_lc);
 					}
 					else {
-						ImGui::TextUnformatted(lookup_symbol(frame.lr).c_str());
+						ImGui::TextUnformatted(lookup_symbol(frame.lr, g_labels).c_str());
 					}
 				}
 			}

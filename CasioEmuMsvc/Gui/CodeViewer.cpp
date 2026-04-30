@@ -205,28 +205,7 @@ void SetDebugbreak(void) {
 	}
 }
 
-inline static std::string lookup_symbol(uint32_t addr) {
-	auto iter = std::lower_bound(g_labels.begin(), g_labels.end(), addr,
-		[](const Label& label, uint32_t addr) { return label.address < addr; });
 
-	if (iter == g_labels.end() || iter->address > addr) {
-		if (iter != g_labels.begin())
-			--iter;
-		else {
-			char buf[20] = "f_";
-			SDL_ltoa(addr, buf + 2, 16);
-			return buf;
-		}
-	}
-
-	if (addr == iter->address) {
-		return iter->name;
-	}
-	else {
-		char buf[20];
-		return iter->name + "+" + SDL_ltoa(addr - iter->address, buf, 16);
-	}
-}
 
 void CodeViewer::PrepareDisasm() {
 	std::thread t1([this]() {
@@ -333,7 +312,7 @@ void CodeViewer::PrepareDisasm() {
 					continue;
 				ce.is_label = true;
 				if (lb.second) {
-					auto symb = lookup_symbol(lb.first);
+					auto symb = lookup_symbol(lb.first, g_labels);
 					strncpy(ce.srcbuf, symb.c_str(), sizeof(ce.srcbuf) - 1);
 					ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0';
 					ce.offset = 0;

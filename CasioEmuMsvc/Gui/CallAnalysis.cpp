@@ -1,4 +1,4 @@
-﻿#include "CallAnalysis.h"
+#include "CallAnalysis.h"
 #include "Chipset/CPU.hpp"
 #include "Hooks.h"
 #include "Ui.hpp"
@@ -28,27 +28,7 @@ struct CallAnalysis : public UIWindow {
 			OnCallFunction(sender, ea.pc, ea.lr);
 		});
 	}
-	inline static std::string lookup_symbol(uint32_t addr) {
-		auto iter = std::lower_bound(g_labels.begin(), g_labels.end(), addr,
-			[](const Label& label, uint32_t addr) { return label.address < addr; });
 
-		if (iter == g_labels.end() || iter->address > addr) {
-			if (iter != g_labels.begin())
-				--iter;
-			else {
-				char buf[20];
-				return SDL_ltoa(addr, buf, 16);
-			}
-		}
-
-		if (addr == iter->address) {
-			return iter->name;
-		}
-		else {
-			char buf[20];
-			return iter->name + "+" + SDL_ltoa(addr - iter->address, buf, 16);
-		}
-	}
 	void OnCallFunction(casioemu::CPU& sender, uint32_t pc, uint32_t lr) {
 		if (is_call_recoding) {
 			if (check_caller)
@@ -95,7 +75,7 @@ struct CallAnalysis : public UIWindow {
 				for (auto& func : funcs) {
 					ImGui::TableNextRow();
 					ImGui::TableNextColumn();
-					ImGui::TextUnformatted(lookup_symbol(func.first).c_str());
+					ImGui::TextUnformatted(lookup_symbol(func.first, g_labels).c_str());
 					ImGui::TableNextColumn();
 					ImGui::Text("%d", (int)func.second.size());
 					ImGui::TableNextColumn();
@@ -197,7 +177,7 @@ struct CallAnalysis : public UIWindow {
 					ImGui::TableNextRow();
 					ImGui::TableNextColumn();
 
-					if (ImGui::Button(lookup_symbol(func.first).c_str())) {
+					if (ImGui::Button(lookup_symbol(func.first, g_labels).c_str())) {
 						viewing_calls = func.second;
 					}
 					ImGui::TableNextColumn();

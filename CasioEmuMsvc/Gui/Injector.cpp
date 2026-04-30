@@ -1,4 +1,4 @@
-﻿#include "Injector.hpp"
+#include "Injector.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Config.hpp"
 #include "Models.h"

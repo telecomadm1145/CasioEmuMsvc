@@ -13,6 +13,3 @@
 [submodule "sentry-native"]
 	path = sentry-native
 	url = https://github.com/getsentry/sentry-native.git
-[submodule "ImGuiColorTextEdit"]
-	path = ImGuiColorTextEdit
-	url = https://github.com/BalazsJako/ImGuiColorTextEdit

@@ -396,7 +396,6 @@
     <ClCompile Include="..\discord-rpc\src\dllmain.cpp" />
     <ClCompile Include="..\discord-rpc\src\rpc_connection.cpp" />
     <ClCompile Include="..\discord-rpc\src\serialization.cpp" />
-    <ClCompile Include="..\ImGuiColorTextEdit\TextEditor.cpp" />
     <ClCompile Include="Chipset\ePSCpu.cpp" />
     <ClCompile Include="Ext\cam\cam.cc" />
     <ClCompile Include="Ext\cam\hct.cc" />
@@ -408,6 +407,7 @@
     <ClCompile Include="Ext\ePSDisas.cpp" />
     <ClCompile Include="Ext\GameBuffer.cpp" />
     <ClCompile Include="Ext\DiscordRPC.cpp" />
+    <ClCompile Include="Gui\imgui\TextEditor.cpp" />
     <ClCompile Include="Gui\ThemeManager.cpp" />
     <ClCompile Include="Gui\AddressWindow.cpp" />
     <ClCompile Include="casioemu.cpp" />
@@ -487,7 +487,6 @@
     <ClCompile Include="miniz_tinfl.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\ImGuiColorTextEdit\TextEditor.h" />
     <ClInclude Include="Chipset\ePSCpu.h" />
     <ClInclude Include="Ext\cam\cam.h" />
     <ClInclude Include="Ext\cam\hct.h" />
@@ -503,6 +502,7 @@
     <ClInclude Include="Ext\Unicode.h" />
     <ClInclude Include="Ext\DiscordRPC.h" />
     <ClInclude Include="Gui\FileDialog.hpp" />
+    <ClInclude Include="Gui\imgui\TextEditor.h" />
     <ClInclude Include="Gui\RopTool.h" />
     <ClInclude Include="Gui\ThemeManager.h" />
     <ClInclude Include="Gui\UIScaling.h" />
@@ -599,7 +599,6 @@
     <ClInclude Include="Gui\Gui.h" />
     <ClInclude Include="locales\lang.h" />
     <ClInclude Include="asmjit\src\**\*.h" />
-    <ClInclude Include="version.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".clang-format" />
