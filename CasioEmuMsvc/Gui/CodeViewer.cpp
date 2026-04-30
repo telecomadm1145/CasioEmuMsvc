@@ -877,7 +877,7 @@ void CodeViewer::RenderCore() {
 	ImGui::SetNextItemWidth(ImGui::CalcTextSize("000000").x);
 	ImGui::InputText("##input", adrbuf, 8);
 	if (adrbuf[0] != '\0' && ImGui::IsItemFocused()) {
-		uint32_t addr = std::stoi(adrbuf, 0, 16);
+		uint32_t addr = strtol(adrbuf, 0, 16);
 		JumpTo(addr);
 	}
 	ImGui::SameLine();
