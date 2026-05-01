@@ -33,6 +33,13 @@ import android.content.ClipboardManager;
 import android.content.ClipData;
 import android.content.DialogInterface;
 import android.system.Os;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.Notification;
+import android.os.Handler;
+import android.os.Looper;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -52,6 +59,46 @@ public class Game extends SDLActivity {
     private static Uri pendingUri = null;
     private static byte[] pendingData = null;
     private static int pendingRequestCode = -1;
+    private static final String CHANNEL_ID = "emu_channel";
+
+    private Handler backgroundHandler = new Handler(Looper.getMainLooper());
+    private Runnable stopEmulationRunnable = new Runnable() {
+        @Override
+        public void run() {
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(Game.this, CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.ic_media_pause)
+                    .setContentTitle("Emulation Stopped")
+                    .setContentText("Emulation was stopped after 5 minutes in background.")
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setAutoCancel(true);
+
+            NotificationManagerCompat notificationManager = NotificationManagerCompat.from(Game.this);
+            if (Build.VERSION.SDK_INT >= 33) {
+                if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                    notificationManager.notify(101, builder.build());
+                }
+            } else {
+                notificationManager.notify(101, builder.build());
+            }
+
+            finish();
+            System.exit(0);
+        }
+    };
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            CharSequence name = "Emulation Status";
+            String description = "Notifications for emulator background running status";
+            int importance = NotificationManager.IMPORTANCE_DEFAULT;
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, name, importance);
+            channel.setDescription(description);
+            NotificationManager notificationManager = getSystemService(NotificationManager.class);
+            if (notificationManager != null) {
+                notificationManager.createNotificationChannel(channel);
+            }
+        }
+    }
 
     private void setImmersiveMode() {
         if (Build.VERSION.SDK_INT >= 19) {
@@ -89,12 +136,58 @@ public class Game extends SDLActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        createNotificationChannel();
         setImmersiveMode();
         extractAssets();
         checkAndExtractPluginAssets();
         try {
             Os.setenv("TMPDIR", getCacheDir().getAbsolutePath(), true);
         } catch (Exception e) {}
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        backgroundHandler.removeCallbacks(stopEmulationRunnable);
+        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
+        notificationManager.cancel(100);
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 102);
+            }
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_media_play)
+                .setContentTitle("Emulation Running")
+                .setContentText("Emulation is currently running in the background.")
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setOngoing(true);
+
+        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                notificationManager.notify(100, builder.build());
+            }
+        } else {
+            notificationManager.notify(100, builder.build());
+        }
+
+        // 5 minutes = 5 * 60 * 1000 = 300,000 ms
+        backgroundHandler.postDelayed(stopEmulationRunnable, 300000);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        backgroundHandler.removeCallbacks(stopEmulationRunnable);
+        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
+        notificationManager.cancel(100);
     }
 
     @Override
@@ -507,6 +600,10 @@ public class Game extends SDLActivity {
                 processPendingOperations();
             } else {
                 onExportFailed();
+            }
+        } else if (requestCode == 102) {
+            if (grantResults.length > 0 && grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+                Log.w(TAG, "Notification permission denied");
             }
         }
     }
