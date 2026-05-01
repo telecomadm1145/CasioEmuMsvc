@@ -46,6 +46,8 @@
 #include <Plugin/PluginMan.h>
 #include <ThemeManager.h>
 
+#include "TouchMouseTranslator.h"
+
 using namespace casioemu;
 SDL_Surface* background;
 SDL_Texture* bg_txt;
