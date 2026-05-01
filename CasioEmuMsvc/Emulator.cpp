@@ -298,7 +298,7 @@ namespace casioemu {
 		}
 	}
 
-	void Emulator::UIEvent(SDL_Event& event) {
+	void Emulator::UIEvent(SDL_Event event) {
 		if (headless)
 			return;
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);

@@ -167,7 +167,7 @@ namespace casioemu {
 		void Tick();
 		void EmulatorTick();
 		void Frame();
-		void UIEvent(SDL_Event& event);
+		void UIEvent(SDL_Event event);
 		void SaveStateAll(std::ostream& os);
 		void LoadStateAll(std::istream& is);
 

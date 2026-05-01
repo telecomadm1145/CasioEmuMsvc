@@ -925,7 +925,7 @@ namespace casioemu {
 		}
 	}
 
-	void Chipset::UIEvent(SDL_Event& event) {
+	void Chipset::UIEvent(SDL_Event event) {
 		for (auto peripheral : peripherals)
 			peripheral->UIEvent(event);
 	}

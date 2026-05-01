@@ -120,7 +120,7 @@ namespace casioemu {
 		bool GetPaused();
 		void SetPaused(bool paused);
 		void RequestStep();
-		void UIEvent(SDL_Event& event);
+		void UIEvent(SDL_Event event);
 		SDL_Renderer* GetRenderer();
 		SDL_Texture* GetInterfaceTexture();
 		std::string GetModelFilePath(std::string relative_path);
