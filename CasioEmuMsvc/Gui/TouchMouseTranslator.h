@@ -1,17 +1,29 @@
 #pragma once
+
 #include <SDL.h>
 #include <array>
 #include <cstddef>
 #include <functional>
 
+enum class TouchTarget {
+	Emulator,
+	ImGui
+};
+
 class TouchMouseTranslator {
 public:
-	using EventSink = std::function<void(const SDL_Event&)>;
+	using EventSink = std::function<void(const SDL_Event&, TouchTarget)>;
+	using GuiHitTest = std::function<bool(float x, float y)>;
 
-	TouchMouseTranslator(Uint32 windowId, EventSink sink);
+	TouchMouseTranslator(Uint32 windowId, EventSink sink, GuiHitTest guiHitTest);
 
 	void SetWindowId(Uint32 windowId);
+
+	/**
+	 * 返回 true 表示该 touch 事件已消费。
+	 */
 	bool HandleEvent(const SDL_Event& event, int windowW, int windowH);
+
 	void RenderDebug(SDL_Renderer* renderer) const;
 
 private:
@@ -28,6 +40,8 @@ private:
 		float currentY = 0.0f;
 
 		Uint32 startTime = 0;
+
+		TouchTarget target = TouchTarget::Emulator;
 	};
 
 	struct TouchSample {
@@ -49,7 +63,7 @@ private:
 	bool HandleFingerUp(const SDL_TouchFingerEvent& finger, int windowW, int windowH);
 	bool HandleFingerMotion(const SDL_TouchFingerEvent& finger, int windowW, int windowH);
 
-	void StartFinger(TouchState& state, SDL_FingerID fingerId, float x, float y);
+	void StartFinger(TouchState& state, SDL_FingerID fingerId, float x, float y, TouchTarget target);
 	void ResetFinger(TouchState& state);
 
 	void HandleSingleFingerMove(TouchState& state, float x, float y);
@@ -61,14 +75,15 @@ private:
 	void DrawTrail(SDL_Renderer* renderer, const TouchTrail& trail) const;
 	void DrawCross(SDL_Renderer* renderer, const TouchState& state, Uint8 r, Uint8 g, Uint8 b) const;
 
-	void EmitMouseMotion(float x, float y);
-	void EmitMouseButton(Uint8 button, Uint8 state, float x, float y);
-	void EmitMouseClick(Uint8 button, float x, float y);
-	void EmitMouseWheel(float deltaPixels, float mouseX, float mouseY);
+	void EmitMouseMotion(TouchTarget target, float x, float y);
+	void EmitMouseButton(TouchTarget target, Uint8 button, Uint8 state, float x, float y);
+	void EmitMouseClick(TouchTarget target, Uint8 button, float x, float y);
+	void EmitMouseWheel(TouchTarget target, float deltaPixels, float mouseX, float mouseY);
 
 private:
 	Uint32 windowId_ = 0;
 	EventSink sink_;
+	GuiHitTest guiHitTest_;
 
 	TouchState primary_;
 	TouchState secondary_;
@@ -81,6 +96,5 @@ private:
 	const float dragThresholdPixels_ = 10.0f;
 	const Uint32 longPressDelayMs_ = 500;
 	const Uint32 trailDurationMs_ = 500;
-
 	const float scrollPixelsPerWheel_ = 20.0f;
 };

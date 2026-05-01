@@ -3,8 +3,13 @@
 #include <algorithm>
 #include <cmath>
 
-TouchMouseTranslator::TouchMouseTranslator(Uint32 windowId, EventSink sink)
-	: windowId_(windowId), sink_(std::move(sink)) {
+TouchMouseTranslator::TouchMouseTranslator(
+	Uint32 windowId,
+	EventSink sink,
+	GuiHitTest guiHitTest)
+	: windowId_(windowId),
+	  sink_(std::move(sink)),
+	  guiHitTest_(std::move(guiHitTest)) {
 }
 
 void TouchMouseTranslator::SetWindowId(Uint32 windowId) {
@@ -15,13 +20,10 @@ bool TouchMouseTranslator::HandleEvent(const SDL_Event& event, int windowW, int 
 	switch (event.type) {
 	case SDL_FINGERDOWN:
 		return HandleFingerDown(event.tfinger, windowW, windowH);
-
 	case SDL_FINGERUP:
 		return HandleFingerUp(event.tfinger, windowW, windowH);
-
 	case SDL_FINGERMOTION:
 		return HandleFingerMotion(event.tfinger, windowW, windowH);
-
 	default:
 		return false;
 	}
@@ -32,20 +34,40 @@ bool TouchMouseTranslator::HandleFingerDown(const SDL_TouchFingerEvent& finger, 
 	const float y = finger.y * static_cast<float>(windowH);
 
 	if (!primary_.active) {
-		StartFinger(primary_, finger.fingerId, x, y);
+		const bool hitImGui = guiHitTest_ ? guiHitTest_(x, y) : false;
+		const TouchTarget target = hitImGui ? TouchTarget::ImGui : TouchTarget::Emulator;
+
+		StartFinger(primary_, finger.fingerId, x, y, target);
+
+		/*
+		 * 关键修复：
+		 * 如果目标是 ImGui，必须在 FINGERDOWN 时立刻按下鼠标，
+		 * 否则拖动窗口时会漂移。
+		 */
+		if (target == TouchTarget::ImGui) {
+			EmitMouseMotion(target, x, y);
+			EmitMouseButton(target, SDL_BUTTON_LEFT, SDL_PRESSED, x, y);
+
+			primary_.dragging = true;
+			primary_.suppressTap = true;
+		}
+
 		return true;
 	}
 
 	if (!secondary_.active && finger.fingerId != primary_.fingerId) {
-		if (primary_.dragging || leftButtonDown_) {
-			EmitMouseButton(SDL_BUTTON_LEFT, SDL_RELEASED, primary_.currentX, primary_.currentY);
+		/*
+		 * 如果第一根手指是 emulator 拖拽中，第二根手指按下后转双指滚动。
+		 * 先释放左键，避免左键卡住。
+		 */
+		if (primary_.target == TouchTarget::Emulator && (primary_.dragging || leftButtonDown_)) {
+			EmitMouseButton(TouchTarget::Emulator, SDL_BUTTON_LEFT, SDL_RELEASED, primary_.currentX, primary_.currentY);
 			primary_.dragging = false;
 		}
 
-		primary_.suppressTap = true;
-
-		StartFinger(secondary_, finger.fingerId, x, y);
+		StartFinger(secondary_, finger.fingerId, x, y, primary_.target);
 		secondary_.suppressTap = true;
+		primary_.suppressTap = true;
 
 		return true;
 	}
@@ -62,8 +84,22 @@ bool TouchMouseTranslator::HandleFingerUp(const SDL_TouchFingerEvent& finger, in
 		primary_.currentX = x;
 		primary_.currentY = y;
 
+		if (primary_.target == TouchTarget::ImGui) {
+			EmitMouseMotion(primary_.target, x, y);
+			EmitMouseButton(primary_.target, SDL_BUTTON_LEFT, SDL_RELEASED, x, y);
+
+			ResetFinger(primary_);
+
+			if (secondary_.active) {
+				PromoteSecondFingerToPrimary();
+				primary_.suppressTap = true;
+			}
+
+			return true;
+		}
+
 		if (primary_.dragging || leftButtonDown_) {
-			EmitMouseButton(SDL_BUTTON_LEFT, SDL_RELEASED, x, y);
+			EmitMouseButton(primary_.target, SDL_BUTTON_LEFT, SDL_RELEASED, x, y);
 			primary_.dragging = false;
 		}
 		else {
@@ -74,10 +110,10 @@ bool TouchMouseTranslator::HandleFingerUp(const SDL_TouchFingerEvent& finger, in
 
 			if (!primary_.suppressTap && distSq <= thresholdSq) {
 				if (now - primary_.startTime < longPressDelayMs_) {
-					EmitMouseClick(SDL_BUTTON_LEFT, x, y);
+					EmitMouseClick(primary_.target, SDL_BUTTON_LEFT, x, y);
 				}
 				else {
-					EmitMouseClick(SDL_BUTTON_RIGHT, x, y);
+					EmitMouseClick(primary_.target, SDL_BUTTON_RIGHT, x, y);
 				}
 			}
 		}
@@ -95,14 +131,19 @@ bool TouchMouseTranslator::HandleFingerUp(const SDL_TouchFingerEvent& finger, in
 		secondary_.currentX = x;
 		secondary_.currentY = y;
 
+		if (secondary_.target == TouchTarget::ImGui) {
+			ResetFinger(secondary_);
+			primary_.suppressTap = true;
+			return true;
+		}
+
 		if (secondary_.dragging || leftButtonDown_) {
-			EmitMouseButton(SDL_BUTTON_LEFT, SDL_RELEASED, x, y);
+			EmitMouseButton(secondary_.target, SDL_BUTTON_LEFT, SDL_RELEASED, x, y);
 			secondary_.dragging = false;
 		}
 
 		ResetFinger(secondary_);
 		primary_.suppressTap = true;
-
 		return true;
 	}
 
@@ -114,34 +155,46 @@ bool TouchMouseTranslator::HandleFingerMotion(const SDL_TouchFingerEvent& finger
 	const float y = finger.y * static_cast<float>(windowH);
 
 	if (primary_.active && primary_.fingerId == finger.fingerId) {
+		if (primary_.target == TouchTarget::ImGui) {
+			EmitMouseMotion(primary_.target, x, y);
+
+			primary_.currentX = x;
+			primary_.currentY = y;
+			AddTrail(primaryTrail_, x, y);
+			return true;
+		}
+
 		if (!secondary_.active) {
 			HandleSingleFingerMove(primary_, x, y);
 		}
 		else {
 			primary_.suppressTap = true;
 			secondary_.suppressTap = true;
-
 			HandleTwoFingerMove(primary_, x, y, primary_.currentX, primary_.currentY);
 		}
 
 		primary_.currentX = x;
 		primary_.currentY = y;
-
 		AddTrail(primaryTrail_, x, y);
 		return true;
 	}
 
 	if (secondary_.active && secondary_.fingerId == finger.fingerId) {
+		if (secondary_.target == TouchTarget::ImGui) {
+			secondary_.currentX = x;
+			secondary_.currentY = y;
+			AddTrail(secondaryTrail_, x, y);
+			return true;
+		}
+
 		if (primary_.active) {
 			primary_.suppressTap = true;
 			secondary_.suppressTap = true;
-
 			HandleTwoFingerMove(secondary_, x, y, primary_.currentX, primary_.currentY);
 		}
 
 		secondary_.currentX = x;
 		secondary_.currentY = y;
-
 		AddTrail(secondaryTrail_, x, y);
 		return true;
 	}
@@ -149,19 +202,17 @@ bool TouchMouseTranslator::HandleFingerMotion(const SDL_TouchFingerEvent& finger
 	return true;
 }
 
-void TouchMouseTranslator::StartFinger(TouchState& state, SDL_FingerID fingerId, float x, float y) {
+void TouchMouseTranslator::StartFinger(TouchState& state, SDL_FingerID fingerId, float x, float y, TouchTarget target) {
 	state.active = true;
 	state.dragging = false;
 	state.suppressTap = false;
-
 	state.fingerId = fingerId;
-
 	state.startX = x;
 	state.startY = y;
 	state.currentX = x;
 	state.currentY = y;
-
 	state.startTime = SDL_GetTicks();
+	state.target = target;
 }
 
 void TouchMouseTranslator::ResetFinger(TouchState& state) {
@@ -171,19 +222,18 @@ void TouchMouseTranslator::ResetFinger(TouchState& state) {
 void TouchMouseTranslator::HandleSingleFingerMove(TouchState& state, float x, float y) {
 	const float dx = x - state.startX;
 	const float dy = y - state.startY;
-
 	const float distSq = dx * dx + dy * dy;
 	const float thresholdSq = dragThresholdPixels_ * dragThresholdPixels_;
 
 	if (!state.dragging && distSq > thresholdSq) {
-		EmitMouseMotion(x, y);
-		EmitMouseButton(SDL_BUTTON_LEFT, SDL_PRESSED, x, y);
+		EmitMouseMotion(state.target, x, y);
+		EmitMouseButton(state.target, SDL_BUTTON_LEFT, SDL_PRESSED, x, y);
 		state.dragging = true;
 		state.suppressTap = true;
 	}
 
 	if (state.dragging) {
-		EmitMouseMotion(x, y);
+		EmitMouseMotion(state.target, x, y);
 	}
 }
 
@@ -194,19 +244,16 @@ void TouchMouseTranslator::HandleTwoFingerMove(TouchState& state, float x, float
 		return;
 	}
 
-	EmitMouseWheel(-moveY, anchorX, anchorY);
+	EmitMouseWheel(state.target, moveY, anchorX, anchorY);
 }
 
 void TouchMouseTranslator::PromoteSecondFingerToPrimary() {
 	primary_ = secondary_;
-
 	primary_.startX = primary_.currentX;
 	primary_.startY = primary_.currentY;
 	primary_.startTime = SDL_GetTicks();
-
 	primary_.dragging = false;
 	primary_.suppressTap = true;
-
 	ResetFinger(secondary_);
 }
 
@@ -229,65 +276,81 @@ void TouchMouseTranslator::RenderDebug(SDL_Renderer* renderer) const {
 	DrawCross(renderer, primary_, 255, 0, 0);
 	DrawCross(renderer, secondary_, 0, 255, 0);
 }
+static void RenderFilledCircle(SDL_Renderer* renderer, int cx, int cy, int radius) {
+	for (int dy = -radius; dy <= radius; ++dy) {
+		int dx = (int)std::sqrt(radius * radius - dy * dy);
+		SDL_RenderDrawLine(renderer, cx - dx, cy + dy, cx + dx, cy + dy);
+	}
+}
+static void RenderInterpolatedCircleLine(
+	SDL_Renderer* renderer,
+	float x1, float y1,
+	float x2, float y2,
+	float radius) {
+	float dx = x2 - x1;
+	float dy = y2 - y1;
+	float dist = std::sqrt(dx * dx + dy * dy);
+
+	int steps = std::max(1, (int)(dist / 1.5f));
+	for (int i = 0; i <= steps; ++i) {
+		float t = (float)i / (float)steps;
+		float x = x1 + dx * t;
+		float y = y1 + dy * t;
+		RenderFilledCircle(renderer, (int)x, (int)y, (int)radius);
+	}
+}
 
 void TouchMouseTranslator::DrawTrail(SDL_Renderer* renderer, const TouchTrail& trail) const {
 	const Uint32 now = SDL_GetTicks();
 
-	for (std::size_t i = 0; i < trail.count; ++i) {
-		const std::size_t idx =
+	if (trail.count < 2) {
+		return;
+	}
+
+	for (std::size_t i = 0; i + 1 < trail.count; ++i) {
+		const std::size_t idx1 =
 			(trail.currentIndex + TrailBufferSize - 1 - i) % TrailBufferSize;
+		const std::size_t idx2 =
+			(trail.currentIndex + TrailBufferSize - 2 - i) % TrailBufferSize;
 
-		const TouchSample& sample = trail.samples[idx];
-		const Uint32 age = now - sample.time;
+		const TouchSample& s1 = trail.samples[idx1];
+		const TouchSample& s2 = trail.samples[idx2];
 
+		Uint32 age = now - s1.time;
 		if (age > trailDurationMs_) {
 			continue;
 		}
 
-		const float t = static_cast<float>(age) / static_cast<float>(trailDurationMs_);
-		const float radius = 5.0f + 50.0f * t;
-		const Uint8 alpha = static_cast<Uint8>(120.0f * (1.0f - t));
+		float t = static_cast<float>(age) / static_cast<float>(trailDurationMs_);
+		float radius = 2.0f + 8.0f * (1.0f - t);
+		Uint8 alpha = static_cast<Uint8>(160.0f * (1.0f - t));
 
 		SDL_SetRenderDrawColor(renderer, 255, 255, 255, alpha);
-
-		SDL_Rect rect{
-			static_cast<int>(sample.x - radius * 0.5f),
-			static_cast<int>(sample.y - radius * 0.5f),
-			static_cast<int>(radius),
-			static_cast<int>(radius)};
-
-		SDL_RenderFillRect(renderer, &rect);
+		RenderInterpolatedCircleLine(renderer, s1.x, s1.y, s2.x, s2.y, radius);
 	}
 }
 
-void TouchMouseTranslator::DrawCross(
-	SDL_Renderer* renderer,
-	const TouchState& state,
-	Uint8 r,
-	Uint8 g,
-	Uint8 b) const {
+void TouchMouseTranslator::DrawCross(SDL_Renderer* renderer, const TouchState& state, Uint8 r, Uint8 g, Uint8 b) const {
 	if (!state.active) {
 		return;
 	}
 
 	SDL_SetRenderDrawColor(renderer, r, g, b, 255);
 
-	SDL_RenderDrawLine(
-		renderer,
+	SDL_RenderDrawLine(renderer,
 		static_cast<int>(state.currentX - 10),
 		static_cast<int>(state.currentY),
 		static_cast<int>(state.currentX + 10),
 		static_cast<int>(state.currentY));
 
-	SDL_RenderDrawLine(
-		renderer,
+	SDL_RenderDrawLine(renderer,
 		static_cast<int>(state.currentX),
 		static_cast<int>(state.currentY - 10),
 		static_cast<int>(state.currentX),
 		static_cast<int>(state.currentY + 10));
 }
 
-void TouchMouseTranslator::EmitMouseMotion(float x, float y) {
+void TouchMouseTranslator::EmitMouseMotion(TouchTarget target, float x, float y) {
 	if (!sink_) {
 		return;
 	}
@@ -303,16 +366,16 @@ void TouchMouseTranslator::EmitMouseMotion(float x, float y) {
 	event.motion.xrel = 0;
 	event.motion.yrel = 0;
 
-	sink_(event);
+	sink_(event, target);
 }
 
-void TouchMouseTranslator::EmitMouseButton(Uint8 button, Uint8 state, float x, float y) {
+void TouchMouseTranslator::EmitMouseButton(TouchTarget target, Uint8 button, Uint8 state, float x, float y) {
 	if (!sink_) {
 		return;
 	}
 
 	SDL_Event event{};
-	event.type = state == SDL_PRESSED ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
+	event.type = (state == SDL_PRESSED) ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
 	event.button.timestamp = SDL_GetTicks();
 	event.button.windowID = windowId_;
 	event.button.which = SDL_TOUCH_MOUSEID;
@@ -322,20 +385,20 @@ void TouchMouseTranslator::EmitMouseButton(Uint8 button, Uint8 state, float x, f
 	event.button.x = static_cast<Sint32>(std::lround(x));
 	event.button.y = static_cast<Sint32>(std::lround(y));
 
-	sink_(event);
+	sink_(event, target);
 
 	if (button == SDL_BUTTON_LEFT) {
-		leftButtonDown_ = state == SDL_PRESSED;
+		leftButtonDown_ = (state == SDL_PRESSED);
 	}
 }
 
-void TouchMouseTranslator::EmitMouseClick(Uint8 button, float x, float y) {
-	EmitMouseMotion(x, y);
-	EmitMouseButton(button, SDL_PRESSED, x, y);
-	EmitMouseButton(button, SDL_RELEASED, x, y);
+void TouchMouseTranslator::EmitMouseClick(TouchTarget target, Uint8 button, float x, float y) {
+	EmitMouseMotion(target, x, y);
+	EmitMouseButton(target, button, SDL_PRESSED, x, y);
+	EmitMouseButton(target, button, SDL_RELEASED, x, y);
 }
 
-void TouchMouseTranslator::EmitMouseWheel(float deltaPixels, float mouseX, float mouseY) {
+void TouchMouseTranslator::EmitMouseWheel(TouchTarget target, float deltaPixels, float mouseX, float mouseY) {
 	if (!sink_) {
 		return;
 	}
@@ -361,5 +424,5 @@ void TouchMouseTranslator::EmitMouseWheel(float deltaPixels, float mouseX, float
 	event.wheel.mouseY = static_cast<Sint32>(std::lround(mouseY));
 #endif
 
-	sink_(event);
+	sink_(event, target);
 }
