@@ -1,18 +1,18 @@
 ﻿#pragma once
 #include "Config.hpp"
-#include "ModelInfo.h"
-#include <string>
-#include <map>
 #include <SDL.h>
 #include <SDL_image.h>
+#include <map>
+#include <string>
 
-#include <mutex>
-#include <thread>
 #include <condition_variable>
+#include <mutex>
 #include <queue>
+#include <thread>
 
-namespace casioemu
-{
+#include "ModelInfo.h"
+
+namespace casioemu {
 	class Chipset;
 	class CPU;
 	class MMU;
@@ -20,8 +20,7 @@ namespace casioemu
 	/**
 	 * A mutex that ensures that a thread cannot get the mutex right after it's released if there are another waiting thread.
 	 */
-	class FairRecursiveMutex
-	{
+	class FairRecursiveMutex {
 		std::mutex m;
 		std::thread::id holding;
 		int recursive_count;
@@ -34,16 +33,16 @@ namespace casioemu
 		void unlock();
 	};
 
-	class Emulator
-	{
-    public:
-		SDL_Renderer *renderer;
+	class Emulator {
+	public:
+		SDL_Renderer* renderer;
 		SDL_Surface* interface_surface;
-		SDL_Texture *interface_texture;
+		SDL_Texture* interface_texture;
 		unsigned int cycles_per_second;
 		unsigned int timer_interval;
 		bool running, Paused;
-	std::atomic<bool> m_step_requested;
+		bool headless = false;
+		std::atomic<bool> m_step_requested;
 		unsigned int last_frame_tick_count;
 		std::string model_path;
 		bool pause_on_mem_error;
@@ -51,7 +50,7 @@ namespace casioemu
 		std::atomic<bool> screenshot_requested{};
 		std::atomic<bool> mirroring_requested{};
 
-		std::thread *tick_thread;
+		std::thread* tick_thread;
 
 		SpriteInfo interface_background;
 		SDL_Rect emu_rect{};
@@ -67,15 +66,16 @@ namespace casioemu
 
 	public:
 		ModelInfo ModelDefinition{};
-		SDL_Window *window;
-		Emulator(std::map<std::string, std::string> &argv_map, bool Paused = false);
+		SDL_Window* window;
+		Emulator(std::map<std::string, std::string>& argv_map, bool Paused = false);
+		Emulator(ModelInfo def, bool paused = false, bool headless = true);
 		~Emulator();
 
 		FairRecursiveMutex access_mx;
 		HardwareId hardware_id;
-		std::map<std::string, std::string> &argv_map;
+		std::map<std::string, std::string>& argv_map;
 
-	// private:
+		// private:
 	public:
 		/**
 		 * The cycle manager structure. This structure is reset every time the
@@ -88,8 +88,7 @@ namespace casioemu
 		 * timer_interval milliseconds. It's up to the timer to make sure that
 		 * there's no drift.
 		 */
-		struct Cycles
-		{
+		struct Cycles {
 			void Setup(Uint64 cycles_per_second, unsigned int timer_interval);
 			void Reset();
 			Uint64 GetDelta();
@@ -101,7 +100,7 @@ namespace casioemu
 		 * peripheral state. The emulator interfaces with the chipset by issuing interrupts
 		 * and rendering the screen buffer. It may also read internal state for testing purposes.
 		 */
-		Chipset &chipset;
+		Chipset& chipset;
 
 		float BatteryVoltage, SolarPanelVoltage;
 
@@ -120,13 +119,13 @@ namespace casioemu
 		void SetClockSpeed(float speed);
 		bool GetPaused();
 		void SetPaused(bool paused);
-	void RequestStep();
-		void UIEvent(SDL_Event &event);
-		SDL_Renderer *GetRenderer();
-		SDL_Texture *GetInterfaceTexture();
+		void RequestStep();
+		void UIEvent(SDL_Event& event);
+		SDL_Renderer* GetRenderer();
+		SDL_Texture* GetInterfaceTexture();
 		std::string GetModelFilePath(std::string relative_path);
 
 		friend class CPU;
 		friend class MMU;
 	};
-}
+} // namespace casioemu

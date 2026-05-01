@@ -54,8 +54,8 @@ public:
 					outFile << it->second;
 				}
 				else {
-					LoadTranslationsFromString(DefaultLocales::en_US);
-					m_currentLocale = "en_US";
+					//LoadTranslationsFromString(DefaultLocales::en_US);
+					m_currentLocale = "C";
 				}
 			}
 			if (savesetting) {

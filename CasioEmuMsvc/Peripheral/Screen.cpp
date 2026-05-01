@@ -38,7 +38,6 @@
 #include <iostream>
 #include <vector>
 
-
 #ifndef __ANDROID__
 #include "Theme.h"
 #endif
@@ -156,7 +155,7 @@ namespace casioemu {
 			SPR_MAX;
 
 		MMURegion region_buffer{}, region_buffer1{}, region_contrast{}, region_brightness{}, region_scan_report_op1{}, region_mode{}, region_range{}, region_select{}, region_offset{}, region_refresh_rate{}, region_scan_report{};
-		uint8_t *screen_buffer{}, *screen_buffer1{}, screen_contrast{}, screen_brightness{}, screen_scan_report_op1{}, screen_mode{}, screen_range{}, screen_select{}, screen_offset{}, screen_refresh_rate{}, screen_scan_report{};
+		uint8_t* screen_buffer{}, * screen_buffer1{}, screen_contrast{}, screen_brightness{}, screen_scan_report_op1{}, screen_mode{}, screen_range{}, screen_select{}, screen_offset{}, screen_refresh_rate{}, screen_scan_report{};
 
 		MMURegion region_power{}, region_scan_report_en{};
 		uint8_t screen_power{}, screen_scan_report_en{};
@@ -193,6 +192,7 @@ namespace casioemu {
 	public:
 		Screen(Emulator& emu)
 			: Peripheral(emu) {
+#ifndef TEST_BUILD
 			std::thread thd([&]() {
 				while (1) {
 					tick();
@@ -204,8 +204,9 @@ namespace casioemu {
 					}
 #endif
 				}
-			});
+				});
 			thd.detach();
+#endif
 		}
 		~Screen() {
 			if (screen_buffer)
@@ -323,20 +324,23 @@ namespace casioemu {
 				float ink_alpha_on = 255;
 				float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);
 				ink_alpha_on = std::clamp(ink_alpha_on, 0.0f, 255.0f);
-				uint8_t* screen_buffer = (uint8_t*)emulator.chipset.epscpu->vram;
+				uint8_t* screen_buffer = (uint8_t*)(emulator.chipset.epscpu->vram + 0x120);
 				// if (emulator.ModelDefinition.real_hardware) {
 				//	screen_buffer = this->screen_buffer;
 				// }
-				for (int ix = 0; ix < 98; ++ix) {
-					for (int iy = 0; iy < 64; ++iy) {
-						uint32_t i = (ix * 64) | iy;
-						int bIndx = (i >> 3);
-						int subIndx = (i & 7);
-						int mask = (1 << subIndx);
-						bool on = (screen_buffer[bIndx] & mask) != 0;
-						auto& data = screen_ink_alpha[(iy * 192 + 192) + ix];
-						data = data * ratio + (on ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
+				for (int blk = 0; blk < 4; ++blk) {
+					for (int ix = 0; ix < 98; ++ix) {
+						for (int iy = 0; iy < 8; ++iy) {
+							uint32_t i = (ix * 8) | iy;
+							int bIndx = (i >> 3);
+							int subIndx = (i & 7);
+							int mask = (1 << subIndx);
+							bool on = (screen_buffer[bIndx] & mask) != 0;
+							auto& data = screen_ink_alpha[(((8 - iy + (blk) * 8)) * 192) + ix];
+							data = data * ratio + (on ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
+						}
 					}
+					screen_buffer -= 0x60;
 				}
 				screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xe5d4;
 				// if (emulator.ModelDefinition.real_hardware) {
@@ -689,7 +693,7 @@ namespace casioemu {
 		{"rsd_up", 0x01, 0x12},
 		{"rsd_right", 0x01, 0x13},
 		{"rsd_pause", 0x01, 0x15},
-		{"rsd_sun", 0x01, 0x16}};
+		{"rsd_sun", 0x01, 0x16} };
 
 	template <>
 	const SpriteBitmap Screen<HW_CLASSWIZ>::sprite_bitmap[] = {
@@ -713,7 +717,7 @@ namespace casioemu {
 		{"rsd_up", 0x01, 0x12},
 		{"rsd_right", 0x01, 0x13},
 		{"rsd_pause", 0x01, 0x15},
-		{"rsd_sun", 0x01, 0x16}};
+		{"rsd_sun", 0x01, 0x16} };
 
 	template <>
 	const SpriteBitmap Screen<HW_ES_PLUS>::sprite_bitmap[] = {
@@ -735,7 +739,7 @@ namespace casioemu {
 		{"rsd_math", 0x40, 0x0A},
 		{"rsd_down", 0x08, 0x0A},
 		{"rsd_up", 0x80, 0x0B},
-		{"rsd_disp", 0x10, 0x0B}};
+		{"rsd_disp", 0x10, 0x0B} };
 
 	template <>
 	const SpriteBitmap Screen<HW_EPS6800>::sprite_bitmap[] = {
@@ -757,7 +761,7 @@ namespace casioemu {
 		{"rsd_math", 0x40, 0x0A},
 		{"rsd_down", 0x08, 0x0A},
 		{"rsd_up", 0x80, 0x0B},
-		{"rsd_disp", 0x10, 0x0B}};
+		{"rsd_disp", 0x10, 0x0B} };
 
 	template <HardwareId hardware_id>
 	void Screen<hardware_id>::Initialise() {
@@ -807,7 +811,7 @@ namespace casioemu {
 			auto pp = emulator.chipset.QueryInterface<IPortProvider>();
 			pp->SetPortOutputCallback(7, [&](uint8_t data) {
 				ti_port7 = data;
-			});
+				});
 			pp->SetPortOutputCallback(5, [&](uint8_t data) {
 				// ti_port5 = data;
 				if (ti_a0 && !(data & 0x40)) {
@@ -894,24 +898,24 @@ namespace casioemu {
 					}
 				}
 				ti_a0 = (data & 0x40);
-			});
+				});
 			return;
 		}
 		if (!(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) || (!enabled_2 && (screen_power & 1))) {
 			if constexpr (hardware_id != HW_CLASSWIZ_II) {
 				region_buffer.Setup(
 					0xF800, (N_ROW + 1) * ROW_SIZE, "Screen/Buffer", this, [](MMURegion* region, size_t offset) {
-				offset -= region->base;
-				if (offset % ROW_SIZE >= ROW_SIZE_DISP)
-					return (uint8_t)0;
-				return ((Screen*)region->userdata)->screen_buffer[offset]; },
+						offset -= region->base;
+						if (offset % ROW_SIZE >= ROW_SIZE_DISP)
+							return (uint8_t)0;
+						return ((Screen*)region->userdata)->screen_buffer[offset]; },
 					[](MMURegion* region, size_t offset, uint8_t data) {
-					offset -= region->base;
-					if (offset % ROW_SIZE >= ROW_SIZE_DISP)
-						return;
+						offset -= region->base;
+						if (offset % ROW_SIZE >= ROW_SIZE_DISP)
+							return;
 
-                                        auto this_obj = (Screen*)region->userdata;
-                                        this_obj->screen_buffer[offset] = data; },
+						auto this_obj = (Screen*)region->userdata;
+						this_obj->screen_buffer[offset] = data; },
 					emulator);
 			}
 			else {
@@ -1007,7 +1011,7 @@ namespace casioemu {
 							auto sb = screen->screen_buffer;
 							for (int iy = 0; iy != (N_ROW + 1); ++iy) {
 								for (int ix = 0; ix != ROW_SIZE_DISP; ++ix) {
-									sb[ix + iy * ROW_SIZE] = bit_lookup_table[sb[(ix) + iy * ROW_SIZE]];
+									sb[ix + iy * ROW_SIZE] = bit_lookup_table[sb[(ix)+iy * ROW_SIZE]];
 								}
 							}
 							for (int iy = 0; iy != (N_ROW + 1); ++iy) {
@@ -1019,7 +1023,7 @@ namespace casioemu {
 								sb = screen->screen_buffer1;
 								for (int iy = 0; iy != (N_ROW + 1); ++iy) {
 									for (int ix = 0; ix != ROW_SIZE_DISP; ++ix) {
-										sb[ix + iy * ROW_SIZE] = bit_lookup_table[sb[(ix) + iy * ROW_SIZE]];
+										sb[ix + iy * ROW_SIZE] = bit_lookup_table[sb[(ix)+iy * ROW_SIZE]];
 									}
 								}
 								for (int iy = 0; iy != (N_ROW + 1); ++iy) {
@@ -1069,8 +1073,8 @@ namespace casioemu {
 			}
 
 			if constexpr (hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) {
-				region_select.Setup(0xF037, 1, "Screen/Select", &screen_select, MMURegion::DefaultRead<uint8_t, 0x04 | 1>,
-					MMURegion::DefaultWrite<uint8_t, 0x04 | 1>, emulator);
+				region_select.Setup(0xF037, 1, "Screen/Select", &screen_select, MMURegion::DefaultRead < uint8_t, 0x04 | 1 >,
+					MMURegion::DefaultWrite < uint8_t, 0x04 | 1 >, emulator);
 
 				region_brightness.Setup(0xF033, 1, "Screen/Brightness", &screen_brightness, MMURegion::DefaultRead<uint8_t, 0x07>,
 					MMURegion::DefaultWrite<uint8_t, 0x07>, emulator);
@@ -1116,6 +1120,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 
 	template <HardwareId hardware_id>
 	void Screen<hardware_id>::Uninitialise() {
+		if (!enabled_2)
+			return;
 		fillRandomData(screen_buffer, (N_ROW + 1) * ROW_SIZE);
 		if constexpr (hardware_id == HW_CLASSWIZ_II) {
 			fillRandomData(screen_buffer1, (N_ROW + 1) * ROW_SIZE);
@@ -1168,9 +1174,9 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		std::ostringstream filename;
 
 		filename << "screenshot-"
-				 << std::put_time(&tm, "%Y-%m-%d-%H-%M-%S-")
-				 << util::Random::uniform_uint32(0, 999)
-				 << ".png";
+			<< std::put_time(&tm, "%Y-%m-%d-%H-%M-%S-")
+			<< util::Random::uniform_uint32(0, 999)
+			<< ".png";
 
 		// Calculate the bounding box of the rendering area from both sprite and pixel rectangles
 		int minX = INT_MAX, minY = INT_MAX, maxX = INT_MIN, maxY = INT_MIN;
@@ -1201,11 +1207,11 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 
 		if (screenSurface != nullptr) {
 			// Define the area to capture
-			SDL_Rect captureRect = {minX, minY, captureWidth, captureHeight};
+			SDL_Rect captureRect = { minX, minY, captureWidth, captureHeight };
 
 			// Copy the renderer to the surface
 			if (SDL_RenderReadPixels(renderer, &captureRect, SDL_PIXELFORMAT_RGBA32,
-					screenSurface->pixels, screenSurface->pitch) == 0) {
+				screenSurface->pixels, screenSurface->pitch) == 0) {
 
 #ifdef __ANDROID__
 				// Save to MediaStore
@@ -1261,7 +1267,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 					SDL_Log("Screenshot saved to %s", str.c_str());
 				}
 
-// Copy to clipboard on Windows/Desktop
+				// Copy to clipboard on Windows/Desktop
 #ifdef _WIN32
 				// Convert SDL_Surface to Windows DIB format for clipboard
 				HDC hdcScreen = GetDC(NULL);
@@ -1365,7 +1371,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		SDL_Surface* screenSurface = SDL_CreateRGBSurface(0, captureWidth, captureHeight, 32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
 		if (screenSurface != nullptr) {
 			// Define the area to capture
-			SDL_Rect captureRect = {minX, minY, captureWidth, captureHeight};
+			SDL_Rect captureRect = { minX, minY, captureWidth, captureHeight };
 
 			// Copy the renderer to the surface
 			if (SDL_RenderReadPixels(renderer, &captureRect, SDL_PIXELFORMAT_RGBA32, screenSurface->pixels, screenSurface->pitch) == 0) {
@@ -1405,7 +1411,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		// Calculate the width and height of the capture area
 		int captureWidth = maxX - minX;
 		int captureHeight = maxY - minY;
-		return {captureWidth, captureHeight};
+		return { captureWidth, captureHeight };
 	}
 	// Function to collect all sprite and pixel rectangles
 	template <HardwareId hardware_id>

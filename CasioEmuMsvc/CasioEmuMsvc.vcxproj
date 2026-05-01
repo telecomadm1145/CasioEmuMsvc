@@ -156,16 +156,40 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ASan|Win32'">
+    <LibraryPath>$(VCInstallDir)Auxiliary\VS\UnitTest\lib\;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LibraryPath>$(VCInstallDir)Auxiliary\VS\UnitTest\lib\;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='PatchableRelease|Win32'">
+    <LibraryPath>$(VCInstallDir)Auxiliary\VS\UnitTest\lib\;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LibraryPath>$(VCInstallDir)Auxiliary\VS\UnitTest\lib\;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ASan|x64'">
+    <LibraryPath>$(VCInstallDir)Auxiliary\VS\UnitTest\lib\;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LibraryPath>$(VCInstallDir)Auxiliary\VS\UnitTest\lib\;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='PatchableRelease|x64'">
+    <LibraryPath>$(VCInstallDir)Auxiliary\VS\UnitTest\lib\;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LibraryPath>$(VCInstallDir)Auxiliary\VS\UnitTest\lib\;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING;WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -175,6 +199,8 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateMapFile />
     </Link>
     <PreBuildEvent>
       <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)GitInfo.ps1"</Command>
@@ -186,12 +212,12 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -203,6 +229,8 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateMapFile />
     </Link>
     <PreBuildEvent>
       <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)GitInfo.ps1"</Command>
@@ -214,12 +242,12 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -231,6 +259,8 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateMapFile />
     </Link>
     <PreBuildEvent>
       <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)GitInfo.ps1"</Command>
@@ -242,7 +272,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
@@ -252,7 +282,7 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <FloatingPointModel>Fast</FloatingPointModel>
       <CreateHotpatchableImage>false</CreateHotpatchableImage>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DisableSpecificWarnings>
       </DisableSpecificWarnings>
@@ -265,6 +295,8 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalOptions>/EDITANDCONTINUE %(AdditionalOptions)</AdditionalOptions>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateMapFile />
     </Link>
     <PreBuildEvent>
       <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)GitInfo.ps1"</Command>
@@ -274,12 +306,12 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;_DEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING;_DEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;../discord-rpc/include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;../discord-rpc/include</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -289,6 +321,8 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateMapFile />
     </Link>
     <PreBuildEvent>
       <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)GitInfo.ps1"</Command>
@@ -300,12 +334,12 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -318,6 +352,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateMapFile />
     </Link>
     <PreBuildEvent>
       <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)GitInfo.ps1"</Command>
@@ -329,12 +364,12 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -347,6 +382,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateMapFile />
     </Link>
     <PreBuildEvent>
       <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)GitInfo.ps1"</Command>
@@ -358,7 +394,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
@@ -368,7 +404,7 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <FloatingPointModel>Fast</FloatingPointModel>
       <CreateHotpatchableImage>false</CreateHotpatchableImage>
-      <AdditionalIncludeDirectories>.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
       <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
@@ -384,6 +420,7 @@
       <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>/EDITANDCONTINUE %(AdditionalOptions)</AdditionalOptions>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
+      <GenerateMapFile />
     </Link>
     <PreBuildEvent>
       <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)GitInfo.ps1"</Command>
@@ -406,7 +443,6 @@
     <ClCompile Include="Ext\ConsoleText.cpp" />
     <ClCompile Include="Ext\ePSDisas.cpp" />
     <ClCompile Include="Ext\GameBuffer.cpp" />
-    <ClCompile Include="Ext\DiscordRPC.cpp" />
     <ClCompile Include="Gui\imgui\TextEditor.cpp" />
     <ClCompile Include="Gui\ThemeManager.cpp" />
     <ClCompile Include="Gui\AddressWindow.cpp" />
@@ -485,6 +521,7 @@
     <ClCompile Include="miniz.c" />
     <ClCompile Include="miniz_tdef.c" />
     <ClCompile Include="miniz_tinfl.c" />
+    <ClCompile Include="Gui\TouchMouseTranslator.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Chipset\ePSCpu.h" />
@@ -599,6 +636,7 @@
     <ClInclude Include="Gui\Gui.h" />
     <ClInclude Include="locales\lang.h" />
     <ClInclude Include="asmjit\src\**\*.h" />
+    <ClInclude Include="Gui\TouchMouseTranslator.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".clang-format" />
@@ -622,6 +660,9 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="locales\ja_JP.lc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

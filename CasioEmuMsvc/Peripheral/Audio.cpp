@@ -114,6 +114,9 @@ namespace casioemu {
 		void Uninitialise() override {
 			SDL_PauseAudioDevice(audio_device, 1);
 		}
+		~AudioDriver() {
+			SDL_CloseAudioDevice(audio_device);
+		}
 	};
 	Peripheral* CreateBuzzerDriver(Emulator& emu) {
 		return new AudioDriver(emu);

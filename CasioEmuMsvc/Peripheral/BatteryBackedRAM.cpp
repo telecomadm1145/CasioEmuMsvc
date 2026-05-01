@@ -25,6 +25,8 @@ namespace casioemu {
 		size_t ram_size{};
 		bool ram_file_requested{};
 
+		SDL_TimerID save_timer_id{};
+
 	public:
 		using Peripheral::Peripheral;
 
@@ -97,7 +99,7 @@ namespace casioemu {
 				emulator);
 		}
 
-		SDL_AddTimer(SAVE_INTERVAL_MS, SaveRamCallback, this);
+		save_timer_id = SDL_AddTimer(SAVE_INTERVAL_MS, SaveRamCallback, this);
 		n_ram_buffer = (char*)ram_buffer;
 	}
 
@@ -151,6 +153,7 @@ namespace casioemu {
 
 	void BatteryBackedRAM::Uninitialise() {
 		SaveRAMImage();
+		SDL_RemoveTimer(save_timer_id);
 		delete[] ram_buffer;
 		delete[] pram_buffer;
 	}

@@ -1,8 +1,8 @@
-﻿#include <SDL.h>
-#include "Emulator.hpp"
+﻿#include "Emulator.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Logger.hpp"
 #include "ModelInfo.h"
+#include <SDL.h>
 #include <cassert>
 #include <chrono>
 #include <filesystem>
@@ -30,7 +30,7 @@ namespace casioemu {
 		}
 		if (!full_spd) {
 			cycles_per_second = hardware_id == HW_ES_PLUS ? 128 * 1024 * 2 : hardware_id == HW_CLASSWIZ ? 1024 * 1024 * 2
-																										: 2048 * 1024 * 2;
+				: 2048 * 1024 * 2;
 		}
 		else {
 			cycles_per_second = 1024 * 1024 * 8;
@@ -113,7 +113,7 @@ namespace casioemu {
 					else // in case the computer is not fast enough or Paused
 						iteration_end = now;
 				}
-			});
+				});
 		}
 		else {
 			tick_thread = new std::thread([this] {
@@ -125,7 +125,7 @@ namespace casioemu {
 							Tick();
 					}
 				}
-			});
+				});
 			SDL_AddTimer(
 				25,
 				[](Uint32 interval, void* param) -> Uint32 {
@@ -140,24 +140,155 @@ namespace casioemu {
 
 		chipset.Reset();
 
-		if (argv_map.find("Paused") != argv_map.end())
+		if (argv_map.find("paused") != argv_map.end())
 			SetPaused(true);
 
 		pause_on_mem_error = argv_map.find("pause_on_mem_error") != argv_map.end();
 	}
 
+	Emulator::Emulator(ModelInfo def, bool paused, bool headless) : Paused(paused), argv_map(*new std::map<std::string, std::string>()), chipset(*new Chipset(*this)), m_step_requested(false), headless(headless) {
+		running = true;
+		model_path = argv_map["model"];
+
+		ModelDefinition = def;
+
+		int hardware_id = ModelDefinition.hardware_id;
+		if (hardware_id < HW_MIN || hardware_id > HW_MAX)
+			PANIC("Unknown hardware id %d\n", hardware_id);
+		this->hardware_id = (HardwareId)hardware_id;
+		bool full_spd = !ModelDefinition.real_hardware;
+		if (ModelDefinition.extra.find("limit_spd") != ModelDefinition.extra.end()) {
+			full_spd = false;
+		}
+		if (!full_spd) {
+			cycles_per_second = hardware_id == HW_ES_PLUS ? 128 * 1024 * 2 : hardware_id == HW_CLASSWIZ ? 1024 * 1024 * 2
+				: 2048 * 1024 * 2;
+		}
+		else {
+			cycles_per_second = 1024 * 1024 * 8;
+		}
+		if (hardware_id == HW_EPS6800) {
+			cycles_per_second = 1024 * 1024 * 2;
+		}
+		timer_interval = 20;
+
+		cycles.Setup(cycles_per_second, timer_interval);
+		chipset.Setup();
+
+		BatteryVoltage = 1.5;
+		SolarPanelVoltage = 1.5;
+		if (!headless) {
+			interface_background = ModelDefinition.sprites["rsd_interface"];
+			if (interface_background.dest.x != 0 || interface_background.dest.y != 0)
+				PANIC("rsd_interface must have dest x and y coordinate zero\n");
+
+			auto width = interface_background.dest.w;
+			auto height = interface_background.dest.h;
+			try {
+				std::size_t pos;
+
+				auto width_iter = argv_map.find("width");
+				if (width_iter != argv_map.end()) {
+					width = std::stoi(width_iter->second, &pos, 0);
+					if (pos != width_iter->second.size())
+						PANIC("width parameter has extraneous trailing characters\n");
+				}
+
+				auto height_iter = argv_map.find("height");
+				if (height_iter != argv_map.end()) {
+					height = std::stoi(height_iter->second, &pos, 0);
+					if (pos != height_iter->second.size())
+						PANIC("height parameter has extraneous trailing characters\n");
+				}
+			}
+			catch (std::invalid_argument const&) {
+				PANIC("invalid width/height parameter\n");
+			}
+			catch (std::out_of_range const&) {
+				PANIC("out of range width/height parameter\n");
+			}
+			SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
+			window = SDL_CreateWindow(
+				std::string(ModelDefinition.model_name).c_str(),
+				SDL_WINDOWPOS_UNDEFINED,
+				SDL_WINDOWPOS_UNDEFINED,
+				width, height,
+				SDL_WINDOW_SHOWN | (SDL_WINDOW_RESIZABLE));
+			if (!window)
+				PANIC("SDL_CreateWindow failed: %s\n", SDL_GetError());
+			renderer = SDL_CreateRenderer(window, -1, 0);
+			if (!renderer)
+				PANIC("SDL_CreateRenderer failed: %s\n", SDL_GetError());
+
+			interface_surface = IMG_Load(GetModelFilePath(ModelDefinition.interface_path).c_str());
+			if (!interface_surface)
+				PANIC("IMG_Load failed: %s\n", IMG_GetError());
+			interface_texture = SDL_CreateTextureFromSurface(renderer, interface_surface);
+		}
+		SetupInternals();
+		cycles.Reset();
+		if (!headless) {
+			if (ModelDefinition.real_hardware) {
+				tick_thread = new std::thread([this] {
+					auto iteration_end = std::chrono::steady_clock::now();
+					while (1) {
+						{
+							// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
+							if (!Running())
+								break;
+							TimerCallback();
+						}
+
+						iteration_end += std::chrono::milliseconds(timer_interval);
+						auto now = std::chrono::steady_clock::now();
+						if (iteration_end > now)
+							std::this_thread::sleep_until(iteration_end);
+						else // in case the computer is not fast enough or Paused
+							iteration_end = now;
+					}
+					});
+			}
+			else {
+				tick_thread = new std::thread([this] {
+					while (1) {
+						{
+							if (!Running())
+								break;
+							if (!Paused)
+								Tick();
+						}
+					}
+					});
+				SDL_AddTimer(
+					25,
+					[](Uint32 interval, void* param) -> Uint32 {
+						auto emu = ((Emulator*)param);
+						emu->chipset.EmulatorTick();
+						return interval;
+					},
+					this);
+			}
+
+			RunStartupScript();
+		}
+
+		chipset.Reset();
+	}
+
 	Emulator::~Emulator() {
-		if (tick_thread->joinable())
-			tick_thread->join();
-		delete tick_thread;
+		if (!headless) {
+			if (tick_thread->joinable())
+				tick_thread->join();
+			delete tick_thread;
 
-		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
+			// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
-		SDL_DestroyTexture(interface_texture);
-		SDL_DestroyRenderer(renderer);
-		SDL_DestroyWindow(window);
+			SDL_DestroyTexture(interface_texture);
+			SDL_DestroyRenderer(renderer);
+			SDL_DestroyWindow(window);
+		}
 
-		delete &chipset;
+		delete& chipset;
 	}
 
 	void Emulator::HandleMemoryError() {
@@ -168,6 +299,8 @@ namespace casioemu {
 	}
 
 	void Emulator::UIEvent(SDL_Event& event) {
+		if (headless)
+			return;
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 		if (event.type == SDL_KEYDOWN) {
 			if (event.key.keysym.sym == SDL_KeyCode::SDLK_F12) {
@@ -222,7 +355,7 @@ namespace casioemu {
 	std::string Emulator::GetModelFilePath(std::string relative_path) {
 		return
 #ifdef __ANDROID__
-			(SDL_AndroidGetExternalStoragePath() / std::filesystem::path(model_path) / relative_path).string();
+		(SDL_AndroidGetExternalStoragePath() / std::filesystem::path(model_path) / relative_path).string();
 #else
 			(std::filesystem::path(model_path) / relative_path).string();
 #endif
@@ -242,6 +375,8 @@ namespace casioemu {
 		// SDL_RenderPresent(renderer);
 	}
 	void Emulator::Frame() {
+		if (headless)
+			return;
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
 		// create texture `tx` with the same format as `interface_texture`
@@ -258,7 +393,7 @@ namespace casioemu {
 		SDL_Rect tmp = interface_background.src;
 		SDL_RenderCopy(renderer, interface_texture, &tmp, nullptr);
 		chipset.Frame();
-		
+
 		// resize and copy `tx` to screen
 		SDL_SetRenderTarget(renderer, nullptr);
 		int w, h;
@@ -362,7 +497,7 @@ namespace casioemu {
 				assert(not waiting.empty());
 				assert((holding == std::thread::id{}) == (recursive_count == 0));
 				return recursive_count == 0 && &waiting.front() == &c;
-			});
+				});
 			waiting.pop();
 		}
 		assert(holding == std::thread::id{});

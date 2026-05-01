@@ -120,7 +120,9 @@ public:
 				tm.SetSeedColor(seedColor);
 			}
 			if (ImGui::Button("Theme.MD"_lc)) {
+#ifndef TEST_BUILD
 				seedColor = tm.ExtractDominantColor(bg_txt, renderer);
+#endif
 				tm.SetSeedColor(seedColor);
 			}
 		}

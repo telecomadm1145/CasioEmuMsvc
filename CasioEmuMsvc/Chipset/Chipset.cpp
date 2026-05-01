@@ -62,9 +62,9 @@ namespace casioemu {
 			cpu.SetMemoryModel(CPU::MM_LARGE);
 			cpu.SetCPUModel(emulator.hardware_id == HW_CLASSWIZ || emulator.hardware_id == HW_CLASSWIZ_II || emulator.hardware_id == HW_TI ? CPU::CM_NX_U16 : CPU::CM_NX_U8);
 
-			std::initializer_list<int> segments_es_plus{0, 1, 8}, segments_classwiz{0, 1, 2, 3, 4, 5}, segments_classwiz_ii{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+			std::initializer_list<int> segments_es_plus{ 0, 1, 8 }, segments_classwiz{ 0, 1, 2, 3, 4, 5 }, segments_classwiz_ii{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 			for (auto segment_index : emulator.hardware_id == HW_ES_PLUS ? segments_es_plus : emulator.hardware_id == HW_CLASSWIZ ? segments_classwiz
-																																  : segments_classwiz_ii)
+				: segments_classwiz_ii)
 				mmu.GenerateSegmentDispatch(segment_index);
 		}
 		else {
@@ -79,8 +79,8 @@ namespace casioemu {
 		DestructClockGenerator();
 		DestructInterruptSFR();
 		delete epscpu;
-		delete &mmu;
-		delete &cpu;
+		delete& mmu;
+		delete& cpu;
 	}
 
 	void Chipset::ConstructInterruptSFR() {
@@ -156,7 +156,7 @@ namespace casioemu {
 			return;
 		}
 		EffectiveMICount = emulator.hardware_id == HW_ES_PLUS ? 12 : emulator.hardware_id == HW_CLASSWIZ ? 17
-																										 : 21;
+			: 21;
 		MaskableInterrupts = new InterruptSource[EffectiveMICount];
 		for (size_t i = 0; i < EffectiveMICount; i++) {
 			MaskableInterrupts[i].Setup(i + INT_MASKABLE, emulator);
@@ -305,47 +305,47 @@ namespace casioemu {
 		else {
 			region_FCON.Setup(
 				0xF00A, 1, "ClockGenerator/FCON", this, [](MMURegion* region, size_t) {
-			Chipset* chipset = (Chipset*)region->userdata;
-			return chipset->data_FCON; }, [](MMURegion* region, size_t, uint8_t data) {
-			Chipset* chipset = (Chipset*)region->userdata;
-			uint8_t OSCLK = (data & 0x70) >> 4;
-			chipset->data_FCON = data & 0x73;
-			chipset->ClockDiv = static_cast<int>(std::pow(2, OSCLK == 0 ? OSCLK : OSCLK - 1));
-			chipset->LSCLKMode = (chipset->data_FCON & 0x03) == 1 ? true : false; }, emulator);
+					Chipset* chipset = (Chipset*)region->userdata;
+					return chipset->data_FCON; }, [](MMURegion* region, size_t, uint8_t data) {
+						Chipset* chipset = (Chipset*)region->userdata;
+						uint8_t OSCLK = (data & 0x70) >> 4;
+						chipset->data_FCON = data & 0x73;
+						chipset->ClockDiv = static_cast<int>(std::pow(2, OSCLK == 0 ? OSCLK : OSCLK - 1));
+						chipset->LSCLKMode = (chipset->data_FCON & 0x03) == 1 ? true : false; }, emulator);
 			region_LTBR.Setup(
 				0xF00C, 1, "TimerBaseCounter/LTBR", this, [](MMURegion* region, size_t) {
-			Chipset* chipset = (Chipset*)region->userdata;
-			return chipset->data_LTBR; }, [](MMURegion* region, size_t, uint8_t data) {
-			Chipset* chipset = (Chipset*)region->userdata;
-			chipset->data_LTBR = 0;
-			chipset->LTBCReset = true;
-			chipset->LSCLKTick = true;
-			chipset->LSCLKTickCounter = 0;
-			chipset->LSCLKTimeCounter = 0;
-			chipset->LSCLKFreqAddition = 0; }, emulator);
+					Chipset* chipset = (Chipset*)region->userdata;
+					return chipset->data_LTBR; }, [](MMURegion* region, size_t, uint8_t data) {
+						Chipset* chipset = (Chipset*)region->userdata;
+						chipset->data_LTBR = 0;
+						chipset->LTBCReset = true;
+						chipset->LSCLKTick = true;
+						chipset->LSCLKTickCounter = 0;
+						chipset->LSCLKTimeCounter = 0;
+						chipset->LSCLKFreqAddition = 0; }, emulator);
 			region_HTBR.Setup(
 				0xF00D, 1, "ClockGenerator/HTBR", this, [](MMURegion* region, size_t) {
-			Chipset* chipset = (Chipset*)region->userdata;
-			return chipset->data_HTBR; }, [](MMURegion* region, size_t, uint8_t data) {
-			Chipset* chipset = (Chipset*)region->userdata;
-			chipset->data_HTBR = 0;
-			chipset->HSCLK_output = 0xFF;
-			chipset->HTBCReset = true;
-			chipset->HSCLKTick = true;
-			chipset->HSCLKTickCounter = 0; }, emulator);
+					Chipset* chipset = (Chipset*)region->userdata;
+					return chipset->data_HTBR; }, [](MMURegion* region, size_t, uint8_t data) {
+						Chipset* chipset = (Chipset*)region->userdata;
+						chipset->data_HTBR = 0;
+						chipset->HSCLK_output = 0xFF;
+						chipset->HTBCReset = true;
+						chipset->HSCLKTick = true;
+						chipset->HSCLKTickCounter = 0; }, emulator);
 			region_LTBADJ.Setup(
 				0xF006, 2, "TimerBaseCounter/LTBADJ", this, [](MMURegion* region, size_t offset) {
-			Chipset* chipset = (Chipset*)region->userdata;
-			offset -= region->base;
-			return (uint8_t)((chipset->data_LTBADJ & 0x7FF) >> offset * 8); }, [](MMURegion* region, size_t offset, uint8_t data) {
-			Chipset* chipset = (Chipset*)region->userdata;
-			offset -= region->base;
-			chipset->data_LTBADJ = (chipset->data_LTBADJ & (~(0xFF << offset * 8))) | (data << offset * 8);
-			chipset->data_LTBADJ &= 0x7FF;
-			if(chipset->data_LTBADJ != 0)
-				chipset->LSCLKThresh = (chipset->LSCLKFreq * (1 + 2097152 / (short)chipset->data_LTBADJ)) / chipset->emulator.GetCyclesPerSecond();
-			else
-				chipset->LSCLKThresh = 0; }, emulator);
+					Chipset* chipset = (Chipset*)region->userdata;
+					offset -= region->base;
+					return (uint8_t)((chipset->data_LTBADJ & 0x7FF) >> offset * 8); }, [](MMURegion* region, size_t offset, uint8_t data) {
+						Chipset* chipset = (Chipset*)region->userdata;
+						offset -= region->base;
+						chipset->data_LTBADJ = (chipset->data_LTBADJ & (~(0xFF << offset * 8))) | (data << offset * 8);
+						chipset->data_LTBADJ &= 0x7FF;
+						if (chipset->data_LTBADJ != 0)
+							chipset->LSCLKThresh = (chipset->LSCLKFreq * (1 + 2097152 / (short)chipset->data_LTBADJ)) / chipset->emulator.GetCyclesPerSecond();
+						else
+							chipset->LSCLKThresh = 0; }, emulator);
 		}
 	}
 
@@ -447,22 +447,22 @@ namespace casioemu {
 			BLKCON_mask = emulator.hardware_id == HW_CLASSWIZ ? 0x1F : 0xFF;
 			region_BLKCON.Setup(
 				0xF028, 1, "Chipset/BLKCON0", this, [](MMURegion* region, size_t) {
-			Chipset* chipset = (Chipset*)region->userdata;
-			return (uint8_t)(chipset->data_BLKCON & chipset->BLKCON_mask); }, [](MMURegion* region, size_t, uint8_t data) {
-			Chipset* chipset = (Chipset*)region->userdata;
-			data &= chipset->BLKCON_mask;
-			chipset->data_BLKCON = data;
-			for(auto peripheral : chipset->peripherals) {
-				int block_bit = peripheral->block_bit;
-				if(block_bit == -1)
-					continue;
-				if((1 << block_bit) > chipset->BLKCON_mask)
-					PANIC("Invalid BLKCON0 bit %d\n", block_bit);
-				if(data & (1 << block_bit))
-					peripheral->Uninitialise();
-				else
-					peripheral->Initialise();
-			} }, emulator);
+					Chipset* chipset = (Chipset*)region->userdata;
+					return (uint8_t)(chipset->data_BLKCON & chipset->BLKCON_mask); }, [](MMURegion* region, size_t, uint8_t data) {
+						Chipset* chipset = (Chipset*)region->userdata;
+						data &= chipset->BLKCON_mask;
+						chipset->data_BLKCON = data;
+						for (auto peripheral : chipset->peripherals) {
+							int block_bit = peripheral->block_bit;
+							if (block_bit == -1)
+								continue;
+							if ((1 << block_bit) > chipset->BLKCON_mask)
+								PANIC("Invalid BLKCON0 bit %d\n", block_bit);
+							if (data & (1 << block_bit))
+								peripheral->Uninitialise();
+							else
+								peripheral->Initialise();
+						} }, emulator);
 		}
 
 		ioport = new IOPorts(emulator);
@@ -537,7 +537,7 @@ namespace casioemu {
 			//flash_data[0x37FFE] = 0xff;
 			//flash_data[0x37FFF] = 0x44;
 		}
-
+#ifndef TEST_BUILD
 		{
 			auto ri = rom_info(rom_data, flash_data);
 			if (ri.ok) {
@@ -549,6 +549,7 @@ namespace casioemu {
 					printf("[Chipset][Warn] SUM %s!\n", res ? "OK" : "NG");
 			}
 		}
+#endif
 		GetRamSize(emulator.hardware_id);
 		for (auto& peripheral : peripherals)
 			peripheral->Initialise();

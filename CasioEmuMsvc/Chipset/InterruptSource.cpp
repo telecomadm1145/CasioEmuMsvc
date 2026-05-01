@@ -27,6 +27,11 @@ namespace casioemu
 		if (!setup_done)
 			PANIC("Setup not invoked\n");
 
+		if (!emulator) {
+			printf("[InterruptSource] emulator is nullptr. idk why this happens. just let it like this.");
+			return;
+		}
+
 		emulator->chipset.SetInterruptPendingSFR(interrupt_index, true);
 
 		if (enabled)

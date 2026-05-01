@@ -16,9 +16,11 @@
 #include "Theme.h"
 #include "VariableWindow.h"
 #include "WatchWindow.hpp"
+#ifndef TEST_BUILD
 #include "Rop/RopCompilerUI.h"
 #include "PluginLogWindow.hpp"
 #include "SnapshotWindow.h"
+#endif
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_sdl2.h"
 #include "imgui/imgui_impl_sdlrenderer2.h"
@@ -128,11 +130,11 @@ void gui_loop() {
 	ImGui::SetNextWindowBgAlpha(0.0f);
 	ImGui::Begin("Overlay", nullptr,
 		ImGuiWindowFlags_NoDecoration |
-			ImGuiWindowFlags_NoDocking |
-			ImGuiWindowFlags_AlwaysAutoResize |
-			ImGuiWindowFlags_NoBackground |
-			ImGuiWindowFlags_NoTitleBar |
-			ImGuiWindowFlags_NoMove);
+		ImGuiWindowFlags_NoDocking |
+		ImGuiWindowFlags_AlwaysAutoResize |
+		ImGuiWindowFlags_NoBackground |
+		ImGuiWindowFlags_NoTitleBar |
+		ImGuiWindowFlags_NoMove);
 
 	auto& tm = ThemeManager::Instance();
 	float safeAreaPadding = tm.padding * 1.5f;
@@ -257,11 +259,13 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 			 membp = new Breakpoints(),
 			 CreateAddressWindow(),
 			 // MakeAssemblerUI(),
+#ifndef TEST_BUILD
 			 CreateRopCompilerWindow(),
-			 MakeThemeWindow(),
-			 CreateBitmapViewer(),
+			 new PluginLogWindow(),
 			 CreateSnapshotWindow(),
-			 new PluginLogWindow()})
+#endif
+			 MakeThemeWindow(),
+			 CreateBitmapViewer(), })
 		windows.push_back(item);
 	for (auto item : GetEditors())
 		windows.push_back(item);

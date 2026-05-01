@@ -1,6 +1,9 @@
 #include "ThemeManager.h"
+#ifndef TEST_BUILD
+
 #include "Ext/cam/hct.h"
 #include "Ext/cam/tones.h"
+#endif // !TEST_BUILD
 #include "Gui.h"
 #include "Localization.h"
 #include <SDL.h>
@@ -11,7 +14,10 @@
 #include <imgui_internal.h>
 #include <map>
 #include <vector>
+#ifndef TEST_BUILD
+
 using namespace material_color_utilities;
+#endif
 
 // ============================================================================
 // 设置持久化
@@ -253,8 +259,8 @@ void ThemeManager::ApplyDefaultTheme() {
 
 ImVec4 ThemeManager::RGBtoHSV(const ImVec4& rgb) {
 	float r = rgb.x, g = rgb.y, b = rgb.z;
-	float max = std::max({r, g, b});
-	float min = std::min({r, g, b});
+	float max = std::max({ r, g, b });
+	float min = std::min({ r, g, b });
 	float delta = max - min;
 
 	ImVec4 hsv;
@@ -410,9 +416,9 @@ static inline uint32_t ImVec4ToArgb(const ImVec4& c) {
 	uint8_t b = static_cast<uint8_t>(ImSaturate(c.z) * 255.0f + 0.5f);
 
 	return (static_cast<uint32_t>(a) << 24) |
-		   (static_cast<uint32_t>(r) << 16) |
-		   (static_cast<uint32_t>(g) << 8) |
-		   (static_cast<uint32_t>(b));
+		(static_cast<uint32_t>(r) << 16) |
+		(static_cast<uint32_t>(g) << 8) |
+		(static_cast<uint32_t>(b));
 }
 
 // ARGB (0xAARRGGBB) -> ImVec4 (0~1 float)
@@ -424,6 +430,7 @@ static inline ImVec4 ArgbToImVec4(uint32_t argb) {
 	return ImVec4(r, g, b, a);
 }
 void ThemeManager::GenerateMonetPalette(const ImVec4& seed, ImGuiStyle& style, bool isDark) {
+#ifndef TEST_BUILD
 	// 1. 把 ImGui 的 seedColor 转成 ARGB + HCT 对象
 	uint32_t seed_argb = ImVec4ToArgb(seed);
 	Hct seed_hct = Hct(seed_argb);
@@ -440,7 +447,7 @@ void ThemeManager::GenerateMonetPalette(const ImVec4& seed, ImGuiStyle& style, b
 
 	auto tone = [](const TonalPalette& p, double t) -> ImVec4 {
 		return ArgbToImVec4(static_cast<uint32_t>(p.get(t)));
-	};
+		};
 
 	ImVec4 primaryCol, primaryContainer, secondaryCol, secondaryContainer;
 	ImVec4 tertiaryCol, surface, surfaceVariant, outline;
@@ -554,6 +561,7 @@ void ThemeManager::GenerateMonetPalette(const ImVec4& seed, ImGuiStyle& style, b
 	style.Colors[ImGuiCol_NavWindowingHighlight] = primaryCol;
 	style.Colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0, 0, 0, 0.7f);
 	style.Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0, 0, 0, 0.7f);
+#endif
 }
 void ThemeManager::ExtractAndApplyAutoTint(SDL_Texture* bgTexture, SDL_Renderer* renderer) {
 	if (!m_settings.enableAutoTint || !bgTexture || !renderer)
@@ -576,6 +584,7 @@ static inline uint64_t MakeHarmonizeKey(uint32_t src_argb, uint8_t factorKey) {
 }
 
 ImVec4 ThemeManager::Harmonize(const ImVec4& source, float factor) const {
+#ifndef TEST_BUILD
 	// 约束 factor 到 [0, 1]
 	factor = ImClamp(factor, 0.0f, 1.0f);
 
@@ -627,6 +636,9 @@ ImVec4 ThemeManager::Harmonize(const ImVec4& source, float factor) const {
 	m_harmonizeCache.emplace(key, result);
 
 	return result;
+#else
+	return {};
+#endif // !TEST_BUILD
 }
 void ThemeManager::SetSeedColor(const ImVec4& color) {
 	m_settings.seedColor = color;

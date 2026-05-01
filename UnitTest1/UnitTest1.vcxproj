@@ -1,0 +1,353 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{5768658D-5753-57BE-9F55-89088097DC31}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>UnitTest1</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectSubType>NativeUnitTestProject</ProjectSubType>
+    <ProjectName>CasioEmuTests</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseOfMfc>false</UseOfMfc>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseOfMfc>false</UseOfMfc>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseOfMfc>false</UseOfMfc>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseOfMfc>false</UseOfMfc>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <UseFullPaths>true</UseFullPaths>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <LanguageStandard>stdcpp23</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <ScanSourceForModuleDependencies>true</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalLibraryDirectories>$(VCInstallDir)UnitTest\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;WIN32;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <UseFullPaths>true</UseFullPaths>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <LanguageStandard>stdcpp23</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <ScanSourceForModuleDependencies>true</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalLibraryDirectories>$(VCInstallDir)UnitTest\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <UseFullPaths>true</UseFullPaths>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <LanguageStandard>stdcpp23</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <ScanSourceForModuleDependencies>true</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalLibraryDirectories>$(VCInstallDir)UnitTest\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;WIN32;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <UseFullPaths>true</UseFullPaths>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <LanguageStandard>stdcpp23</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <ScanSourceForModuleDependencies>true</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalLibraryDirectories>$(VCInstallDir)UnitTest\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="Chipset\Chipset.cpp" />
+    <ClCompile Include="Chipset\CPU.cpp" />
+    <ClCompile Include="Chipset\CPUArithmetic.cpp" />
+    <ClCompile Include="Chipset\CPUControl.cpp" />
+    <ClCompile Include="Chipset\CPULoadStore.cpp" />
+    <ClCompile Include="Chipset\CPUPushPop.cpp" />
+    <ClCompile Include="Chipset\ePSCpu.cpp" />
+    <ClCompile Include="Chipset\InterruptSource.cpp" />
+    <ClCompile Include="Chipset\MMU.cpp" />
+    <ClCompile Include="Chipset\MMURegion.cpp" />
+    <ClCompile Include="Emulator.cpp" />
+    <ClCompile Include="Ext\ConsoleText.cpp" />
+    <ClCompile Include="Ext\ePSDisas.cpp" />
+    <ClCompile Include="Ext\GameBuffer.cpp" />
+    <ClCompile Include="Ext\Romu.cpp" />
+    <ClCompile Include="Ext\SysDialog.cpp" />
+    <ClCompile Include="Ext\U8Disas.cpp" />
+    <ClCompile Include="Ext\vibration.cpp" />
+    <ClCompile Include="Gui\5800FileSystem.cpp" />
+    <ClCompile Include="Gui\AddressWindow.cpp" />
+    <ClCompile Include="Gui\BitmapViewer.cpp" />
+    <ClCompile Include="Gui\CallAnalysis.cpp" />
+    <ClCompile Include="Gui\CodeViewer.cpp" />
+    <ClCompile Include="Gui\Editors.cpp" />
+    <ClCompile Include="Gui\FileDialog.cpp" />
+    <ClCompile Include="Gui\Hooks.cpp" />
+    <ClCompile Include="Gui\HwController.cpp" />
+    <ClCompile Include="Gui\imgui\imgui.cpp" />
+    <ClCompile Include="Gui\imgui\imgui_demo.cpp" />
+    <ClCompile Include="Gui\imgui\imgui_draw.cpp" />
+    <ClCompile Include="Gui\imgui\imgui_impl_sdl2.cpp" />
+    <ClCompile Include="Gui\imgui\imgui_impl_sdlrenderer2.cpp" />
+    <ClCompile Include="Gui\imgui\imgui_tables.cpp" />
+    <ClCompile Include="Gui\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="Gui\imgui\TextEditor.cpp" />
+    <ClCompile Include="Gui\Injector.cpp" />
+    <ClCompile Include="Gui\LabelViewer.cpp" />
+    <ClCompile Include="Gui\Localization.cpp" />
+    <ClCompile Include="Gui\MemBreakPoint.cpp" />
+    <ClCompile Include="Gui\Theme.cpp" />
+    <ClCompile Include="Gui\ThemeManager.cpp" />
+    <ClCompile Include="Gui\TouchMouseTranslator.cpp" />
+    <ClCompile Include="Gui\Ui.cpp" />
+    <ClCompile Include="Gui\VariableWindow.cpp" />
+    <ClCompile Include="Gui\WatchWindow.cpp" />
+    <ClCompile Include="pch.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Peripheral\5800Flash.cpp" />
+    <ClCompile Include="Peripheral\Audio.cpp" />
+    <ClCompile Include="Peripheral\BatteryBackedRAM.cpp" />
+    <ClCompile Include="Peripheral\BCDCalc.cpp" />
+    <ClCompile Include="Peripheral\ExternalInterrupts.cpp" />
+    <ClCompile Include="Peripheral\Flash.cpp" />
+    <ClCompile Include="Peripheral\IOPorts.cpp" />
+    <ClCompile Include="Peripheral\Keyboard.cpp" />
+    <ClCompile Include="Peripheral\Miscellaneous.cpp" />
+    <ClCompile Include="Peripheral\ML620Ports.cpp" />
+    <ClCompile Include="Peripheral\PowerSupply.cpp" />
+    <ClCompile Include="Peripheral\RealTimeClock.cpp" />
+    <ClCompile Include="Peripheral\ROMWindow.cpp" />
+    <ClCompile Include="Peripheral\Screen.cpp" />
+    <ClCompile Include="Peripheral\Spi.cpp" />
+    <ClCompile Include="Peripheral\StandbyControl.cpp" />
+    <ClCompile Include="Peripheral\Timer.cpp" />
+    <ClCompile Include="Peripheral\TimerBaseCounter.cpp" />
+    <ClCompile Include="Peripheral\Uart.cpp" />
+    <ClCompile Include="Peripheral\VoltageLevelSupervisor.cpp" />
+    <ClCompile Include="Peripheral\WatchdogTimer.cpp" />
+    <ClCompile Include="sdl_win32_extra.cpp" />
+    <ClCompile Include="UnitTest1.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Binary.h" />
+    <ClInclude Include="Chipset\Chipset.hpp" />
+    <ClInclude Include="Chipset\CPU.hpp" />
+    <ClInclude Include="Chipset\ePSCpu.h" />
+    <ClInclude Include="Chipset\InterruptSource.hpp" />
+    <ClInclude Include="Chipset\MMU.hpp" />
+    <ClInclude Include="Chipset\MMURegion.hpp" />
+    <ClInclude Include="config.hpp" />
+    <ClInclude Include="Containers\ConcurrentObject.h" />
+    <ClInclude Include="Emulator.hpp" />
+    <ClInclude Include="Ext\3rd_licenses.h" />
+    <ClInclude Include="Ext\ConsoleText.h" />
+    <ClInclude Include="Ext\ePSDisas.h" />
+    <ClInclude Include="Ext\GameBuffer.h" />
+    <ClInclude Include="Ext\LabelFile.h" />
+    <ClInclude Include="Ext\Logger.hpp" />
+    <ClInclude Include="Ext\Memory.h" />
+    <ClInclude Include="Ext\Random.hpp" />
+    <ClInclude Include="Ext\RomPackage.h" />
+    <ClInclude Include="Ext\Romu.h" />
+    <ClInclude Include="Ext\SysDialog.h" />
+    <ClInclude Include="Ext\U8Disas.h" />
+    <ClInclude Include="Ext\Unicode.h" />
+    <ClInclude Include="Ext\vibration.h" />
+    <ClInclude Include="Gui\5800FileSystem.h" />
+    <ClInclude Include="Gui\AddressWindow.h" />
+    <ClInclude Include="Gui\BitmapViewer.h" />
+    <ClInclude Include="Gui\CallAnalysis.h" />
+    <ClInclude Include="Gui\CodeViewer.hpp" />
+    <ClInclude Include="Gui\CwiiHelp.h" />
+    <ClInclude Include="Gui\Editors.h" />
+    <ClInclude Include="Gui\FileDialog.hpp" />
+    <ClInclude Include="Gui\Gui.h" />
+    <ClInclude Include="Gui\hex.hpp" />
+    <ClInclude Include="Gui\Hooks.h" />
+    <ClInclude Include="Gui\HwController.h" />
+    <ClInclude Include="Gui\imgui\imconfig.h" />
+    <ClInclude Include="Gui\imgui\imgui.h" />
+    <ClInclude Include="Gui\imgui\imgui_impl_sdl2.h" />
+    <ClInclude Include="Gui\imgui\imgui_impl_sdlrenderer2.h" />
+    <ClInclude Include="Gui\imgui\imgui_internal.h" />
+    <ClInclude Include="Gui\imgui\imstb_rectpack.h" />
+    <ClInclude Include="Gui\imgui\imstb_textedit.h" />
+    <ClInclude Include="Gui\imgui\imstb_truetype.h" />
+    <ClInclude Include="Gui\imgui\TextEditor.h" />
+    <ClInclude Include="Gui\Injector.hpp" />
+    <ClInclude Include="Gui\LabelViewer.h" />
+    <ClInclude Include="Gui\Localization.h" />
+    <ClInclude Include="Gui\MemBreakPoint.hpp" />
+    <ClInclude Include="Gui\PopUpDisplay.h" />
+    <ClInclude Include="Gui\Theme.h" />
+    <ClInclude Include="Gui\ThemeManager.h" />
+    <ClInclude Include="Gui\TouchMouseTranslator.h" />
+    <ClInclude Include="Gui\Ui.hpp" />
+    <ClInclude Include="Gui\UIScaling.h" />
+    <ClInclude Include="Gui\VariableWindow.h" />
+    <ClInclude Include="Gui\WatchWindow.hpp" />
+    <ClInclude Include="ModelInfo.h" />
+    <ClInclude Include="Models.h" />
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="Peripheral\5800Flash.h" />
+    <ClInclude Include="Peripheral\Audio.h" />
+    <ClInclude Include="Peripheral\BatteryBackedRAM.hpp" />
+    <ClInclude Include="Peripheral\BCDCalc.hpp" />
+    <ClInclude Include="Peripheral\ExternalInterrupts.hpp" />
+    <ClInclude Include="Peripheral\Flash.hpp" />
+    <ClInclude Include="Peripheral\IOPorts.hpp" />
+    <ClInclude Include="Peripheral\Keyboard.hpp" />
+    <ClInclude Include="Peripheral\Miscellaneous.hpp" />
+    <ClInclude Include="Peripheral\ML620Ports.h" />
+    <ClInclude Include="Peripheral\Peripheral.hpp" />
+    <ClInclude Include="Peripheral\PowerSupply.hpp" />
+    <ClInclude Include="Peripheral\RealTimeClock.hpp" />
+    <ClInclude Include="Peripheral\ROMWindow.hpp" />
+    <ClInclude Include="Peripheral\Screen.hpp" />
+    <ClInclude Include="Peripheral\SD\FakeSdCard.h" />
+    <ClInclude Include="Peripheral\Spi.h" />
+    <ClInclude Include="Peripheral\StandbyControl.hpp" />
+    <ClInclude Include="Peripheral\Timer.hpp" />
+    <ClInclude Include="Peripheral\TimerBaseCounter.hpp" />
+    <ClInclude Include="Peripheral\Uart.h" />
+    <ClInclude Include="Peripheral\VoltageLevelSupervisor.h" />
+    <ClInclude Include="Peripheral\WatchdogTimer.hpp" />
+    <ClInclude Include="sdl_win32_extra.h" />
+    <ClInclude Include="stringhelper.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="..\packages\sdl2.nuget.redist.2.32.8\build\native\sdl2.nuget.redist.targets" Condition="Exists('..\packages\sdl2.nuget.redist.2.32.8\build\native\sdl2.nuget.redist.targets')" />
+    <Import Project="..\packages\sdl2.nuget.2.32.8\build\native\sdl2.nuget.targets" Condition="Exists('..\packages\sdl2.nuget.2.32.8\build\native\sdl2.nuget.targets')" />
+    <Import Project="..\packages\sdl2_image.nuget.redist.2.8.8\build\native\sdl2_image.nuget.redist.targets" Condition="Exists('..\packages\sdl2_image.nuget.redist.2.8.8\build\native\sdl2_image.nuget.redist.targets')" />
+    <Import Project="..\packages\sdl2_image.nuget.2.8.8\build\native\sdl2_image.nuget.targets" Condition="Exists('..\packages\sdl2_image.nuget.2.8.8\build\native\sdl2_image.nuget.targets')" />
+  </ImportGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>这台计算机上缺少此项目引用的 NuGet 程序包。使用“NuGet 程序包还原”可下载这些程序包。有关更多信息，请参见 http://go.microsoft.com/fwlink/?LinkID=322105。缺少的文件是 {0}。</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\sdl2.nuget.redist.2.32.8\build\native\sdl2.nuget.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2.nuget.redist.2.32.8\build\native\sdl2.nuget.redist.targets'))" />
+    <Error Condition="!Exists('..\packages\sdl2.nuget.2.32.8\build\native\sdl2.nuget.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2.nuget.2.32.8\build\native\sdl2.nuget.targets'))" />
+    <Error Condition="!Exists('..\packages\sdl2_image.nuget.redist.2.8.8\build\native\sdl2_image.nuget.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2_image.nuget.redist.2.8.8\build\native\sdl2_image.nuget.redist.targets'))" />
+    <Error Condition="!Exists('..\packages\sdl2_image.nuget.2.8.8\build\native\sdl2_image.nuget.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2_image.nuget.2.8.8\build\native\sdl2_image.nuget.targets'))" />
+  </Target>
+</Project>

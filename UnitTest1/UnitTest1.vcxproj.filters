@@ -1,0 +1,486 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="源文件">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="头文件">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="资源文件">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="UnitTest1.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="pch.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Chipset\Chipset.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Chipset\CPU.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Chipset\CPUArithmetic.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Chipset\CPUControl.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Chipset\CPULoadStore.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Chipset\CPUPushPop.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Chipset\ePSCpu.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Chipset\InterruptSource.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Chipset\MMU.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Chipset\MMURegion.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Emulator.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="sdl_win32_extra.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Ext\ConsoleText.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Ext\ePSDisas.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Ext\GameBuffer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Ext\Romu.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Ext\SysDialog.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Ext\U8Disas.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Ext\vibration.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\imgui\imgui.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\imgui\imgui_demo.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\imgui\imgui_draw.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\imgui\imgui_impl_sdl2.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\imgui\imgui_impl_sdlrenderer2.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\imgui\imgui_tables.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\imgui\imgui_widgets.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\imgui\TextEditor.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\5800FileSystem.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\AddressWindow.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\BitmapViewer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\CallAnalysis.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\CodeViewer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\Editors.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\FileDialog.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\Hooks.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\HwController.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\Injector.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\LabelViewer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\Localization.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\MemBreakPoint.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\Theme.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\ThemeManager.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\TouchMouseTranslator.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\Ui.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\VariableWindow.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Gui\WatchWindow.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\5800Flash.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\Audio.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\BatteryBackedRAM.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\BCDCalc.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\ExternalInterrupts.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\Flash.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\IOPorts.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\Keyboard.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\Miscellaneous.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\ML620Ports.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\PowerSupply.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\RealTimeClock.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\ROMWindow.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\Screen.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\Spi.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\StandbyControl.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\Timer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\TimerBaseCounter.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\Uart.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\VoltageLevelSupervisor.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Peripheral\WatchdogTimer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Chipset\Chipset.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Chipset\CPU.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Chipset\ePSCpu.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Chipset\InterruptSource.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Chipset\MMU.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Chipset\MMURegion.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Binary.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="config.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Emulator.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="ModelInfo.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Models.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="sdl_win32_extra.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="stringhelper.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Containers\ConcurrentObject.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Ext\3rd_licenses.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Ext\ConsoleText.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Ext\ePSDisas.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Ext\GameBuffer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Ext\LabelFile.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Ext\Logger.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Ext\Memory.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Ext\Random.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Ext\RomPackage.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Ext\Romu.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Ext\SysDialog.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Ext\U8Disas.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Ext\Unicode.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Ext\vibration.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\imgui\imconfig.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\imgui\imgui.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\imgui\imgui_impl_sdl2.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\imgui\imgui_impl_sdlrenderer2.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\imgui\imgui_internal.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\imgui\imstb_rectpack.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\imgui\imstb_textedit.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\imgui\imstb_truetype.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\imgui\TextEditor.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\5800FileSystem.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\AddressWindow.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\BitmapViewer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\CallAnalysis.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\CodeViewer.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\CwiiHelp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\Editors.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\FileDialog.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\Gui.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\hex.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\Hooks.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\HwController.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\Injector.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\LabelViewer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\Localization.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\MemBreakPoint.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\PopUpDisplay.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\Theme.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\ThemeManager.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\TouchMouseTranslator.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\Ui.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\UIScaling.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\VariableWindow.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Gui\WatchWindow.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\SD\FakeSdCard.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\5800Flash.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\Audio.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\BatteryBackedRAM.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\BCDCalc.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\ExternalInterrupts.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\Flash.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\IOPorts.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\Keyboard.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\Miscellaneous.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\ML620Ports.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\Peripheral.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\PowerSupply.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\RealTimeClock.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\ROMWindow.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\Screen.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\Spi.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\StandbyControl.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\Timer.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\TimerBaseCounter.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\Uart.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\VoltageLevelSupervisor.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Peripheral\WatchdogTimer.hpp">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+</Project>
