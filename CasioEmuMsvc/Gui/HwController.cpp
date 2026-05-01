@@ -81,10 +81,12 @@ void HwController::RenderCore() {
 		m_emu->ModelDefinition.pd_value = pd;
 	}
 
-	static int irq = 0;
+	static int irq = 5;
 	ImGui::InputInt("##0d000721",&irq);
 	if (ImGui::Button("HwController.Interrupt"_lc)) {
-		m_emu->chipset.RaiseMaskable(irq);
+		if (irq >= 5 && irq < 64) {
+			m_emu->chipset.RaiseMaskable(irq);
+		}
 	}
 	if (ImGui::Button("HwController.HotReload"_lc)) {
 		m_emu->SetPaused(true);
