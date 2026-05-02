@@ -88,7 +88,7 @@ bool TouchMouseTranslator::HandleFingerUp(const SDL_TouchFingerEvent& finger, in
 			EmitMouseMotion(primary_.target, x, y);
 			EmitMouseButton(primary_.target, SDL_BUTTON_LEFT, SDL_RELEASED, x, y);
 
-			ResetTrail(primaryTrail_);
+			// ResetTrail(primaryTrail_);
 			ResetFinger(primary_);
 
 			if (secondary_.active) {
@@ -118,7 +118,7 @@ bool TouchMouseTranslator::HandleFingerUp(const SDL_TouchFingerEvent& finger, in
 				}
 			}
 		}
-		ResetTrail(primaryTrail_);
+		// ResetTrail(primaryTrail_);
 		ResetFinger(primary_);
 
 		if (secondary_.active) {
@@ -133,7 +133,7 @@ bool TouchMouseTranslator::HandleFingerUp(const SDL_TouchFingerEvent& finger, in
 		secondary_.currentY = y;
 
 		if (secondary_.target == TouchTarget::ImGui) {
-			ResetTrail(secondaryTrail_);
+			// ResetTrail(secondaryTrail_);
 			ResetFinger(secondary_);
 			primary_.suppressTap = true;
 			return true;
@@ -143,7 +143,7 @@ bool TouchMouseTranslator::HandleFingerUp(const SDL_TouchFingerEvent& finger, in
 			EmitMouseButton(secondary_.target, SDL_BUTTON_LEFT, SDL_RELEASED, x, y);
 			secondary_.dragging = false;
 		}
-		ResetTrail(secondaryTrail_);
+		// ResetTrail(secondaryTrail_);
 		ResetFinger(secondary_);
 		primary_.suppressTap = true;
 		return true;
@@ -215,6 +215,12 @@ void TouchMouseTranslator::StartFinger(TouchState& state, SDL_FingerID fingerId,
 	state.currentY = y;
 	state.startTime = SDL_GetTicks();
 	state.target = target;
+	if (&state == &primary_) {
+		ResetTrail(primaryTrail_);
+	}
+	else {
+		ResetTrail(secondaryTrail_);
+	}
 }
 
 void TouchMouseTranslator::ResetFinger(TouchState& state) {
@@ -256,7 +262,7 @@ void TouchMouseTranslator::PromoteSecondFingerToPrimary() {
 	primary_.startTime = SDL_GetTicks();
 	primary_.dragging = false;
 	primary_.suppressTap = true;
-	ResetTrail(secondaryTrail_);
+	// ResetTrail(secondaryTrail_);
 	ResetFinger(secondary_);
 }
 
