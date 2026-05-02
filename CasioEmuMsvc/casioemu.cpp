@@ -105,6 +105,8 @@ static bool IsPointInImGuiWindow(float x, float y) {
 	if (io.WantCaptureMouse || ImGui::IsAnyItemActive()) {
 		return true;
 	}
+	if (y < top_bar_size)
+		return true;
 
 	for (int i = g.Windows.Size - 1; i >= 0; --i) {
 		ImGuiWindow* window = g.Windows[i];
@@ -199,11 +201,6 @@ int main(int argc, char* argv[]) {
 			logger::Info("[argv][Info] #%i: key '%s' already set\n", ix, key.c_str());
 	}
 	bool headless = argv_map.find("headless") != argv_map.end();
-
-#ifdef __ANDROID__
-	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
-	SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
-#endif
 	int sdlFlags = SDL_INIT_VIDEO | SDL_INIT_TIMER;
 	if (SDL_Init(sdlFlags) != 0)
 		PANIC("SDL_Init failed: %s\n", SDL_GetError());
@@ -221,6 +218,13 @@ int main(int argc, char* argv[]) {
 			return -1;
 		}
 	}
+
+	// After startupui has done its job:
+	// startupui doesn't need that.
+#ifdef __ANDROID__
+	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+	SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
+#endif
 
 	bool no_dbg = !argv_map["no_dbg"].empty();
 	low_perf_ext = !argv_map["low_perf_ext"].empty();

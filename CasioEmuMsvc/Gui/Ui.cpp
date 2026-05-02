@@ -45,6 +45,7 @@ std::vector<Label> g_labels;
 
 CodeViewer* code_viewer = 0;
 Injector* injector = 0;
+int top_bar_size = 0;
 Breakpoints* membp = 0;
 
 std::vector<UIWindow*> windows{};
@@ -172,9 +173,10 @@ void gui_loop() {
 			win->open = false;
 		}
 	}
+	// Let's record where we are.
+	top_bar_size = ImGui::GetCursorPosY();
 	ImGui::End();
 #endif
-
 	ImGui::Render();
 #ifdef SINGLE_WINDOW
 	ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());

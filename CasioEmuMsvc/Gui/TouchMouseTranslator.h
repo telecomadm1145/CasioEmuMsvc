@@ -72,6 +72,7 @@ private:
 	void PromoteSecondFingerToPrimary();
 
 	void AddTrail(TouchTrail& trail, float x, float y);
+	void ResetTrail(TouchTrail& trail);
 	void DrawTrail(SDL_Renderer* renderer, const TouchTrail& trail) const;
 	void DrawCross(SDL_Renderer* renderer, const TouchState& state, Uint8 r, Uint8 g, Uint8 b) const;
 
