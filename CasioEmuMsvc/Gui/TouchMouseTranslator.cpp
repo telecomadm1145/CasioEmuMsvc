@@ -8,8 +8,8 @@ TouchMouseTranslator::TouchMouseTranslator(
 	EventSink sink,
 	GuiHitTest guiHitTest)
 	: windowId_(windowId),
-	  sink_(std::move(sink)),
-	  guiHitTest_(std::move(guiHitTest)) {
+	sink_(std::move(sink)),
+	guiHitTest_(std::move(guiHitTest)) {
 }
 
 void TouchMouseTranslator::SetWindowId(Uint32 windowId) {
@@ -44,13 +44,13 @@ bool TouchMouseTranslator::HandleFingerDown(const SDL_TouchFingerEvent& finger, 
 		 * 如果目标是 ImGui，必须在 FINGERDOWN 时立刻按下鼠标，
 		 * 否则拖动窗口时会漂移。
 		 */
-		if (target == TouchTarget::ImGui) {
-			EmitMouseMotion(target, x, y);
-			EmitMouseButton(target, SDL_BUTTON_LEFT, SDL_PRESSED, x, y);
+		 //if (target == TouchTarget::ImGui) {
+		EmitMouseMotion(target, x, y);
+		EmitMouseButton(target, SDL_BUTTON_LEFT, SDL_PRESSED, x, y);
 
-			primary_.dragging = true;
-			primary_.suppressTap = true;
-		}
+		primary_.dragging = true;
+		primary_.suppressTap = true;
+		// }
 
 		return true;
 	}
@@ -261,7 +261,7 @@ void TouchMouseTranslator::PromoteSecondFingerToPrimary() {
 }
 
 void TouchMouseTranslator::AddTrail(TouchTrail& trail, float x, float y) {
-	trail.samples[trail.currentIndex] = TouchSample{x, y, SDL_GetTicks()};
+	trail.samples[trail.currentIndex] = TouchSample{ x, y, SDL_GetTicks() };
 	trail.currentIndex = (trail.currentIndex + 1) % TrailBufferSize;
 	trail.count = std::min<std::size_t>(trail.count + 1, TrailBufferSize);
 }
