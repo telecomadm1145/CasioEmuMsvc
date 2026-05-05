@@ -18,6 +18,13 @@ class LocalizationException : public std::runtime_error {
 	using std::runtime_error::runtime_error;
 };
 
+struct StringHash {
+	using is_transparent = void;
+	size_t operator()(std::string_view sv) const {
+		return std::hash<std::string_view>{}(sv);
+	}
+};
+
 class Localization {
 public:
 	void Load() {
@@ -77,7 +84,7 @@ public:
 	}
 
 	std::string Get(std::string_view key) const {
-		auto iter = m_translations.find(std::string(key));
+		auto iter = m_translations.find(key);
 		if (iter == m_translations.end()) {
 			ReportMissingKey(key);
 			return std::string(key);
@@ -86,7 +93,7 @@ public:
 	}
 
 	const char* GetCStr(const char* key) const {
-		auto iter = m_translations.find(key);
+		auto iter = m_translations.find(std::string_view(key));
 		if (iter == m_translations.end()) {
 			ReportMissingKey(key);
 			return key;
@@ -140,8 +147,8 @@ private:
 
 	std::string m_basePath = "./locales/";
 	std::string m_currentLocale = "en_US";
-	std::unordered_map<std::string, std::string, std::hash<std::string_view>, std::equal_to<>> m_translations;
-	std::unordered_map<std::string, std::vector<PluralRule>, std::hash<std::string_view>, std::equal_to<>> m_pluralRules;
+	std::unordered_map<std::string, std::string, StringHash, std::equal_to<>> m_translations;
+	std::unordered_map<std::string, std::vector<PluralRule>, StringHash, std::equal_to<>> m_pluralRules;
 	mutable std::unordered_set<std::string> m_missingKeys;
 	mutable std::mutex m_missingMutex;
 	void ReportMissingKey(std::string_view key) const {
