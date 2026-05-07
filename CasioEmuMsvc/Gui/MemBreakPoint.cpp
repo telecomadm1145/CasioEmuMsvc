@@ -84,7 +84,9 @@ void Breakpoints::DrawFindContent() {
 		);
 		ImGui::TableHeadersRow();
 		int i = 0;
-		for (auto kv : break_point_hash[target_addr].records) {
+		// Bolt: Using const auto& to prevent deep copying of the Record struct (specifically the stacktrace string)
+		// on every single frame during the hot ImGui render loop. This significantly reduces heap allocations.
+		for (const auto& kv : break_point_hash[target_addr].records) {
 			ImGui::TableNextRow();
 			ImGui::TableSetColumnIndex(0);
 			ImGui::TextColored(~ImVec4(0, 200, 0, 200), "%01x:%04x", kv.first >> 16, kv.first & 0x0ffff);
