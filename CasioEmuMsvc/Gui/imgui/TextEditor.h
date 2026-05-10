@@ -125,9 +125,17 @@ public:
 		std::string mDeclaration;
 	};
 
+	struct StringHash {
+		using is_transparent = void;
+		size_t operator()(std::string_view sv) const {
+			return std::hash<std::string_view>{}(sv);
+		}
+	};
+
 	typedef std::string String;
-	typedef std::unordered_map<std::string, Identifier> Identifiers;
-	typedef std::unordered_set<std::string> Keywords;
+	// Optimization: Enable C++20 heterogeneous lookup to avoid std::string heap allocations
+	typedef std::unordered_map<std::string, Identifier, StringHash, std::equal_to<>> Identifiers;
+	typedef std::unordered_set<std::string, StringHash, std::equal_to<>> Keywords;
 	typedef std::map<int, std::string> ErrorMarkers;
 	typedef std::unordered_set<int> Breakpoints;
 	typedef std::array<ImU32, (unsigned)PaletteIndex::Max> Palette;

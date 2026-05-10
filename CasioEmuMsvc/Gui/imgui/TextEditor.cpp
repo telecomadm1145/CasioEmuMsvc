@@ -1082,6 +1082,7 @@ void TextEditor::Render()
 		// Draw a tooltip on known identifiers/preprocessor symbols
 		if (ImGui::IsMousePosValid())
 		{
+			// GetWordAt returns std::string, but lookups use heterogeneous lookup now
 			auto id = GetWordAt(ScreenPosToCoordinates(ImGui::GetMousePos()));
 			if (!id.empty())
 			{
@@ -2214,25 +2215,46 @@ void TextEditor::ColorizeRange(int aFromLine, int aToLine)
 
 				if (token_color == PaletteIndex::Identifier)
 				{
-					id.assign(token_begin, token_end);
-
-					// todo : allmost all language definitions use lower case to specify keywords, so shouldn't this use ::tolower ?
-					if (!mLanguageDefinition.mCaseSensitive)
-						std::transform(id.begin(), id.end(), id.begin(), ::toupper);
-
-					if (!line[first - bufferBegin].mPreprocessor)
+					// Optimization: use std::string_view for case-sensitive languages to avoid std::string heap allocation
+					if (mLanguageDefinition.mCaseSensitive)
 					{
-						if (mLanguageDefinition.mKeywords.count(id) != 0)
-							token_color = PaletteIndex::Keyword;
-						else if (mLanguageDefinition.mIdentifiers.count(id) != 0)
-							token_color = PaletteIndex::KnownIdentifier;
-						else if (mLanguageDefinition.mPreprocIdentifiers.count(id) != 0)
-							token_color = PaletteIndex::PreprocIdentifier;
+						std::string_view id_view(token_begin, token_end - token_begin);
+						if (!line[first - bufferBegin].mPreprocessor)
+						{
+							if (mLanguageDefinition.mKeywords.count(id_view) != 0)
+								token_color = PaletteIndex::Keyword;
+							else if (mLanguageDefinition.mIdentifiers.count(id_view) != 0)
+								token_color = PaletteIndex::KnownIdentifier;
+							else if (mLanguageDefinition.mPreprocIdentifiers.count(id_view) != 0)
+								token_color = PaletteIndex::PreprocIdentifier;
+						}
+						else
+						{
+							if (mLanguageDefinition.mPreprocIdentifiers.count(id_view) != 0)
+								token_color = PaletteIndex::PreprocIdentifier;
+						}
 					}
 					else
 					{
-						if (mLanguageDefinition.mPreprocIdentifiers.count(id) != 0)
-							token_color = PaletteIndex::PreprocIdentifier;
+						id.assign(token_begin, token_end);
+
+						// todo : allmost all language definitions use lower case to specify keywords, so shouldn't this use ::tolower ?
+						std::transform(id.begin(), id.end(), id.begin(), ::toupper);
+
+						if (!line[first - bufferBegin].mPreprocessor)
+						{
+							if (mLanguageDefinition.mKeywords.count(id) != 0)
+								token_color = PaletteIndex::Keyword;
+							else if (mLanguageDefinition.mIdentifiers.count(id) != 0)
+								token_color = PaletteIndex::KnownIdentifier;
+							else if (mLanguageDefinition.mPreprocIdentifiers.count(id) != 0)
+								token_color = PaletteIndex::PreprocIdentifier;
+						}
+						else
+						{
+							if (mLanguageDefinition.mPreprocIdentifiers.count(id) != 0)
+								token_color = PaletteIndex::PreprocIdentifier;
+						}
 					}
 				}
 
