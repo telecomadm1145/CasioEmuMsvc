@@ -434,12 +434,23 @@ void SystemDialogs::OpenFileDialog(std::function<void(std::filesystem::path)> ca
     }
 }
 
+static std::string escape_shell_arg(const std::string& arg) {
+    std::string escaped = "'";
+    for (char c : arg) {
+        if (c == '\'') escaped += "'\\''";
+        else escaped += c;
+    }
+    escaped += "'";
+    return escaped;
+}
+
 void SystemDialogs::SaveFileDialog(std::string preferred_name, std::function<void(std::filesystem::path)> callback) {
+    std::string safe_name = escape_shell_arg(preferred_name);
     std::string cmd;
     if (command_exists("zenity")) {
-        cmd = "zenity --file-selection --save --confirm-overwrite --filename=\"" + preferred_name + "\"";
+        cmd = "zenity --file-selection --save --confirm-overwrite --filename=" + safe_name;
     } else if (command_exists("kdialog")) {
-        cmd = "kdialog --getsavefilename \"" + preferred_name + "\"";
+        cmd = "kdialog --getsavefilename " + safe_name;
     }
 
     if (!cmd.empty()) {
