@@ -1,0 +1,4 @@
+## 2024-05-13 - [Command Injection in SystemDialogs]
+**Vulnerability:** The `SystemDialogs::SaveFileDialog` method on Linux concatenated a user-controlled string (`preferred_name`) directly into a shell command for `zenity` or `kdialog` (`cmd = "zenity ... --filename=\"" + preferred_name + "\"";`). A malicious `preferred_name` (e.g. `test"; echo vulnerable; "`) could execute arbitrary commands.
+**Learning:** Shell commands constructed via string concatenation with external input are vulnerable to command injection, even if basic quoting is attempted, because attackers can close the quotes and append their own commands. This affects `popen` and `system` calls.
+**Prevention:** Always use robust escaping functions (like `escape_shell_arg` which safely escapes single quotes and wraps the entire string in single quotes) when passing untrusted data to a shell command, or use APIs that accept argument lists instead of raw shell strings.
