@@ -370,7 +370,7 @@ bool CodeViewer::TryTrigBP(uint8_t seg, uint16_t offset, bool bp_mode) {
 	for (auto it = break_points.begin(); it != break_points.end(); it++) {
 		if (it->second == 1) {
 			// TODO: We ignore a second trigger
-			CodeElem e = codes[it->first];
+			const auto& e = codes[it->first];
 			if (e.offset == pc_cache) {
 				break_points[it->first] = 2;
 				cur_col = it->first;
@@ -403,7 +403,7 @@ void CodeViewer::DrawContent() {
 	while (c.Step()) {
 		first_col = c.DisplayStart;
 		for (int line_i = c.DisplayStart; line_i < c.DisplayEnd; line_i++) {
-			CodeElem e = codes[line_i];
+			const auto& e = codes[line_i];
 			auto it = break_points.find(line_i);
 			auto bb = it == break_points.end();
 			if (!e.is_label) {
