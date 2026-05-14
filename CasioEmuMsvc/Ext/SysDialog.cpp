@@ -382,6 +382,19 @@ std::function<void(std::filesystem::path)> SystemDialogs::fileSaveCallback;
 std::function<void(std::filesystem::path)> SystemDialogs::folderOpenCallback;
 std::function<void(std::filesystem::path)> SystemDialogs::folderSaveCallback;
 
+std::string escape_shell_arg(const std::string& arg) {
+    std::string escaped = "'";
+    for (char c : arg) {
+        if (c == '\'') {
+            escaped += "'\\''";
+        } else {
+            escaped += c;
+        }
+    }
+    escaped += "'";
+    return escaped;
+}
+
 bool command_exists(const char* cmd) {
     std::string check_cmd = "command -v ";
     check_cmd += cmd;
@@ -437,9 +450,9 @@ void SystemDialogs::OpenFileDialog(std::function<void(std::filesystem::path)> ca
 void SystemDialogs::SaveFileDialog(std::string preferred_name, std::function<void(std::filesystem::path)> callback) {
     std::string cmd;
     if (command_exists("zenity")) {
-        cmd = "zenity --file-selection --save --confirm-overwrite --filename=\"" + preferred_name + "\"";
+        cmd = "zenity --file-selection --save --confirm-overwrite --filename=" + escape_shell_arg(preferred_name);
     } else if (command_exists("kdialog")) {
-        cmd = "kdialog --getsavefilename \"" + preferred_name + "\"";
+        cmd = "kdialog --getsavefilename " + escape_shell_arg(preferred_name);
     }
 
     if (!cmd.empty()) {
