@@ -1,0 +1,4 @@
+## 2024-05-24 - [Command Injection in SystemDialogs]
+**Vulnerability:** The `SystemDialogs::SaveFileDialog` in `CasioEmuMsvc/Ext/SysDialog.cpp` directly concatenated user-provided filename strings into shell commands (`zenity` and `kdialog`) and executed them via `popen`, enabling arbitrary command execution on Linux environments if the `preferred_name` parameter contained shell metacharacters like `"` and `;`.
+**Learning:** Raw string concatenation for executing shell commands with user-provided arguments opens the door for command injection. A static helper function to escape arguments is necessary when built-in libraries (like `system` or `popen`) are used directly instead of functions that execute programs with an argument array.
+**Prevention:** Always escape shell arguments using a robust mechanism like `escape_shell_arg` (which wraps in single quotes and handles internal single quotes safely) when constructing command strings for `popen` or `system`.

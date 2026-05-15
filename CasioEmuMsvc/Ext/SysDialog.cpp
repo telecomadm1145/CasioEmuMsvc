@@ -404,6 +404,19 @@ std::string exec_and_get_output(const char* cmd) {
     return result;
 }
 
+std::string escape_shell_arg(const std::string& arg) {
+    std::string escaped = "'";
+    for (char c : arg) {
+        if (c == '\'') {
+            escaped += "'\\''";
+        } else {
+            escaped += c;
+        }
+    }
+    escaped += "'";
+    return escaped;
+}
+
 void terminal_fallback(const std::string& prompt, const std::function<void(std::filesystem::path)>& callback) {
     std::cout << "\n[INFO] No graphical file dialog tool (zenity/kdialog) found." << std::endl;
     std::cout << prompt;
@@ -437,9 +450,9 @@ void SystemDialogs::OpenFileDialog(std::function<void(std::filesystem::path)> ca
 void SystemDialogs::SaveFileDialog(std::string preferred_name, std::function<void(std::filesystem::path)> callback) {
     std::string cmd;
     if (command_exists("zenity")) {
-        cmd = "zenity --file-selection --save --confirm-overwrite --filename=\"" + preferred_name + "\"";
+        cmd = "zenity --file-selection --save --confirm-overwrite --filename=" + escape_shell_arg(preferred_name);
     } else if (command_exists("kdialog")) {
-        cmd = "kdialog --getsavefilename \"" + preferred_name + "\"";
+        cmd = "kdialog --getsavefilename " + escape_shell_arg(preferred_name);
     }
 
     if (!cmd.empty()) {
