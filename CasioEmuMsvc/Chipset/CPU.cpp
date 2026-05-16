@@ -181,10 +181,10 @@ namespace casioemu {
 		{&CPU::OP_SWI        ,                         0, 0xE500, {{0, 0x00FF,  0}, {0,      0,  0}}},
 		{&CPU::OP_BRK        ,                         0, 0xFFFF, {{0,      0,  0}, {0,      0,  0}}},
 		// * Branch Instructions
-		{&CPU::OP_B          ,        H_TI              , 0xF000, {{0,      0,  0}, {0, 0x000F,  8}}},
-		{&CPU::OP_B          ,                         0, 0xF002, {{0,      0,  0}, {2, 0x000E,  4}}},
-		{&CPU::OP_BL         ,        H_TI              , 0xF001, {{0,      0,  0}, {0, 0x000F,  8}}},
-		{&CPU::OP_BL         ,                         0, 0xF003, {{0,      0,  0}, {2, 0x000E,  4}}},
+		{&CPU::OP_B          ,        H_TI              , 0xF000, {{0, 0x000F,  4}, {0, 0x000F,  8}}},
+		{&CPU::OP_B          ,                         0, 0xF002, {{0, 0x000F,  8}, {2, 0x000E,  4}}},
+		{&CPU::OP_BL         ,        H_TI              , 0xF001, {{0, 0x000F,  4}, {0, 0x000F,  8}}},
+		{&CPU::OP_BL         ,                         0, 0xF003, {{0, 0x000F,  8}, {2, 0x000E,  4}}},
 		// * Multiplication and Division Instructions
 		{&CPU::OP_MUL        , H_WB                     , 0xF004, {{2, 0x000E,  8}, {1, 0x000F,  4}}},
 		{&CPU::OP_DIV        , H_WB                     , 0xF009, {{2, 0x000E,  8}, {1, 0x000F,  4}}},
@@ -357,10 +357,13 @@ namespace casioemu {
 		while (1) {
 
 			impl_opcode = Fetch();
+			
 			OpcodeSource* handler = opcode_dispatch[impl_opcode];
 
-			if (!handler)
+			if (!handler) {
+				printf("[CPU][Warn] Unknown Inst at 0x%x: %x\n", (uint32_t)pc_before, (uint32_t)impl_opcode);
 				continue;
+			}
 
 			impl_long_imm = 0;
 			if (handler->hint & H_TI)

@@ -156,6 +156,7 @@ namespace casioemu {
 
 		MemoryByte* segment = segment_dispatch[segment_index];
 		if (!segment) {
+			printf("[MMU][Warn] Unmapped read: %x\n", (uint32_t)offset);
 			return 0;
 		}
 
@@ -163,6 +164,7 @@ namespace casioemu {
 		MMURegion* region = byte.region;
 
 		if (!region || !region->read) {
+			printf("[MMU][Warn] Unmapped read: %x\n", (uint32_t)offset);
 			return 0;
 		}
 		return region->read(region, offset);
@@ -192,6 +194,7 @@ namespace casioemu {
 
 		MemoryByte* segment = segment_dispatch[segment_index];
 		if (!segment) {
+			printf("[MMU][Warn] Unmapped write: %x <- %x\n", (uint32_t)offset, (uint32_t)data);
 			return;
 		}
 
@@ -199,7 +202,7 @@ namespace casioemu {
 		MMURegion* region = byte.region;
 		if (!region || !region->write) {
 #ifdef DBG
-			// printf("[MMU][Warn] Unmapped write: %x <- %x\n", (uint32_t)offset, (uint32_t)data);
+			printf("[MMU][Warn] Unmapped write: %x <- %x\n", (uint32_t)offset, (uint32_t)data);
 #endif
 			return;
 		}
