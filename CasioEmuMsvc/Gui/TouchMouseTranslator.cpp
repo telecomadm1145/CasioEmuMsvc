@@ -430,9 +430,10 @@ void TouchMouseTranslator::DrawLongPressRing(
 	progress = std::min(progress, 1.0f);
 
 	// 进度太小不画
-	if (progress < 0.01f) {
+	if (progress < 0.5f) {
 		return;
 	}
+	progress = (progress - 0.5f) * 2.0f; // 0.5~1.0 映射到 0.0~1.0
 
 	const int cx = static_cast<int>(state.startX);
 	const int cy = static_cast<int>(state.startY);

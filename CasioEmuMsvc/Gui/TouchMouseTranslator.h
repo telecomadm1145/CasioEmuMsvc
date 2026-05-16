@@ -97,6 +97,6 @@ private:
 	const float scrollPixelsPerWheel_ = 20.0f;
 
 	// 长按环渲染参数
-	const float ringRadius_ = 35.0f;
-	const float ringThickness_ = 3.0f;
+	const float ringRadius_ = 80.0f;
+	const float ringThickness_ = 8.0f;
 };
