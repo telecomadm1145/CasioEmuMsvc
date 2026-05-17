@@ -79,6 +79,17 @@ class RomPackage {
 		}
 	}
 
+	static bool isPathSafe(const std::string& path_str) {
+		std::filesystem::path path(path_str);
+		if (path.is_absolute()) return false;
+		for (const auto& part : path) {
+			if (part == "..") {
+				return false;
+			}
+		}
+		return true;
+	}
+
 public:
 	File RomData;
 	File FlashData;
@@ -127,6 +138,11 @@ public:
 	void ExtractTo(std::filesystem::path pth) {
 		if (IsEncrypted)
 			throw std::runtime_error("Please decrypt first.");
+
+		if (!isPathSafe(ModelInfo.rom_path)) throw std::runtime_error("Path traversal detected");
+		if (!ModelInfo.flash_path.empty() && !isPathSafe(ModelInfo.flash_path)) throw std::runtime_error("Path traversal detected");
+		if (!isPathSafe(ModelInfo.interface_path)) throw std::runtime_error("Path traversal detected");
+
 		std::filesystem::create_directory(pth);
 		WriteFile(pth / ModelInfo.rom_path, RomData);
 		if (!ModelInfo.flash_path.empty())
