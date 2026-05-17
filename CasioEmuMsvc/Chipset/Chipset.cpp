@@ -653,7 +653,7 @@ namespace casioemu {
 
 	void Chipset::RaiseMaskable(size_t index) {
 		if (index < INT_MASKABLE || index >= INT_SOFTWARE)
-			PANIC("%zu is not a valid maskable interrupt index\n", index);
+			printf("[Chipset][Warn] %zu is not a valid maskable interrupt index\n", index);
 
 		InterruptEventArgs iea{};
 		iea.index = static_cast<uint8_t>(index); // this conversion is guaranteed
@@ -670,7 +670,7 @@ namespace casioemu {
 
 	void Chipset::ResetMaskable(size_t index) {
 		if (index < INT_MASKABLE || index >= INT_SOFTWARE)
-			PANIC("%zu is not a valid maskable interrupt index\n", index);
+			printf("[Chipset][Warn] %zu is not a valid maskable interrupt index\n", index);
 		if (!interrupts_active[index])
 			return;
 		interrupts_active[index] = false;
