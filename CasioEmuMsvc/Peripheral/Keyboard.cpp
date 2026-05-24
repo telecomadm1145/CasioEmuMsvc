@@ -43,6 +43,9 @@ namespace casioemu {
 			uint8_t ko_bit, ki_bit;
 			uint8_t code;
 			bool pressed, stuck;
+			uint32_t pressTime;
+			SDL_TimerID releaseTimer;
+			struct DelayedReleaseParam* releaseParam = nullptr;
 			SDL_FingerID pressingFingerId; // ID of the finger currently pressing this button
 		} buttons[64];
 
@@ -66,6 +69,8 @@ namespace casioemu {
 		void PressAt(int x, int y, bool stick, SDL_FingerID fingerId);
 		void ReleaseAt(int x, int y, SDL_FingerID fingerId);
 		void PressButtonByCode(uint8_t code);
+		bool TryReleaseButton(Button& button);
+		void ExecuteDelayedRelease(size_t button_index);
 		void StartInject();
 		void StoreKeyLog();
 		void ReleaseAll();
@@ -110,9 +115,7 @@ namespace casioemu {
 					if (pressed) {
 						PressButton(button, false, -1);
 					} else {
-						if (button.pressed && !button.stuck) {
-							button.pressed = false;
-							button.pressingFingerId = -1;
+						if (TryReleaseButton(button)) {
 							if (real_hardware) RecalculateGhost();
 							else RecalculateEmuInput();
 						}
@@ -130,9 +133,7 @@ namespace casioemu {
 				else button_index = ((code >> 1) & 0x38) | (code & 0x07);
 				if (button_index < 64) {
 					auto& button = buttons[button_index];
-					if (button.pressed && !button.stuck) {
-						button.pressed = false;
-						button.pressingFingerId = -1;
+					if (TryReleaseButton(button)) {
 						if (real_hardware) RecalculateGhost();
 						else RecalculateEmuInput();
 					}
@@ -140,6 +141,57 @@ namespace casioemu {
 			}
 		}
 	};
+	struct DelayedReleaseParam {
+		Keyboard* keyboard;
+		size_t button_index;
+	};
+
+	Uint32 DelayedReleaseCallback(Uint32 interval, void* param) {
+		auto* p = static_cast<DelayedReleaseParam*>(param);
+		p->keyboard->ExecuteDelayedRelease(p->button_index);
+		delete p;
+		return 0; // Don't run again
+	}
+
+	void Keyboard::ExecuteDelayedRelease(size_t button_index) {
+		if (button_index >= 64) return;
+		auto& button = buttons[button_index];
+		button.releaseTimer = 0; // timer fired
+		button.releaseParam = nullptr;
+		if (button.pressed && !button.stuck) {
+			button.pressed = false;
+			button.pressingFingerId = -1;
+			if (real_hardware) {
+				RecalculateGhost();
+			}
+			else {
+				RecalculateEmuInput();
+			}
+		}
+	}
+
+	bool Keyboard::TryReleaseButton(Button& button) {
+		if (!button.pressed || button.stuck) return false;
+
+		uint32_t now = SDL_GetTicks();
+		uint32_t elapsed = now - button.pressTime;
+		if (elapsed < 25) {
+			if (button.releaseTimer != 0) {
+				return false; // Timer already running
+			}
+			size_t button_index = &button - buttons;
+			auto* param = new DelayedReleaseParam{this, button_index};
+			button.releaseParam = param;
+			button.releaseTimer = SDL_AddTimer(25 - elapsed, DelayedReleaseCallback, param);
+			return false; // Not released yet
+		}
+
+		// Immediately release
+		button.pressed = false;
+		button.pressingFingerId = -1;
+		return true; // Indicates it was immediately released
+	}
+
 	void Keyboard::Initialise() {
 		renderer = emulator.GetRenderer();
 
@@ -518,8 +570,9 @@ namespace casioemu {
 					if (button.rect.x <= event.button.x && button.rect.y <= event.button.y &&
 						button.rect.x + button.rect.w > event.button.x && button.rect.y + button.rect.h > event.button.y) {
 						if (button.pressed && button.pressingFingerId == -1 && !button.stuck) { // Only if pressed by mouse (no fingerId)
-							button.pressed = false;
-							button_released_by_mouse = true;
+							if (TryReleaseButton(button)) {
+								button_released_by_mouse = true;
+							}
 							// Recalculate after this loop if changes were made
 						}
 						break;
@@ -574,6 +627,16 @@ namespace casioemu {
 	}
 
 	void Keyboard::Uninitialise() {
+		for (auto& button : buttons) {
+			if (button.releaseTimer != 0) {
+				SDL_RemoveTimer(button.releaseTimer);
+				button.releaseTimer = 0;
+				if (button.releaseParam) {
+					delete button.releaseParam;
+					button.releaseParam = nullptr;
+				}
+			}
+		}
 	}
 
 	bool Keyboard::AnyFingerPressing() {
@@ -625,6 +688,15 @@ namespace casioemu {
 	}
 
 	void Keyboard::PressButton(Button& button, bool stick, SDL_FingerID fingerId) {
+		button.pressTime = SDL_GetTicks();
+		if (button.releaseTimer != 0) {
+			SDL_RemoveTimer(button.releaseTimer);
+			button.releaseTimer = 0;
+			if (button.releaseParam) {
+				delete button.releaseParam;
+				button.releaseParam = nullptr;
+			}
+		}
 		// SDL_Log("PressButton: code %02X, stick %d, fingerId %lld, current button fingerId %lld", button.code, stick, fingerId, button.pressingFingerId);
 
 		// Prevent a button from being simultaneously claimed by two different fingers.
@@ -727,9 +799,9 @@ namespace casioemu {
 				// If it's stuck, a finger_up event for the finger that stuck it does NOT release it.
 				// It would require a subsequent "stick" press on it to toggle the stuck state.
 				if (button.pressed && button.pressingFingerId == fingerId && !button.stuck) {
-					button.pressed = false;
-					button.pressingFingerId = -1; // Clear the finger ID
-					button_effectively_released = true;
+					if (TryReleaseButton(button)) {
+						button_effectively_released = true;
+					}
 					// SDL_Log("Button code %02X released by finger %lld", button.code, fingerId);
 				}
 				else if (button.pressed && button.pressingFingerId == fingerId && button.stuck) {
@@ -914,10 +986,10 @@ namespace casioemu {
 			// Release a button if it's pressed AND NOT stuck.
 			// If it's stuck, ReleaseAll() does not unstick it. Stuck buttons need a specific stick-press to toggle.
 			if (button.pressed && !button.stuck) {
-				button.pressed = false;
-				button.pressingFingerId = -1; // Clear any finger association
-				if (button.type == Button::BT_BUTTON) {
-					had_effect = true;
+				if (TryReleaseButton(button)) {
+					if (button.type == Button::BT_BUTTON) {
+						had_effect = true;
+					}
 				}
 			}
 			else if (button.stuck && button.pressingFingerId != -1) {
