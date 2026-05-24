@@ -2214,25 +2214,45 @@ void TextEditor::ColorizeRange(int aFromLine, int aToLine)
 
 				if (token_color == PaletteIndex::Identifier)
 				{
-					id.assign(token_begin, token_end);
-
-					// todo : allmost all language definitions use lower case to specify keywords, so shouldn't this use ::tolower ?
 					if (!mLanguageDefinition.mCaseSensitive)
+					{
+						id.assign(token_begin, token_end);
+
+						// todo : allmost all language definitions use lower case to specify keywords, so shouldn't this use ::tolower ?
 						std::transform(id.begin(), id.end(), id.begin(), ::toupper);
 
-					if (!line[first - bufferBegin].mPreprocessor)
-					{
-						if (mLanguageDefinition.mKeywords.count(id) != 0)
-							token_color = PaletteIndex::Keyword;
-						else if (mLanguageDefinition.mIdentifiers.count(id) != 0)
-							token_color = PaletteIndex::KnownIdentifier;
-						else if (mLanguageDefinition.mPreprocIdentifiers.count(id) != 0)
-							token_color = PaletteIndex::PreprocIdentifier;
+						if (!line[first - bufferBegin].mPreprocessor)
+						{
+							if (mLanguageDefinition.mKeywords.count(id) != 0)
+								token_color = PaletteIndex::Keyword;
+							else if (mLanguageDefinition.mIdentifiers.count(id) != 0)
+								token_color = PaletteIndex::KnownIdentifier;
+							else if (mLanguageDefinition.mPreprocIdentifiers.count(id) != 0)
+								token_color = PaletteIndex::PreprocIdentifier;
+						}
+						else
+						{
+							if (mLanguageDefinition.mPreprocIdentifiers.count(id) != 0)
+								token_color = PaletteIndex::PreprocIdentifier;
+						}
 					}
 					else
 					{
-						if (mLanguageDefinition.mPreprocIdentifiers.count(id) != 0)
-							token_color = PaletteIndex::PreprocIdentifier;
+						std::string_view id_view(token_begin, token_end - token_begin);
+						if (!line[first - bufferBegin].mPreprocessor)
+						{
+							if (mLanguageDefinition.mKeywords.find(id_view) != mLanguageDefinition.mKeywords.end())
+								token_color = PaletteIndex::Keyword;
+							else if (mLanguageDefinition.mIdentifiers.find(id_view) != mLanguageDefinition.mIdentifiers.end())
+								token_color = PaletteIndex::KnownIdentifier;
+							else if (mLanguageDefinition.mPreprocIdentifiers.find(id_view) != mLanguageDefinition.mPreprocIdentifiers.end())
+								token_color = PaletteIndex::PreprocIdentifier;
+						}
+						else
+						{
+							if (mLanguageDefinition.mPreprocIdentifiers.find(id_view) != mLanguageDefinition.mPreprocIdentifiers.end())
+								token_color = PaletteIndex::PreprocIdentifier;
+						}
 					}
 				}
 

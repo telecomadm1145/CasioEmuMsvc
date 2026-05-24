@@ -1,3 +1,7 @@
 ## 2026-05-05 - [C++ Heterogeneous Lookup in unordered_map]
 **Learning:** By default in C++20, `std::hash<std::string_view>` is not transparent. Using an `std::unordered_map` with `std::string` keys and looking up with `std::string_view` or `const char*` requires implicit construction of `std::string` and heap allocation, which can cause significant performance penalties when called frequently (like in UI rendering loops).
 **Action:** Define a custom transparent hash struct (e.g., `struct StringHash { using is_transparent = void; ... }`) and use it in `std::unordered_map` to enable C++20 heterogeneous lookup and avoid `std::string` heap allocations.
+
+## 2024-05-18 - [TextEditor Performance via Heterogeneous Lookup]
+**Learning:** `std::unordered_map` and `std::unordered_set` do not support heterogeneous lookup by default. In highly frequently executed routines such as UI syntax coloring (`TextEditor::Colorize`), querying map elements using an intermediate `std::string` can cause significant allocation churn when a large portion of the text is tokenized into identifiers and queried. Enabling heterogeneous lookup via a transparent hash struct along with `std::string_view` completely skips these heap allocations, improving string processing and rendering performance without compromising memory.
+**Action:** Always prefer `std::string_view` combined with transparent comparators (`std::equal_to<>`) and transparent hash structs (`using is_transparent = void`) for high-frequency associative container lookups using string identifiers in C++20 codebases.
