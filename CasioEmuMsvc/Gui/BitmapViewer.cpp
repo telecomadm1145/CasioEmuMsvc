@@ -193,7 +193,7 @@ public:
 				}
 				addr = newAddr;
 				bitOffset = newBitOffset;
-				sprintf(bufaddr, "%08X", addr);
+				snprintf(bufaddr, sizeof(bufaddr), "%08X", addr);
 			}
 		}
 		// —— 4. 添加键盘滚动处理（上下箭头，PageUp，PageDown）
@@ -228,7 +228,7 @@ public:
 				}
 				addr = newAddr;
 				bitOffset = newBitOffset;
-				sprintf(bufaddr, "%08X", addr);
+				snprintf(bufaddr, sizeof(bufaddr), "%08X", addr);
 			}
 		}
 	}

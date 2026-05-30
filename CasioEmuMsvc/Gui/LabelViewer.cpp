@@ -15,7 +15,7 @@ void LabelViewer::RenderCore() {
 	for (const auto& lb : labels) {
 		ImGui::PushID(i++);
 		if (ImGui::Button("Label.Copy"_lc)) {
-			sprintf(buf, "%X", static_cast<unsigned int>(lb.start));
+			snprintf(buf, sizeof(buf), "%X", static_cast<unsigned int>(lb.start));
 			ImGui::SetClipboardText(buf);
 		}
 		ImGui::PopID();
@@ -34,7 +34,7 @@ void LabelViewer::RenderCore() {
 	for (auto lb : regs) {
 		ImGui::PushID(i++);
 		if (ImGui::Button("Label.Copy"_lc)) {
-			sprintf(buf, "%X", static_cast<unsigned int>(lb->base));
+			snprintf(buf, sizeof(buf), "%X", static_cast<unsigned int>(lb->base));
 			ImGui::SetClipboardText(buf);
 		}
 		ImGui::PopID();
