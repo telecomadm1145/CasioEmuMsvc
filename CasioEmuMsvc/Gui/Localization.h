@@ -149,12 +149,13 @@ private:
 	std::string m_currentLocale = "en_US";
 	std::unordered_map<std::string, std::string, StringHash, std::equal_to<>> m_translations;
 	std::unordered_map<std::string, std::vector<PluralRule>, StringHash, std::equal_to<>> m_pluralRules;
-	mutable std::unordered_set<std::string> m_missingKeys;
+	mutable std::unordered_set<std::string, StringHash, std::equal_to<>> m_missingKeys;
 	mutable std::mutex m_missingMutex;
 	void ReportMissingKey(std::string_view key) const {
 		std::lock_guard<std::mutex> lock(m_missingMutex);
 
-		if (m_missingKeys.insert(std::string(key)).second) {
+		if (m_missingKeys.find(key) == m_missingKeys.end()) {
+			m_missingKeys.insert(std::string(key));
 			// 只会在第一次插入成功时进入
 			fprintf(stderr, "[Localization] Missing key: %.*s\n",
 				(int)key.size(), key.data());
