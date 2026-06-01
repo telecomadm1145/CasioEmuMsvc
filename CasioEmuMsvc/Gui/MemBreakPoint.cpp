@@ -84,7 +84,8 @@ void Breakpoints::DrawFindContent() {
 		);
 		ImGui::TableHeadersRow();
 		int i = 0;
-		for (auto kv : break_point_hash[target_addr].records) {
+		// ⚡ Bolt: Prevent deep copy of Record struct (which contains std::string) in 60fps render loop
+		for (const auto& kv : break_point_hash[target_addr].records) {
 			ImGui::TableNextRow();
 			ImGui::TableSetColumnIndex(0);
 			ImGui::TextColored(~ImVec4(0, 200, 0, 200), "%01x:%04x", kv.first >> 16, kv.first & 0x0ffff);
