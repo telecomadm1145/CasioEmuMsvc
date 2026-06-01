@@ -298,8 +298,8 @@ struct MemoryEditor {
 						ImGui::PushID((void*)addr);
 						if (DataEditingTakeFocus) {
 							ImGui::SetKeyboardFocusHere(0);
-							sprintf(AddrInputBuf, format_data, s.AddrDigitsCount, base_display_addr + addr);
-							sprintf(DataInputBuf, format_byte, ReadFn ? ReadFn(mem_data, addr) : mem_data[addr]);
+							snprintf(AddrInputBuf, sizeof(AddrInputBuf), format_data, s.AddrDigitsCount, base_display_addr + addr);
+							snprintf(DataInputBuf, sizeof(DataInputBuf), format_byte, ReadFn ? ReadFn(mem_data, addr) : mem_data[addr]);
 						}
 						struct UserData {
 							// FIXME: We should have a way to retrieve the text edit cursor position more easily in the API, this is rather tedious. This is such a ugly mess we may be better off not using InputText() at all here.
@@ -323,7 +323,7 @@ struct MemoryEditor {
 						};
 						UserData user_data;
 						user_data.CursorPos = -1;
-						sprintf(user_data.CurrentBufOverwrite, format_byte, ReadFn ? ReadFn(mem_data, addr) : mem_data[addr]);
+						snprintf(user_data.CurrentBufOverwrite, sizeof(user_data.CurrentBufOverwrite), format_byte, ReadFn ? ReadFn(mem_data, addr) : mem_data[addr]);
 						ImGuiInputTextFlags flags = ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_NoHorizontalScroll | ImGuiInputTextFlags_CallbackAlways;
 						flags |= ImGuiInputTextFlags_AlwaysOverwrite; // was ImGuiInputTextFlags_AlwaysInsertMode
 						ImGui::SetNextItemWidth(s.GlyphWidth * 2);
@@ -648,8 +648,8 @@ struct MemoryEditor {
 						ImGui::PushID((void*)addr);
 						if (DataEditingTakeFocus) {
 							ImGui::SetKeyboardFocusHere(0);
-							sprintf(AddrInputBuf, format_data, s.AddrDigitsCount, base_display_addr + addr);
-							sprintf(DataInputBuf, format_byte, ReadFn ? ReadFn(mem_data, addr) : mem_data[addr]);
+								snprintf(AddrInputBuf, sizeof(AddrInputBuf), format_data, s.AddrDigitsCount, base_display_addr + addr);
+								snprintf(DataInputBuf, sizeof(DataInputBuf), format_byte, ReadFn ? ReadFn(mem_data, addr) : mem_data[addr]);
 						}
 						struct UserData {
 							// FIXME: We should have a way to retrieve the text edit cursor position more easily in the API, this is rather tedious. This is such a ugly mess we may be better off not using InputText() at all here.
@@ -673,7 +673,7 @@ struct MemoryEditor {
 						};
 						UserData user_data;
 						user_data.CursorPos = -1;
-						sprintf(user_data.CurrentBufOverwrite, format_byte, ReadFn ? ReadFn(mem_data, addr) : mem_data[addr]);
+							snprintf(user_data.CurrentBufOverwrite, sizeof(user_data.CurrentBufOverwrite), format_byte, ReadFn ? ReadFn(mem_data, addr) : mem_data[addr]);
 						ImGuiInputTextFlags flags = ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_NoHorizontalScroll | ImGuiInputTextFlags_CallbackAlways;
 						flags |= ImGuiInputTextFlags_AlwaysOverwrite; // was ImGuiInputTextFlags_AlwaysInsertMode
 						ImGui::SetNextItemWidth(s.GlyphWidth * 2);
