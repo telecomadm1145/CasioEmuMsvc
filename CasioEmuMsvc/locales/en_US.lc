@@ -116,6 +116,7 @@ MemBP.MonitoringHint=Monitoring: 0x%06x
 MemBP.ClearRec=Clear Logs
 MemBP.AddAddr=Add
 MemBP.BreakWhenHit=Break on hit
+MemBP.ViewCallstack=View Call Stack
 
 WatchWindow.CoreStatus=CPU Status
 WatchWindow.Pause=Pause
@@ -123,6 +124,8 @@ WatchWindow.Continue=Resume
 WatchWindow.Function=Function
 WatchWindow.LrDestroyed=LR Corrupted
 WatchWindow.StackMemViewRange=Stack View Range
+StatusBar.Paused=Paused
+StatusBar.Running=Running
 
 VarWindow.Variable=Variable
 VarWindow.ReP=Real

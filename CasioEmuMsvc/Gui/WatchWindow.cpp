@@ -51,7 +51,7 @@ void WatchWindow::ShowRX() {
 	if (m_emu->chipset.epscpu) {
 	}
 	else {
-		ImGui::TextColored(~ImVec4(0, 200, 0, 255), "RXn: ");
+		ImGui::TextColored(~UIHelpers::kColorSuccess, "RXn: ");
 		for (int i = 0; i < 16; i++) {
 			ImGui::SameLine();
             snprintf(id, sizeof(id), "##data%d", i);
@@ -68,7 +68,7 @@ void WatchWindow::ShowRX() {
 		}
 	}
 	auto show_sfr = ([&](char* ptr, const char* label, int i, int width = 4) {
-		ImGui::TextColored(~ImVec4(0, 200, 0, 255), "%s", label);
+		ImGui::TextColored(~UIHelpers::kColorSuccess, "%s", label);
 		ImGui::SameLine();
         snprintf(id, sizeof(id), "##sfr%d", i);
 		ImGui::SetNextItemWidth(char_width * width + 5);
@@ -104,7 +104,7 @@ void WatchWindow::ShowRX() {
 }
 void WatchWindow::ModRX() {
 	char id[10];
-	ImGui::TextColored(~ImVec4(0, 200, 0, 255), "RXn: ");
+	ImGui::TextColored(~UIHelpers::kColorSuccess, "RXn: ");
 	for (int i = 0; i < 16; i++) {
 		ImGui::SameLine();
         snprintf(id, sizeof(id), "##data%d", i);
@@ -123,7 +123,7 @@ void WatchWindow::ModRX() {
 	}
 
 	auto show_sfr = ([&](char* ptr, const char* label, int i, int width = 4) {
-		ImGui::TextColored(~ImVec4(0, 200, 0, 255), "%s", label);
+		ImGui::TextColored(~UIHelpers::kColorSuccess, "%s", label);
 		ImGui::SameLine();
         snprintf(id, sizeof(id), "##sfr%d", i);
 		ImGui::SetNextItemWidth(char_width * width + 2);
@@ -225,7 +225,7 @@ void WatchWindow::RenderCore() {
 				ImGui::TableNextColumn();
 				ImGui::Text("%06X", chipset.epscpu->stack[i] << 1);
 				ImGui::TableNextColumn();
-				ImGui::Text("%06X", chipset.epscpu->stack[i] << 1);
+				UIHelpers::ClickableAddress(chipset.epscpu->stack[i] << 1);
 				ImGui::TableNextColumn();
 				ImGui::Text("%04zX", i);
 				ImGui::TableNextColumn();
@@ -238,36 +238,49 @@ void WatchWindow::RenderCore() {
 		}
 		else {
 			auto stack = chipset.cpu.stack.get();
-			class reverse_view {
-			public:
-				reverse_view(decltype(*stack)& vector1) : stk(vector1) {}
-				decltype(*stack)& stk;
-				auto begin() {
-					return stk.rbegin();
-				}
-				auto end() {
-					return stk.rend();
-				}
-			};
-			for (auto& frame : reverse_view{*stack}) {
+			if (stack->empty()) {
 				ImGui::TableNextRow();
 				ImGui::TableNextColumn();
-				ImGui::TextUnformatted(lookup_symbol(frame.new_pc, g_labels).c_str());
-				ImGui::TableNextColumn();
-				ImGui::Text("%06X", frame.new_pc);
-				ImGui::TableNextColumn();
-				ImGui::Text("%04X", frame.sp);
-				ImGui::TableNextColumn();
-				ImGui::Text("%04X", frame.er0);
-				ImGui::TableNextColumn();
-				ImGui::Text("%04X", frame.er2);
-				ImGui::TableNextColumn();
-				if (frame.lr_pushed) {
-					if (frame.lr == 0xffffff) {
-						ImGui::TextUnformatted("WatchWindow.LrDestroyed"_lc);
+				ImGui::PushStyleColor(ImGuiCol_Text, UIHelpers::kColorMuted);
+				ImGui::TextUnformatted("No stack frames. Run or step to update stack trace.");
+				ImGui::PopStyleColor();
+				for (int col = 1; col < 6; ++col) {
+					ImGui::TableNextColumn();
+					ImGui::TextUnformatted("");
+				}
+			}
+			else {
+				class reverse_view {
+				public:
+					reverse_view(decltype(*stack)& vector1) : stk(vector1) {}
+					decltype(*stack)& stk;
+					auto begin() {
+						return stk.rbegin();
 					}
-					else {
-						ImGui::TextUnformatted(lookup_symbol(frame.lr, g_labels).c_str());
+					auto end() {
+						return stk.rend();
+					}
+				};
+				for (auto& frame : reverse_view{*stack}) {
+					ImGui::TableNextRow();
+					ImGui::TableNextColumn();
+					ImGui::TextUnformatted(lookup_symbol(frame.new_pc, g_labels).c_str());
+					ImGui::TableNextColumn();
+					UIHelpers::ClickableAddress(frame.new_pc);
+					ImGui::TableNextColumn();
+					ImGui::Text("%04X", frame.sp);
+					ImGui::TableNextColumn();
+					ImGui::Text("%04X", frame.er0);
+					ImGui::TableNextColumn();
+					ImGui::Text("%04X", frame.er2);
+					ImGui::TableNextColumn();
+					if (frame.lr_pushed) {
+						if (frame.lr == 0xffffff) {
+							ImGui::TextUnformatted("WatchWindow.LrDestroyed"_lc);
+						}
+						else {
+							ImGui::TextUnformatted(lookup_symbol(frame.lr, g_labels).c_str());
+						}
 					}
 				}
 			}

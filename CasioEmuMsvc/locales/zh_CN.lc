@@ -115,6 +115,7 @@ MemBP.MonitoringHint=正在监控：0x%06x
 MemBP.ClearRec=清除记录
 MemBP.AddAddr=添加
 MemBP.BreakWhenHit=命中时中断
+MemBP.ViewCallstack=查看调用堆栈
 
 WatchWindow.CoreStatus=核心状态
 WatchWindow.Pause=暂停
@@ -122,6 +123,8 @@ WatchWindow.Continue=继续
 WatchWindow.Function=函数
 WatchWindow.LrDestroyed=LR 已损坏
 WatchWindow.StackMemViewRange=堆栈内存查看范围
+StatusBar.Paused=已暂停
+StatusBar.Running=运行中
 
 VarWindow.Variable=变量
 VarWindow.ReP=实部

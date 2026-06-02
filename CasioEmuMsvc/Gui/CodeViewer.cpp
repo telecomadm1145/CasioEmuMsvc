@@ -437,6 +437,16 @@ void CodeViewer::DrawContent() {
 			ImGui::PushID(line_i);
 			bool selected = (last_found_idx == line_i);
 
+			// Draw row background highlights (PC and searched line)
+			ImVec2 min_pos = ImGui::GetCursorScreenPos();
+			ImVec2 max_pos = ImVec2(min_pos.x + ImGui::GetContentRegionAvail().x, min_pos.y + ImGui::GetTextLineHeight() + 2.0f);
+			if (!e.is_label && e.offset == pc_cache) {
+				ImGui::GetWindowDrawList()->AddRectFilled(min_pos, max_pos, ImGui::GetColorU32(ImVec4(0.0f, 0.8f, 0.0f, 0.12f)));
+			}
+			else if (selected) {
+				ImGui::GetWindowDrawList()->AddRectFilled(min_pos, max_pos, ImGui::GetColorU32(ImVec4(0.2f, 0.5f, 0.9f, 0.15f)));
+			}
+
 			// 记录当前光标位置，实现控件叠加绘制
 			ImVec2 pos = ImGui::GetCursorPos();
 
@@ -484,6 +494,7 @@ void CodeViewer::JumpTo(uint32_t offset) {
 }
 
 void CodeViewer::Search(bool next) {
+	search_failed = false;
 	if (codes.empty())
 		return;
 	std::string needle = search_buf;
@@ -552,6 +563,7 @@ void CodeViewer::Search(bool next) {
 			return;
 		}
 	}
+	search_failed = true;
 }
 
 void CodeViewer::ExportDisassembly() {
@@ -779,7 +791,9 @@ void CodeViewer::RenderCore() {
 	int w = ImGui::CalcTextSize("F").x;
 	if (!is_loaded) {
 		ImGui::SetCursorPos(ImVec2(w * 2, h * 5));
-		ImGui::TextUnformatted("CodeViewer.Loading"_lc);
+		const char* spinner = "|/-\\";
+		int idx = (int)(ImGui::GetTime() / 0.15f) % 4;
+		ImGui::Text("%c %s", spinner[idx], "CodeViewer.Loading"_lc);
 		return;
 	}
 	if (m_emu->chipset.epscpu) {
@@ -823,6 +837,36 @@ void CodeViewer::RenderCore() {
 		if (search_activated && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
 			search_activated = false;
 		}
+		// F5: Continue / Pause
+		if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) {
+			if (m_emu->GetPaused()) {
+				m_emu->SetPaused(false);
+			}
+			else {
+				trace_bp = 0;
+				stepping = false;
+				m_emu->SetPaused(true);
+				JumpTo(pc_cache);
+			}
+		}
+		// F10: Trace (Step Over)
+		if (m_emu->GetPaused() && ImGui::IsKeyPressed(ImGuiKey_F10, false)) {
+			tracing = true;
+			m_emu->SetPaused(false);
+		}
+		// F11: Step (Step Into)
+		if (m_emu->GetPaused() && ImGui::IsKeyPressed(ImGuiKey_F11, false)) {
+			stepping = true;
+			m_emu->SetPaused(false);
+		}
+		// Ctrl+G: Go to PC
+		if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_G, false)) {
+			JumpTo(pc_cache);
+		}
+		// F3: Find next
+		if (search_activated && ImGui::IsKeyPressed(ImGuiKey_F3, false)) {
+			Search(true);
+		}
 	}
 	// Bottom controls
 	// First line: Search
@@ -837,6 +881,9 @@ void CodeViewer::RenderCore() {
 		if (ImGui::InputText("##search", search_buf, sizeof(search_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
 			Search(false);
 		}
+		if (ImGui::IsItemActive()) {
+			search_failed = false;
+		}
 		ImGui::SameLine();
 		const char* items[] = {"CodeViewer.Hex"_lc, "CodeViewer.Inst"_lc};
 		ImGui::SetNextItemWidth(100);
@@ -846,8 +893,12 @@ void CodeViewer::RenderCore() {
 			Search(false);
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("CodeViewer.Next"_lc)) {
+		if (UIHelpers::ButtonWithShortcut("CodeViewer.Next"_lc, "F3")) {
 			Search(true);
+		}
+		if (search_failed) {
+			ImGui::SameLine();
+			ImGui::TextColored(UIHelpers::kColorError, "Not found");
 		}
 	}
 	if (help_activated) {
@@ -882,17 +933,17 @@ void CodeViewer::RenderCore() {
 	}
 	ImGui::SameLine();
 	if (m_emu->GetPaused()) {
-		if (ImGui::Button("CodeViewer.Step"_lc)) {
+		if (UIHelpers::ButtonWithShortcut("CodeViewer.Step"_lc, "F11")) {
 			stepping = true;
 			m_emu->SetPaused(false);
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("CodeViewer.Trace"_lc)) {
+		if (UIHelpers::ButtonWithShortcut("CodeViewer.Trace"_lc, "F10")) {
 			tracing = true;
 			m_emu->SetPaused(false);
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("CodeViewer.JumpOut"_lc)) {
+		if (UIHelpers::ButtonWithShortcut("CodeViewer.JumpOut"_lc, "Shift+F11")) {
 			auto stk = m_emu->chipset.cpu.stack.get();
 			if (!stk->empty()) {
 				if (!stk->back().is_jump) {
@@ -907,13 +958,13 @@ void CodeViewer::RenderCore() {
 			}
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("CodeViewer.Continue"_lc)) {
+		if (UIHelpers::ButtonWithShortcut("CodeViewer.Continue"_lc, "F5")) {
 			m_emu->SetPaused(false);
 		}
 		ImGui::SameLine();
 	}
 	else {
-		if (ImGui::Button("CodeViewer.Pause"_lc)) {
+		if (UIHelpers::ButtonWithShortcut("CodeViewer.Pause"_lc, "F5")) {
 			trace_bp = false;
 			stepping = false;
 			m_emu->SetPaused(true);
@@ -921,7 +972,7 @@ void CodeViewer::RenderCore() {
 		}
 		ImGui::SameLine();
 	}
-	if (ImGui::Button("CodeViewer.GotoPC"_lc)) {
+	if (UIHelpers::ButtonWithShortcut("CodeViewer.GotoPC"_lc, "Ctrl+G")) {
 		JumpTo(pc_cache);
 	}
 	ImGui::SameLine();

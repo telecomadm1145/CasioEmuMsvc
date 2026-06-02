@@ -1,4 +1,4 @@
-﻿#include "VariableWindow.h"
+#include "VariableWindow.h"
 #include "CwiiHelp.h"
 #include "Models.h"
 #include "Ui.hpp"
@@ -30,68 +30,124 @@ void VariableWindow::RenderCore() {
 	static bool showhex = false;
 	static bool showimg_auto = true;
 	static bool showimg_f = false;
-	ImGui::TextUnformatted("VarWindow.Variable"_lc);
-	ImGui::SameLine(90);
-	ImGui::TextUnformatted("VarWindow.ReP"_lc);
+
 	bool is_in_im = (*(base_addr + casioemu::GetModeOffset(m_emu->hardware_id)) & 0xFF) == 0xC4;
 	bool s_im = showimg_f ? 1 : (showimg_auto ? is_in_im : 0);
-	if (s_im) {
-		ImGui::SameLine(320);
-		ImGui::TextUnformatted("VarWindow.ImP"_lc);
-	}
-	for (const auto& v : vars) {
-		if (is_in_im && !strcmp(v.Name, "PreAns"))
-			continue;
-		std::string s;
-		ImGui::TextUnformatted(v.Name);
-		ImGui::SameLine(90);
-		s = casioemu::BCD2Str(base_addr + v.RealPartOffset);
-		ImGui::TextUnformatted(s.c_str());
+
+	int cols = 2;
+	if (s_im) cols++;
+	if (showhex) cols += (s_im ? 2 : 1);
+	if (showaddr) cols += (s_im ? 2 : 1);
+
+	if (ImGui::BeginTable("##vars_table", cols, pretty_table)) {
+		ImGui::TableSetupColumn("VarWindow.Variable"_lc, ImGuiTableColumnFlags_WidthStretch, 1.0f);
+		ImGui::TableSetupColumn("VarWindow.ReP"_lc, ImGuiTableColumnFlags_WidthStretch, 2.0f);
 		if (s_im) {
-			ImGui::SameLine(320);
-			s = casioemu::BCD2Str(base_addr + v.RealPartOffset + casioemu::GetReImOffset(m_emu->hardware_id));
-			ImGui::TextUnformatted(s.c_str());
+			ImGui::TableSetupColumn("VarWindow.ImP"_lc, ImGuiTableColumnFlags_WidthStretch, 2.0f);
 		}
 		if (showhex) {
-			ImGui::TextUnformatted("VarWindow.Hex"_lc);
-			ImGui::SameLine(90);
-			s = casioemu::ConvHex(base_addr + v.RealPartOffset, casioemu::GetVariableSize(m_emu->hardware_id));
-			ImGui::TextUnformatted(s.c_str());
+			ImGui::TableSetupColumn("Real Hex", ImGuiTableColumnFlags_WidthStretch, 1.5f);
 			if (s_im) {
-				ImGui::SameLine(320);
-				s = casioemu::ConvHex(base_addr + v.RealPartOffset + casioemu::GetReImOffset(m_emu->hardware_id), casioemu::GetVariableSize(m_emu->hardware_id));
-				ImGui::TextUnformatted(s.c_str());
+				ImGui::TableSetupColumn("Imag Hex", ImGuiTableColumnFlags_WidthStretch, 1.5f);
 			}
 		}
 		if (showaddr) {
-			ImGui::TextUnformatted("VarWindow.Addr"_lc);
-			ImGui::SameLine(90);
-			s = to_hex(v.RealPartOffset);
-			ImGui::TextUnformatted(s.c_str());
+			ImGui::TableSetupColumn("Real Addr", ImGuiTableColumnFlags_WidthStretch, 1.2f);
 			if (s_im) {
-				ImGui::SameLine(320);
-				s = to_hex(v.RealPartOffset + casioemu::GetReImOffset(m_emu->hardware_id));
-				ImGui::TextUnformatted(s.c_str());
+				ImGui::TableSetupColumn("Imag Addr", ImGuiTableColumnFlags_WidthStretch, 1.2f);
 			}
 		}
-	}
-	if (m_emu->hardware_id == casioemu::HW_CLASSWIZ_II) {
-		ImGui::TextUnformatted("Theta");
-		ImGui::SameLine(90);
-		auto a = casioemu::BCD2Str(n_ram_buffer + 0xBDEC - 0x9000);
-		ImGui::TextUnformatted(a.c_str());
-		if (showaddr) {
-			ImGui::TextUnformatted("VarWindow.Addr"_lc);
-			ImGui::SameLine(90);
-			ImGui::TextUnformatted("0xBDEC");
+		ImGui::TableHeadersRow();
+
+		for (const auto& v : vars) {
+			if (is_in_im && !strcmp(v.Name, "PreAns"))
+				continue;
+			ImGui::TableNextRow();
+			
+			// Column 0: Variable Name
+			ImGui::TableNextColumn();
+			ImGui::TextUnformatted(v.Name);
+
+			// Column 1: Real BCD
+			ImGui::TableNextColumn();
+			std::string s = casioemu::BCD2Str(base_addr + v.RealPartOffset);
+			ImGui::TextUnformatted(s.c_str());
+
+			// Column 2: Imag BCD (if s_im)
+			if (s_im) {
+				ImGui::TableNextColumn();
+				s = casioemu::BCD2Str(base_addr + v.RealPartOffset + casioemu::GetReImOffset(m_emu->hardware_id));
+				ImGui::TextUnformatted(s.c_str());
+			}
+
+			// Hex
+			if (showhex) {
+				ImGui::TableNextColumn();
+				s = casioemu::ConvHex(base_addr + v.RealPartOffset, casioemu::GetVariableSize(m_emu->hardware_id));
+				ImGui::TextUnformatted(s.c_str());
+				if (s_im) {
+					ImGui::TableNextColumn();
+					s = casioemu::ConvHex(base_addr + v.RealPartOffset + casioemu::GetReImOffset(m_emu->hardware_id), casioemu::GetVariableSize(m_emu->hardware_id));
+					ImGui::TextUnformatted(s.c_str());
+				}
+			}
+
+			// Addr
+			if (showaddr) {
+				ImGui::TableNextColumn();
+				UIHelpers::ClickableAddress(v.RealPartOffset);
+				if (s_im) {
+					ImGui::TableNextColumn();
+					UIHelpers::ClickableAddress(v.RealPartOffset + casioemu::GetReImOffset(m_emu->hardware_id));
+				}
+			}
 		}
+
+		if (m_emu->hardware_id == casioemu::HW_CLASSWIZ_II) {
+			ImGui::TableNextRow();
+			ImGui::TableNextColumn();
+			ImGui::TextUnformatted("Theta");
+
+			ImGui::TableNextColumn();
+			auto a = casioemu::BCD2Str(n_ram_buffer + 0xBDEC - 0x9000);
+			ImGui::TextUnformatted(a.c_str());
+
+			if (s_im) {
+				ImGui::TableNextColumn();
+				ImGui::TextUnformatted("");
+			}
+
+			if (showhex) {
+				ImGui::TableNextColumn();
+				ImGui::TextUnformatted("");
+				if (s_im) {
+					ImGui::TableNextColumn();
+					ImGui::TextUnformatted("");
+				}
+			}
+
+			if (showaddr) {
+				ImGui::TableNextColumn();
+				UIHelpers::ClickableAddress(0xBDEC);
+				if (s_im) {
+					ImGui::TableNextColumn();
+					ImGui::TextUnformatted("");
+				}
+			}
+		}
+
+		ImGui::EndTable();
 	}
-	ImGui::Checkbox("VarWindow.ShowAddrOpt"_lc,
-		&showaddr);
-	ImGui::Checkbox("VarWindow.ShowHexOpt"_lc,
-		&showhex);
-	ImGui::Checkbox("VarWindow.ShowImPWhenComplex"_lc,
-		&showimg_auto);
-	ImGui::Checkbox("VarWindow.AlwaysShowImP"_lc,
-		&showimg_f);
+
+	ImGui::Spacing();
+	ImGui::Separator();
+	ImGui::Spacing();
+
+	ImGui::Checkbox("VarWindow.ShowAddrOpt"_lc, &showaddr);
+	ImGui::SameLine();
+	ImGui::Checkbox("VarWindow.ShowHexOpt"_lc, &showhex);
+	ImGui::SameLine();
+	ImGui::Checkbox("VarWindow.ShowImPWhenComplex"_lc, &showimg_auto);
+	ImGui::SameLine();
+	ImGui::Checkbox("VarWindow.AlwaysShowImP"_lc, &showimg_f);
 }

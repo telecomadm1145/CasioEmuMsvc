@@ -444,15 +444,15 @@ bool Injector::ApplyInjection(const CustomInjection& inj, bool& show_info, std::
 
 		char buf[256];
 		snprintf(buf, sizeof(buf), "Rop.CustomInjectApplied"_lc, inj.name.c_str());
-		info_msg = buf;
-		show_info = true;
+		SetFeedback(buf, false);
+		show_info = false;
 		return true;
 	}
 	catch (const std::exception& e) {
 		char buf[256];
 		snprintf(buf, sizeof(buf), "Rop.CustomInjectError"_lc, inj.name.c_str());
-		info_msg = buf;
-		show_info = true;
+		SetFeedback(buf, true);
+		show_info = false;
 		return false;
 	}
 }
@@ -478,8 +478,8 @@ void Injector::RenderCustomInjectTab(bool& show_info, std::string& info_msg) {
 
 			AsyncLoadCustomInjections();
 
-			info_msg = "Rop.CustomInjectReloading"_l;
-			show_info = true;
+			SetFeedback("Rop.CustomInjectReloading"_l, false);
+			show_info = false;
 		}
 	}
 
@@ -541,7 +541,7 @@ void Injector::RenderInjectorTab(InjectorData& inj, int index, bool& show_info, 
 		memset(inj.data, 0, sizeof(inj.data));
 	}
 
-	ImGui::SetNextItemWidth(ImGui::GetWindowWidth() * 1.4f);
+	ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 	ImGui::InputTextMultiline(
 		("##hex" + std::to_string(index)).c_str(),
 		inj.data,
@@ -579,8 +579,10 @@ void Injector::RenderInjectorTab(InjectorData& inj, int index, bool& show_info, 
 			}
 		}
 	exit:
-		info_msg = "Rop.Injected"_l;
-		show_info = true;
+		char buf[128];
+		snprintf(buf, sizeof(buf), "✔ Injected %zu bytes at 0x%05X", j, (unsigned int)plc);
+		SetFeedback(buf, false);
+		show_info = false;
 	}
 }
 
@@ -623,8 +625,8 @@ void Injector::RenderCore() {
 				}
 				*(base_addr + inputbase + off) = 0xfd;
 				*(base_addr + inputbase + off + 1) = 0x20;
-				info_msg = "Rop.AnInputed"_l;
-				show_info = true;
+				SetFeedback("✔ " + "Rop.AnInputed"_l, false);
+				show_info = false;
 			}
 
 			ImGui::EndTabItem();
@@ -635,7 +637,7 @@ void Injector::RenderCore() {
 				injectors.push_back(InjectorData());
 			}
 
-			ImGui::SetNextItemWidth(ImGui::GetWindowWidth() * 1.4f);
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 			for (size_t i = 0; i < injectors.size(); i++) {
 				ImGui::PushID(static_cast<int>(i));
 
@@ -664,13 +666,13 @@ void Injector::RenderCore() {
 			editor.DrawContents(data_buf, range);
 			ImGui::EndChild();
 
-			ImGui::SetNextItemWidth(ImGui::GetWindowWidth() * 1.4f);
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 			ImGui::SliderInt("Rop.InputSize"_lc, &range, 64, 1024);
 
 			if (ImGui::Button("Rop.LoadToInputArea"_lc)) {
 				memcpy(base_addr + inputbase, data_buf, range);
-				info_msg = "Rop.LoadedTip"_l;
-				show_info = true;
+				SetFeedback("✔ " + "Rop.LoadedTip"_l, false);
+				show_info = false;
 			}
 
 			ImGui::EndTabItem();
@@ -682,6 +684,13 @@ void Injector::RenderCore() {
 		}
 
 		ImGui::EndTabBar();
+	}
+
+	if (ImGui::GetTime() - feedback_time < 3.0) {
+		ImGui::Separator();
+		ImGui::PushStyleColor(ImGuiCol_Text, is_feedback_error ? UIHelpers::kColorError : UIHelpers::kColorSuccess);
+		ImGui::TextUnformatted(feedback_msg.c_str());
+		ImGui::PopStyleColor();
 	}
 
 	if (show_info) {

@@ -1,4 +1,4 @@
-﻿#include "AddressWindow.h"
+#include "AddressWindow.h"
 #include <Hooks.h>
 #include <Localization.h>
 struct AddressInfo {
@@ -41,7 +41,7 @@ private:
 
 				ImGui::TableNextRow();
 				ImGui::TableSetColumnIndex(0);
-				ImGui::Text("0x%08X", info.address);
+				UIHelpers::ClickableAddress(info.address);
 
 				ImGui::TableSetColumnIndex(1);
 				uint8_t value = info.value;

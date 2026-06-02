@@ -65,22 +65,29 @@ struct CallAnalysis : public UIWindow {
 				funcs.clear();
 			}
 			ImGui::Separator();
-			if (ImGui::BeginTable("##records", 2, pretty_table)) {
-				ImGui::TableSetupColumn("CallAnalysis.Function"_lc,
-					ImGuiTableColumnFlags_WidthStretch, 80);
-				ImGui::TableSetupColumn("CallAnalysis.CallCount"_lc,
-					ImGuiTableColumnFlags_WidthFixed, 80);
-				// ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch, 1);
-				ImGui::TableHeadersRow();
-				for (auto& func : funcs) {
-					ImGui::TableNextRow();
-					ImGui::TableNextColumn();
-					ImGui::TextUnformatted(lookup_symbol(func.first, g_labels).c_str());
-					ImGui::TableNextColumn();
-					ImGui::Text("%d", (int)func.second.size());
-					ImGui::TableNextColumn();
+			
+			if (funcs.empty()) {
+				ImGui::Spacing();
+				ImGui::PushStyleColor(ImGuiCol_Text, UIHelpers::kColorMuted);
+				ImGui::TextWrapped("Recording... Waiting for function calls to be triggered.");
+				ImGui::PopStyleColor();
+			}
+			else {
+				if (ImGui::BeginTable("##records", 2, pretty_table)) {
+					ImGui::TableSetupColumn("CallAnalysis.Function"_lc,
+						ImGuiTableColumnFlags_WidthStretch, 80);
+					ImGui::TableSetupColumn("CallAnalysis.CallCount"_lc,
+						ImGuiTableColumnFlags_WidthFixed, 80);
+					ImGui::TableHeadersRow();
+					for (auto& func : funcs) {
+						ImGui::TableNextRow();
+						ImGui::TableNextColumn();
+						ImGui::TextUnformatted(lookup_symbol(func.first, g_labels).c_str());
+						ImGui::TableNextColumn();
+						ImGui::Text("%d", (int)func.second.size());
+					}
+					ImGui::EndTable();
 				}
-				ImGui::EndTable();
 			}
 		}
 		else {
@@ -109,9 +116,9 @@ struct CallAnalysis : public UIWindow {
 						ImGui::TableNextColumn();
 						ImGui::Text("%d", i);
 						ImGui::TableNextColumn();
-						ImGui::Text("%06x", func.pc);
+						UIHelpers::ClickableAddress(func.pc);
 						ImGui::TableNextColumn();
-						ImGui::Text("%06x", func.lr);
+						UIHelpers::ClickableAddress(func.lr);
 						ImGui::TableNextColumn();
 						ImGui::Text("%02x", func.xr0 & 0xff);
 						ImGui::TableNextColumn();
@@ -156,37 +163,31 @@ struct CallAnalysis : public UIWindow {
 			if (ImGui::InputText("##caller", caller, 260))
 				caller_v = strtol(caller, 0, 16);
 			ImGui::Separator();
-			// ImGui::Text("Shows:");
-			// ImGui::Checkbox("R0", &r0);
-			// ImGui::SameLine();
-			// ImGui::Checkbox("R1", &r1);
-			// ImGui::SameLine();
-			// ImGui::Checkbox("R2", &r2);
-			// ImGui::SameLine();
-			// ImGui::Checkbox("R3", &r3);
-			// ImGui::Checkbox("ER0", &er0);
-			// ImGui::SameLine();
-			// ImGui::Checkbox("ER2", &er2);
-			// ImGui::Separator();
-			if (ImGui::BeginTable("##records", 2, pretty_table)) {
-				ImGui::TableSetupColumn("CallAnalysis.Function"_lc, ImGuiTableColumnFlags_WidthStretch, 80);
-				ImGui::TableSetupColumn("CallAnalysis.CallCount"_lc, ImGuiTableColumnFlags_WidthFixed, 80);
-				ImGui::TableHeadersRow();
-				int i = 0;
-				for (auto& func : funcs) {
-					ImGui::TableNextRow();
-					ImGui::TableNextColumn();
 
-					if (ImGui::Button(lookup_symbol(func.first, g_labels).c_str())) {
-						viewing_calls = func.second;
+			if (funcs.empty()) {
+				ImGui::Spacing();
+				ImGui::PushStyleColor(ImGuiCol_Text, UIHelpers::kColorMuted);
+				ImGui::TextWrapped("Click 'Start Recording' above to begin capturing function calls.");
+				ImGui::PopStyleColor();
+			}
+			else {
+				if (ImGui::BeginTable("##records", 2, pretty_table)) {
+					ImGui::TableSetupColumn("CallAnalysis.Function"_lc, ImGuiTableColumnFlags_WidthStretch, 80);
+					ImGui::TableSetupColumn("CallAnalysis.CallCount"_lc, ImGuiTableColumnFlags_WidthFixed, 80);
+					ImGui::TableHeadersRow();
+					int i = 0;
+					for (auto& func : funcs) {
+						ImGui::TableNextRow();
+						ImGui::TableNextColumn();
+
+						if (ImGui::Button(lookup_symbol(func.first, g_labels).c_str())) {
+							viewing_calls = func.second;
+						}
+						ImGui::TableNextColumn();
+						ImGui::Text("%d", (int)func.second.size());
 					}
-					ImGui::TableNextColumn();
-					ImGui::Text("%d", (int)func.second.size());
-					ImGui::TableNextColumn();
-					ImGui::PushID(i++);
-					ImGui::PopID();
+					ImGui::EndTable();
 				}
-				ImGui::EndTable();
 			}
 		}
 	}

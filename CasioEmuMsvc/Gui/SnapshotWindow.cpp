@@ -104,6 +104,7 @@ void SnapshotWindow::RenderToolbar() {
     if (ImGui::Button("SnapshotWindow.Load"_lc)) {
         try {
             m_Manager.LoadSnapshot(*::m_emu, m_SelectedId);
+            m_LoadSuccessTime = ImGui::GetTime();
         } catch (const std::exception& e) {
             ShowError(e.what());
         }
@@ -115,9 +116,8 @@ void SnapshotWindow::RenderToolbar() {
     if (!hasSelected) ImGui::BeginDisabled();
     if (ImGui::Button("SnapshotWindow.Delete"_lc)) {
         if (m_SelectedId != 0) {
-            m_Manager.DeleteNode(m_SelectedId);
-            m_SelectedId = 0;
-            m_Preview.Free();
+            m_NodeToDelete = m_SelectedId;
+            ImGui::OpenPopup("Delete Confirmation");
         }
     }
     if (!hasSelected) ImGui::EndDisabled();
@@ -234,11 +234,8 @@ void SnapshotWindow::RenderTreeNode(uint32_t parentId, int depth) {
             }
             ImGui::Separator();
             if (ImGui::MenuItem("SnapshotWindow.DeleteWithChildren"_lc)) {
-                m_Manager.DeleteNode(node.Id);
-                if (m_SelectedId == node.Id) { m_SelectedId = 0; m_Preview.Free(); }
-                ImGui::EndPopup();
-                if (open) ImGui::TreePop();
-                return; // node is gone, stop iterating siblings here
+                m_NodeToDelete = node.Id;
+                ImGui::OpenPopup("Delete Confirmation");
             }
             ImGui::EndPopup();
         }
@@ -251,7 +248,9 @@ void SnapshotWindow::RenderTreeNode(uint32_t parentId, int depth) {
 }
 
 void SnapshotWindow::RenderTree() {
-    ImGui::BeginChild("##snap_tree", ImVec2(380, 0), true);
+    float width = ImGui::GetContentRegionAvail().x * 0.35f;
+    if (width < 250.0f) width = 250.0f; // min width
+    ImGui::BeginChild("##snap_tree", ImVec2(width, 0), true);
     if (m_Manager.Nodes.empty()) {
         ImGui::TextDisabled("%s", "SnapshotWindow.NoSnapshots"_lc);
     } else {
@@ -302,6 +301,11 @@ void SnapshotWindow::RenderDetails() {
                 sel->CompressedState.size());
     ImGui::Text("SnapshotWindow.PreviewFmt"_lc, sel->PreviewPng.size());
 
+    if (ImGui::GetTime() - m_LoadSuccessTime < 3.0) {
+        ImGui::Spacing();
+        ImGui::TextColored(UIHelpers::kColorSuccess, "✔ Loaded");
+    }
+
     ImGui::EndChild();
 }
 
@@ -320,6 +324,37 @@ void SnapshotWindow::RenderCore() {
     if (ImGui::BeginPopupModal("SnapshotWindow.ErrorTitle"_lc, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::TextWrapped("%s", m_ErrorMsg.c_str());
         if (ImGui::Button("Button.Positive"_lc, ImVec2(120, 0))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+
+    // Delete Confirmation Popup
+    if (ImGui::BeginPopupModal("Delete Confirmation", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted("Are you sure you want to delete this snapshot?");
+        if (m_NodeToDelete != 0) {
+            for (const auto& node : m_Manager.Nodes) {
+                if (node.Id == m_NodeToDelete) {
+                    ImGui::TextDisabled("Snapshot: %s", node.Label.empty() ? (std::string("Node ") + std::to_string(node.Id)).c_str() : node.Label.c_str());
+                    break;
+                }
+            }
+        }
+        ImGui::Separator();
+        if (ImGui::Button("Button.Positive"_lc, ImVec2(120, 0))) {
+            if (m_NodeToDelete != 0) {
+                m_Manager.DeleteNode(m_NodeToDelete);
+                if (m_SelectedId == m_NodeToDelete) {
+                    m_SelectedId = 0;
+                    m_Preview.Free();
+                }
+                m_NodeToDelete = 0;
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Button.Negative"_lc, ImVec2(120, 0))) {
+            m_NodeToDelete = 0;
+            ImGui::CloseCurrentPopup();
+        }
         ImGui::EndPopup();
     }
 

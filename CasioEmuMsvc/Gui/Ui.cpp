@@ -50,6 +50,47 @@ Breakpoints* membp = 0;
 
 std::vector<UIWindow*> windows{};
 
+void RenderStatusBar() {
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+	float barHeight = ImGui::GetFrameHeight() + 4.0f;
+	
+	ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - barHeight));
+	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, barHeight));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 2.0f));
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.12f, 1.0f));
+	
+	if (ImGui::Begin("##StatusBar", nullptr, 
+		ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 
+		ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+		ImGuiWindowFlags_NoDocking)) {
+		
+		// Run/Pause state status indicator
+		if (m_emu->GetPaused()) {
+			ImGui::TextColored(UIHelpers::kColorWarning, "\xe2\x8f\xb8 %s", "StatusBar.Paused"_lc);  // ⏸
+		} else {
+			ImGui::TextColored(UIHelpers::kColorSuccess, "\xe2\x96\xb6 %s", "StatusBar.Running"_lc); // ▶
+		}
+		
+		ImGui::SameLine(0.0f, 20.0f);
+		ImGui::TextDisabled("|");
+		ImGui::SameLine(0.0f, 20.0f);
+		
+		// Current PC
+		ImGui::Text("PC: %05X", pc_cache);
+		
+		ImGui::SameLine(0.0f, 20.0f);
+		ImGui::TextDisabled("|");
+		ImGui::SameLine(0.0f, 20.0f);
+		
+		// Breakpoints count
+		int bpCount = code_viewer ? (int)code_viewer->GetBreakpointCount() : 0;
+		ImGui::Text("BP: %d", bpCount);
+	}
+	ImGui::End();
+	ImGui::PopStyleColor();
+	ImGui::PopStyleVar();
+}
+
 void gui_loop() {
 	if (!m_emu->Running())
 		return;
@@ -73,6 +114,10 @@ void gui_loop() {
 #endif
 		win->Render();
 	}
+
+#ifndef __ANDROID__
+	RenderStatusBar();
+#endif
 
 	//	ImGui::Begin("Testing");
 	//	if (ImGui::Button("Crash"_lc)) {
@@ -279,6 +324,26 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 #endif
 
 	return 0;
+}
+
+namespace UIHelpers {
+	void ClickableAddress(uint32_t addr) {
+		ImGui::PushStyleColor(ImGuiCol_Text, kColorInfo);
+		ImGui::Text("%05X", addr);
+		ImGui::PopStyleColor();
+		if (ImGui::IsItemHovered()) {
+			ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+			ImGui::BeginTooltip();
+			ImGui::Text("Click to go to 0x%05X in Code Viewer", addr);
+			ImGui::EndTooltip();
+		}
+		if (ImGui::IsItemClicked()) {
+			if (code_viewer) {
+				code_viewer->JumpTo(addr);
+				code_viewer->BringToFront();
+			}
+		}
+	}
 }
 
 void gui_cleanup() {

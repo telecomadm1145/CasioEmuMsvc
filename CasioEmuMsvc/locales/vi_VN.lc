@@ -117,6 +117,7 @@ MemBP.MonitoringHint=Đang giám sát: 0x%06x
 MemBP.ClearRec=Xóa bản ghi
 MemBP.AddAddr=Thêm
 MemBP.BreakWhenHit=Dừng khi chạm điểm dừng
+MemBP.ViewCallstack=Xem call stack
 
 WatchWindow.CoreStatus=Trạng thái nhân(lõi)
 WatchWindow.Pause=Tạm dừng
@@ -124,6 +125,8 @@ WatchWindow.Continue=Tiếp tục
 WatchWindow.Function=Hàm
 WatchWindow.LrDestroyed=LR đã bị hủy
 WatchWindow.StackMemViewRange=Phạm vi xem bộ nhớ stack
+StatusBar.Paused=Đã tạm dừng
+StatusBar.Running=Đang chạy
 VarWindow.Variable=Biến
 VarWindow.ReP=Phần thực
 VarWindow.ImP=Phần ảo

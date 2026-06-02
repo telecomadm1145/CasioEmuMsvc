@@ -26,6 +26,8 @@ private:
     SnapshotPreview m_Preview;
     bool            m_ShowError = false;
     std::string     m_ErrorMsg;
+    uint32_t        m_NodeToDelete = 0;
+    double          m_LoadSuccessTime = 0.0;
 
     // Helpers
     void RenderToolbar();

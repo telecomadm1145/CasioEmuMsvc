@@ -45,6 +45,7 @@ private:
 	char search_buf[256]{0};
 	int search_mode = 0; // 0: Hex, 1: Instruction
 	int last_found_idx = -1;
+	bool search_failed = false;
 
 public:
 	uint8_t debug_flags = DEBUG_BREAKPOINT;
@@ -66,4 +67,5 @@ public:
 	void RemoveBreakpoint(uint32_t address);
 	void Search(bool next);
 	void ExportDisassembly();
+	size_t GetBreakpointCount() const { return break_points.size(); }
 };

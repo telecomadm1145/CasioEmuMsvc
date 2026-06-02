@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Chipset/MMU.hpp"
 #include "Emulator.hpp"
 #include "LabelFile.h"
@@ -18,6 +18,7 @@ extern casioemu::Emulator* m_emu;
 extern SDL_Window* window;
 extern SDL_Renderer* renderer;
 extern std::vector<Label> g_labels;
+extern uint32_t pc_cache;
 
 void SetDebugbreak(void); 
 class UIWindow {
@@ -71,5 +72,57 @@ public:
 //	// syntax: prompt_if_error(func)(...);
 //	auto prompt_if_error(auto f) {
 //	}
+
+namespace UIHelpers {
+	// Button with keyboard shortcut tooltip
+	inline bool ButtonWithShortcut(const char* label, const char* shortcut, ImVec2 size = { 0, 0 }) {
+		bool pressed = ImGui::Button(label, size);
+		if (shortcut && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+			ImGui::BeginTooltip();
+			ImGui::TextDisabled("Shortcut: %s", shortcut);
+			ImGui::EndTooltip();
+		}
+		return pressed;
+	}
+
+	// (?) Help marker - displays a tooltip on hover
+	inline void HelpMarker(const char* desc) {
+		ImGui::TextDisabled("(?)");
+		if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+			ImGui::BeginTooltip();
+			ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
+			ImGui::TextUnformatted(desc);
+			ImGui::PopTextWrapPos();
+			ImGui::EndTooltip();
+		}
+	}
+
+	// Group/Section header with separator line
+	inline void SectionHeader(const char* label) {
+		ImGui::Spacing();
+		ImGui::TextUnformatted(label);
+		ImGui::Separator();
+		ImGui::Spacing();
+	}
+
+	// Colored status badge
+	inline void StatusBadge(const char* text, const ImVec4& color) {
+		ImGui::PushStyleColor(ImGuiCol_Button, color);
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, color);
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, color);
+		ImGui::SmallButton(text);
+		ImGui::PopStyleColor(3);
+	}
+
+	// Color constants (proper 0.0 - 1.0 range)
+	inline constexpr ImVec4 kColorSuccess = ImVec4(0.30f, 0.80f, 0.30f, 1.0f);
+	inline constexpr ImVec4 kColorWarning = ImVec4(0.95f, 0.80f, 0.20f, 1.0f);
+	inline constexpr ImVec4 kColorError   = ImVec4(0.95f, 0.30f, 0.30f, 1.0f);
+	inline constexpr ImVec4 kColorInfo    = ImVec4(0.40f, 0.60f, 0.90f, 1.0f);
+	inline constexpr ImVec4 kColorMuted   = ImVec4(0.55f, 0.55f, 0.60f, 1.0f);
+
+	// Clickable address link (implemented in Ui.cpp)
+	void ClickableAddress(uint32_t addr);
+}
 
 inline constexpr ImGuiTableFlags pretty_table = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Resizable;

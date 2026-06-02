@@ -43,6 +43,14 @@ private:
 
 	int current_tab = 0;
 	char strbuf[65536];
+	double feedback_time = 0.0;
+	std::string feedback_msg;
+	bool is_feedback_error = false;
+	void SetFeedback(const std::string& msg, bool is_error = false) {
+		feedback_msg = msg;
+		feedback_time = ImGui::GetTime();
+		is_feedback_error = is_error;
+	}
 
 	void InitCustomInjectionsFile();
 	bool ParseCustomInjections(const std::string& content);

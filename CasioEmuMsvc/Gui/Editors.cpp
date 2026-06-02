@@ -1,4 +1,4 @@
-﻿#include "Editors.h"
+#include "Editors.h"
 #include "CPU.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Hooks.h"
@@ -31,7 +31,7 @@ struct HexEditor : public UIWindow, public MemoryEditor {
 			open_popup = false;
 		}
 		if (ImGui::BeginPopup("ContextMenu")) {
-			ImGui::Text("%x", (unsigned int)popup_p);
+			UIHelpers::ClickableAddress(popup_p);
 			if (ImGui::MenuItem("HexEditors.ContextMenu.MonitorWrite"_lc)) {
 				SetMemBp(popup_p, true);
 			}
@@ -66,7 +66,7 @@ struct SpansHexEditor : public UIWindow, public MemoryEditor {
 			open_popup = false;
 		}
 		if (ImGui::BeginPopup("ContextMenu")) {
-			ImGui::Text("%x", (unsigned int)popup_p);
+			UIHelpers::ClickableAddress(popup_p);
 			if (ImGui::MenuItem("HexEditors.ContextMenu.MonitorWrite"_lc)) {
 				SetMemBp(popup_p, true);
 			}
