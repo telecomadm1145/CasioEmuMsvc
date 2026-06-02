@@ -80,14 +80,16 @@ void Breakpoints::DrawFindContent() {
 	}
 	if (ImGui::BeginTable("##outputtable", 2, flags)) {
 		ImGui::TableSetupScrollFreeze(0, 1);
-		ImGui::TableSetupColumn("PC: ");
+		ImGui::TableSetupColumn("MemBP.ColPC"_lc);
 		ImGui::TableSetupColumn("");
 		ImGui::TableHeadersRow();
 		int i = 0;
 		for (auto kv : break_point_hash[target_addr].records) {
+			uint32_t pc_addr = kv.first;
 			ImGui::TableNextRow();
 			ImGui::TableSetColumnIndex(0);
-			ImGui::TextColored(~UIHelpers::kColorSuccess, "%01x:%04x", kv.first >> 16, kv.first & 0x0ffff);
+			// Clickable address → left-click navigates CodeViewer; right-click offers memory jump
+			UIHelpers::ClickableAddress(pc_addr, UIHelpers::JumpTarget::Code);
 			ImGui::TableSetColumnIndex(1);
 			ImGui::PushID(i++);
 			if (ImGui::Button("MemBP.ViewCallstack"_lc)) {
@@ -99,6 +101,7 @@ void Breakpoints::DrawFindContent() {
 		ImGui::EndTable();
 	}
 }
+
 
 void Breakpoints::SetupHooks() {
 	SetupHook(on_memory_read, [&](casioemu::MMU& sender, MemoryEventArgs& mea) {

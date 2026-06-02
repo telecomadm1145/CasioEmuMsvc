@@ -65,18 +65,57 @@ public:
 
 		UIHelpers::SectionHeader("Language");
 
-		ImGui::TextUnformatted("Ui.CurrentLang"_lc);
-		ImGui::SameLine();
-		ImGui::TextUnformatted("Localization.LanguageName"_lc);
-
-		ImGui::SetNextItemWidth(200.0f);
-		ImGui::InputText("##language_input", settings.language, 30);
-		ImGui::SameLine();
-		if (ImGui::Button("Ui.ChangeLang"_lc)) {
-			g_local.ChangeLanguage(settings.language);
-			tm.RequestFontRebuild();
-			tm.SaveSettings();
+		if (strlen(settings.language) == 0) {
+			strncpy(settings.language, g_local.GetCurrentLanguage().c_str(), sizeof(settings.language));
 		}
+
+		static const struct {
+			const char* code;
+			const char* badge;
+			const char* displayNameKey;
+		} availableLanguages[] = {
+			{"en_US", "EN", "Localization.Lang.en_US"},
+			{"zh_CN", "ZH", "Localization.Lang.zh_CN"},
+			{"ja_JP", "JA", "Localization.Lang.ja_JP"},
+			{"vi_VN", "VI", "Localization.Lang.vi_VN"},
+			{"ru_RU", "RU", "Localization.Lang.ru_RU"},
+			{"ko_KR", "KO", "Localization.Lang.ko_KR"},
+			{"fr_FR", "FR", "Localization.Lang.fr_FR"},
+			{"de_DE", "DE", "Localization.Lang.de_DE"},
+			{"es_ES", "ES", "Localization.Lang.es_ES"}
+		};
+
+		std::string currentLangStr(settings.language);
+		std::string currentDisplayName = "Localization.LanguageName"_l;
+		std::string currentBadge = "??";
+		for (const auto& lang : availableLanguages) {
+			if (currentLangStr == lang.code) {
+				currentBadge = lang.badge;
+				currentDisplayName = g_local.Get(lang.displayNameKey);
+				break;
+			}
+		}
+		std::string currentLabel = std::string("[") + currentBadge + "] " + currentDisplayName;
+
+		ImGui::SetNextItemWidth(300.0f);
+		if (ImGui::BeginCombo("##language_combo", currentLabel.c_str())) {
+			for (const auto& lang : availableLanguages) {
+				std::string dispName = g_local.Get(lang.displayNameKey);
+				std::string itemLabel = std::string("[") + lang.badge + "] " + dispName;
+				bool isSelected = (currentLangStr == lang.code);
+				if (ImGui::Selectable(itemLabel.c_str(), isSelected)) {
+					strncpy(settings.language, lang.code, sizeof(settings.language));
+					g_local.ChangeLanguage(settings.language);
+					tm.RequestFontRebuild();
+					tm.SaveSettings();
+				}
+				if (isSelected) {
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+
 		ImGui::SameLine();
 		if (ImGui::Button("Ui.ForceUpdateLang"_lc)) {
 			if (strlen(settings.language) > 0) {

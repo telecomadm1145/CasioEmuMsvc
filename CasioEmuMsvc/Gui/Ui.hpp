@@ -19,6 +19,8 @@ extern SDL_Window* window;
 extern SDL_Renderer* renderer;
 extern std::vector<Label> g_labels;
 extern uint32_t pc_cache;
+extern CodeViewer* code_viewer;
+extern std::vector<class UIWindow*> windows;
 
 void SetDebugbreak(void); 
 class UIWindow {
@@ -63,6 +65,8 @@ public:
 		bring_to_front_requested = true;
 	}
 	virtual void RenderCore() = 0;
+	// Optional: navigate the window to a specific memory address. No-op by default.
+	virtual void GotoMemoryAddress(uint32_t /*addr*/) {}
 	virtual ~UIWindow() {}
 
 
@@ -121,8 +125,17 @@ namespace UIHelpers {
 	inline constexpr ImVec4 kColorInfo    = ImVec4(0.40f, 0.60f, 0.90f, 1.0f);
 	inline constexpr ImVec4 kColorMuted   = ImVec4(0.55f, 0.55f, 0.60f, 1.0f);
 
-	// Clickable address link (implemented in Ui.cpp)
-	void ClickableAddress(uint32_t addr);
+	// Jump target types: code address navigates the Code Viewer disassembler,
+	// memory address navigates the RAM/ROM hex editor.
+	enum class JumpTarget { Code, Memory, Both };
+
+	// Clickable address link (implemented in Ui.cpp).
+	// - Left-click: jumps according to `defaultTarget`
+	// - Right-click: opens a context menu offering both Code Jump and Memory Jump
+	void ClickableAddress(uint32_t addr, JumpTarget defaultTarget = JumpTarget::Code);
+
+	// Programmatically navigate the memory editor to `addr`.
+	void JumpToMemory(uint32_t addr);
 }
 
 inline constexpr ImGuiTableFlags pretty_table = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Resizable;

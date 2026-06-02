@@ -2,10 +2,21 @@ R"(placeholder=a
 # English (United States) resources for CasioEmuMsvc
 Localization.LanguageName=English (United States)
 Localization.Lang.en_US=English (United States)
-Localization.Lang.vi_VN=Vietnamese (Vietnam)
+Localization.Lang.zh_CN=Chinese (Simplified)
 Localization.Lang.zh_Hans=Chinese (Simplified)
+Localization.Lang.ja_JP=Japanese (Japan)
+Localization.Lang.vi_VN=Vietnamese (Vietnam)
+Localization.Lang.ru_RU=Russian (Russia)
+Localization.Lang.ko_KR=Korean (Korea)
+Localization.Lang.fr_FR=French (France)
+Localization.Lang.de_DE=German (Germany)
+Localization.Lang.es_ES=Spanish (Spain)
 Localization.EnableCJK=0
 Localization.CJKPreference=CN
+Localization.LoadVietnamese=0
+Localization.LoadCyrillic=0
+Localization.LoadGreek=0
+Localization.LoadThai=0
 
 StartupUI.Title=Startup
 StartupUI.ImportRomPackage=Import...
@@ -359,5 +370,17 @@ RopCompiler.CursorStatus=Line: %d  Column: %d | Total lines: %d
 RopCompiler.DiagLine=line %d:
 RopCompiler.DiagError=error
 RopCompiler.DiagWarning=warning
+RopCompiler.InjectToRam=Inject to RAM
+RopCompiler.InjectToRamTooltip=Write %u bytes to RAM at 0x%05X
+RopCompiler.InjectSuccess=\xe2\x9c\x93 Injected %d bytes at 0x%05X
+
+ClickableAddress.CodeJump=Jump to Code (Code Viewer)
+ClickableAddress.MemJump=Jump to Memory (Hex Editor)
+ClickableAddress.CodeJumpTooltip=Click to navigate to 0x%05X in Code Viewer
+ClickableAddress.MemJumpTooltip=Click to navigate to 0x%05X in Memory Editor
+ClickableAddress.BothTooltip=0x%05X — Click to navigate
+ClickableAddress.RightClickHint=Right-click for more options
+
+MemBP.ColPC=PC Address
 
 placeholder2=a)"

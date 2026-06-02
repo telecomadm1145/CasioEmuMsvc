@@ -640,9 +640,14 @@
   </ItemGroup>
   <ItemGroup>
     <None Include=".clang-format" />
+    <None Include="locales\de_DE.lc" />
     <None Include="locales\en_US.lc">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="locales\es_ES.lc" />
+    <None Include="locales\fr_FR.lc" />
+    <None Include="locales\ko_KR.lc" />
+    <None Include="locales\ru_RU.lc" />
     <None Include="locales\zh_CN.lc">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

@@ -31,7 +31,7 @@ struct HexEditor : public UIWindow, public MemoryEditor {
 			open_popup = false;
 		}
 		if (ImGui::BeginPopup("ContextMenu")) {
-			UIHelpers::ClickableAddress(popup_p);
+			UIHelpers::ClickableAddress(popup_p, UIHelpers::JumpTarget::Memory);
 			if (ImGui::MenuItem("HexEditors.ContextMenu.MonitorWrite"_lc)) {
 				SetMemBp(popup_p, true);
 			}
@@ -40,6 +40,10 @@ struct HexEditor : public UIWindow, public MemoryEditor {
 			}
 			ImGui::EndPopup();
 		}
+	}
+	void GotoMemoryAddress(uint32_t addr) override {
+		BringToFront();
+		GotoAddrAndHighlight(addr, addr + 1);
 	}
 };
 struct SpansHexEditor : public UIWindow, public MemoryEditor {
@@ -66,7 +70,7 @@ struct SpansHexEditor : public UIWindow, public MemoryEditor {
 			open_popup = false;
 		}
 		if (ImGui::BeginPopup("ContextMenu")) {
-			UIHelpers::ClickableAddress(popup_p);
+			UIHelpers::ClickableAddress(popup_p, UIHelpers::JumpTarget::Memory);
 			if (ImGui::MenuItem("HexEditors.ContextMenu.MonitorWrite"_lc)) {
 				SetMemBp(popup_p, true);
 			}
@@ -76,8 +80,11 @@ struct SpansHexEditor : public UIWindow, public MemoryEditor {
 			ImGui::EndPopup();
 		}
 	}
+	void GotoMemoryAddress(uint32_t addr) override {
+		BringToFront();
+		GotoAddrAndHighlight(addr, addr + 1);
+	}
 };
-
 inline auto MMU_Hex(auto he) {
 	he->ReadFn = [](const ImU8* data, size_t off) -> ImU8 {
 		return me_mmu->ReadData((size_t)data + off, 0);

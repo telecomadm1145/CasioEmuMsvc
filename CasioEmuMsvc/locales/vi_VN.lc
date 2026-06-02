@@ -3,10 +3,21 @@ R"(placeholder=a
 # Dịch bởi hieuxyz(update/edit)
 Localization.LanguageName=Tiếng Việt
 Localization.Lang.en_US=Tiếng Anh (Hoa Kỳ)
-Localization.Lang.vi_VN=Tiếng Việt (Việt Nam)
+Localization.Lang.zh_CN=Tiếng Trung (Giản thể)
 Localization.Lang.zh_Hans=Tiếng Trung (Giản thể)
+Localization.Lang.ja_JP=Tiếng Nhật (Nhật Bản)
+Localization.Lang.vi_VN=Tiếng Việt (Việt Nam)
+Localization.Lang.ru_RU=Tiếng Nga (Nga)
+Localization.Lang.ko_KR=Tiếng Hàn (Hàn Quốc)
+Localization.Lang.fr_FR=Tiếng Pháp (Pháp)
+Localization.Lang.de_DE=Tiếng Đức (Đức)
+Localization.Lang.es_ES=Tiếng Tây Ban Nha (Tây Ban Nha)
 Localization.EnableCJK=0
 Localization.CJKPreference=CN
+Localization.LoadVietnamese=1
+Localization.LoadCyrillic=0
+Localization.LoadGreek=0
+Localization.LoadThai=0
 
 StartupUI.Title=Khởi động
 StartupUI.ImportRomPackage=Nhập...
@@ -360,5 +371,18 @@ RopCompiler.CursorStatus=Dòng: %d  Cột: %d | Tổng dòng: %d
 RopCompiler.DiagLine=dòng %d:
 RopCompiler.DiagError=lỗi
 RopCompiler.DiagWarning=cảnh báo
+RopCompiler.InjectToRam=Chèn vào RAM
+RopCompiler.InjectToRamTooltip=Ghi %u byte vào RAM tại địa chỉ 0x%05X
+RopCompiler.InjectSuccess=\xe2\x9c\x93 Đã chèn %d byte tại 0x%05X
+
+ClickableAddress.CodeJump=Nhảy đến Code (Code Viewer)
+ClickableAddress.MemJump=Nhảy đến Bộ nhớ (Hex Editor)
+ClickableAddress.CodeJumpTooltip=Nhấp để điều hướng đến 0x%05X trong Code Viewer
+ClickableAddress.MemJumpTooltip=Nhấp để điều hướng đến 0x%05X trong Hex Editor
+ClickableAddress.BothTooltip=0x%05X — Nhấp để điều hướng
+ClickableAddress.RightClickHint=Nhấp chuột phải để xem thêm tùy chọn
+
+MemBP.ColPC=Địa chỉ PC
+
 
 placeholder2=a)"

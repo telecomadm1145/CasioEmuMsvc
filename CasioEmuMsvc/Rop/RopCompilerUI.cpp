@@ -1,6 +1,7 @@
 // LibCompilerImGuiWindow.cpp
 #include "Compiler.h"
 #include "Localization.h"
+#include "Models.h"
 #include "SysDialog.h"
 #include "TextEditor.h"
 #include "Ui.hpp"
@@ -118,7 +119,29 @@ private:
 	int dbDataLabelCount_ = 0;
 	std::string dbLoadError_;
 
+	// Inject feedback (transient banner)
+	double injectFeedbackTimer_ = 0.0;
+	std::string injectFeedbackText_;
+
 private:
+	// ============================================================
+	// RAM injection
+	// ============================================================
+	void injectToRam() {
+		if (outputBytes_.empty() || !n_ram_buffer || !me_mmu)
+			return;
+
+		// Write bytes via MMU at the virtual address baseAddress_
+		for (size_t i = 0; i < outputBytes_.size(); ++i) {
+			uint32_t dest = baseAddress_ + static_cast<uint32_t>(i);
+			me_mmu->WriteData(dest, outputBytes_[i], 0);
+		}
+
+		injectFeedbackText_ = g_local.Format("RopCompiler.InjectSuccess",
+			(int)outputBytes_.size(), baseAddress_);
+		injectFeedbackTimer_ = ImGui::GetTime();
+	}
+
 	// ============================================================
 	// Setup
 	// ============================================================
@@ -384,18 +407,53 @@ private:
 	}
 
 	void drawToolbar() {
+		// ── Primary actions ──────────────────────────────────────
+		// Compile button: green tint on OK, red tint on error
+		if (lastCompileOk_) {
+			ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.15f, 0.55f, 0.15f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.20f, 0.70f, 0.20f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.10f, 0.45f, 0.10f, 1.0f));
+		} else {
+			ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.55f, 0.12f, 0.12f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.70f, 0.18f, 0.18f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.45f, 0.08f, 0.08f, 1.0f));
+		}
 		if (ImGui::Button("RopCompiler.Compile"_lc)) {
 			compile();
 		}
-		ImGui::SameLine();
-		if (ImGui::Button("RopCompiler.LoadDatabase"_lc)) {
-			openDatabaseDialog();
+		ImGui::PopStyleColor(3);
+
+		if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+			ImGui::BeginTooltip();
+			ImGui::TextDisabled("Shortcut: F5 / Ctrl+Enter");
+			ImGui::EndTooltip();
 		}
+
 		ImGui::SameLine();
 
-		// Show database status indicator
+		// Inject to RAM button (only enabled when there is output)
+		bool canInject = !outputBytes_.empty() && n_ram_buffer != nullptr;
+		if (!canInject) ImGui::BeginDisabled();
+		if (ImGui::Button("RopCompiler.InjectToRam"_lc)) {
+			injectToRam();
+		}
+		if (!canInject) ImGui::EndDisabled();
+		if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+			ImGui::BeginTooltip();
+			ImGui::Text("RopCompiler.InjectToRamTooltip"_lc,
+				static_cast<unsigned>(outputBytes_.size()), baseAddress_);
+			ImGui::EndTooltip();
+		}
+
+		ImGui::SameLine();
+		ImGui::TextDisabled("|");
+		ImGui::SameLine();
+
+		// ── Database badge ────────────────────────────────────────
 		if (databaseLoaded_) {
-			ImGui::TextColored(ImVec4(0.25f, 0.95f, 0.35f, 1.0f), "[DB]");
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.25f, 0.95f, 0.35f, 1.0f));
+			ImGui::TextUnformatted("[DB]");
+			ImGui::PopStyleColor();
 			if (ImGui::IsItemHovered()) {
 				ImGui::BeginTooltip();
 				auto tipText = g_local.Format("RopCompiler.DbTooltip",
@@ -404,9 +462,10 @@ private:
 				ImGui::TextUnformatted(tipText.c_str());
 				ImGui::EndTooltip();
 			}
-		}
-		else {
-			ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "[No DB]");
+		} else {
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.6f, 0.2f, 1.0f));
+			ImGui::TextUnformatted("[No DB]");
+			ImGui::PopStyleColor();
 			if (ImGui::IsItemHovered()) {
 				ImGui::BeginTooltip();
 				ImGui::TextUnformatted("RopCompiler.NoDbTooltip"_lc);
@@ -415,49 +474,70 @@ private:
 		}
 
 		ImGui::SameLine();
-		if (ImGui::Button("RopCompiler.ClearOutput"_lc)) {
+		if (ImGui::SmallButton("RopCompiler.LoadDatabase"_lc)) {
+			openDatabaseDialog();
+		}
+
+		ImGui::SameLine();
+		ImGui::TextDisabled("|");
+		ImGui::SameLine();
+
+		// ── Base address + length ─────────────────────────────────
+		ImGui::TextUnformatted("RopCompiler.Base"_lc);
+		ImGui::SameLine();
+		int base = static_cast<int>(baseAddress_);
+		ImGui::SetNextItemWidth(90.0f);
+		if (ImGui::InputInt("##base_address", &base, 0, 0, ImGuiInputTextFlags_CharsHexadecimal)) {
+			if (base < 0) base = 0;
+			baseAddress_ = static_cast<uint32_t>(base);
+		}
+		ImGui::SameLine();
+		ImGui::TextDisabled("%s 0x%04X / %zu bytes",
+			"RopCompiler.Length"_lc,
+			static_cast<unsigned>(outputBytes_.size()),
+			outputBytes_.size());
+
+		ImGui::SameLine();
+		ImGui::TextDisabled("|");
+		ImGui::SameLine();
+
+		// ── Secondary actions ─────────────────────────────────────
+		if (ImGui::SmallButton("RopCompiler.CopyHex"_lc)) {
+			copyOutputHexToClipboard();
+		}
+		ImGui::SameLine();
+		if (ImGui::SmallButton("RopCompiler.ClearOutput"_lc)) {
 			outputBytes_.clear();
 			diagnosticsText_.clear();
 			editor_.SetErrorMarkers({});
 			lastCompileOk_ = true;
 		}
-		ImGui::SameLine();
-		if (ImGui::Button("RopCompiler.CopyHex"_lc)) {
-			copyOutputHexToClipboard();
-		}
-		ImGui::SameLine();
-		ImGui::TextDisabled("|");
-		ImGui::SameLine();
-		ImGui::TextUnformatted("RopCompiler.Base"_lc);
-		ImGui::SameLine();
 
-		int base = static_cast<int>(baseAddress_);
-		ImGui::SetNextItemWidth(100.0f);
-		if (ImGui::InputInt("##base_address", &base, 0, 0, ImGuiInputTextFlags_CharsHexadecimal)) {
-			if (base < 0)
-				base = 0;
-			baseAddress_ = static_cast<uint32_t>(base);
-		}
-		ImGui::SameLine();
-		ImGui::Text("%s 0x%04X / %zu %s",
-			"RopCompiler.Length"_lc,
-			static_cast<unsigned>(outputBytes_.size()),
-			outputBytes_.size(),
-			"RopCompiler.Bytes"_lc);
-		ImGui::SameLine();
-
-		if (lastCompileOk_) {
-			ImGui::TextColored(ImVec4(0.25f, 0.95f, 0.35f, 1.0f), "OK");
-		}
-		else {
-			ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.25f, 1.0f), "%s", "RopCompiler.Error"_lc);
-		}
-
-		// Show database load error if any
+		// Show database load error if any (inline red badge)
 		if (!dbLoadError_.empty()) {
-			ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%s", dbLoadError_.c_str());
+			ImGui::SameLine();
+			ImGui::PushStyleColor(ImGuiCol_Text, UIHelpers::kColorError);
+			ImGui::TextUnformatted(dbLoadError_.c_str());
+			ImGui::PopStyleColor();
+		}
+
+		// Show inject feedback
+		if (injectFeedbackTimer_ > 0.0) {
+			double elapsed = ImGui::GetTime() - injectFeedbackTimer_;
+			if (elapsed < 3.0) {
+				ImGui::SameLine();
+				float alpha = (float)std::max(0.0, 1.0 - elapsed / 1.5);
+				ImGui::PushStyleColor(ImGuiCol_Text,
+					ImVec4(UIHelpers::kColorSuccess.x, UIHelpers::kColorSuccess.y,
+						UIHelpers::kColorSuccess.z, alpha));
+				ImGui::TextUnformatted(injectFeedbackText_.c_str());
+				ImGui::PopStyleColor();
+			} else {
+				injectFeedbackTimer_ = 0.0;
+			}
 		}
 	}
+
 
 	void drawSourcePanel(float height) {
 		ImGui::BeginChild("##source_panel", ImVec2(-1, height), true);

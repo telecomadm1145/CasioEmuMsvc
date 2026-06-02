@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Localization.h"
 #include <filesystem>
 #include <imgui.h>
@@ -93,6 +93,13 @@ inline std::string GetCJKFontPath() {
 			"C:\\Windows\\Fonts\\YuGothM.ttc",
 			"C:\\Windows\\Fonts\\meiryo.ttc"};
 	}
+	else if (preference == "KR") {
+		candidates = {
+			"C:\\Windows\\Fonts\\malgun.ttf",  // Malgun Gothic (맑은 고딕)
+			"C:\\Windows\\Fonts\\gulim.ttc",   // Gulim (굴림)
+			"C:\\Windows\\Fonts\\batang.ttc"   // Batang (바탕)
+		};
+	}
 	else {
 		candidates = {
 			"C:\\Windows\\Fonts\\msyh.ttc",	  // 雅黑
@@ -148,6 +155,22 @@ inline void RebuildFont(float scale = 0.0f) {
 		io.Fonts->AddFontFromFileTTF(mono_font_path.c_str(), 15 * scale, &config, io.Fonts->GetGlyphRangesDefault());
 		base_loaded = true;
 		printf("[Ui][Info] Loaded Monospace Font: %s\n", mono_font_path.c_str());
+
+		// Merge additional glyph ranges based on localization settings
+		config.MergeMode = true;
+		if ("Localization.LoadVietnamese"_l == "1" || "Localization.LoadVietnamese"_l == "true") {
+			io.Fonts->AddFontFromFileTTF(mono_font_path.c_str(), 15 * scale, &config, io.Fonts->GetGlyphRangesVietnamese());
+		}
+		if ("Localization.LoadCyrillic"_l == "1" || "Localization.LoadCyrillic"_l == "true") {
+			io.Fonts->AddFontFromFileTTF(mono_font_path.c_str(), 15 * scale, &config, io.Fonts->GetGlyphRangesCyrillic());
+		}
+		if ("Localization.LoadGreek"_l == "1" || "Localization.LoadGreek"_l == "true") {
+			io.Fonts->AddFontFromFileTTF(mono_font_path.c_str(), 15 * scale, &config, io.Fonts->GetGlyphRangesGreek());
+		}
+		if ("Localization.LoadThai"_l == "1" || "Localization.LoadThai"_l == "true") {
+			io.Fonts->AddFontFromFileTTF(mono_font_path.c_str(), 15 * scale, &config, io.Fonts->GetGlyphRangesThai());
+		}
+		config.MergeMode = false;
 	}
 	else {
 		printf("[Ui][Warn] No monospace font found! Falling back to ImGui Default (ProggyClean).\n");
@@ -166,7 +189,12 @@ inline void RebuildFont(float scale = 0.0f) {
 
 			// 稍微放大一点 CJK 字体，通常中文比同号的英文显得小
 			// 保持 16 vs 15 或者 15 vs 15 都可以，看你视觉偏好
-			io.Fonts->AddFontFromFileTTF(cjk_font_path.c_str(), 16 * scale, &config, GetCJKRanges());
+			if ("Localization.CJKPreference"_l == "KR") {
+				io.Fonts->AddFontFromFileTTF(cjk_font_path.c_str(), 16 * scale, &config, io.Fonts->GetGlyphRangesKorean());
+			}
+			else {
+				io.Fonts->AddFontFromFileTTF(cjk_font_path.c_str(), 16 * scale, &config, GetCJKRanges());
+			}
 		}
 	}
 

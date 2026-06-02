@@ -1,4 +1,5 @@
 #include "Ui.hpp"
+#include "hex.hpp"
 #include "5800FileSystem.h"
 #include "AddressWindow.h"
 #include "BitmapViewer.h"
@@ -327,24 +328,85 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 }
 
 namespace UIHelpers {
-	void ClickableAddress(uint32_t addr) {
+
+	void JumpToMemory(uint32_t addr) {
+		// Prefer the "Ram" window; fall back to any window that overrides GotoMemoryAddress.
+		UIWindow* fallback = nullptr;
+		for (auto* win : windows) {
+			const char* n = win->name;
+			if (n && strcmp(n, "Ram") == 0) {
+				win->GotoMemoryAddress(addr);
+				return;
+			}
+			// Track first editor-like window as fallback
+			if (!fallback && n && (strcmp(n, "Rom") == 0 || strcmp(n, "All") == 0
+				|| strcmp(n, "PRam") == 0 || strcmp(n, "Flash") == 0)) {
+				fallback = win;
+			}
+		}
+		if (fallback) {
+			fallback->GotoMemoryAddress(addr);
+		}
+	}
+
+	void ClickableAddress(uint32_t addr, JumpTarget defaultTarget) {
+		// Render the colored address text
 		ImGui::PushStyleColor(ImGuiCol_Text, kColorInfo);
-		ImGui::Text("%05X", addr);
+		char addrLabel[16];
+		snprintf(addrLabel, sizeof(addrLabel), "%05X", addr);
+		ImGui::TextUnformatted(addrLabel);
 		ImGui::PopStyleColor();
+
 		if (ImGui::IsItemHovered()) {
 			ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 			ImGui::BeginTooltip();
-			ImGui::Text("Click to go to 0x%05X in Code Viewer", addr);
+			if (defaultTarget == JumpTarget::Code) {
+				ImGui::Text("ClickableAddress.CodeJumpTooltip"_lc, addr);
+				ImGui::TextDisabled("ClickableAddress.RightClickHint"_lc);
+			} else if (defaultTarget == JumpTarget::Memory) {
+				ImGui::Text("ClickableAddress.MemJumpTooltip"_lc, addr);
+				ImGui::TextDisabled("ClickableAddress.RightClickHint"_lc);
+			} else {
+				ImGui::Text("ClickableAddress.BothTooltip"_lc, addr);
+			}
 			ImGui::EndTooltip();
 		}
-		if (ImGui::IsItemClicked()) {
-			if (code_viewer) {
-				code_viewer->JumpTo(addr);
-				code_viewer->BringToFront();
+
+		// Left-click: default action
+		if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+			if (defaultTarget == JumpTarget::Code || defaultTarget == JumpTarget::Both) {
+				if (code_viewer) {
+					code_viewer->JumpTo(addr);
+					code_viewer->BringToFront();
+				}
+			} else {
+				JumpToMemory(addr);
 			}
+		}
+
+		// Right-click: context menu with both options
+		char popupId[32];
+		snprintf(popupId, sizeof(popupId), "##ca_popup_%05X", addr);
+		if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+			ImGui::OpenPopup(popupId);
+		}
+		if (ImGui::BeginPopup(popupId)) {
+			ImGui::TextDisabled("0x%05X", addr);
+			ImGui::Separator();
+			if (ImGui::MenuItem("ClickableAddress.CodeJump"_lc)) {
+				if (code_viewer) {
+					code_viewer->JumpTo(addr);
+					code_viewer->BringToFront();
+				}
+			}
+			if (ImGui::MenuItem("ClickableAddress.MemJump"_lc)) {
+				JumpToMemory(addr);
+			}
+			ImGui::EndPopup();
 		}
 	}
 }
+
 
 void gui_cleanup() {
 	ImGui_ImplSDLRenderer2_Shutdown();

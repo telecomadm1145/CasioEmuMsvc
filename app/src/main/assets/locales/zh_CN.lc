@@ -1,10 +1,21 @@
 R"(placeholder=a
 Localization.LanguageName=中文 (简体)
 Localization.Lang.en_US=英语 (美国)
-Localization.Lang.vi_VN=越南语 (越南)
+Localization.Lang.zh_CN=中文 (简体)
 Localization.Lang.zh_Hans=中文 (简体)
+Localization.Lang.ja_JP=日语 (日本)
+Localization.Lang.vi_VN=越南语 (越南)
+Localization.Lang.ru_RU=俄语 (俄罗斯)
+Localization.Lang.ko_KR=韩语 (韩国)
+Localization.Lang.fr_FR=法语 (法国)
+Localization.Lang.de_DE=德语 (德国)
+Localization.Lang.es_ES=西班牙语 (西班牙)
 Localization.EnableCJK=1
 Localization.CJKPreference=CN
+Localization.LoadVietnamese=0
+Localization.LoadCyrillic=0
+Localization.LoadGreek=0
+Localization.LoadThai=0
 
 StartupUI.Title=启动
 StartupUI.ImportRomPackage=导入...
@@ -359,5 +370,17 @@ RopCompiler.CursorStatus=行：%d  列：%d | 总行数：%d
 RopCompiler.DiagLine=第 %d 行：
 RopCompiler.DiagError=错误
 RopCompiler.DiagWarning=警告
+RopCompiler.InjectToRam=注入到内存
+RopCompiler.InjectToRamTooltip=将 %u 字节写入地址 0x%05X 处的内存
+RopCompiler.InjectSuccess=\xe2\x9c\x93 已注入 %d 字节到 0x%05X
+
+ClickableAddress.CodeJump=跳转到代码（代码查看器）
+ClickableAddress.MemJump=跳转到内存（十六进制编辑器）
+ClickableAddress.CodeJumpTooltip=点击在代码查看器中跳转到 0x%05X
+ClickableAddress.MemJumpTooltip=点击在内存编辑器中跳转到 0x%05X
+ClickableAddress.BothTooltip=0x%05X — 点击跳转
+ClickableAddress.RightClickHint=右键查看更多选项
+
+MemBP.ColPC=PC 地址
 
 placeholder2=a)"
