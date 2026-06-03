@@ -362,10 +362,10 @@ namespace UIHelpers {
 			ImGui::BeginTooltip();
 			if (defaultTarget == JumpTarget::Code) {
 				ImGui::Text("ClickableAddress.CodeJumpTooltip"_lc, addr);
-				ImGui::TextDisabled("ClickableAddress.RightClickHint"_lc);
+				ImGui::TextDisabled("%s", "ClickableAddress.RightClickHint"_lc);
 			} else if (defaultTarget == JumpTarget::Memory) {
 				ImGui::Text("ClickableAddress.MemJumpTooltip"_lc, addr);
-				ImGui::TextDisabled("ClickableAddress.RightClickHint"_lc);
+				ImGui::TextDisabled("%s", "ClickableAddress.RightClickHint"_lc);
 			} else {
 				ImGui::Text("ClickableAddress.BothTooltip"_lc, addr);
 			}
