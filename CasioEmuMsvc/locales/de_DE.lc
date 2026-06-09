@@ -112,6 +112,9 @@ CodeViewer.Pause=Pause
 CodeViewer.GotoPC=Gehe zu PC
 
 ScreenshotBtn=Screenshot
+RecordStartBtn=Aufnahme starten
+RecordStopBtn=Aufnahme stoppen
+RecordStatus=Aufnahme: %u Frames
 
 HwController.Value1=Flimmerschwelle
 HwController.Value2=Helligkeitskoeff.

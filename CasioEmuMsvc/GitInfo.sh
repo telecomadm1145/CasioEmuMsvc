@@ -8,4 +8,4 @@ macroDefinition+="\n\n#define GIT_LATEST_TAG \"$latestTag\""
 macroDefinition+="\n#define GIT_COMMIT_HASH \"$gitCommitHash\""
 macroDefinition+="\n#define GIT_COMMIT_DATE \"$gitCommitDate\""
 
-echo -e "$macroDefinition" > git_info.h
+echo -e "$macroDefinition" > src/git_info.h

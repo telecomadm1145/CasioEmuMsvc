@@ -378,3 +378,7 @@ sentry.properties
 local.properties
 
 .idea/
+
+build-web/
+build-web-check/
+build-parent-check/

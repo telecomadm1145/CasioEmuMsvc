@@ -111,6 +111,9 @@ CodeViewer.Pause=一時停止
 CodeViewer.GotoPC=PCへ移動
 
 ScreenshotBtn=スクリーンショット
+RecordStartBtn=録画開始
+RecordStopBtn=録画停止
+RecordStatus=録画中: %u フレーム
 
 HwController.Value1=画面のちらつきしきい値
 HwController.Value2=画面のちらつき輝度係数

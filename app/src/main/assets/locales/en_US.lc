@@ -112,6 +112,9 @@ CodeViewer.Pause=Pause
 CodeViewer.GotoPC=Go to PC
 
 ScreenshotBtn=Screenshot
+RecordStartBtn=Start Recording
+RecordStopBtn=Stop Recording
+RecordStatus=Recording: %u frames
 
 HwController.Value1=Flicker Threshold
 HwController.Value2=Brightness Coeff.

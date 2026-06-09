@@ -11,10 +11,10 @@ SDL_PATH := ../SDL
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/$(SDL_PATH)/include $(LOCAL_PATH)/../SDK_image/include
 
 # Add your application source files here...
-LOCAL_SRC_FILES := casioemu.cpp
+LOCAL_SRC_FILES := src/casioemu.cpp
 
 LOCAL_SHARED_LIBRARIES := SDL2 SDL_image
 
-LOCAL_LDLIBS := -lGLESv1_CM -lGLESv2 -lOpenSLES -llog -landroid
+LOCAL_LDLIBS := -lGLESv1_CM -lGLESv2 -lOpenSLES -llog -landroid -lmediandk
 
 include $(BUILD_SHARED_LIBRARY)

@@ -112,6 +112,9 @@ CodeViewer.Pause=Pause
 CodeViewer.GotoPC=Aller au PC
 
 ScreenshotBtn=Capture d'écran
+RecordStartBtn=Démarrer l'enregistrement
+RecordStopBtn=Arrêter l'enregistrement
+RecordStatus=Enregistrement : %u images
 
 HwController.Value1=Seuil de scintillement
 HwController.Value2=Coeff. de luminosité

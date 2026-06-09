@@ -112,6 +112,9 @@ CodeViewer.Pause=Pausa
 CodeViewer.GotoPC=Ir al PC
 
 ScreenshotBtn=Captura de pantalla
+RecordStartBtn=Iniciar grabación
+RecordStopBtn=Detener grabación
+RecordStatus=Grabando: %u fotogramas
 
 HwController.Value1=Umbral de parpadeo
 HwController.Value2=Coef. de brillo

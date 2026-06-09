@@ -7,4 +7,4 @@ $macroDefinition += "`n`n#define GIT_LATEST_TAG `"$latestTag`""
 $macroDefinition += "`n#define GIT_COMMIT_HASH `"$gitCommitHash`""
 $macroDefinition += "`n#define GIT_COMMIT_DATE `"$gitCommitDate`""
 
-$macroDefinition | Out-File -FilePath "git_info.h" -Encoding utf8
+$macroDefinition | Out-File -FilePath "src/git_info.h" -Encoding utf8

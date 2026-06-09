@@ -113,6 +113,9 @@ CodeViewer.Pause=Tạm dừng
 CodeViewer.GotoPC=Nhảy đến PC
 
 ScreenshotBtn=Chụp màn hình
+RecordStartBtn=Bắt đầu quay
+RecordStopBtn=Dừng quay
+RecordStatus=Đang quay: %u khung
 
 HwController.Value1=Ngưỡng nháy màn hình
 HwController.Value2=Hệ số độ sáng nháy màn hình

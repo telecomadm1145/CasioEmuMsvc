@@ -112,6 +112,9 @@ CodeViewer.Pause=일시 중지
 CodeViewer.GotoPC=PC로 이동
 
 ScreenshotBtn=스크린샷
+RecordStartBtn=녹화 시작
+RecordStopBtn=녹화 중지
+RecordStatus=녹화 중: %u 프레임
 
 HwController.Value1=플리커 임계값
 HwController.Value2=밝기 계수

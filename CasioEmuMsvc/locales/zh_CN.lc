@@ -111,6 +111,9 @@ CodeViewer.Pause=暂停
 CodeViewer.GotoPC=跳转至 PC
 
 ScreenshotBtn=截屏
+RecordStartBtn=开始录像
+RecordStopBtn=停止录像
+RecordStatus=正在录像：%u 帧
 
 HwController.Value1=屏幕闪烁阈值
 HwController.Value2=屏幕闪烁亮度系数

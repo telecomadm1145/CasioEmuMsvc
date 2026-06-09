@@ -112,6 +112,9 @@ CodeViewer.Pause=Пауза
 CodeViewer.GotoPC=Перейти к PC
 
 ScreenshotBtn=Снимок экрана
+RecordStartBtn=Начать запись
+RecordStopBtn=Остановить запись
+RecordStatus=Запись: %u кадров
 
 HwController.Value1=Порог мерцания
 HwController.Value2=Коэф. яркости

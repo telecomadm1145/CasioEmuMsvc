@@ -189,7 +189,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;src;src\Chipset;src\Containers;src\CrashHandler;src\Ext;src\Ext\cam;src\Gui;src\Gui\imgui;src\JitU8;src\Peripheral;src\Plugin;src\Rop;src\StartupUi;src\locales;../ImGuiColorTextEdit;../discord-rpc/include;third_party;third_party\asmjit\src;third_party\miniz;System;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -217,7 +217,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;src;src\Chipset;src\Containers;src\CrashHandler;src\Ext;src\Ext\cam;src\Gui;src\Gui\imgui;src\JitU8;src\Peripheral;src\Plugin;src\Rop;src\StartupUi;src\locales;../ImGuiColorTextEdit;../discord-rpc/include;third_party;third_party\asmjit\src;third_party\miniz;System;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -247,7 +247,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;src;src\Chipset;src\Containers;src\CrashHandler;src\Ext;src\Ext\cam;src\Gui;src\Gui\imgui;src\JitU8;src\Peripheral;src\Plugin;src\Rop;src\StartupUi;src\locales;../ImGuiColorTextEdit;../discord-rpc/include;third_party;third_party\asmjit\src;third_party\miniz;System;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -282,7 +282,7 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <FloatingPointModel>Fast</FloatingPointModel>
       <CreateHotpatchableImage>false</CreateHotpatchableImage>
-      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;src;src\Chipset;src\Containers;src\CrashHandler;src\Ext;src\Ext\cam;src\Gui;src\Gui\imgui;src\JitU8;src\Peripheral;src\Plugin;src\Rop;src\StartupUi;src\locales;../ImGuiColorTextEdit;../discord-rpc/include;third_party;third_party\asmjit\src;third_party\miniz;System;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DisableSpecificWarnings>
       </DisableSpecificWarnings>
@@ -311,7 +311,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;../discord-rpc/include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;src;src\Chipset;src\Containers;src\CrashHandler;src\Ext;src\Ext\cam;src\Gui;src\Gui\imgui;src\JitU8;src\Peripheral;src\Plugin;src\Rop;src\StartupUi;src\locales;../ImGuiColorTextEdit;../discord-rpc/include;third_party;third_party\asmjit\src;third_party\miniz;System;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -339,7 +339,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;src;src\Chipset;src\Containers;src\CrashHandler;src\Ext;src\Ext\cam;src\Gui;src\Gui\imgui;src\JitU8;src\Peripheral;src\Plugin;src\Rop;src\StartupUi;src\locales;../ImGuiColorTextEdit;../discord-rpc/include;third_party;third_party\asmjit\src;third_party\miniz;System;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -369,7 +369,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;src;src\Chipset;src\Containers;src\CrashHandler;src\Ext;src\Ext\cam;src\Gui;src\Gui\imgui;src\JitU8;src\Peripheral;src\Plugin;src\Rop;src\StartupUi;src\locales;../ImGuiColorTextEdit;../discord-rpc/include;third_party;third_party\asmjit\src;third_party\miniz;System;</AdditionalIncludeDirectories>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>
@@ -404,7 +404,7 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <FloatingPointModel>Fast</FloatingPointModel>
       <CreateHotpatchableImage>false</CreateHotpatchableImage>
-      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;Chipset;Containers;Gui;Gui/imgui;../ImGuiColorTextEdit;../discord-rpc/include;Peripheral;Ext;Dcl;StartupUi;System;asmjit/src;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;.;src;src\Chipset;src\Containers;src\CrashHandler;src\Ext;src\Ext\cam;src\Gui;src\Gui\imgui;src\JitU8;src\Peripheral;src\Plugin;src\Rop;src\StartupUi;src\locales;../ImGuiColorTextEdit;../discord-rpc/include;third_party;third_party\asmjit\src;third_party\miniz;System;</AdditionalIncludeDirectories>
       <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <ProgramDataBaseFileName>$(IntDir)$(TargetName).pdb</ProgramDataBaseFileName>
@@ -433,210 +433,210 @@
     <ClCompile Include="..\discord-rpc\src\dllmain.cpp" />
     <ClCompile Include="..\discord-rpc\src\rpc_connection.cpp" />
     <ClCompile Include="..\discord-rpc\src\serialization.cpp" />
-    <ClCompile Include="Chipset\ePSCpu.cpp" />
-    <ClCompile Include="Ext\cam\cam.cc" />
-    <ClCompile Include="Ext\cam\hct.cc" />
-    <ClCompile Include="Ext\cam\hct_solver.cc" />
-    <ClCompile Include="Ext\cam\tones.cc" />
-    <ClCompile Include="Ext\cam\utils.cc" />
-    <ClCompile Include="Ext\cam\viewing_conditions.cc" />
-    <ClCompile Include="Ext\ConsoleText.cpp" />
-    <ClCompile Include="Ext\ePSDisas.cpp" />
-    <ClCompile Include="Ext\GameBuffer.cpp" />
-    <ClCompile Include="Gui\imgui\TextEditor.cpp" />
-    <ClCompile Include="Gui\ThemeManager.cpp" />
-    <ClCompile Include="Gui\AddressWindow.cpp" />
-    <ClCompile Include="casioemu.cpp" />
-    <ClCompile Include="Chipset\Chipset.cpp" />
-    <ClCompile Include="Chipset\CPU.cpp" />
-    <ClCompile Include="Chipset\CPUArithmetic.cpp" />
-    <ClCompile Include="Chipset\CPUControl.cpp" />
-    <ClCompile Include="Chipset\CPULoadStore.cpp" />
-    <ClCompile Include="Chipset\CPUPushPop.cpp" />
-    <ClCompile Include="Chipset\InterruptSource.cpp" />
-    <ClCompile Include="Chipset\MMU.cpp" />
-    <ClCompile Include="Chipset\MMURegion.cpp" />
-    <ClCompile Include="CrashHandler\CrashHandler.cpp" />
-    <ClCompile Include="Emulator.cpp" />
-    <ClCompile Include="Ext\SysDialog.cpp" />
-    <ClCompile Include="Gui\5800FileSystem.cpp" />
-    <ClCompile Include="Gui\CallAnalysis.cpp" />
-    <ClCompile Include="Gui\Editors.cpp" />
-    <ClCompile Include="Gui\Hooks.cpp" />
-    <ClCompile Include="Gui\imgui\imgui_demo.cpp" />
-    <ClCompile Include="Gui\Localization.cpp" />
-    <ClCompile Include="Gui\Theme.cpp" />
-    <ClCompile Include="Gui\BitmapViewer.cpp" />
-    <ClCompile Include="Peripheral\ML620Ports.cpp" />
-    <ClCompile Include="Peripheral\ROMWindow.cpp" />
-    <ClCompile Include="Peripheral\Uart.cpp" />
-    <ClCompile Include="Peripheral\Spi.cpp" />
-    <ClCompile Include="Plugin\PluginApi_Impl.cpp" />
-    <ClCompile Include="Plugin\PluginMan.cpp" />
-    <ClCompile Include="Rop\Compiler.h">
+    <ClCompile Include="src\Chipset\ePSCpu.cpp" />
+    <ClCompile Include="src\Ext\cam\cam.cc" />
+    <ClCompile Include="src\Ext\cam\hct.cc" />
+    <ClCompile Include="src\Ext\cam\hct_solver.cc" />
+    <ClCompile Include="src\Ext\cam\tones.cc" />
+    <ClCompile Include="src\Ext\cam\utils.cc" />
+    <ClCompile Include="src\Ext\cam\viewing_conditions.cc" />
+    <ClCompile Include="src\Ext\ConsoleText.cpp" />
+    <ClCompile Include="src\Ext\ePSDisas.cpp" />
+    <ClCompile Include="src\Ext\GameBuffer.cpp" />
+    <ClCompile Include="src\Gui\imgui\TextEditor.cpp" />
+    <ClCompile Include="src\Gui\ThemeManager.cpp" />
+    <ClCompile Include="src\Gui\AddressWindow.cpp" />
+    <ClCompile Include="src\casioemu.cpp" />
+    <ClCompile Include="src\Chipset\Chipset.cpp" />
+    <ClCompile Include="src\Chipset\CPU.cpp" />
+    <ClCompile Include="src\Chipset\CPUArithmetic.cpp" />
+    <ClCompile Include="src\Chipset\CPUControl.cpp" />
+    <ClCompile Include="src\Chipset\CPULoadStore.cpp" />
+    <ClCompile Include="src\Chipset\CPUPushPop.cpp" />
+    <ClCompile Include="src\Chipset\InterruptSource.cpp" />
+    <ClCompile Include="src\Chipset\MMU.cpp" />
+    <ClCompile Include="src\Chipset\MMURegion.cpp" />
+    <ClCompile Include="src\CrashHandler\CrashHandler.cpp" />
+    <ClCompile Include="src\Emulator.cpp" />
+    <ClCompile Include="src\Ext\SysDialog.cpp" />
+    <ClCompile Include="src\Gui\5800FileSystem.cpp" />
+    <ClCompile Include="src\Gui\CallAnalysis.cpp" />
+    <ClCompile Include="src\Gui\Editors.cpp" />
+    <ClCompile Include="src\Gui\Hooks.cpp" />
+    <ClCompile Include="src\Gui\imgui\imgui_demo.cpp" />
+    <ClCompile Include="src\Gui\Localization.cpp" />
+    <ClCompile Include="src\Gui\Theme.cpp" />
+    <ClCompile Include="src\Gui\BitmapViewer.cpp" />
+    <ClCompile Include="src\Peripheral\ML620Ports.cpp" />
+    <ClCompile Include="src\Peripheral\ROMWindow.cpp" />
+    <ClCompile Include="src\Peripheral\Uart.cpp" />
+    <ClCompile Include="src\Peripheral\Spi.cpp" />
+    <ClCompile Include="src\Plugin\PluginApi_Impl.cpp" />
+    <ClCompile Include="src\Plugin\PluginMan.cpp" />
+    <ClCompile Include="src\Rop\Compiler.h">
       <FileType>CppHeader</FileType>
     </ClCompile>
-    <ClCompile Include="Rop\RopCompilerUI.cpp" />
-    <ClCompile Include="sdl_win32_extra.cpp" />
-    <ClCompile Include="StartupUi\StartupUi.cpp" />
-    <ClCompile Include="Gui\CodeViewer.cpp" />
-    <ClCompile Include="Gui\imgui\imgui.cpp" />
-    <ClCompile Include="Gui\imgui\imgui_draw.cpp" />
-    <ClCompile Include="Gui\imgui\imgui_impl_sdl2.cpp" />
-    <ClCompile Include="Gui\imgui\imgui_impl_sdlrenderer2.cpp" />
-    <ClCompile Include="Gui\imgui\imgui_tables.cpp" />
-    <ClCompile Include="Gui\imgui\imgui_widgets.cpp" />
-    <ClCompile Include="Gui\Injector.cpp" />
-    <ClCompile Include="Gui\LabelViewer.cpp" />
-    <ClCompile Include="Gui\MemBreakPoint.cpp" />
-    <ClCompile Include="Gui\HwController.cpp" />
-    <ClCompile Include="Gui\Ui.cpp" />
-    <ClCompile Include="Gui\WatchWindow.cpp" />
-    <ClCompile Include="Gui\FileDialog.cpp" />
-    <ClCompile Include="Gui\VariableWindow.cpp" />
-    <ClCompile Include="Gui\PluginLogWindow.cpp" />
-    <ClCompile Include="Peripheral\5800Flash.cpp" />
-    <ClCompile Include="Peripheral\Audio.cpp" />
-    <ClCompile Include="Peripheral\BatteryBackedRAM.cpp" />
-    <ClCompile Include="Peripheral\BCDCalc.cpp" />
-    <ClCompile Include="Peripheral\ExternalInterrupts.cpp" />
-    <ClCompile Include="Peripheral\Flash.cpp" />
-    <ClCompile Include="Peripheral\IOPorts.cpp" />
-    <ClCompile Include="Peripheral\Keyboard.cpp" />
-    <ClCompile Include="Peripheral\Miscellaneous.cpp" />
-    <ClCompile Include="Peripheral\PowerSupply.cpp" />
-    <ClCompile Include="Peripheral\RealTimeClock.cpp" />
-    <ClCompile Include="Peripheral\Screen.cpp" />
-    <ClCompile Include="Peripheral\StandbyControl.cpp" />
-    <ClCompile Include="Peripheral\Timer.cpp" />
-    <ClCompile Include="Peripheral\TimerBaseCounter.cpp" />
-    <ClCompile Include="Peripheral\WatchdogTimer.cpp" />
-    <ClCompile Include="Ext\Romu.cpp" />
-    <ClCompile Include="Ext\U8Disas.cpp" />
-    <ClCompile Include="Peripheral\VoltageLevelSupervisor.cpp" />
-    <ClCompile Include="Ext\vibration.cpp" />
-    <ClCompile Include="asmjit\src\**\*.cpp" />
-    <ClCompile Include="Snapshot.cpp" />
-    <ClCompile Include="Gui\SnapshotWindow.cpp" />
-    <ClCompile Include="miniz.c" />
-    <ClCompile Include="miniz_tdef.c" />
-    <ClCompile Include="miniz_tinfl.c" />
-    <ClCompile Include="Gui\TouchMouseTranslator.cpp" />
+    <ClCompile Include="src\Rop\RopCompilerUI.cpp" />
+    <ClCompile Include="src\sdl_win32_extra.cpp" />
+    <ClCompile Include="src\StartupUi\StartupUi.cpp" />
+    <ClCompile Include="src\Gui\CodeViewer.cpp" />
+    <ClCompile Include="src\Gui\imgui\imgui.cpp" />
+    <ClCompile Include="src\Gui\imgui\imgui_draw.cpp" />
+    <ClCompile Include="src\Gui\imgui\imgui_impl_sdl2.cpp" />
+    <ClCompile Include="src\Gui\imgui\imgui_impl_sdlrenderer2.cpp" />
+    <ClCompile Include="src\Gui\imgui\imgui_tables.cpp" />
+    <ClCompile Include="src\Gui\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="src\Gui\Injector.cpp" />
+    <ClCompile Include="src\Gui\LabelViewer.cpp" />
+    <ClCompile Include="src\Gui\MemBreakPoint.cpp" />
+    <ClCompile Include="src\Gui\HwController.cpp" />
+    <ClCompile Include="src\Gui\Ui.cpp" />
+    <ClCompile Include="src\Gui\WatchWindow.cpp" />
+    <ClCompile Include="src\Gui\FileDialog.cpp" />
+    <ClCompile Include="src\Gui\VariableWindow.cpp" />
+    <ClCompile Include="src\Gui\PluginLogWindow.cpp" />
+    <ClCompile Include="src\Peripheral\5800Flash.cpp" />
+    <ClCompile Include="src\Peripheral\Audio.cpp" />
+    <ClCompile Include="src\Peripheral\BatteryBackedRAM.cpp" />
+    <ClCompile Include="src\Peripheral\BCDCalc.cpp" />
+    <ClCompile Include="src\Peripheral\ExternalInterrupts.cpp" />
+    <ClCompile Include="src\Peripheral\Flash.cpp" />
+    <ClCompile Include="src\Peripheral\IOPorts.cpp" />
+    <ClCompile Include="src\Peripheral\Keyboard.cpp" />
+    <ClCompile Include="src\Peripheral\Miscellaneous.cpp" />
+    <ClCompile Include="src\Peripheral\PowerSupply.cpp" />
+    <ClCompile Include="src\Peripheral\RealTimeClock.cpp" />
+    <ClCompile Include="src\Peripheral\Screen.cpp" />
+    <ClCompile Include="src\Peripheral\StandbyControl.cpp" />
+    <ClCompile Include="src\Peripheral\Timer.cpp" />
+    <ClCompile Include="src\Peripheral\TimerBaseCounter.cpp" />
+    <ClCompile Include="src\Peripheral\WatchdogTimer.cpp" />
+    <ClCompile Include="src\Ext\Romu.cpp" />
+    <ClCompile Include="src\Ext\U8Disas.cpp" />
+    <ClCompile Include="src\Peripheral\VoltageLevelSupervisor.cpp" />
+    <ClCompile Include="src\Ext\vibration.cpp" />
+    <ClCompile Include="third_party\asmjit\src\**\*.cpp" />
+    <ClCompile Include="src\Snapshot.cpp" />
+    <ClCompile Include="src\Gui\SnapshotWindow.cpp" />
+    <ClCompile Include="third_party\miniz\miniz.c" />
+    <ClCompile Include="third_party\miniz\miniz_tdef.c" />
+    <ClCompile Include="third_party\miniz\miniz_tinfl.c" />
+    <ClCompile Include="src\Gui\TouchMouseTranslator.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Chipset\ePSCpu.h" />
-    <ClInclude Include="Ext\cam\cam.h" />
-    <ClInclude Include="Ext\cam\hct.h" />
-    <ClInclude Include="Ext\cam\hct_solver.h" />
-    <ClInclude Include="Ext\cam\tones.h" />
-    <ClInclude Include="Ext\cam\utils.h" />
-    <ClInclude Include="Ext\cam\viewing_conditions.h" />
-    <ClInclude Include="Ext\ConsoleText.h" />
-    <ClInclude Include="Ext\ePSDisas.h" />
-    <ClInclude Include="Ext\GameBuffer.h" />
-    <ClInclude Include="Ext\Random.hpp" />
-    <ClInclude Include="Ext\TextEditor.h" />
-    <ClInclude Include="Ext\Unicode.h" />
-    <ClInclude Include="Ext\DiscordRPC.h" />
-    <ClInclude Include="Gui\FileDialog.hpp" />
-    <ClInclude Include="Gui\imgui\TextEditor.h" />
-    <ClInclude Include="Gui\RopTool.h" />
-    <ClInclude Include="Gui\ThemeManager.h" />
-    <ClInclude Include="Gui\UIScaling.h" />
-    <ClInclude Include="Ext\3rd_licenses.h" />
-    <ClInclude Include="Gui\AddressWindow.h" />
-    <ClInclude Include="Binary.h" />
-    <ClInclude Include="Chipset\Chipset.hpp" />
-    <ClInclude Include="Chipset\CPU.hpp" />
-    <ClInclude Include="Chipset\InterruptSource.hpp" />
-    <ClInclude Include="Chipset\MMU.hpp" />
-    <ClInclude Include="Chipset\MMURegion.hpp" />
-    <ClInclude Include="Config.hpp" />
-    <ClInclude Include="Containers\ConcurrentObject.h" />
-    <ClInclude Include="Ext\LabelFile.h" />
-    <ClInclude Include="Ext\RomPackage.h" />
-    <ClInclude Include="Ext\SysDialog.h" />
-    <ClInclude Include="Gui\Localization.h" />
-    <ClInclude Include="Gui\PopUpDisplay.h" />
-    <ClInclude Include="Gui\Theme.h" />
-    <ClInclude Include="Gui\BitmapViewer.h" />
-    <ClInclude Include="Peripheral\SD\FakeSdCard.h" />
-    <ClInclude Include="Gui\5800FileSystem.h" />
-    <ClInclude Include="Gui\CallAnalysis.h" />
-    <ClInclude Include="Gui\CwiiHelp.h" />
+    <ClInclude Include="src\Chipset\ePSCpu.h" />
+    <ClInclude Include="src\Ext\cam\cam.h" />
+    <ClInclude Include="src\Ext\cam\hct.h" />
+    <ClInclude Include="src\Ext\cam\hct_solver.h" />
+    <ClInclude Include="src\Ext\cam\tones.h" />
+    <ClInclude Include="src\Ext\cam\utils.h" />
+    <ClInclude Include="src\Ext\cam\viewing_conditions.h" />
+    <ClInclude Include="src\Ext\ConsoleText.h" />
+    <ClInclude Include="src\Ext\ePSDisas.h" />
+    <ClInclude Include="src\Ext\GameBuffer.h" />
+    <ClInclude Include="src\Ext\Random.hpp" />
+    <ClInclude Include="src\Ext\TextEditor.h" />
+    <ClInclude Include="src\Ext\Unicode.h" />
+    <ClInclude Include="src\Ext\DiscordRPC.h" />
+    <ClInclude Include="src\Gui\FileDialog.hpp" />
+    <ClInclude Include="src\Gui\imgui\TextEditor.h" />
+    <ClInclude Include="src\Gui\RopTool.h" />
+    <ClInclude Include="src\Gui\ThemeManager.h" />
+    <ClInclude Include="src\Gui\UIScaling.h" />
+    <ClInclude Include="src\Ext\3rd_licenses.h" />
+    <ClInclude Include="src\Gui\AddressWindow.h" />
+    <ClInclude Include="src\Binary.h" />
+    <ClInclude Include="src\Chipset\Chipset.hpp" />
+    <ClInclude Include="src\Chipset\CPU.hpp" />
+    <ClInclude Include="src\Chipset\InterruptSource.hpp" />
+    <ClInclude Include="src\Chipset\MMU.hpp" />
+    <ClInclude Include="src\Chipset\MMURegion.hpp" />
+    <ClInclude Include="src\Config.hpp" />
+    <ClInclude Include="src\Containers\ConcurrentObject.h" />
+    <ClInclude Include="src\Ext\LabelFile.h" />
+    <ClInclude Include="src\Ext\RomPackage.h" />
+    <ClInclude Include="src\Ext\SysDialog.h" />
+    <ClInclude Include="src\Gui\Localization.h" />
+    <ClInclude Include="src\Gui\PopUpDisplay.h" />
+    <ClInclude Include="src\Gui\Theme.h" />
+    <ClInclude Include="src\Gui\BitmapViewer.h" />
+    <ClInclude Include="src\Peripheral\SD\FakeSdCard.h" />
+    <ClInclude Include="src\Gui\5800FileSystem.h" />
+    <ClInclude Include="src\Gui\CallAnalysis.h" />
+    <ClInclude Include="src\Gui\CwiiHelp.h" />
     <ClInclude Include="Data\ColourInfo.hpp" />
     <ClInclude Include="Data\EventCode.hpp" />
     <ClInclude Include="Data\HardwareId.hpp" />
     <ClInclude Include="Data\ModelInfo.hpp" />
     <ClInclude Include="Data\SpriteInfo.hpp" />
-    <ClInclude Include="Emulator.hpp" />
-    <ClInclude Include="Gui\CodeViewer.hpp" />
-    <ClInclude Include="Gui\Editors.h" />
-    <ClInclude Include="Gui\hex.hpp" />
-    <ClInclude Include="Gui\Hooks.h" />
-    <ClInclude Include="Gui\imgui\imconfig.h" />
-    <ClInclude Include="Gui\imgui\imgui.h" />
-    <ClInclude Include="Gui\imgui\imgui_impl_sdl2.h" />
-    <ClInclude Include="Gui\imgui\imgui_impl_sdlrenderer2.h" />
-    <ClInclude Include="Gui\imgui\imgui_internal.h" />
-    <ClInclude Include="Gui\imgui\imstb_rectpack.h" />
-    <ClInclude Include="Gui\imgui\imstb_textedit.h" />
-    <ClInclude Include="Gui\imgui\imstb_truetype.h" />
-    <ClInclude Include="Gui\Injector.hpp" />
-    <ClInclude Include="Gui\LabelViewer.h" />
-    <ClInclude Include="Gui\MemBreakPoint.hpp" />
-    <ClInclude Include="Gui\HwController.h" />
-    <ClInclude Include="Gui\FileDialog.h" />
-    <ClInclude Include="Ext\Memory.h" />
-    <ClInclude Include="Peripheral\ML620Ports.h" />
-    <ClInclude Include="Peripheral\Uart.h" />
-    <ClInclude Include="Plugin\PluginApi.h" />
-    <ClInclude Include="Plugin\PluginMan.h" />
+    <ClInclude Include="src\Emulator.hpp" />
+    <ClInclude Include="src\Gui\CodeViewer.hpp" />
+    <ClInclude Include="src\Gui\Editors.h" />
+    <ClInclude Include="src\Gui\hex.hpp" />
+    <ClInclude Include="src\Gui\Hooks.h" />
+    <ClInclude Include="src\Gui\imgui\imconfig.h" />
+    <ClInclude Include="src\Gui\imgui\imgui.h" />
+    <ClInclude Include="src\Gui\imgui\imgui_impl_sdl2.h" />
+    <ClInclude Include="src\Gui\imgui\imgui_impl_sdlrenderer2.h" />
+    <ClInclude Include="src\Gui\imgui\imgui_internal.h" />
+    <ClInclude Include="src\Gui\imgui\imstb_rectpack.h" />
+    <ClInclude Include="src\Gui\imgui\imstb_textedit.h" />
+    <ClInclude Include="src\Gui\imgui\imstb_truetype.h" />
+    <ClInclude Include="src\Gui\Injector.hpp" />
+    <ClInclude Include="src\Gui\LabelViewer.h" />
+    <ClInclude Include="src\Gui\MemBreakPoint.hpp" />
+    <ClInclude Include="src\Gui\HwController.h" />
+    <ClInclude Include="src\Gui\FileDialog.h" />
+    <ClInclude Include="src\Ext\Memory.h" />
+    <ClInclude Include="src\Peripheral\ML620Ports.h" />
+    <ClInclude Include="src\Peripheral\Uart.h" />
+    <ClInclude Include="src\Plugin\PluginApi.h" />
+    <ClInclude Include="src\Plugin\PluginMan.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="Peripheral\Spi.h" />
-    <ClInclude Include="Rop\RopCompilerUI.h" />
-    <ClInclude Include="sdl_win32_extra.h" />
-    <ClInclude Include="Settings.h" />
-    <ClInclude Include="stringhelper.h" />
-    <ClInclude Include="Gui\Ui.hpp" />
-    <ClInclude Include="Gui\WatchWindow.hpp" />
-    <ClInclude Include="Ext\Logger.hpp" />
-    <ClInclude Include="ModelInfo.h" />
-    <ClInclude Include="Models.h" />
-    <ClInclude Include="Gui\VariableWindow.h" />
-    <ClInclude Include="Gui\PluginLogWindow.hpp" />
-    <ClInclude Include="miniz_export.h" />
-    <ClInclude Include="Snapshot.h" />
-    <ClInclude Include="Compress.h" />
-    <ClInclude Include="miniz.h" />
-    <ClInclude Include="Gui\SnapshotWindow.h" />
-    <ClInclude Include="Peripheral\5800Flash.h" />
-    <ClInclude Include="Peripheral\Audio.h" />
-    <ClInclude Include="Peripheral\BatteryBackedRAM.hpp" />
-    <ClInclude Include="Peripheral\BCDCalc.hpp" />
-    <ClInclude Include="Peripheral\ExternalInterrupts.hpp" />
-    <ClInclude Include="Peripheral\Flash.hpp" />
-    <ClInclude Include="Peripheral\IOPorts.hpp" />
-    <ClInclude Include="Peripheral\Keyboard.hpp" />
-    <ClInclude Include="Peripheral\Miscellaneous.hpp" />
-    <ClInclude Include="Peripheral\Peripheral.hpp" />
-    <ClInclude Include="Peripheral\PowerSupply.hpp" />
-    <ClInclude Include="Peripheral\RealTimeClock.hpp" />
-    <ClInclude Include="Peripheral\ROMWindow.hpp" />
-    <ClInclude Include="Peripheral\Screen.hpp" />
-    <ClInclude Include="Peripheral\StandbyControl.hpp" />
-    <ClInclude Include="Peripheral\Timer.hpp" />
-    <ClInclude Include="Peripheral\TimerBaseCounter.hpp" />
-    <ClInclude Include="Peripheral\WatchdogTimer.hpp" />
-    <ClInclude Include="Ext\Romu.h" />
-    <ClInclude Include="StartupUi\StartupUi.h" />
-    <ClInclude Include="Ext\U8Disas.h" />
-    <ClInclude Include="Peripheral\VoltageLevelSupervisor.h" />
-    <ClInclude Include="Ext\vibration.h" />
-    <ClInclude Include="Gui\Gui.h" />
-    <ClInclude Include="locales\lang.h" />
-    <ClInclude Include="asmjit\src\**\*.h" />
-    <ClInclude Include="Gui\TouchMouseTranslator.h" />
+    <ClInclude Include="src\Peripheral\Spi.h" />
+    <ClInclude Include="src\Rop\RopCompilerUI.h" />
+    <ClInclude Include="src\sdl_win32_extra.h" />
+    <ClInclude Include="src\Settings.h" />
+    <ClInclude Include="src\stringhelper.h" />
+    <ClInclude Include="src\Gui\Ui.hpp" />
+    <ClInclude Include="src\Gui\WatchWindow.hpp" />
+    <ClInclude Include="src\Ext\Logger.hpp" />
+    <ClInclude Include="src\ModelInfo.h" />
+    <ClInclude Include="src\Models.h" />
+    <ClInclude Include="src\Gui\VariableWindow.h" />
+    <ClInclude Include="src\Gui\PluginLogWindow.hpp" />
+    <ClInclude Include="third_party\miniz\miniz_export.h" />
+    <ClInclude Include="src\Snapshot.h" />
+    <ClInclude Include="src\Compress.h" />
+    <ClInclude Include="third_party\miniz\miniz.h" />
+    <ClInclude Include="src\Gui\SnapshotWindow.h" />
+    <ClInclude Include="src\Peripheral\5800Flash.h" />
+    <ClInclude Include="src\Peripheral\Audio.h" />
+    <ClInclude Include="src\Peripheral\BatteryBackedRAM.hpp" />
+    <ClInclude Include="src\Peripheral\BCDCalc.hpp" />
+    <ClInclude Include="src\Peripheral\ExternalInterrupts.hpp" />
+    <ClInclude Include="src\Peripheral\Flash.hpp" />
+    <ClInclude Include="src\Peripheral\IOPorts.hpp" />
+    <ClInclude Include="src\Peripheral\Keyboard.hpp" />
+    <ClInclude Include="src\Peripheral\Miscellaneous.hpp" />
+    <ClInclude Include="src\Peripheral\Peripheral.hpp" />
+    <ClInclude Include="src\Peripheral\PowerSupply.hpp" />
+    <ClInclude Include="src\Peripheral\RealTimeClock.hpp" />
+    <ClInclude Include="src\Peripheral\ROMWindow.hpp" />
+    <ClInclude Include="src\Peripheral\Screen.hpp" />
+    <ClInclude Include="src\Peripheral\StandbyControl.hpp" />
+    <ClInclude Include="src\Peripheral\Timer.hpp" />
+    <ClInclude Include="src\Peripheral\TimerBaseCounter.hpp" />
+    <ClInclude Include="src\Peripheral\WatchdogTimer.hpp" />
+    <ClInclude Include="src\Ext\Romu.h" />
+    <ClInclude Include="src\StartupUi\StartupUi.h" />
+    <ClInclude Include="src\Ext\U8Disas.h" />
+    <ClInclude Include="src\Peripheral\VoltageLevelSupervisor.h" />
+    <ClInclude Include="src\Ext\vibration.h" />
+    <ClInclude Include="src\Gui\Gui.h" />
+    <ClInclude Include="src\locales\lang.h" />
+    <ClInclude Include="third_party\asmjit\src\**\*.h" />
+    <ClInclude Include="src\Gui\TouchMouseTranslator.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".clang-format" />
@@ -658,7 +658,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="packages.config" />
-    <None Include="Peripheral\SD\HowToCreateASDCard.md" />
+    <None Include="src\Peripheral\SD\HowToCreateASDCard.md" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="icon.ico" />
