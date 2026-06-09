@@ -1,6 +1,7 @@
 #include "CPU.hpp"
 #include "MMU.hpp"
-#include "asmjit/src/asmjit/asmjit.h"
+#include <asmjit/core.h>
+#include <asmjit/x86.h>
 #include <map>
 #include <optional>
 #include <unordered_map>
@@ -78,7 +79,7 @@ public:
 				// This should ideally be done once after successful compilation
 				// For simplicity, doing it here if somehow it's null
 				Error err = rt.add(&func.compiled_func_ptr, func.code.get());
-				if (err) {
+				if (err != asmjit::Error::kOk) {
 					// Failed to finalize code
 					cached_function.erase(it); // Remove broken entry
 					condition_check[offset] = NotMet;
@@ -110,7 +111,7 @@ public:
 		if (compiled_func_opt) {
 			Function& new_func_storage = compiled_func_opt.value();
 			Error err = rt.add(&new_func_storage.compiled_func_ptr, new_func_storage.code.get());
-			if (err) {
+			if (err != asmjit::Error::kOk) {
 				condition_check[offset] = NotMet; // Compilation finalized failed
 				return std::nullopt;
 			}
@@ -135,14 +136,14 @@ public:
 
 	std::optional<Function> CompileAt(size_t entry_offset) {
 		auto code_ptr = std::make_unique<CodeHolder>();
-		code_ptr->init(rt.environment(), rt.cpuFeatures());
+		code_ptr->init(rt.environment(), rt.cpu_features());
 		x86::Compiler cc(code_ptr.get());
 
 		auto func_sig = FuncSignature::build<void, void*>(); // void JIT_Func(CPU* cpu_ptr);
-		FuncNode* func_node = cc.addFunc(func_sig);
+		FuncNode* func_node = cc.add_func(func_sig);
 
-		x86::Gp reg_cpu = cc.newIntPtr("reg_cpu"); // To hold the CPU* argument
-		func_node->setArg(0, reg_cpu);
+		x86::Gp reg_cpu = cc.new_gpz("reg_cpu"); // To hold the CPU* argument
+		func_node->set_arg(0, reg_cpu);
 
 		uint16_t pc = entry_offset & 0xFFFF;
 		uint32_t csr_val = entry_offset & 0xFF0000; // Full CSR shifted value e.g. 0x0F0000
@@ -177,7 +178,7 @@ public:
 		bool block_terminated_by_jit = false;
 
 		// Label for the very first instruction in the block
-		Label entry_label = cc.newLabel();
+		Label entry_label = cc.new_label();
 		jump_map[entry_offset] = entry_label;
 		cc.bind(entry_label);
 
@@ -196,7 +197,7 @@ public:
 				// This case implies non-contiguous compilation, or an issue.
 				// For linear scan, this shouldn't be hit after the first instruction.
 				// If it's a new unforeseen entry, create and bind.
-				Label new_label = cc.newLabel();
+				Label new_label = cc.new_label();
 				jump_map[current_instr_addr] = new_label;
 				cc.bind(new_label);
 			}
@@ -227,18 +228,18 @@ public:
 			// Prepare label for the *next* sequential instruction (fallthrough)
 			size_t next_sequential_addr = csr_val | pc;
 			if (!jump_map.count(next_sequential_addr)) {
-				jump_map[next_sequential_addr] = cc.newLabel();
+				jump_map[next_sequential_addr] = cc.new_label();
 			}
 			Label fallthrough_label = jump_map[next_sequential_addr];
 
 			// --- Instruction Handling ---
 			if (opd->handler_function == &casioemu::CPU::OP_RT ||
 				opd->handler_function == &casioemu::CPU::OP_RTI) {
-				x86::Gp gp1 = cc.newUInt16("rt_lr_pc");
+				x86::Gp gp1 = cc.new_gp16("rt_lr_pc");
 				cc.mov(gp1, x86::Mem(reg_cpu, lr_off + reg_off)); // Assuming reg_lr is reg16_t, access its .raw
 				cc.mov(x86::Mem(reg_cpu, pc_off + reg_off), gp1);
 
-				x86::Gp gp2 = cc.newUInt8("rt_lcsr_csr");
+				x86::Gp gp2 = cc.new_gp8("rt_lcsr_csr");
 				cc.mov(gp2, x86::Mem(reg_cpu, lcsr_off + reg_off)); // Assuming reg_lcsr is reg8_t, access its .raw
 				cc.mov(x86::Mem(reg_cpu, csr_off + reg_off), gp2);
 				cc.ret();
@@ -278,7 +279,7 @@ public:
 						else {
 							// Intra-segment jump: Use JIT label
 							if (!jump_map.count(target_addr)) {
-								jump_map[target_addr] = cc.newLabel();
+								jump_map[target_addr] = cc.new_label();
 							}
 							cc.jmp(jump_map[target_addr]);
 							// JIT execution path diverges, compiler loop might continue if other paths exist.
@@ -311,7 +312,7 @@ public:
 				// Create / reuse label for the “taken” path
 				Label lblTaken;
 				if (!jump_map.count(tgtAbs))
-					jump_map[tgtAbs] = cc.newLabel();
+					jump_map[tgtAbs] = cc.new_label();
 				lblTaken = jump_map[tgtAbs];
 
 				const uint8_t cond = (op >> 8) & 0x0F; // 0 … 15
@@ -329,7 +330,7 @@ public:
 				// -------------------------------------------------
 
 				// Bring PSW once into an 8-bit register
-				x86::Gp psw = cc.newUInt8("psw");
+				x86::Gp psw = cc.new_gp8("psw");
 				cc.mov(psw, x86::Mem(reg_cpu, psw_off + reg_off));
 
 				/*  Condition LUT
@@ -389,7 +390,7 @@ public:
 					// LES  = (OV ^ S) | Z
 					// ->  tmp = (psw & (OV|S)) ; tmp = ((tmp >> ovShift) ^ (tmp >> sShift)) & 1
 					// Using 8-bit regs keeps the sequence small.
-					x86::Gp tmp = cc.newUInt8("tmp");
+					x86::Gp tmp = cc.new_gp8("tmp");
 
 					switch (cond) {
 					case 4: // !LTS
@@ -464,17 +465,17 @@ public:
 					cc.mov(x86::Mem(reg_cpu, op_operands_off + op_size * ix + op_value_off), Imm(static_cast<uint16_t>(op_field_val)));
 				}
 				else { // Register operand, load its value
-					x86::Gp acc_val = cc.newUInt64("reg_acc_val");
+					x86::Gp acc_val = cc.new_gp64("reg_acc_val");
 					cc.mov(acc_val, Imm(0));
 
-					x86::Gp reg_base_ptr = cc.newIntPtr("gpr_base");
+					x86::Gp reg_base_ptr = cc.new_gpz("gpr_base");
 					cc.lea(reg_base_ptr, x86::Mem(reg_cpu, gpr_off + op_field_val * reg8_size));
 
 					for (size_t bx = 0; bx < opd->operands[ix].register_size; ++bx) {
-						x86::Gp byte_val = cc.newUInt8("reg_byte_val");
+						x86::Gp byte_val = cc.new_gp8("reg_byte_val");
 						cc.mov(byte_val, x86::Mem(reg_base_ptr, bx * reg8_size + reg_off)); // Access .raw field
 
-						x86::Gp temp_qword = cc.newUInt64("temp_qword_val");
+						x86::Gp temp_qword = cc.new_gp64("temp_qword_val");
 						cc.movzx(temp_qword, byte_val); // zero extend byte to qword
 						if (bx > 0)
 							cc.shl(temp_qword, bx * 8);
@@ -486,13 +487,13 @@ public:
 
 			// Clear/setup flags state for C++ handler
 			cc.mov(x86::Mem(reg_cpu, flags_changed_off), Imm(static_cast<uint8_t>(0)));
-			x86::Gp psw_reg = cc.newUInt8("psw_val_generic");
+			x86::Gp psw_reg = cc.new_gp8("psw_val_generic");
 			cc.mov(psw_reg, x86::Mem(reg_cpu, psw_off + reg_off));
 			cc.mov(x86::Mem(reg_cpu, flags_in_off), psw_reg);
 			cc.mov(x86::Mem(reg_cpu, flags_out_off), Imm(static_cast<uint8_t>(casioemu::CPU::PSW_Z))); // Default flags_out
 
 			// Call the original C++ handler function
-			x86::Gp temp_cpu_ptr = cc.newIntPtr("reg_cpu"); // Ensure reg_cpu is not clobbered if it's also an arg reg
+			x86::Gp temp_cpu_ptr = cc.new_gpz("reg_cpu_tmp"); // Ensure reg_cpu is not clobbered if it's also an arg reg
 
 			// TODO: ???
 			cc.mov(temp_cpu_ptr, reg_cpu);
@@ -504,17 +505,17 @@ public:
 			cc.call(asmjit::Imm(*(size_t*)&opd->handler_function));
 
 			// Update PSW based on flags_changed and flags_out from C++ handler
-			x86::Gp flags_changed_val = cc.newUInt8("flags_changed_val");
-			x86::Gp flags_out_val = cc.newUInt8("flags_out_val");
+			x86::Gp flags_changed_val = cc.new_gp8("flags_changed_val");
+			x86::Gp flags_out_val = cc.new_gp8("flags_out_val");
 
 			cc.mov(flags_changed_val, x86::Mem(reg_cpu, flags_changed_off));
 			cc.mov(flags_out_val, x86::Mem(reg_cpu, flags_out_off));
 
 			// psw = (psw & ~flags_changed) | (flags_out & flags_changed)
-			x86::Gp psw_current = cc.newUInt8("psw_current_val");
+			x86::Gp psw_current = cc.new_gp8("psw_current_val");
 			cc.mov(psw_current, x86::Mem(reg_cpu, psw_off + reg_off));
 
-			x86::Gp mask_fc = cc.newUInt8("mask_fc");
+			x86::Gp mask_fc = cc.new_gp8("mask_fc");
 			cc.mov(mask_fc, flags_changed_val);
 			cc.not_(mask_fc);			   // ~flags_changed
 			cc.and_(psw_current, mask_fc); // psw & ~flags_changed
@@ -526,16 +527,16 @@ public:
 			// Write-back for operands (if H_WB hint)
 			if ((opd->hint & casioemu::CPU::OpcodeHint::H_WB) && opd->operands[0].register_size > 0) {
 				uint16_t wb_reg_idx = (op >> opd->operands[0].shift) & opd->operands[0].mask;
-				x86::Gp wb_val = cc.newUInt64("wb_val");
+				x86::Gp wb_val = cc.new_gp64("wb_val");
 				cc.mov(wb_val, x86::Mem(reg_cpu, op_operands_off + op_size * 0 + op_value_off)); // Operand 0 value
 
-				x86::Gp wb_reg_base_ptr = cc.newIntPtr("wb_gpr_base");
+				x86::Gp wb_reg_base_ptr = cc.new_gpz("wb_gpr_base");
 				cc.lea(wb_reg_base_ptr, x86::Mem(reg_cpu, gpr_off + wb_reg_idx * reg8_size));
 
 				for (size_t bx = 0; bx < opd->operands[0].register_size; ++bx) {
-					x86::Gp temp_byte = cc.newUInt8("wb_byte");
+					x86::Gp temp_byte = cc.new_gp8("wb_byte");
 					// Extract (bx)-th byte from wb_val
-					x86::Gp shifted_val = cc.newUInt64("shifted_wb_val");
+					x86::Gp shifted_val = cc.new_gp64("shifted_wb_val");
 					cc.mov(shifted_val, wb_val);
 					if (bx > 0)
 						cc.shr(shifted_val, bx * 8);
@@ -575,15 +576,15 @@ public:
 			cc.ret();
 		}
 
-		cc.endFunc();
+		cc.end_func();
 		Error err = cc.finalize();
-		if (err) {
+		if (err != asmjit::Error::kOk) {
 			// std::cerr << "AsmJit finalization error: " << DebugUtils::errorAsString(err) << std::endl;
 			return std::nullopt;
 		}
 
 		size_t guest_code_end_address = csr_val | pc;
-		return Function(entry_offset, guest_code_end_address, code_ptr->codeSize(), std::move(code_ptr));
+		return Function(entry_offset, guest_code_end_address, code_ptr->code_size(), std::move(code_ptr));
 	}
 
 	void OnMMUCodeWrite(size_t modified_guest_addr_start, size_t modified_length) {

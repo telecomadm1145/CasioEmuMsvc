@@ -93,7 +93,7 @@ android {
             //}
             cmake {
                 path '../CMakeLists.txt'
-                // version '3.31.6'
+                version '4.1.2'
             }
         }
        
