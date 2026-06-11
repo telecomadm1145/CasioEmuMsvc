@@ -374,13 +374,6 @@ namespace casioemu {
 			button = {};
 
 		for (auto& btn : emulator.ModelDefinition.buttons) {
-			auto button_name = btn.keyname.c_str();
-
-			SDL_Keycode button_key;
-			button_key = SDL_GetKeyFromName(button_name);
-			if (button_key == SDLK_UNKNOWN)
-				printf("[Keyboard][Warn] Key %x is being bind to a invalid or empty key '%s'\n", btn.kiko, button_name);
-
 			uint8_t code = btn.kiko;
 			size_t button_ix;
 			if (code == 0xFF) {
@@ -396,6 +389,13 @@ namespace casioemu {
 				if (button_ix >= 64)
 					PANIC("button index doesn't fit 6 bits\n");
 			}
+#ifndef CASIOEMU_CORE_WEB
+			auto button_name = btn.keyname.c_str();
+
+			SDL_Keycode button_key;
+			button_key = SDL_GetKeyFromName(button_name);
+			if (button_key == SDLK_UNKNOWN)
+				printf("[Keyboard][Warn] Key %x is being bind to a invalid or empty key '%s'\n", btn.kiko, button_name);
 
 			if (button_key != SDLK_UNKNOWN) {
 				bool insert_success = keyboard_map.emplace(button_key, button_ix).second;
@@ -432,7 +432,7 @@ namespace casioemu {
 			if (button_key_2 != SDLK_UNKNOWN) {
 				bool insert_success = keyboard_map.emplace(button_key_2, button_ix).second;
 			}
-
+#endif
 			Button& button = buttons[button_ix];
 			button = {};
 
