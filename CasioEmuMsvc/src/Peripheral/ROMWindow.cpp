@@ -50,11 +50,12 @@ namespace casioemu {
 
 		switch (emulator.hardware_id) { // Initializer list cannot be used with move-only type: https://stackoverflow.com/q/8468774
 		case HW_ES_PLUS:
-			regions.reset(new MMURegion[3]);
-			emulator.chipset.rom_data.resize(0x20000, 0);
+			regions.reset(new MMURegion[4]);
+			emulator.chipset.rom_data.resize(0x30000, 0);
 			SetupROMRegion(regions[0], 0x00000, 0x08000, 0x00000, strict_memory, emulator);
 			SetupROMRegion(regions[1], 0x10000, 0x10000, 0x10000, strict_memory, emulator);
-			SetupROMRegion(regions[2], 0x80000, 0x10000, 0x00000, strict_memory, emulator);
+			SetupROMRegion(regions[2], 0x20000, 0x10000, 0x20000, strict_memory, emulator);
+			SetupROMRegion(regions[3], 0x80000, 0x10000, 0x00000, strict_memory, emulator);
 			break;
 
 		case HW_CLASSWIZ:
