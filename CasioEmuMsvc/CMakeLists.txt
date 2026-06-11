@@ -5,6 +5,7 @@ project(CasioEmuMsvc)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 option(CASIOEMU_WEB "Build the Emscripten/WebAssembly version" OFF)
+option(CASIOEMU_CORE_WEB "Build the headless Emscripten/WebAssembly core API" OFF)
 
 if(EMSCRIPTEN OR CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     set(CASIOEMU_WEB ON CACHE BOOL "Build the Emscripten/WebAssembly version" FORCE)
@@ -99,6 +100,11 @@ file(GLOB MAIN_SOURCES_WEB "${SOURCE_DIR}/Web/*.cpp")
 if(CASIOEMU_WEB)
     list(FILTER MAIN_SOURCES_ROOT EXCLUDE REGEX "casioemu\\.cpp$")
     list(FILTER MAIN_SOURCES_EXT EXCLUDE REGEX "SysDialog\\.cpp$")
+    if(CASIOEMU_CORE_WEB)
+        list(FILTER MAIN_SOURCES_WEB EXCLUDE REGEX "web_main\\.cpp$")
+    else()
+        list(FILTER MAIN_SOURCES_WEB EXCLUDE REGEX "core_api\\.cpp$")
+    endif()
     set(MAIN_SOURCES
         ${MAIN_SOURCES_ROOT}
         ${MAIN_SOURCES_MINIZ}
@@ -131,7 +137,9 @@ endif()
 
 if(BUILD_EXECUTABLE)
     message(STATUS "Building executable")
-    if(CASIOEMU_WEB)
+    if(CASIOEMU_CORE_WEB)
+        set(TARGET_NAME "CasioEmuCore")
+    elseif(CASIOEMU_WEB)
         set(TARGET_NAME "CasioEmuWeb")
     else()
         set(TARGET_NAME "CasioEmuMsvc")
@@ -180,25 +188,47 @@ if(CASIOEMU_WEB)
         -sUSE_SDL=2
         -sUSE_SDL_IMAGE=2
     )
-    target_link_options(${TARGET_NAME} PRIVATE
-        -fexceptions
-        -sDISABLE_EXCEPTION_CATCHING=0
-        -sUSE_SDL=2
-        -sUSE_SDL_IMAGE=2
-        "SHELL:-sSDL2_IMAGE_FORMATS=[\"png\"]"
-        -sALLOW_MEMORY_GROWTH=1
-        -sINITIAL_MEMORY=134217728
-        -sEXIT_RUNTIME=0
-        -sFORCE_FILESYSTEM=1
-        "SHELL:-sEXPORTED_RUNTIME_METHODS=['FS','IDBFS','ccall','cwrap','UTF8ToString']"
-        "SHELL:-sEXPORTED_FUNCTIONS=['_main','_casioemu_web_start','_casioemu_web_stop','_casioemu_web_pause','_casioemu_web_reset','_casioemu_web_resize','_casioemu_web_syncfs']"
-        --shell-file
-        "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
-        "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/locales@/locales"
-        "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/roms.db@/roms.db"
-        -lidbfs.js
-    )
-    set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX ".html")
+    if(CASIOEMU_CORE_WEB)
+        target_compile_definitions(${TARGET_NAME} PRIVATE CASIOEMU_CORE_WEB CASIOEMU_DISABLE_RAM_IMAGE CASIOEMU_ENABLE_KEYBOARD_KI_WRITE)
+        target_link_options(${TARGET_NAME} PRIVATE
+            -fexceptions
+            -sDISABLE_EXCEPTION_CATCHING=0
+            -sUSE_SDL=2
+            -sUSE_SDL_IMAGE=2
+            "SHELL:-sSDL2_IMAGE_FORMATS=[\"png\"]"
+            -sALLOW_MEMORY_GROWTH=1
+            -sINITIAL_MEMORY=134217728
+            -sEXIT_RUNTIME=0
+            -sFORCE_FILESYSTEM=1
+            -sMODULARIZE=1
+            -sEXPORT_NAME=CasioEmuCoreModule
+            "SHELL:-sEXPORTED_RUNTIME_METHODS=['FS','ccall','cwrap','HEAPU8']"
+            "SHELL:-sEXPORTED_FUNCTIONS=['_main','_malloc','_free','_casioemu_core_init_cy239r','_casioemu_core_init_cy_sim','_casioemu_core_shutdown','_casioemu_core_reset','_casioemu_core_step','_casioemu_core_is_running','_casioemu_core_cpu_time','_casioemu_core_key_mask','_casioemu_core_screen_alpha','_casioemu_core_status_alpha','_casioemu_core_read_data','_casioemu_core_write_data','_casioemu_core_read_code','_casioemu_core_write_code','_casioemu_core_read_reg','_casioemu_core_write_reg','_casioemu_core_set_solar_voltage','_casioemu_core_set_battery_voltage','_casioemu_core_save_state','_casioemu_core_load_state']"
+            "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/locales@/locales"
+            "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/roms.db@/roms.db"
+        )
+        set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX ".js")
+    else()
+        target_link_options(${TARGET_NAME} PRIVATE
+            -fexceptions
+            -sDISABLE_EXCEPTION_CATCHING=0
+            -sUSE_SDL=2
+            -sUSE_SDL_IMAGE=2
+            "SHELL:-sSDL2_IMAGE_FORMATS=[\"png\"]"
+            -sALLOW_MEMORY_GROWTH=1
+            -sINITIAL_MEMORY=134217728
+            -sEXIT_RUNTIME=0
+            -sFORCE_FILESYSTEM=1
+            "SHELL:-sEXPORTED_RUNTIME_METHODS=['FS','IDBFS','ccall','cwrap','UTF8ToString']"
+            "SHELL:-sEXPORTED_FUNCTIONS=['_main','_casioemu_web_start','_casioemu_web_stop','_casioemu_web_pause','_casioemu_web_reset','_casioemu_web_resize','_casioemu_web_syncfs']"
+            --shell-file
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
+            "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/locales@/locales"
+            "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/roms.db@/roms.db"
+            -lidbfs.js
+        )
+        set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX ".html")
+    endif()
 elseif(BUILD_EXECUTABLE)
     target_link_libraries(${TARGET_NAME} PRIVATE
         SDL2::SDL2

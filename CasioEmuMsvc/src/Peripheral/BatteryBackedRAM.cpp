@@ -17,6 +17,12 @@ namespace casioemu {
     }
 
 	constexpr uint32_t SAVE_INTERVAL_MS = 10 * 1000; // 10s
+	constexpr size_t ES_PLUS_SIM_RAM_BASE = 0x9800;
+	constexpr size_t ES_PLUS_SIM_RAM_SIZE = 0x0100;
+	constexpr size_t CLASSWIZ_SIM_RAM_BASE = 0x49800;
+	constexpr size_t CLASSWIZ_SIM_RAM_SIZE = 0x2800;
+	constexpr size_t CLASSWIZ_II_SIM_RAM_BASE = 0x89800;
+	constexpr size_t CLASSWIZ_II_SIM_RAM_SIZE = 0x2800;
 
 	class BatteryBackedRAM : public Peripheral, public IRam {
 		MMURegion region{}, region_2{}, region_5{};
@@ -64,12 +70,21 @@ namespace casioemu {
 
 	void BatteryBackedRAM::Initialise() {
 		bool real_hardware = emulator.ModelDefinition.real_hardware;
-		ram_size = GetRamSize(emulator.hardware_id) + (real_hardware ? 0 : 0x100);
+		size_t sim_ram_size = 0;
+		if (!real_hardware) {
+			sim_ram_size = emulator.hardware_id == HW_ES_PLUS	 ? ES_PLUS_SIM_RAM_SIZE
+						 : emulator.hardware_id == HW_CLASSWIZ	 ? CLASSWIZ_SIM_RAM_SIZE
+						 : emulator.hardware_id == HW_CLASSWIZ_II ? CLASSWIZ_II_SIM_RAM_SIZE
+																 : 0x100;
+		}
+		ram_size = GetRamSize(emulator.hardware_id) + sim_ram_size;
 
 		ram_buffer = new uint8_t[ram_size];
 		fillRandomData(ram_buffer, ram_size);
 
+#ifndef CASIOEMU_DISABLE_RAM_IMAGE
 		LoadRAMImage();
+#endif
 
 		region.Setup(
 			GetRamBaseAddr(emulator.hardware_id), GetRamSize(emulator.hardware_id),
@@ -90,16 +105,19 @@ namespace casioemu {
 
 		if (!real_hardware) {
 			region_2.Setup(
-				emulator.hardware_id == HW_ES_PLUS	  ? 0x9800
-				: emulator.hardware_id == HW_CLASSWIZ ? 0x49800
-													  : 0x89800,
-				0x0100, "BatteryBackedRAM/2", ram_buffer + ram_size - 0x100,
+				emulator.hardware_id == HW_ES_PLUS		 ? ES_PLUS_SIM_RAM_BASE
+				: emulator.hardware_id == HW_CLASSWIZ	 ? CLASSWIZ_SIM_RAM_BASE
+				: emulator.hardware_id == HW_CLASSWIZ_II ? CLASSWIZ_II_SIM_RAM_BASE
+														 : 0x89800,
+				sim_ram_size, "BatteryBackedRAM/2", ram_buffer + GetRamSize(emulator.hardware_id),
 				[](MMURegion* r, size_t o) { return static_cast<uint8_t*>(r->userdata)[o - r->base]; },
 				[](MMURegion* r, size_t o, uint8_t d) { static_cast<uint8_t*>(r->userdata)[o - r->base] = d; },
 				emulator);
 		}
 
+#ifndef CASIOEMU_DISABLE_RAM_IMAGE
 		save_timer_id = SDL_AddTimer(SAVE_INTERVAL_MS, SaveRamCallback, this);
+#endif
 		n_ram_buffer = (char*)ram_buffer;
 	}
 
@@ -152,8 +170,11 @@ namespace casioemu {
 	}
 
 	void BatteryBackedRAM::Uninitialise() {
+#ifndef CASIOEMU_DISABLE_RAM_IMAGE
 		SaveRAMImage();
-		SDL_RemoveTimer(save_timer_id);
+		if (save_timer_id)
+			SDL_RemoveTimer(save_timer_id);
+#endif
 		delete[] ram_buffer;
 		delete[] pram_buffer;
 	}
