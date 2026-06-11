@@ -159,7 +159,7 @@ namespace casioemu {
 		return n;
 	}
 	template <HardwareId hardware_id>
-	class Screen : public Peripheral, public IScreenAutomation {
+	class Screen : public Peripheral {
 		static int const N_ROW,
 			ROW_SIZE,
 			OFFSET,
@@ -230,38 +230,6 @@ namespace casioemu {
 		void Uninitialise() override;
 		void Frame() override;
 		void Reset() override;
-		void* QueryInterface(const char* name) override {
-			if (std::strcmp(name, "IScreenAutomation") == 0)
-				return static_cast<IScreenAutomation*>(this);
-			return nullptr;
-		}
-		int Width() const override {
-			return ROW_SIZE_DISP * 8;
-		}
-		int Height() const override {
-			return N_ROW;
-		}
-		int StatusCount() const override {
-			return SPR_MAX - 1;
-		}
-		int CopyAlpha(uint8_t* out, int len) override {
-			if (!out || len < Width() * Height()) return 1;
-			tick();
-			for (int y = 0; y < Height(); ++y) {
-				for (int x = 0; x < Width(); ++x) {
-					out[y * Width() + x] = static_cast<uint8_t>(std::clamp((int)screen_ink_alpha[(y + 1) * 192 + x], 0, 255));
-				}
-			}
-			return 0;
-		}
-		int CopyStatusAlpha(uint8_t* out, int len) override {
-			if (!out || len < StatusCount()) return 1;
-			tick();
-			for (int i = 0; i < StatusCount(); ++i) {
-				out[i] = static_cast<uint8_t>(std::clamp((int)screen_ink_alpha[i], 0, 255));
-			}
-			return 0;
-		}
 		void SaveState(std::ostream& os) override {
 			size_t bufSize = (hardware_id == HW_TI) ? (192 * 9) : (N_ROW + 1) * ROW_SIZE;
 			if (screen_buffer)

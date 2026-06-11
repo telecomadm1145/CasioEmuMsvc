@@ -340,19 +340,6 @@ int casioemu_core_key_mask(int ki_mask, int ko_mask, int pressed) {
 	return 0;
 }
 
-int casioemu_core_screen_alpha(uint8_t* out, int len) {
-	if (!g_emulator || !out || len < 0) return 1;
-	auto screen = g_emulator->chipset.QueryInterface<casioemu::IScreenAutomation>();
-	if (!screen) return 2;
-	return screen->CopyAlpha(out, len);
-}
-
-int casioemu_core_status_alpha(uint8_t* out, int len) {
-	if (!g_emulator || !out || len < 0) return 1;
-	auto screen = g_emulator->chipset.QueryInterface<casioemu::IScreenAutomation>();
-	if (!screen) return 2;
-	return screen->CopyStatusAlpha(out, len);
-}
 
 int casioemu_core_read_data(uint32_t addr, int len, uint8_t* out) {
 	if (!g_emulator || !out || len < 0) return 1;
