@@ -185,8 +185,6 @@ namespace casioemu {
 			std::cout << data;
 			return;
 		}
-#endif
-#ifdef DBG
 		if (softwareWrite) {
 			MemoryEventArgs mea{};
 			mea.offset = static_cast<uint32_t>(offset);
