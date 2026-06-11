@@ -122,6 +122,14 @@ namespace {
 		return out.good();
 	}
 
+	std::vector<uint8_t> NormalizeSimulatorRomForWeb(const uint8_t* rom, int len, casioemu::HardwareId hardware_id) {
+		std::vector<uint8_t> normalized(rom, rom + len);
+		if (hardware_id == casioemu::HW_CLASSWIZ_II && normalized.size() >= 0x72000) {
+			std::copy_n(normalized.begin() + 0x70000, 0x2000, normalized.begin() + 0x5E000);
+		}
+		return normalized;
+	}
+
 	uint16_t ReadRegister(int reg_type) {
 		auto& cpu = g_emulator->chipset.cpu;
 		if (reg_type >= 0 && reg_type <= 15) return cpu.reg_r[reg_type].raw;
@@ -278,7 +286,10 @@ int casioemu_core_init_sim_rom(const uint8_t* rom, int len, const char* model_na
 	try {
 		EnsureSdl();
 		g_emulator.reset();
-		if (!WriteRomFile(rom, len)) return -2;
+		const std::string model_name_str = model_name && model_name[0] ? model_name : "CY";
+		const auto hardware_id = HardwareIdFromModelName(model_name_str, false);
+		auto normalized_rom = NormalizeSimulatorRomForWeb(rom, len, hardware_id);
+		if (!WriteRomFile(normalized_rom.data(), static_cast<int>(normalized_rom.size()))) return -2;
 		auto model = MakeWebModel(model_name, false, is_sample_rom != 0, pd_value);
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
 		m_emu = g_emulator.get();
