@@ -382,5 +382,6 @@ local.properties
 build-web/
 build-web-check/
 build-parent-check/
+/CasioEmuMsvc/build-core-web/
 
 /CasioEmuMsvc/temp/
