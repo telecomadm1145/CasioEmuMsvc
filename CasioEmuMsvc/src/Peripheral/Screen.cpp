@@ -159,7 +159,7 @@ namespace casioemu {
 		return n;
 	}
 	template <HardwareId hardware_id>
-	class Screen : public Peripheral {
+	class Screen : public Peripheral, public IScreenFrameProvider {
 		static int const N_ROW,
 			ROW_SIZE,
 			OFFSET,
@@ -230,6 +230,34 @@ namespace casioemu {
 		void Uninitialise() override;
 		void Frame() override;
 		void Reset() override;
+		void* QueryInterface(const char* name) override {
+			if (strcmp(name, typeid(IScreenFrameProvider).name()) == 0) {
+				return static_cast<IScreenFrameProvider*>(this);
+			}
+			return Peripheral::QueryInterface(name);
+		}
+		void UpdateFrameAlpha() override {
+#ifdef __EMSCRIPTEN__
+			tick();
+#endif
+		}
+		int GetFrameWidth() const override { return 192; }
+		int GetFrameHeight() const override { return hardware_id == HW_ES_PLUS || hardware_id == HW_EPS6800 ? 32 : 64; }
+		void WriteFrameRgba(uint8_t* out, int r, int g, int b) const override {
+			if (!out) return;
+			const int width = GetFrameWidth();
+			const int height = GetFrameHeight();
+			for (int y = 0; y < height; ++y) {
+				for (int x = 0; x < width; ++x) {
+					const float alpha = screen_ink_alpha[y * 192 + x];
+					const int idx = (y * width + x) * 4;
+					out[idx + 0] = static_cast<uint8_t>(std::clamp(r, 0, 255));
+					out[idx + 1] = static_cast<uint8_t>(std::clamp(g, 0, 255));
+					out[idx + 2] = static_cast<uint8_t>(std::clamp(b, 0, 255));
+					out[idx + 3] = static_cast<uint8_t>(std::clamp(static_cast<int>(alpha), 0, 255));
+				}
+			}
+		}
 		void SaveState(std::ostream& os) override {
 			size_t bufSize = (hardware_id == HW_TI) ? (192 * 9) : (N_ROW + 1) * ROW_SIZE;
 			if (screen_buffer)

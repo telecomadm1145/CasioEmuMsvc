@@ -19,6 +19,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <vector>
 
 bool low_perf_ext = false;
 char* n_ram_buffer = nullptr;
@@ -43,6 +44,10 @@ namespace {
 	Uint64 g_last_cpu_tick = 0;
 	Uint64 g_last_emu_tick = 0;
 	bool g_main_loop_running = false;
+	casioemu::IScreenFrameProvider* g_screen_provider = nullptr;
+	std::vector<uint8_t> g_frame_rgba;
+	int g_frame_width = 0;
+	int g_frame_height = 0;
 
 	void EnsureSdl() {
 		if (!g_sdl_ready) {
@@ -84,6 +89,22 @@ namespace {
 		g_last_cpu_tick = SDL_GetTicks64();
 		g_last_emu_tick = g_last_cpu_tick;
 		g_cpu_time = static_cast<uint32_t>(SDL_GetTicks());
+	}
+
+	void RefreshScreenProvider() {
+		g_screen_provider = nullptr;
+		if (!g_emulator) return;
+		g_screen_provider = g_emulator->chipset.QueryInterface<casioemu::IScreenFrameProvider>();
+		if (g_screen_provider) {
+			g_frame_width = g_screen_provider->GetFrameWidth();
+			g_frame_height = g_screen_provider->GetFrameHeight();
+			g_frame_rgba.resize(static_cast<size_t>(g_frame_width) * static_cast<size_t>(g_frame_height) * 4);
+		}
+		else {
+			g_frame_width = 0;
+			g_frame_height = 0;
+			g_frame_rgba.clear();
+		}
 	}
 
 	void StopMainLoop() {
@@ -316,6 +337,7 @@ int casioemu_core_init_real_rom(const uint8_t* rom, int len, const char* model_n
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
 		m_emu = g_emulator.get();
 		low_perf_ext = true;
+		RefreshScreenProvider();
 		ResetClock();
 		return 0;
 	}
@@ -341,6 +363,7 @@ int casioemu_core_init_sim_rom(const uint8_t* rom, int len, const char* model_na
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
 		m_emu = g_emulator.get();
 		low_perf_ext = true;
+		RefreshScreenProvider();
 		ResetClock();
 		return 0;
 	}
@@ -358,6 +381,10 @@ void casioemu_core_shutdown() {
 	m_emu = nullptr;
 	me_mmu = nullptr;
 	n_ram_buffer = nullptr;
+	g_screen_provider = nullptr;
+	g_frame_rgba.clear();
+	g_frame_width = 0;
+	g_frame_height = 0;
 }
 
 int casioemu_core_start() {
@@ -383,6 +410,7 @@ int casioemu_core_pause(int paused) {
 int casioemu_core_reset() {
 	if (!g_emulator) return 1;
 	g_emulator->chipset.Reset();
+	RefreshScreenProvider();
 	ResetClock();
 	return 0;
 }
@@ -427,6 +455,29 @@ int casioemu_core_button_event(int kiko, int pressed) {
 	if (kiko < 0 || kiko > 0xFF) return 3;
 	keyboard->PressCode(static_cast<uint8_t>(kiko), pressed != 0);
 	return 0;
+}
+
+int casioemu_core_update_frame() {
+	if (!g_emulator || !g_screen_provider) return 1;
+	g_screen_provider->UpdateFrameAlpha();
+	g_frame_width = g_screen_provider->GetFrameWidth();
+	g_frame_height = g_screen_provider->GetFrameHeight();
+	g_frame_rgba.resize(static_cast<size_t>(g_frame_width) * static_cast<size_t>(g_frame_height) * 4);
+	const auto& color = g_emulator->ModelDefinition.ink_color;
+	g_screen_provider->WriteFrameRgba(g_frame_rgba.data(), color.r, color.g, color.b);
+	return 0;
+}
+
+uint32_t casioemu_core_frame_ptr() {
+	return g_frame_rgba.empty() ? 0 : reinterpret_cast<uint32_t>(g_frame_rgba.data());
+}
+
+int casioemu_core_frame_width() {
+	return g_frame_width;
+}
+
+int casioemu_core_frame_height() {
+	return g_frame_height;
 }
 
 
