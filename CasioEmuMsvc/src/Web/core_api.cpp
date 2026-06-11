@@ -40,11 +40,56 @@ namespace {
 	std::unique_ptr<casioemu::Emulator> g_emulator;
 	bool g_sdl_ready = false;
 	uint32_t g_cpu_time = 0;
+	Uint64 g_last_cpu_tick = 0;
+	Uint64 g_last_emu_tick = 0;
+	bool g_main_loop_running = false;
 
 	void EnsureSdl() {
 		if (!g_sdl_ready) {
 			SDL_Init(SDL_INIT_TIMER);
 			g_sdl_ready = true;
+		}
+	}
+
+	void PumpEmulationClock() {
+		if (!g_emulator || !g_emulator->Running()) return;
+		const Uint64 now = SDL_GetTicks64();
+		if (g_last_cpu_tick == 0) {
+			g_last_cpu_tick = now;
+			g_last_emu_tick = now;
+		}
+
+		int catchup_steps = 0;
+		while (now >= g_last_cpu_tick + g_emulator->timer_interval && catchup_steps < 4) {
+			g_emulator->TimerCallback();
+			g_last_cpu_tick += g_emulator->timer_interval;
+			++catchup_steps;
+		}
+		if (catchup_steps == 4 && now > g_last_cpu_tick + 250) {
+			g_last_cpu_tick = now;
+		}
+
+		if (now >= g_last_emu_tick + 25) {
+			g_emulator->chipset.EmulatorTick();
+			g_last_emu_tick = now;
+		}
+		g_cpu_time = static_cast<uint32_t>(SDL_GetTicks());
+	}
+
+	void CoreFrame() {
+		PumpEmulationClock();
+	}
+
+	void ResetClock() {
+		g_last_cpu_tick = SDL_GetTicks64();
+		g_last_emu_tick = g_last_cpu_tick;
+		g_cpu_time = static_cast<uint32_t>(SDL_GetTicks());
+	}
+
+	void StopMainLoop() {
+		if (g_main_loop_running) {
+			emscripten_cancel_main_loop();
+			g_main_loop_running = false;
 		}
 	}
 
@@ -264,13 +309,14 @@ int casioemu_core_init_real_rom(const uint8_t* rom, int len, const char* model_n
 	if (!rom || len <= 0) return -1;
 	try {
 		EnsureSdl();
+		StopMainLoop();
 		g_emulator.reset();
 		if (!WriteRomFile(rom, len)) return -2;
 		auto model = MakeWebModel(model_name, true, false, pd_value);
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
 		m_emu = g_emulator.get();
 		low_perf_ext = true;
-		g_cpu_time = SDL_GetTicks();
+		ResetClock();
 		return 0;
 	}
 	catch (const std::exception& ex) {
@@ -285,6 +331,7 @@ int casioemu_core_init_sim_rom(const uint8_t* rom, int len, const char* model_na
 	if (!rom || len <= 0) return -1;
 	try {
 		EnsureSdl();
+		StopMainLoop();
 		g_emulator.reset();
 		const std::string model_name_str = model_name && model_name[0] ? model_name : "CY";
 		const auto hardware_id = HardwareIdFromModelName(model_name_str, false);
@@ -294,7 +341,7 @@ int casioemu_core_init_sim_rom(const uint8_t* rom, int len, const char* model_na
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
 		m_emu = g_emulator.get();
 		low_perf_ext = true;
-		g_cpu_time = SDL_GetTicks();
+		ResetClock();
 		return 0;
 	}
 	catch (const std::exception& ex) {
@@ -306,15 +353,37 @@ int casioemu_core_init_sim_rom(const uint8_t* rom, int len, const char* model_na
 }
 
 void casioemu_core_shutdown() {
+	StopMainLoop();
 	g_emulator.reset();
 	m_emu = nullptr;
 	me_mmu = nullptr;
 	n_ram_buffer = nullptr;
 }
 
+int casioemu_core_start() {
+	if (!g_emulator) return 1;
+	ResetClock();
+	if (!g_main_loop_running) {
+		emscripten_set_main_loop(CoreFrame, 0, 0);
+		g_main_loop_running = true;
+	}
+	return 0;
+}
+
+void casioemu_core_stop() {
+	StopMainLoop();
+}
+
+int casioemu_core_pause(int paused) {
+	if (!g_emulator) return 1;
+	g_emulator->SetPaused(paused != 0);
+	return 0;
+}
+
 int casioemu_core_reset() {
 	if (!g_emulator) return 1;
 	g_emulator->chipset.Reset();
+	ResetClock();
 	return 0;
 }
 
@@ -348,6 +417,15 @@ int casioemu_core_key_mask(int ki_mask, int ko_mask, int pressed) {
 	int ko = BitIndex(static_cast<uint8_t>(ko_mask));
 	if (ki < 0 || ko < 0) return 3;
 	keyboard->Key(ki, ko, pressed != 0);
+	return 0;
+}
+
+int casioemu_core_button_event(int kiko, int pressed) {
+	if (!g_emulator) return 1;
+	auto keyboard = g_emulator->chipset.QueryInterface<casioemu::IKeyboardAutomation>();
+	if (!keyboard) return 2;
+	if (kiko < 0 || kiko > 0xFF) return 3;
+	keyboard->PressCode(static_cast<uint8_t>(kiko), pressed != 0);
 	return 0;
 }
 
