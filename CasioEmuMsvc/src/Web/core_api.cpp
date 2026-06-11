@@ -252,7 +252,7 @@ namespace {
 
 extern "C" {
 
-int casioemu_core_init_cy239r(const uint8_t* rom, int len, const char* model_name, int pd_value) {
+int casioemu_core_init_real_rom(const uint8_t* rom, int len, const char* model_name, int pd_value) {
 	if (!rom || len <= 0) return -1;
 	try {
 		EnsureSdl();
@@ -273,7 +273,7 @@ int casioemu_core_init_cy239r(const uint8_t* rom, int len, const char* model_nam
 	}
 }
 
-int casioemu_core_init_cy_sim(const uint8_t* rom, int len, const char* model_name, int is_sample_rom, int pd_value) {
+int casioemu_core_init_sim_rom(const uint8_t* rom, int len, const char* model_name, int is_sample_rom, int pd_value) {
 	if (!rom || len <= 0) return -1;
 	try {
 		EnsureSdl();
