@@ -36,8 +36,6 @@ bool audio_enable = false;
 namespace {
 	constexpr const char* kCoreDir = "/tmp/casioemu_core";
 	constexpr const char* kRomPath = "/tmp/casioemu_core/rom.bin";
-	constexpr int kCoreMainLoopIntervalMs = 20;
-	constexpr Uint64 kMaxCatchupMsPerFrame = 1000;
 
 	std::unique_ptr<casioemu::Emulator> g_emulator;
 	bool g_sdl_ready = false;
@@ -70,13 +68,14 @@ namespace {
 			g_last_emu_tick = now;
 		}
 
-		const Uint64 timer_interval = std::max<Uint64>(1, g_emulator->timer_interval);
-		const Uint64 max_catchup_steps = std::max<Uint64>(1, kMaxCatchupMsPerFrame / timer_interval);
-		Uint64 catchup_steps = 0;
-		while (now >= g_last_cpu_tick + timer_interval && catchup_steps < max_catchup_steps) {
+		int catchup_steps = 0;
+		while (now >= g_last_cpu_tick + g_emulator->timer_interval && catchup_steps < 4) {
 			g_emulator->TimerCallback();
-			g_last_cpu_tick += timer_interval;
+			g_last_cpu_tick += g_emulator->timer_interval;
 			++catchup_steps;
+		}
+		if (catchup_steps == 4 && now > g_last_cpu_tick + 250) {
+			g_last_cpu_tick = now;
 		}
 
 		if (now >= g_last_emu_tick + 25) {
@@ -350,7 +349,6 @@ int casioemu_core_start() {
 	ResetClock();
 	if (!g_main_loop_running) {
 		emscripten_set_main_loop(CoreFrame, 0, 0);
-		emscripten_set_main_loop_timing(EM_TIMING_SETTIMEOUT, kCoreMainLoopIntervalMs);
 		g_main_loop_running = true;
 	}
 	return 0;
