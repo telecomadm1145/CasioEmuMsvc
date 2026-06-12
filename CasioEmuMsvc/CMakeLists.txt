@@ -189,7 +189,7 @@ if(CASIOEMU_WEB)
         -sUSE_SDL_IMAGE=2
     )
     if(CASIOEMU_CORE_WEB)
-        target_compile_definitions(${TARGET_NAME} PRIVATE CASIOEMU_CORE_WEB CASIOEMU_DISABLE_RAM_IMAGE CASIOEMU_ENABLE_KEYBOARD_KI_WRITE)
+        target_compile_definitions(${TARGET_NAME} PRIVATE CASIOEMU_CORE_WEB CASIOEMU_DISABLE_RAM_IMAGE)
         target_link_options(${TARGET_NAME} PRIVATE
             -fexceptions
             -sDISABLE_EXCEPTION_CATCHING=0

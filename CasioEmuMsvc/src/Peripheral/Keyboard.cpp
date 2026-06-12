@@ -20,7 +20,6 @@ namespace casioemu {
 		MMURegion region_ko_mask, region_ko, region_ki, region_input_mode, region_input_filter;
 		uint16_t keyboard_out, keyboard_out_mask;
 		uint8_t keyboard_in, input_mode, input_filter, keyboard_ghost[8], ki_ghost[8];
-		uint8_t keyboard_in_override{};
 		uint8_t keyboard_in_last, input_filter_last;
 
 		bool real_hardware;
@@ -249,18 +248,7 @@ namespace casioemu {
 			goto init_kbd;
 		}
 
-		region_ki.Setup(0xF040, 1, "Keyboard/KI", this,
-			[](MMURegion* region, size_t) {
-				return ((Keyboard*)region->userdata)->keyboard_in;
-			},
-			[](MMURegion* region, size_t, uint8_t data) {
-#ifdef CASIOEMU_ENABLE_KEYBOARD_KI_WRITE
-				Keyboard* keyboard = ((Keyboard*)region->userdata);
-				keyboard->keyboard_in_override = data;
-				keyboard->RecalculateKI();
-#endif
-			},
-			emulator);
+		region_ki.Setup(0xF040, 1, "Keyboard/KI", &keyboard_in, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
 
 		region_input_mode.Setup(
 			0xF041, 1, "Keyboard/InputMode", this, [](MMURegion* region, size_t) {
@@ -510,10 +498,6 @@ namespace casioemu {
 		}
 		if (factory_test) {
 			keyboard_in = (uint8_t)~0b00011000; // KI 3 KI 4 enabled xD
-			return;
-		}
-		if (keyboard_in_override) {
-			keyboard_in = keyboard_in_override;
 			return;
 		}
 		if (!real_hardware) {
@@ -980,10 +964,6 @@ namespace casioemu {
 			}
 			pp->SetPortInput(0, is_on_pressed ? 0x20 : 0, 0x20);
 			pp->SetPortInput(4, keyboard_in, 0xff);
-			return;
-		}
-		if (keyboard_in_override) {
-			keyboard_in = keyboard_in_override;
 			return;
 		}
 		if (emulator.hardware_id == HW_FX_5800P || emulator.ModelDefinition.legacy_ko) {

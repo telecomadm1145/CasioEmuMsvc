@@ -124,14 +124,6 @@ namespace {
 		}
 	}
 
-	int BitIndex(uint8_t value) {
-		if (value == 0) return -1;
-		for (int i = 0; i < 8; ++i) {
-			if (value == (1u << i)) return i;
-		}
-		return -1;
-	}
-
 	int ParseModelNumber(const std::string& model_name) {
 		if (model_name.size() < 5) return -1;
 		int value = 0;
@@ -160,7 +152,7 @@ namespace {
 		const std::string model_name = model_name_cstr && model_name_cstr[0] ? model_name_cstr : (real_hardware ? "CY239R" : "CY");
 		const auto hardware_id = HardwareIdFromModelName(model_name, real_hardware);
 		casioemu::ModelInfo model{};
-		model.csr_mask = hardware_id == casioemu::HW_ES_PLUS ? 0xff : 0x7;
+	model.csr_mask = hardware_id == casioemu::HW_ES_PLUS ? 0x1 : 0x7;
 		model.hardware_id = hardware_id;
 		model.real_hardware = real_hardware;
 		model.pd_value = static_cast<unsigned char>(pd_value & 0xff);
@@ -368,37 +360,12 @@ int casioemu_core_reset() {
 	return 0;
 }
 
-int casioemu_core_step(int cycles) {
-	if (!g_emulator || cycles <= 0) return 1;
-	for (int i = 0; i < cycles; ++i) {
-		if (!g_emulator->Paused) g_emulator->Tick();
-	}
-	g_emulator->chipset.EmulatorTick();
-	g_cpu_time = SDL_GetTicks();
-	return 0;
-}
-
 int casioemu_core_is_running() {
 	return g_emulator && g_emulator->Running();
 }
 
 uint32_t casioemu_core_cpu_time() {
 	return g_cpu_time;
-}
-
-int casioemu_core_key_mask(int ki_mask, int ko_mask, int pressed) {
-	if (!g_emulator) return 1;
-	auto keyboard = g_emulator->chipset.QueryInterface<casioemu::IKeyboardAutomation>();
-	if (!keyboard) return 2;
-	if (ki_mask == 0 && ko_mask == 0) {
-		keyboard->PressCode(0xFF, pressed != 0);
-		return 0;
-	}
-	int ki = BitIndex(static_cast<uint8_t>(ki_mask));
-	int ko = BitIndex(static_cast<uint8_t>(ko_mask));
-	if (ki < 0 || ko < 0) return 3;
-	keyboard->Key(ki, ko, pressed != 0);
-	return 0;
 }
 
 int casioemu_core_button_event(int kiko, int pressed) {
