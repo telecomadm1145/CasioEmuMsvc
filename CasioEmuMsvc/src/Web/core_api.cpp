@@ -124,40 +124,23 @@ namespace {
 		}
 	}
 
-	int ParseModelNumber(const std::string& model_name) {
-		if (model_name.size() < 5) return -1;
-		int value = 0;
-		for (size_t i = 2; i < 5; ++i) {
-			if (model_name[i] < '0' || model_name[i] > '9') return -1;
-			value = value * 10 + (model_name[i] - '0');
+	casioemu::HardwareId HardwareIdFromCoreType(int core_type) {
+		if (core_type < casioemu::HW_MIN || core_type > casioemu::HW_MAX) {
+			printf("[CasioEmuCore][Error] Invalid hardware_id from core type: %d\n", core_type);
+			std::abort();
 		}
-		return value;
+		return static_cast<casioemu::HardwareId>(core_type);
 	}
 
-	casioemu::HardwareId HardwareIdFromModelName(const std::string& model_name, bool real_hardware) {
-		if (model_name.size() < 2) return casioemu::HW_CLASSWIZ;
-		const std::string prefix = model_name.substr(0, 2);
-		const int ver_num = ParseModelNumber(model_name);
-		if (prefix == "EY" || prefix == "FY" || prefix == "EG") return casioemu::HW_CLASSWIZ_II;
-		if (prefix == "CY") {
-			if (ver_num >= 840) return casioemu::HW_ES_PLUS;
-			if (ver_num >= 220 && ver_num < 230) return casioemu::HW_ES_PLUS;
-			return casioemu::HW_CLASSWIZ;
-		}
-		if (prefix == "LY" || prefix == "GY" || prefix == "ES" || prefix == "FC") return casioemu::HW_ES_PLUS;
-		return casioemu::HW_CLASSWIZ;
-	}
-
-	casioemu::ModelInfo MakeWebModel(const char* model_name_cstr, bool real_hardware, bool is_sample_rom, int pd_value) {
-		const std::string model_name = model_name_cstr && model_name_cstr[0] ? model_name_cstr : (real_hardware ? "CY239R" : "CY");
-		const auto hardware_id = HardwareIdFromModelName(model_name, real_hardware);
+	casioemu::ModelInfo MakeWebModel(bool real_hardware, bool is_sample_rom, int pd_value, int model_type) {
+	const auto hardware_id = HardwareIdFromCoreType(model_type);
 		casioemu::ModelInfo model{};
 	model.csr_mask = hardware_id == casioemu::HW_ES_PLUS ? 0x1 : 0xf;
 		model.hardware_id = hardware_id;
 		model.real_hardware = real_hardware;
 		model.pd_value = static_cast<unsigned char>(pd_value & 0xff);
 		model.interface_path = "";
-		model.model_name = model_name;
+		model.model_name = "CasioEmuCore";
 		model.rom_path = kRomPath;
 		model.enable_new_screen = false;
 		model.is_sample_rom = is_sample_rom;
@@ -275,14 +258,14 @@ namespace {
 
 extern "C" {
 
-int casioemu_core_init_real_rom(const uint8_t* rom, int len, const char* model_name, int pd_value) {
+int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int model_type) {
 	if (!rom || len <= 0) return -1;
 	try {
 		EnsureSdl();
 		StopMainLoop();
 		g_emulator.reset();
 		if (!WriteRomFile(rom, len)) return -2;
-		auto model = MakeWebModel(model_name, true, false, pd_value);
+		auto model = MakeWebModel(true, false, pd_value, model_type);
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
 		m_emu = g_emulator.get();
 		low_perf_ext = true;
@@ -298,17 +281,16 @@ int casioemu_core_init_real_rom(const uint8_t* rom, int len, const char* model_n
 	}
 }
 
-int casioemu_core_init_sim_rom(const uint8_t* rom, int len, const char* model_name, int is_sample_rom, int pd_value) {
+int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, int pd_value, int model_type) {
 	if (!rom || len <= 0) return -1;
 	try {
 		EnsureSdl();
 		StopMainLoop();
 		g_emulator.reset();
-		const std::string model_name_str = model_name && model_name[0] ? model_name : "CY";
-		const auto hardware_id = HardwareIdFromModelName(model_name_str, false);
+		const auto hardware_id = HardwareIdFromCoreType(model_type);
 		auto normalized_rom = NormalizeSimulatorRomForWeb(rom, len, hardware_id);
 		if (!WriteRomFile(normalized_rom.data(), static_cast<int>(normalized_rom.size()))) return -2;
-		auto model = MakeWebModel(model_name, false, is_sample_rom != 0, pd_value);
+		auto model = MakeWebModel(false, is_sample_rom != 0, pd_value, model_type);
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
 		m_emu = g_emulator.get();
 		low_perf_ext = true;
@@ -507,5 +489,3 @@ int casioemu_core_load_user_ram(const uint8_t* in, int len) {
 int main() {
 	return 0;
 }
-
-
