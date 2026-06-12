@@ -141,6 +141,27 @@ namespace casioemu {
 				}
 			}
 		}
+		void BindKeycode(int keycode, uint8_t code) override {
+			int button_index;
+			if (code == 0xFF) button_index = 63;
+			else button_index = ((code >> 1) & 0x38) | (code & 0x07);
+			if (button_index >= 0 && button_index < 64) {
+				keyboard_map[static_cast<SDL_Keycode>(keycode)] = static_cast<size_t>(button_index);
+			}
+		}
+		void HandleKeycode(int keycode, bool pressed) override {
+			auto iterator = keyboard_map.find(static_cast<SDL_Keycode>(keycode));
+			if (iterator == keyboard_map.end()) return;
+			if (pressed) {
+				PressButton(buttons[iterator->second], false, iterator->second);
+			}
+			else {
+				if (TryReleaseButton(buttons[iterator->second])) {
+					if (real_hardware) RecalculateGhost();
+					else RecalculateEmuInput();
+				}
+			}
+		}
 	};
 	struct DelayedReleaseParam {
 		Keyboard* keyboard;

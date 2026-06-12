@@ -3,6 +3,7 @@
 #include "Chipset/MMU.hpp"
 #include "Emulator.hpp"
 #include "ModelInfo.h"
+#include "Models.h"
 #include "Peripheral/Keyboard.hpp"
 #include "Peripheral/Screen.hpp"
 
@@ -13,11 +14,9 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -48,8 +47,13 @@ namespace {
 	bool g_main_loop_running = false;
 	casioemu::IScreenFrameProvider* g_screen_provider = nullptr;
 	std::vector<uint8_t> g_frame_rgba;
+	std::vector<uint8_t> g_source_frame_rgba;
+	std::vector<uint8_t> g_status_alpha;
 	int g_frame_width = 0;
 	int g_frame_height = 0;
+	uint8_t g_display_r = 0;
+	uint8_t g_display_g = 0;
+	uint8_t g_display_b = 0;
 
 	void EnsureSdl() {
 		if (!g_sdl_ready) {
@@ -100,11 +104,15 @@ namespace {
 			g_frame_width = g_screen_provider->GetFrameWidth();
 			g_frame_height = g_screen_provider->GetFrameHeight();
 			g_frame_rgba.resize(static_cast<size_t>(g_frame_width) * static_cast<size_t>(g_frame_height) * 4);
+			g_source_frame_rgba.resize(static_cast<size_t>(g_frame_width) * static_cast<size_t>(g_frame_height) * 4);
+			g_status_alpha.resize(static_cast<size_t>(g_frame_width));
 		}
 		else {
 			g_frame_width = 0;
 			g_frame_height = 0;
 			g_frame_rgba.clear();
+			g_source_frame_rgba.clear();
+			g_status_alpha.clear();
 		}
 	}
 
@@ -197,78 +205,6 @@ namespace {
 		return normalized;
 	}
 
-	uint16_t ReadRegister(int reg_type) {
-		auto& cpu = g_emulator->chipset.cpu;
-		if (reg_type >= 0 && reg_type <= 15) return cpu.reg_r[reg_type].raw;
-		switch (reg_type) {
-		case 16: return cpu.reg_pc.raw;
-		case 17: return cpu.reg_lr.raw;
-		case 18: return cpu.reg_elr[1].raw;
-		case 19: return cpu.reg_elr[2].raw;
-		case 20: return cpu.reg_elr[3].raw;
-		case 21: return cpu.reg_csr.raw;
-		case 22: return cpu.reg_lcsr.raw;
-		case 23: return cpu.reg_ecsr[1].raw;
-		case 24: return cpu.reg_ecsr[2].raw;
-		case 25: return cpu.reg_ecsr[3].raw;
-		case 26: return cpu.reg_psw.raw;
-		case 27: return cpu.reg_epsw[1].raw;
-		case 28: return cpu.reg_epsw[2].raw;
-		case 29: return cpu.reg_epsw[3].raw;
-		case 30: return cpu.reg_sp.raw;
-		case 31: return cpu.reg_ea.raw;
-		case 32: return (cpu.reg_psw.raw & casioemu::CPU::PSW_C) != 0;
-		case 33: return (cpu.reg_psw.raw & casioemu::CPU::PSW_Z) != 0;
-		case 34: return (cpu.reg_psw.raw & casioemu::CPU::PSW_S) != 0;
-		case 35: return (cpu.reg_psw.raw & casioemu::CPU::PSW_OV) != 0;
-		case 36: return (cpu.reg_psw.raw & casioemu::CPU::PSW_MIE) != 0;
-		case 37: return (cpu.reg_psw.raw & casioemu::CPU::PSW_HC) != 0;
-		case 38: return cpu.GetExceptionLevel();
-		case 39: return cpu.reg_psw.raw;
-		default: return 0;
-		}
-	}
-
-	void WriteFlag(uint8_t mask, int value) {
-		auto& psw = g_emulator->chipset.cpu.reg_psw.raw;
-		if (value) psw |= mask;
-		else psw &= ~mask;
-	}
-
-	void WriteRegister(int reg_type, uint16_t value) {
-		auto& cpu = g_emulator->chipset.cpu;
-		if (reg_type >= 0 && reg_type <= 15) {
-			cpu.reg_r[reg_type] = static_cast<uint8_t>(value);
-			return;
-		}
-		switch (reg_type) {
-		case 16: cpu.reg_pc = value; break;
-		case 17: cpu.reg_lr = value; break;
-		case 18: cpu.reg_elr[1] = value; break;
-		case 19: cpu.reg_elr[2] = value; break;
-		case 20: cpu.reg_elr[3] = value; break;
-		case 21: cpu.reg_csr = value; break;
-		case 22: cpu.reg_lcsr = value; break;
-		case 23: cpu.reg_ecsr[1] = value; break;
-		case 24: cpu.reg_ecsr[2] = value; break;
-		case 25: cpu.reg_ecsr[3] = value; break;
-		case 26: cpu.reg_psw = static_cast<uint8_t>(value); break;
-		case 27: cpu.reg_epsw[1] = static_cast<uint8_t>(value); break;
-		case 28: cpu.reg_epsw[2] = static_cast<uint8_t>(value); break;
-		case 29: cpu.reg_epsw[3] = static_cast<uint8_t>(value); break;
-		case 30: cpu.reg_sp = value; break;
-		case 31: cpu.reg_ea = value; break;
-		case 32: WriteFlag(casioemu::CPU::PSW_C, value); break;
-		case 33: WriteFlag(casioemu::CPU::PSW_Z, value); break;
-		case 34: WriteFlag(casioemu::CPU::PSW_S, value); break;
-		case 35: WriteFlag(casioemu::CPU::PSW_OV, value); break;
-		case 36: WriteFlag(casioemu::CPU::PSW_MIE, value); break;
-		case 37: WriteFlag(casioemu::CPU::PSW_HC, value); break;
-		case 39: cpu.reg_psw = static_cast<uint8_t>(value); break;
-		default: break;
-		}
-	}
-
 	casioemu::MMURegion* FindRegion(uint32_t addr) {
 		for (auto* region : g_emulator->chipset.mmu.GetRegions()) {
 			if (addr >= region->base && addr < region->base + region->size) return region;
@@ -289,6 +225,25 @@ namespace {
 			region->description == "BatteryBackedRAM" ||
 			region->description == "BatteryBackedRAM/2" ||
 			region->description == "Segment4");
+	}
+
+	bool UserRamRange(uint32_t& addr, int& len) {
+		if (!g_emulator) return false;
+		switch (g_emulator->hardware_id) {
+		case casioemu::HW_CLASSWIZ_II:
+			addr = 0x9000;
+			len = 0x4000;
+			return true;
+		case casioemu::HW_ES_PLUS:
+		case casioemu::HW_EPS6800:
+			addr = 0x8000;
+			len = 0x2000;
+			return true;
+		default:
+			addr = 0xD000;
+			len = 0x2000;
+			return true;
+		}
 	}
 
 
@@ -384,6 +339,8 @@ void casioemu_core_shutdown() {
 	n_ram_buffer = nullptr;
 	g_screen_provider = nullptr;
 	g_frame_rgba.clear();
+	g_source_frame_rgba.clear();
+	g_status_alpha.clear();
 	g_frame_width = 0;
 	g_frame_height = 0;
 }
@@ -453,14 +410,59 @@ int casioemu_core_button_event(int kiko, int pressed) {
 	return 0;
 }
 
+int casioemu_core_sdl_key_event(int keycode, int pressed) {
+	if (!g_emulator) return 1;
+	auto keyboard = g_emulator->chipset.QueryInterface<casioemu::IKeyboardAutomation>();
+	if (!keyboard) return 2;
+	keyboard->HandleKeycode(keycode, pressed != 0);
+	return 0;
+}
+
+int casioemu_core_bind_sdl_key(int keycode, int kiko) {
+	if (!g_emulator) return 1;
+	auto keyboard = g_emulator->chipset.QueryInterface<casioemu::IKeyboardAutomation>();
+	if (!keyboard) return 2;
+	if (kiko < 0 || kiko > 0xFF) return 3;
+	keyboard->BindKeycode(keycode, static_cast<uint8_t>(kiko));
+	return 0;
+}
+
+int casioemu_core_set_display_color(int r, int g, int b) {
+	g_display_r = static_cast<uint8_t>(std::clamp(r, 0, 255));
+	g_display_g = static_cast<uint8_t>(std::clamp(g, 0, 255));
+	g_display_b = static_cast<uint8_t>(std::clamp(b, 0, 255));
+	return 0;
+}
+
 int casioemu_core_update_frame() {
 	if (!g_emulator || !g_screen_provider) return 1;
 	g_screen_provider->UpdateFrameAlpha();
 	g_frame_width = g_screen_provider->GetFrameWidth();
 	g_frame_height = g_screen_provider->GetFrameHeight();
 	g_frame_rgba.resize(static_cast<size_t>(g_frame_width) * static_cast<size_t>(g_frame_height) * 4);
+	g_source_frame_rgba.resize(static_cast<size_t>(g_frame_width) * static_cast<size_t>(g_frame_height) * 4);
+	g_status_alpha.resize(static_cast<size_t>(g_frame_width));
 	const auto& color = g_emulator->ModelDefinition.ink_color;
-	g_screen_provider->WriteFrameRgba(g_frame_rgba.data(), color.r, color.g, color.b);
+	g_screen_provider->WriteFrameRgba(g_source_frame_rgba.data(), color.r, color.g, color.b);
+	const int display_height = std::max(0, g_frame_height - 1);
+	const int source_start_row = 1;
+	g_frame_rgba.resize(static_cast<size_t>(g_frame_width) * static_cast<size_t>(display_height) * 4);
+	for (int y = 0; y < display_height; ++y) {
+		const auto* src = g_source_frame_rgba.data() + (static_cast<size_t>(source_start_row + y) * g_frame_width * 4);
+		auto* dst = g_frame_rgba.data() + (static_cast<size_t>(y) * g_frame_width * 4);
+		for (int x = 0; x < g_frame_width; ++x) {
+			dst[x * 4] = g_display_r;
+			dst[x * 4 + 1] = g_display_g;
+			dst[x * 4 + 2] = g_display_b;
+			dst[x * 4 + 3] = src[x * 4 + 3];
+		}
+	}
+	if (!g_status_alpha.empty() && !g_source_frame_rgba.empty()) {
+		for (int x = 0; x < g_frame_width; ++x) {
+			g_status_alpha[x] = g_source_frame_rgba[x * 4 + 3];
+		}
+	}
+	g_frame_height = display_height;
 	return 0;
 }
 
@@ -476,54 +478,12 @@ int casioemu_core_frame_height() {
 	return g_frame_height;
 }
 
-
-int casioemu_core_read_data(uint32_t addr, int len, uint8_t* out) {
-	if (!g_emulator || !out || len < 0) return 1;
-	if (len > 64 && ReadDataBulk(addr, len, out) == 0) return 0;
-	for (int i = 0; i < len; ++i) {
-		out[i] = g_emulator->chipset.mmu.ReadData(addr + i, false);
-	}
-	return 0;
+uint32_t casioemu_core_status_alpha_ptr() {
+	return g_status_alpha.empty() ? 0 : reinterpret_cast<uint32_t>(g_status_alpha.data());
 }
 
-int casioemu_core_write_data(uint32_t addr, int len, const uint8_t* in) {
-	if (!g_emulator || !in || len < 0) return 1;
-	for (int i = 0; i < len; ++i) {
-		g_emulator->chipset.mmu.WriteData(addr + i, in[i], false);
-	}
-	return 0;
-}
-
-int casioemu_core_read_code(uint32_t addr, int len, uint8_t* out) {
-	if (!g_emulator || !out || len < 0) return 1;
-	auto& rom = g_emulator->chipset.rom_data;
-	for (int i = 0; i < len; ++i) {
-		uint32_t offset = addr + i;
-		out[i] = offset < rom.size() ? rom[offset] : 0xFF;
-	}
-	return 0;
-}
-
-int casioemu_core_write_code(uint32_t addr, int len, const uint8_t* in) {
-	if (!g_emulator || !in || len < 0) return 1;
-	auto& rom = g_emulator->chipset.rom_data;
-	if (addr + static_cast<uint32_t>(len) > rom.size()) return 2;
-	for (int i = 0; i < len; ++i) {
-		rom[addr + i] = in[i];
-	}
-	return 0;
-}
-
-int casioemu_core_read_reg(int reg_type, uint16_t* out) {
-	if (!g_emulator || !out) return 1;
-	*out = ReadRegister(reg_type);
-	return 0;
-}
-
-int casioemu_core_write_reg(int reg_type, uint16_t value) {
-	if (!g_emulator) return 1;
-	WriteRegister(reg_type, value);
-	return 0;
+int casioemu_core_status_alpha_len() {
+	return static_cast<int>(g_status_alpha.size());
 }
 
 int casioemu_core_set_solar_voltage(double voltage) {
@@ -540,21 +500,30 @@ int casioemu_core_set_battery_voltage(double voltage) {
 	return 0;
 }
 
-int casioemu_core_save_state(uint8_t* out, int max_len) {
-	if (!g_emulator || !out || max_len <= 0) return -1;
-	std::ostringstream os(std::ios::binary);
-	g_emulator->chipset.SaveStateAll(os);
-	const auto state = os.str();
-	if (static_cast<int>(state.size()) > max_len) return -static_cast<int>(state.size());
-	std::memcpy(out, state.data(), state.size());
-	return static_cast<int>(state.size());
+int casioemu_core_user_ram_size() {
+	uint32_t addr = 0;
+	int len = 0;
+	return UserRamRange(addr, len) ? len : 0;
 }
 
-int casioemu_core_load_state(const uint8_t* in, int len) {
-	if (!g_emulator || !in || len <= 0) return 1;
-	std::string state(reinterpret_cast<const char*>(in), len);
-	std::istringstream is(state, std::ios::binary);
-	g_emulator->chipset.LoadStateAll(is);
+int casioemu_core_save_user_ram(uint8_t* out, int max_len) {
+	if (!g_emulator || !out || max_len < 0) return -1;
+	uint32_t addr = 0;
+	int len = 0;
+	if (!UserRamRange(addr, len)) return -2;
+	if (max_len < len) return -len;
+	return ReadDataBulk(addr, len, out);
+}
+
+int casioemu_core_load_user_ram(const uint8_t* in, int len) {
+	if (!g_emulator || !in || len < 0) return 1;
+	uint32_t addr = 0;
+	int ram_len = 0;
+	if (!UserRamRange(addr, ram_len)) return 2;
+	const int copy_len = std::min(len, ram_len);
+	for (int i = 0; i < copy_len; ++i) {
+		g_emulator->chipset.mmu.WriteData(addr + i, in[i], false);
+	}
 	return 0;
 }
 
