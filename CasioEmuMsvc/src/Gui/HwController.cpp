@@ -8,6 +8,8 @@ int screen_flashing_threshold = 20;
 float screen_fading_blending_coefficient = 0;
 bool enable_screen_fading = false;
 float screen_flashing_brightness_coeff = 1.5f;
+bool screen_residual_enabled = true;
+float screen_residual_alpha_scale = 1.0f;
 int screen_buffer_select = 0;
 bool audio_enable = false;
 void HwController::RenderCore() {

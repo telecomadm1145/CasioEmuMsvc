@@ -30,6 +30,8 @@ int screen_flashing_threshold = 20;
 float screen_fading_blending_coefficient = 0.0f;
 bool enable_screen_fading = false;
 float screen_flashing_brightness_coeff = 1.5f;
+bool screen_residual_enabled = true;
+float screen_residual_alpha_scale = 1.0f;
 int screen_buffer_select = 0;
 bool audio_enable = false;
 
@@ -429,6 +431,14 @@ int casioemu_core_set_display_color(int r, int g, int b) {
 	g_display_r = static_cast<uint8_t>(std::clamp(r, 0, 255));
 	g_display_g = static_cast<uint8_t>(std::clamp(g, 0, 255));
 	g_display_b = static_cast<uint8_t>(std::clamp(b, 0, 255));
+	return 0;
+}
+
+int casioemu_core_set_screen_shadow(int enabled, double alpha_scale) {
+	screen_residual_enabled = enabled != 0;
+	if (std::isfinite(alpha_scale)) {
+		screen_residual_alpha_scale = static_cast<float>(std::clamp(alpha_scale, 0.0, 1.0));
+	}
 	return 0;
 }
 

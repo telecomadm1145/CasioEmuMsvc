@@ -326,6 +326,7 @@ namespace casioemu {
 					return;
 				float ink_alpha_on = (ti_contrast - 100) * 20.0;
 				float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);
+				ink_alpha_off = screen_residual_enabled ? ink_alpha_off * screen_residual_alpha_scale : 0.0f;
 				ink_alpha_on = std::clamp(ink_alpha_on, 0.0f, 255.0f);
 				uint8_t* screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xE708;
 				if (emulator.ModelDefinition.real_hardware) {
@@ -369,6 +370,7 @@ namespace casioemu {
 #endif
 				float ink_alpha_on = 255;
 				float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);
+				ink_alpha_off = screen_residual_enabled ? ink_alpha_off * screen_residual_alpha_scale : 0.0f;
 				ink_alpha_on = std::clamp(ink_alpha_on, 0.0f, 255.0f);
 				uint8_t* screen_buffer = (uint8_t*)(emulator.chipset.epscpu->vram + 0x120);
 				// if (emulator.ModelDefinition.real_hardware) {
@@ -430,6 +432,7 @@ namespace casioemu {
 			}
 			int ink_alpha_on = off + contrast * coeff - sb * 8;
 			int ink_alpha_off = off + 20 + (contrast) * (coeff - 11) - sb * 13;
+			ink_alpha_off = screen_residual_enabled ? static_cast<int>(ink_alpha_off * screen_residual_alpha_scale) : 0;
 			if (ink_alpha_on < 0)
 				ink_alpha_on = 0;
 			if (ink_alpha_off < 0)
