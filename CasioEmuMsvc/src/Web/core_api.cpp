@@ -152,7 +152,7 @@ namespace {
 		const std::string model_name = model_name_cstr && model_name_cstr[0] ? model_name_cstr : (real_hardware ? "CY239R" : "CY");
 		const auto hardware_id = HardwareIdFromModelName(model_name, real_hardware);
 		casioemu::ModelInfo model{};
-	model.csr_mask = hardware_id == casioemu::HW_ES_PLUS ? 0x1 : 0x7;
+	model.csr_mask = hardware_id == casioemu::HW_ES_PLUS ? 0x1 : 0xf;
 		model.hardware_id = hardware_id;
 		model.real_hardware = real_hardware;
 		model.pd_value = static_cast<unsigned char>(pd_value & 0xff);
