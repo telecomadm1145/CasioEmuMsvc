@@ -219,6 +219,7 @@ UI.ChangeBg=Cambiar fondo
 Theme.Tint=Activar tinte
 Theme.SeedColor=Color semilla
 Theme.MD=Extraer del fondo
+Theme.EnableDiscordRPC=Habilitar Discord RPC
 CodeViewer.Search=Buscar:
 CodeViewer.Hex=Hex
 CodeViewer.Inst=Instrucción

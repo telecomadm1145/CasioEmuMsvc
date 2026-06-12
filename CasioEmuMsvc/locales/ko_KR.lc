@@ -219,6 +219,7 @@ UI.ChangeBg=배경 변경
 Theme.Tint=색조 활성화
 Theme.SeedColor=시드 색상
 Theme.MD=배경에서 추출
+Theme.EnableDiscordRPC=Discord RPC 활성화
 CodeViewer.Search=검색:
 CodeViewer.Hex=Hex
 CodeViewer.Inst=명령어

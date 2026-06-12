@@ -216,6 +216,7 @@ UI.ChangeBg=背景を変更
 Theme.Tint=色合いを有効にする
 Theme.SeedColor=テーマカラー
 Theme.MD=背景から抽出
+Theme.EnableDiscordRPC=Discord RPCを有効にする
 CodeViewer.Search=検索：
 CodeViewer.Hex=16進数
 CodeViewer.Inst=命令

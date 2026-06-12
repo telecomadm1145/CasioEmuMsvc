@@ -219,6 +219,7 @@ UI.ChangeBg=更改背景
 Theme.Tint=启用色调
 Theme.SeedColor=主色
 Theme.MD=从背景提取
+Theme.EnableDiscordRPC=启用 Discord RPC
 CodeViewer.Search=搜索：
 CodeViewer.Hex=十六进制
 CodeViewer.Inst=指令
