@@ -135,7 +135,7 @@ namespace {
 		return static_cast<casioemu::HardwareId>(core_type);
 	}
 
-	casioemu::ModelInfo MakeWebModel(bool real_hardware, bool is_sample_rom, int pd_value, int model_type) {
+	casioemu::ModelInfo MakeWebModel(bool real_hardware, bool is_sample_rom, int pd_value, int model_type, bool legacy_ko) {
 	const auto hardware_id = HardwareIdFromCoreType(model_type);
 		casioemu::ModelInfo model{};
 	model.csr_mask = hardware_id == casioemu::HW_ES_PLUS ? 0x1 : 0xf;
@@ -147,7 +147,7 @@ namespace {
 		model.rom_path = kRomPath;
 		model.enable_new_screen = false;
 		model.is_sample_rom = is_sample_rom;
-		model.legacy_ko = false;
+		model.legacy_ko = legacy_ko;
 		model.u16_mode = hardware_id != casioemu::HW_ES_PLUS;
 		model.LARGE_model = true;
 		model.ml620_mirroring = hardware_id != casioemu::HW_CLASSWIZ;
@@ -264,14 +264,14 @@ namespace {
 
 extern "C" {
 
-int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int model_type) {
+int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int model_type, int legacy_ko) {
 	if (!rom || len <= 0) return -1;
 	try {
 		EnsureSdl();
 		StopMainLoop();
 		g_emulator.reset();
 		if (!WriteRomFile(rom, len)) return -2;
-		auto model = MakeWebModel(true, false, pd_value, model_type);
+		auto model = MakeWebModel(true, false, pd_value, model_type, legacy_ko != 0);
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
 		m_emu = g_emulator.get();
 		low_perf_ext = true;
@@ -287,7 +287,7 @@ int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int m
 	}
 }
 
-int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, int pd_value, int model_type) {
+int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, int pd_value, int model_type, int legacy_ko) {
 	if (!rom || len <= 0) return -1;
 	try {
 		EnsureSdl();
@@ -296,7 +296,7 @@ int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, i
 		const auto hardware_id = HardwareIdFromCoreType(model_type);
 		auto normalized_rom = NormalizeSimulatorRomForWeb(rom, len, hardware_id);
 		if (!WriteRomFile(normalized_rom.data(), static_cast<int>(normalized_rom.size()))) return -2;
-		auto model = MakeWebModel(false, is_sample_rom != 0, pd_value, model_type);
+		auto model = MakeWebModel(false, is_sample_rom != 0, pd_value, model_type, legacy_ko != 0);
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
 		m_emu = g_emulator.get();
 		low_perf_ext = true;
