@@ -6,6 +6,7 @@
 #include "Models.h"
 #include "Peripheral/Keyboard.hpp"
 #include "Peripheral/Screen.hpp"
+#include "Snapshot.h"
 
 #include <SDL.h>
 #include <emscripten.h>
@@ -16,6 +17,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -49,6 +51,7 @@ namespace {
 	std::vector<uint8_t> g_frame_rgba;
 	std::vector<uint8_t> g_source_frame_rgba;
 	std::vector<uint8_t> g_status_alpha;
+	std::vector<uint8_t> g_snapshot_buffer;
 	int g_frame_width = 0;
 	int g_frame_height = 0;
 	uint8_t g_display_r = 0;
@@ -316,6 +319,7 @@ void casioemu_core_shutdown() {
 	g_frame_rgba.clear();
 	g_source_frame_rgba.clear();
 	g_status_alpha.clear();
+	g_snapshot_buffer.clear();
 	g_frame_width = 0;
 	g_frame_height = 0;
 }
@@ -482,6 +486,61 @@ int casioemu_core_load_user_ram(const uint8_t* in, int len) {
 		g_emulator->chipset.mmu.WriteData(addr + i, in[i], false);
 	}
 	return 0;
+}
+
+uint32_t casioemu_core_snapshot_ptr() {
+	return g_snapshot_buffer.empty() ? 0 : reinterpret_cast<uint32_t>(g_snapshot_buffer.data());
+}
+
+int casioemu_core_snapshot_len() {
+	return static_cast<int>(g_snapshot_buffer.size());
+}
+
+int casioemu_core_save_snapshot() {
+	if (!g_emulator) return 1;
+	try {
+		const std::filesystem::path snapshot_path = std::filesystem::path(kCoreDir) / "state.snapshot";
+		std::filesystem::create_directories(kCoreDir);
+		SnapshotManager manager;
+		const uint32_t id = manager.SaveSnapshot(*g_emulator, 0, "WebCalcEmu");
+		manager.ExportNode(snapshot_path, id);
+		std::ifstream in(snapshot_path, std::ios::binary);
+		if (!in) return 2;
+		g_snapshot_buffer.assign(
+			std::istreambuf_iterator<char>(in),
+			std::istreambuf_iterator<char>());
+		return g_snapshot_buffer.empty() ? 3 : 0;
+	}
+	catch (const std::exception& ex) {
+		printf("[CasioEmuCore][Snapshot][Error] %s\n", ex.what());
+		g_snapshot_buffer.clear();
+		return 4;
+	}
+}
+
+int casioemu_core_load_snapshot(const uint8_t* in, int len) {
+	if (!g_emulator || !in || len <= 0) return 1;
+	try {
+		const std::filesystem::path snapshot_path = std::filesystem::path(kCoreDir) / "state.snapshot";
+		std::filesystem::create_directories(kCoreDir);
+		{
+			std::ofstream out(snapshot_path, std::ios::binary);
+			if (!out) return 2;
+			out.write(reinterpret_cast<const char*>(in), len);
+			if (!out.good()) return 3;
+		}
+		SnapshotManager manager;
+		manager.ImportFromFile(snapshot_path);
+		if (manager.Nodes.empty()) return 4;
+		manager.LoadSnapshot(*g_emulator, manager.Nodes.front().Id);
+		RefreshScreenProvider();
+		ResetClock();
+		return 0;
+	}
+	catch (const std::exception& ex) {
+		printf("[CasioEmuCore][Snapshot][Error] %s\n", ex.what());
+		return 5;
+	}
 }
 
 }
