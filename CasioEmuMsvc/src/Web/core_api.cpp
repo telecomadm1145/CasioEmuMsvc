@@ -152,6 +152,9 @@ namespace {
 		model.LARGE_model = true;
 		model.ml620_mirroring = hardware_id != casioemu::HW_CLASSWIZ;
 		model.ink_color = {0, 0, 0};
+		if (!real_hardware) {
+			model.extra["limit_spd"] = "1";
+		}
 
 		for (int ko = 0; ko < 8; ++ko) {
 			for (int ki = 0; ki < 8; ++ki) {
