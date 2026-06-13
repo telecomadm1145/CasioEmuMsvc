@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10...3.22)
+﻿cmake_minimum_required(VERSION 3.10...3.22)
 
 project(CasioEmuMsvc)
 #set(CMAKE_MESSAGE_LOG_LEVEL NOTICE)
@@ -203,7 +203,7 @@ if(CASIOEMU_WEB)
             -sMODULARIZE=1
             -sEXPORT_NAME=CasioEmuCoreModule
             "SHELL:-sEXPORTED_RUNTIME_METHODS=['FS','ccall','cwrap','HEAPU8']"
-            "SHELL:-sEXPORTED_FUNCTIONS=['_main','_malloc','_free','_casioemu_core_init_real_rom','_casioemu_core_init_sim_rom','_casioemu_core_shutdown','_casioemu_core_start','_casioemu_core_stop','_casioemu_core_reset','_casioemu_core_is_running','_casioemu_core_cpu_time','_casioemu_core_button_event','_casioemu_core_sdl_key_event','_casioemu_core_bind_sdl_key','_casioemu_core_set_display_color','_casioemu_core_set_screen_shadow','_casioemu_core_update_frame','_casioemu_core_frame_ptr','_casioemu_core_frame_width','_casioemu_core_frame_height','_casioemu_core_status_alpha_ptr','_casioemu_core_status_alpha_len','_casioemu_core_set_solar_voltage','_casioemu_core_set_battery_voltage','_casioemu_core_user_ram_size','_casioemu_core_save_user_ram','_casioemu_core_load_user_ram']"
+            "SHELL:-sEXPORTED_FUNCTIONS=['_main','_malloc','_free','_casioemu_core_init_real_rom','_casioemu_core_init_sim_rom','_casioemu_core_shutdown','_casioemu_core_start','_casioemu_core_stop','_casioemu_core_reset','_casioemu_core_is_running','_casioemu_core_cpu_time','_casioemu_core_button_event','_casioemu_core_sdl_key_event','_casioemu_core_bind_sdl_key','_casioemu_core_set_display_color','_casioemu_core_set_screen_shadow','_casioemu_core_update_frame','_casioemu_core_frame_ptr','_casioemu_core_frame_width','_casioemu_core_frame_height','_casioemu_core_status_alpha_ptr','_casioemu_core_status_alpha_len','_casioemu_core_set_solar_voltage','_casioemu_core_set_battery_voltage','_casioemu_core_user_ram_size','_casioemu_core_save_user_ram','_casioemu_core_load_user_ram','_casioemu_core_rom_version']"
             "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/locales@/locales"
             "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/roms.db@/roms.db"
         )

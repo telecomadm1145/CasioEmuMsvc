@@ -1,4 +1,4 @@
-#include "Chipset/CPU.hpp"
+﻿#include "Chipset/CPU.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Chipset/MMU.hpp"
 #include "Emulator.hpp"
@@ -484,6 +484,35 @@ int casioemu_core_load_user_ram(const uint8_t* in, int len) {
 	return 0;
 }
 
+}
+
+static uint32_t rom_info_addr(int hw) {
+	switch (hw) {
+		case 3: return 0x1fff4; // HW_ES_PLUS
+		case 4: return 0x3ffee; // HW_CLASSWIZ
+		case 5: return 0x5ffee; // HW_CLASSWIZ_II
+		default: return 0;
+	}
+}
+
+extern "C" const char* casioemu_core_rom_version() {
+	static char buffer[32] = {};
+	if (!g_emulator) return "";
+	const auto hw = g_emulator->ModelDefinition.hardware_id;
+	const uint32_t addr = rom_info_addr(hw);
+	if (!addr) return "";
+
+	std::ifstream rom(kRomPath, std::ios::binary);
+	if (!rom) return "";
+
+	char name[7] = {};
+	char ver[3] = {};
+	unsigned char sum[2] = {};
+	rom.seekg(addr); rom.read(name, 6);
+	rom.seekg(addr + 6); rom.read(ver, 2);
+	rom.seekg(addr + 8); rom.read(reinterpret_cast<char*>(sum), 2);
+	snprintf(buffer, sizeof(buffer), "%.6s %.2s (%02X)", name, ver, sum[1] * 0x100 + sum[0]);
+	return buffer;
 }
 
 int main() {
