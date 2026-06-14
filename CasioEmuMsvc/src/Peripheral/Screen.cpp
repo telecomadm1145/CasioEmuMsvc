@@ -203,13 +203,27 @@ namespace casioemu {
 		bool enabled_2 = 0;
 		int status_ink_alpha_on = 255;
 		int status_ink_alpha_off = 0;
+		std::array<SpriteInfo, 2> classwiz_graph_sprite_info{};
 
-		bool IsClassWizGraphStatusModel() const {
+		bool HasSprite(const char* name) const {
+			return emulator.ModelDefinition.sprites.find(name) != emulator.ModelDefinition.sprites.end();
+		}
+
+		bool HasClassWizGraphStatusSprites() const {
 			if constexpr (hardware_id != HW_CLASSWIZ_II) {
 				return false;
 			}
 			else {
-				return emulator.ModelDefinition.extra.find("classwiz_graph") != emulator.ModelDefinition.extra.end();
+				return HasSprite("rsd_fx") && HasSprite("rsd_gx");
+			}
+		}
+
+		bool HasClassWizGraphStatusLogic() const {
+			if constexpr (hardware_id != HW_CLASSWIZ_II) {
+				return false;
+			}
+			else {
+				return emulator.ModelDefinition.extra.find("classwiz_graph") != emulator.ModelDefinition.extra.end() || HasClassWizGraphStatusSprites();
 			}
 		}
 
@@ -236,7 +250,6 @@ namespace casioemu {
 			if (!screen_residual_enabled) {
 				return LogicalAlpha((lower ? 0.2f : 0.0f) + (upper ? 0.8f : 0.0f));
 			}
-			if (!lower && !upper) return 0;
 			float alpha = static_cast<float>(status_ink_alpha_off);
 			alpha += (static_cast<float>(status_ink_alpha_on - status_ink_alpha_off)) * (lower ? 0.2f : 0.0f);
 			alpha += (static_cast<float>(status_ink_alpha_on - status_ink_alpha_off)) * (upper ? 0.8f : 0.0f);
@@ -258,6 +271,23 @@ namespace casioemu {
 				alpha *= screen_scan_alpha[0];
 			}
 			return static_cast<uint8_t>(std::clamp(static_cast<int>(alpha), 0, 255));
+		}
+
+		int ClassWizGraphStatusIndexFromCommonIndex(int common_index) const {
+			if (common_index < 7) return common_index;
+			if (common_index < 12) return common_index + 1;
+			return common_index + 2;
+		}
+
+		void UpdateClassWizGraphStatusAlpha(float ratio) {
+			if constexpr (hardware_id == HW_CLASSWIZ_II) {
+				static constexpr int FX_STATUS_INDEX = 7;
+				static constexpr int GX_STATUS_INDEX = 13;
+				const int fx_alpha = ClassWizIISingleStatusAlpha(0x09, 0x01);
+				const int gx_alpha = ClassWizIISingleStatusAlpha(0x0f, 0x01);
+				screen_ink_alpha[FX_STATUS_INDEX] = screen_ink_alpha[FX_STATUS_INDEX] * ratio + fx_alpha * (1 - ratio);
+				screen_ink_alpha[GX_STATUS_INDEX] = screen_ink_alpha[GX_STATUS_INDEX] * ratio + gx_alpha * (1 - ratio);
+			}
 		}
 
 	public:
@@ -319,7 +349,7 @@ namespace casioemu {
 		}
 		int GetStatusAlphaCount() const override {
 			if constexpr (hardware_id == HW_CLASSWIZ_II) {
-				return IsClassWizGraphStatusModel() ? 20 : 18;
+				return HasClassWizGraphStatusLogic() ? 20 : 18;
 			}
 			return SPR_MAX > 0 ? SPR_MAX - 1 : 0;
 		}
@@ -327,26 +357,6 @@ namespace casioemu {
 			if (!out || max_len <= 0) return;
 			const int count = std::min(max_len, GetStatusAlphaCount());
 			for (int i = 0; i < count; ++i) out[i] = 0;
-			if constexpr (hardware_id == HW_CLASSWIZ_II) {
-				if (IsClassWizGraphStatusModel()) {
-					static constexpr int base_index[] = {
-						0, 1, 2, 3, 4, 5, 6, -1, 7, 8,
-						9, 10, 11, -2, 12, 13, 14, 15, 16, 17,
-					};
-					for (int i = 0; i < count; ++i) {
-						if (base_index[i] >= 0) {
-							out[i] = static_cast<uint8_t>(std::clamp(static_cast<int>(screen_ink_alpha[base_index[i]]), 0, 255));
-						}
-						else if (base_index[i] == -1) {
-							out[i] = ClassWizIISingleStatusAlpha(0x09, 0x01);
-						}
-						else if (base_index[i] == -2) {
-							out[i] = ClassWizIISingleStatusAlpha(0x0f, 0x01);
-						}
-					}
-					return;
-				}
-			}
 			for (int i = 0; i < count; ++i) {
 				out[i] = static_cast<uint8_t>(std::clamp(static_cast<int>(screen_ink_alpha[i]), 0, 255));
 			}
@@ -611,8 +621,12 @@ namespace casioemu {
 								ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.8;
 							if (screen_refresh_rate >= screen_flashing_threshold)
 								ink_alpha *= screen_scan_alpha[0];
-							screen_ink_alpha[x] = screen_ink_alpha[x] * ratio + ink_alpha * (1 - ratio);
+							const int status_index = HasClassWizGraphStatusLogic() ? ClassWizGraphStatusIndexFromCommonIndex(x) : x;
+							screen_ink_alpha[status_index] = screen_ink_alpha[status_index] * ratio + ink_alpha * (1 - ratio);
 							x++;
+						}
+						if (HasClassWizGraphStatusLogic()) {
+							UpdateClassWizGraphStatusAlpha(ratio);
 						}
 					}
 					else {
@@ -922,6 +936,10 @@ namespace casioemu {
 			sprite_info.resize(SPR_MAX);
 			for (int ix = 0; ix != SPR_MAX; ++ix)
 				sprite_info[ix] = emulator.ModelDefinition.sprites[sprite_bitmap[ix].name];
+			if (HasClassWizGraphStatusSprites()) {
+				classwiz_graph_sprite_info[0] = emulator.ModelDefinition.sprites["rsd_fx"];
+				classwiz_graph_sprite_info[1] = emulator.ModelDefinition.sprites["rsd_gx"];
+			}
 
 			ink_colour = emulator.ModelDefinition.ink_color;
 			if constexpr (hardware_id == HW_TI) {
@@ -2150,13 +2168,26 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 
 		// Set texture transparency and copy sprites as before
 		for (int ix = 1; ix != SPR_MAX; ++ix) {
-			SDL_SetTextureAlphaMod(interface_texture, Uint8(std::clamp((int)screen_ink_alpha[x], 0, 255)));
+			const int alpha_index = HasClassWizGraphStatusLogic() ? ClassWizGraphStatusIndexFromCommonIndex(x) : x;
+			SDL_SetTextureAlphaMod(interface_texture, Uint8(std::clamp((int)screen_ink_alpha[alpha_index], 0, 255)));
 			x++;
 			SDL_Rect tmp1 = sprite_info[ix].src;
 			SDL_Rect tmp2 = sprite_info[ix].dest;
 			SDL_RenderCopy(renderer, interface_texture, &tmp1, &tmp2);
 			// Store the sprite rectangle for later
 			spriteRects.push_back(sprite_info[ix].dest);
+		}
+		if (HasClassWizGraphStatusSprites()) {
+			static constexpr int FX_STATUS_INDEX = 7;
+			static constexpr int GX_STATUS_INDEX = 13;
+			static constexpr int GRAPH_STATUS_INDEXES[] = {FX_STATUS_INDEX, GX_STATUS_INDEX};
+			for (int ix = 0; ix != 2; ++ix) {
+				SDL_SetTextureAlphaMod(interface_texture, Uint8(std::clamp((int)screen_ink_alpha[GRAPH_STATUS_INDEXES[ix]], 0, 255)));
+				SDL_Rect tmp1 = classwiz_graph_sprite_info[ix].src;
+				SDL_Rect tmp2 = classwiz_graph_sprite_info[ix].dest;
+				SDL_RenderCopy(renderer, interface_texture, &tmp1, &tmp2);
+				spriteRects.push_back(classwiz_graph_sprite_info[ix].dest);
+			}
 		}
 
 		static constexpr auto SPR_PIXEL = 0;
