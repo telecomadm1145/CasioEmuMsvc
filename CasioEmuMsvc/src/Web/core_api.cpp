@@ -23,6 +23,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <unistd.h>
 
 #ifdef CASIOEMU_CORE_WEB_GUI
 #include "Gui/Localization.h"
@@ -45,6 +46,12 @@ bool screen_residual_enabled = true;
 float screen_residual_alpha_scale = 1.0f;
 int screen_buffer_select = 0;
 bool audio_enable = false;
+
+#ifdef CASIOEMU_CORE_WEB_GUI
+ImVec4 ThemeManager::Harmonize(const ImVec4& source, float) const {
+	return source;
+}
+#endif
 
 namespace {
 	constexpr const char* kCoreDir = "/tmp/casioemu_core";
@@ -79,9 +86,11 @@ namespace {
 	std::array<bool, 5> g_gui_mouse_down{};
 	float g_gui_wheel_x = 0.0f;
 	float g_gui_wheel_y = 0.0f;
+	std::string g_gui_locale = "en_US";
 	MemoryEditor g_gui_rom_editor;
 	MemoryEditor g_gui_ram_editor;
 	MemoryEditor g_gui_all_editor;
+	std::vector<MemoryEditor::MarkedSpan> g_gui_ram_spans;
 #endif
 
 	void EnsureSdl() {
@@ -187,6 +196,7 @@ namespace {
 		g_gui_mouse_down.fill(false);
 		g_gui_wheel_x = 0.0f;
 		g_gui_wheel_y = 0.0f;
+		g_gui_ram_spans.clear();
 	}
 #else
 	void GuiResetState() {
@@ -344,6 +354,27 @@ namespace {
 		editor.WriteFn = mmu && !read_only ? GuiWriteMmu : nullptr;
 	}
 
+	void GuiLoadLocale() {
+		try {
+			chdir("/");
+			const std::string locale = g_gui_locale == "zh_CN" ? "zh_CN" : "en_US";
+			g_local.ChangeLanguage(locale, false);
+			if (g_local.Get("CoreGui.Title") == "CoreGui.Title") {
+				throw LocalizationException("CoreGui.Title is still missing after locale load");
+			}
+		}
+		catch (const std::exception& ex) {
+			printf("[CasioEmuCore][GUI][Locale] %s\n", ex.what());
+			try {
+				chdir("/");
+				g_local.ChangeLanguage("en_US", false);
+			}
+			catch (const std::exception& fallback_ex) {
+				printf("[CasioEmuCore][GUI][Locale] fallback failed: %s\n", fallback_ex.what());
+			}
+		}
+	}
+
 	void GuiApplyStyle() {
 		ImGui::StyleColorsDark();
 		ImGuiStyle& style = ImGui::GetStyle();
@@ -377,12 +408,8 @@ namespace {
 		GuiSetupEditor(g_gui_rom_editor, true, false);
 		GuiSetupEditor(g_gui_ram_editor, false, true);
 		GuiSetupEditor(g_gui_all_editor, false, true);
-		try {
-			g_local.Load();
-		}
-		catch (const std::exception& ex) {
-			printf("[CasioEmuCore][GUI][Locale] %s\n", ex.what());
-		}
+		g_gui_ram_spans = casioemu::GetCommonMemLabels(g_emulator->hardware_id);
+		GuiLoadLocale();
 		g_gui_imgui_ready = true;
 		return true;
 	}
@@ -411,6 +438,7 @@ namespace {
 
 	void GuiRenderMainWindow() {
 		const ImGuiViewport* viewport = ImGui::GetMainViewport();
+		std::string title = std::string("CoreGui.Title"_lc) + "###CasioEmuMsvcTools";
 		ImGui::SetNextWindowPos(viewport->Pos, ImGuiCond_Always);
 		ImGui::SetNextWindowSize(viewport->Size, ImGuiCond_Always);
 		ImGuiWindowFlags flags =
@@ -418,34 +446,34 @@ namespace {
 			ImGuiWindowFlags_NoResize |
 			ImGuiWindowFlags_NoCollapse |
 			ImGuiWindowFlags_NoBringToFrontOnFocus;
-		if (ImGui::Begin("CasioEmuMsvc Tools", nullptr, flags)) {
-			ImGui::Text("Model: %s", g_emulator->ModelDefinition.model_name.c_str());
+		if (ImGui::Begin(title.c_str(), nullptr, flags)) {
+			ImGui::Text("CoreGui.ModelFmt"_lc, g_emulator->ModelDefinition.model_name.c_str());
 			ImGui::SameLine();
-			ImGui::Text("PC: %05X", static_cast<unsigned>((g_emulator->chipset.cpu.reg_csr << 16) | g_emulator->chipset.cpu.reg_pc));
+			ImGui::Text("CoreGui.PCFmt"_lc, static_cast<unsigned>((g_emulator->chipset.cpu.reg_csr << 16) | g_emulator->chipset.cpu.reg_pc));
 			ImGui::SameLine();
-			ImGui::Text("%s", g_emulator->GetPaused() ? "Paused" : "Running");
+			ImGui::Text("%s", g_emulator->GetPaused() ? "StatusBar.Paused"_lc : "StatusBar.Running"_lc);
 			ImGui::Separator();
 			if (ImGui::BeginTabBar("##core_tools_tabs")) {
-				if (ImGui::BeginTabItem("RAM")) {
+				if (ImGui::BeginTabItem("CoreGui.TabRAM"_lc)) {
 					const auto base = casioemu::GetRamBaseAddr(g_emulator->hardware_id);
 					const auto size = casioemu::GetRamSize(g_emulator->hardware_id);
-					g_gui_ram_editor.DrawContents(reinterpret_cast<void*>(static_cast<size_t>(base)), size, base);
+					g_gui_ram_editor.DrawContents(reinterpret_cast<void*>(static_cast<size_t>(base)), size, base, g_gui_ram_spans);
 					ImGui::EndTabItem();
 				}
-				if (ImGui::BeginTabItem("ROM")) {
+				if (ImGui::BeginTabItem("CoreGui.TabROM"_lc)) {
 					g_gui_rom_editor.DrawContents(g_emulator->chipset.rom_data.data(), g_emulator->chipset.rom_data.size(), 0);
 					ImGui::EndTabItem();
 				}
-				if (ImGui::BeginTabItem("All")) {
-					g_gui_all_editor.DrawContents(nullptr, 0xfffff, 0);
+				if (ImGui::BeginTabItem("CoreGui.TabAll"_lc)) {
+					g_gui_all_editor.DrawContents(nullptr, 0xfffff, 0, g_gui_ram_spans);
 					ImGui::EndTabItem();
 				}
-				if (ImGui::BeginTabItem("State")) {
-					ImGui::Text("CPU time: %u", g_cpu_time);
-					ImGui::Text("RAM base: %04X", casioemu::GetRamBaseAddr(g_emulator->hardware_id));
-					ImGui::Text("RAM size: %04X", casioemu::GetRamSize(g_emulator->hardware_id));
-					ImGui::Text("ROM size: %zu", g_emulator->chipset.rom_data.size());
-					ImGui::Checkbox("Show ImGui demo", &g_gui_show_demo);
+				if (ImGui::BeginTabItem("CoreGui.TabState"_lc)) {
+					ImGui::Text("CoreGui.CpuTimeFmt"_lc, g_cpu_time);
+					ImGui::Text("CoreGui.RamBaseFmt"_lc, casioemu::GetRamBaseAddr(g_emulator->hardware_id));
+					ImGui::Text("CoreGui.RamSizeFmt"_lc, casioemu::GetRamSize(g_emulator->hardware_id));
+					ImGui::Text("CoreGui.RomSizeFmt"_lc, g_emulator->chipset.rom_data.size());
+					ImGui::Checkbox("CoreGui.ShowDemo"_lc, &g_gui_show_demo);
 					ImGui::EndTabItem();
 				}
 				ImGui::EndTabBar();
@@ -901,6 +929,13 @@ int casioemu_core_gui_height() {
 	return g_gui_height;
 }
 
+int casioemu_core_gui_set_locale(const char* locale) {
+	if (!locale || !locale[0]) return 1;
+	g_gui_locale = std::string(locale) == "zh_CN" ? "zh_CN" : "en_US";
+	if (g_gui_imgui_ready) GuiLoadLocale();
+	return 0;
+}
+
 int casioemu_core_gui_pointer(double x, double y, int button, int pressed) {
 	if (!g_gui_attached) return 2;
 	g_gui_mouse_x = static_cast<float>(x);
@@ -1001,6 +1036,10 @@ int casioemu_core_gui_width() {
 
 int casioemu_core_gui_height() {
 	return 0;
+}
+
+int casioemu_core_gui_set_locale(const char*) {
+	return 99;
 }
 
 int casioemu_core_gui_pointer(double, double, int, int) {

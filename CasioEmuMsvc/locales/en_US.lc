@@ -387,4 +387,17 @@ ClickableAddress.RightClickHint=Right-click for more options
 
 MemBP.ColPC=PC Address
 
+CoreGui.Title=CasioEmuMsvc Tools
+CoreGui.ModelFmt=Model: %s
+CoreGui.PCFmt=PC: %05X
+CoreGui.TabRAM=RAM
+CoreGui.TabROM=ROM
+CoreGui.TabAll=All
+CoreGui.TabState=State
+CoreGui.CpuTimeFmt=CPU time: %u
+CoreGui.RamBaseFmt=RAM base: %04X
+CoreGui.RamSizeFmt=RAM size: %04X
+CoreGui.RomSizeFmt=ROM size: %zu
+CoreGui.ShowDemo=Show ImGui demo
+
 placeholder2=a)"
