@@ -3,6 +3,7 @@
 #include <imgui.h>
 #include <iostream>
 #include <unordered_map>
+#include <SDL.h>
 
 // ============================================================================
 // ThemeSettings — 序列化数据结构（保持不变以兼容 theme.bin）
@@ -19,7 +20,13 @@ struct ThemeSettings {
 	// Auto-tint (MD3 Monet)
 	bool enableAutoTint = false;
 	ImVec4 seedColor = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
-  bool enableDiscordRPC = true;
+	bool enableDiscordRPC = true;
+
+	int windowX = SDL_WINDOWPOS_CENTERED;
+	int windowY = SDL_WINDOWPOS_CENTERED;
+	int windowW = 1600;
+	int windowH = 1080;
+
 	void Write(std::ostream& stm) const {
 		Binary::Write(stm, isDarkMode);
 		stm.write(language, sizeof(language));
@@ -31,6 +38,10 @@ struct ThemeSettings {
 		Binary::Write(stm, enableAutoTint);
 		Binary::Write(stm, seedColor);
 		Binary::Write(stm, enableDiscordRPC);
+		Binary::Write(stm, windowX);
+		Binary::Write(stm, windowY);
+		Binary::Write(stm, windowW);
+		Binary::Write(stm, windowH);
 	}
 
 	void Read(std::istream& stm) {
@@ -49,6 +60,12 @@ struct ThemeSettings {
 		}
 		if (stm.peek() != EOF) {
 			Binary::Read(stm, enableDiscordRPC);
+		}
+		if (stm.peek() != EOF) {
+			Binary::Read(stm, windowX);
+			Binary::Read(stm, windowY);
+			Binary::Read(stm, windowW);
+			Binary::Read(stm, windowH);
 		}
 	}
 };
