@@ -13,6 +13,8 @@
 
 #include <cmath>
 #include <algorithm>
+#include <array>
+#include <cfloat>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -21,6 +23,13 @@
 #include <memory>
 #include <string>
 #include <vector>
+
+#ifdef CASIOEMU_CORE_WEB_GUI
+#include "Gui/Localization.h"
+#include "Gui/hex.hpp"
+#include "Gui/imgui/imgui.h"
+#include "Gui/imgui/imgui_internal.h"
+#endif
 
 bool low_perf_ext = false;
 char* n_ram_buffer = nullptr;
@@ -57,6 +66,23 @@ namespace {
 	uint8_t g_display_r = 0;
 	uint8_t g_display_g = 0;
 	uint8_t g_display_b = 0;
+	bool g_gui_attached = false;
+	int g_gui_width = 0;
+	int g_gui_height = 0;
+	uint32_t g_gui_frame_counter = 0;
+	std::vector<uint8_t> g_gui_frame_rgba;
+#ifdef CASIOEMU_CORE_WEB_GUI
+	bool g_gui_imgui_ready = false;
+	bool g_gui_show_demo = false;
+	float g_gui_mouse_x = -FLT_MAX;
+	float g_gui_mouse_y = -FLT_MAX;
+	std::array<bool, 5> g_gui_mouse_down{};
+	float g_gui_wheel_x = 0.0f;
+	float g_gui_wheel_y = 0.0f;
+	MemoryEditor g_gui_rom_editor;
+	MemoryEditor g_gui_ram_editor;
+	MemoryEditor g_gui_all_editor;
+#endif
 
 	void EnsureSdl() {
 		if (!g_sdl_ready) {
@@ -145,6 +171,32 @@ namespace {
 		}
 		return static_cast<casioemu::HardwareId>(core_type);
 	}
+
+#ifdef CASIOEMU_CORE_WEB_GUI
+	void GuiShutdown();
+
+	void GuiResetState() {
+		GuiShutdown();
+		g_gui_attached = false;
+		g_gui_width = 0;
+		g_gui_height = 0;
+		g_gui_frame_counter = 0;
+		g_gui_frame_rgba.clear();
+		g_gui_mouse_x = -FLT_MAX;
+		g_gui_mouse_y = -FLT_MAX;
+		g_gui_mouse_down.fill(false);
+		g_gui_wheel_x = 0.0f;
+		g_gui_wheel_y = 0.0f;
+	}
+#else
+	void GuiResetState() {
+		g_gui_attached = false;
+		g_gui_width = 0;
+		g_gui_height = 0;
+		g_gui_frame_counter = 0;
+		g_gui_frame_rgba.clear();
+	}
+#endif
 
 	casioemu::ModelInfo MakeWebModel(bool real_hardware, bool is_sample_rom, int pd_value, int model_type, bool legacy_ko, bool classwiz_graph) {
 	const auto hardware_id = HardwareIdFromCoreType(model_type);
@@ -274,6 +326,250 @@ namespace {
 		}
 		return 0;
 	}
+
+#ifdef CASIOEMU_CORE_WEB_GUI
+	ImU8 GuiReadMmu(const ImU8* data, size_t off) {
+		return me_mmu ? me_mmu->ReadData(static_cast<uint32_t>(reinterpret_cast<size_t>(data) + off), 0) : 0;
+	}
+
+	void GuiWriteMmu(ImU8* data, size_t off, ImU8 value) {
+		if (me_mmu) me_mmu->WriteData(static_cast<uint32_t>(reinterpret_cast<size_t>(data) + off), value, 0);
+	}
+
+	void GuiSetupEditor(MemoryEditor& editor, bool read_only, bool mmu) {
+		editor.ReadOnly = read_only;
+		editor.OptShowDataPreview = true;
+		editor.OptGreyOutZeroes = true;
+		editor.ReadFn = mmu ? GuiReadMmu : nullptr;
+		editor.WriteFn = mmu && !read_only ? GuiWriteMmu : nullptr;
+	}
+
+	void GuiApplyStyle() {
+		ImGui::StyleColorsDark();
+		ImGuiStyle& style = ImGui::GetStyle();
+		style.WindowRounding = 4.0f;
+		style.FrameRounding = 3.0f;
+		style.ScrollbarRounding = 3.0f;
+		style.WindowBorderSize = 1.0f;
+		style.Colors[ImGuiCol_WindowBg] = ImVec4(0.08f, 0.09f, 0.11f, 1.0f);
+		style.Colors[ImGuiCol_TitleBg] = ImVec4(0.13f, 0.15f, 0.18f, 1.0f);
+		style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.17f, 0.22f, 0.30f, 1.0f);
+		style.Colors[ImGuiCol_Header] = ImVec4(0.20f, 0.32f, 0.48f, 1.0f);
+		style.Colors[ImGuiCol_Button] = ImVec4(0.20f, 0.36f, 0.56f, 1.0f);
+	}
+
+	bool GuiEnsureImGui() {
+		if (!g_emulator || g_gui_width <= 0 || g_gui_height <= 0) return false;
+		if (g_gui_imgui_ready) return true;
+		IMGUI_CHECKVERSION();
+		ImGui::CreateContext();
+		ImGuiIO& io = ImGui::GetIO();
+		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+		io.IniFilename = nullptr;
+		io.LogFilename = nullptr;
+		io.Fonts->AddFontDefault();
+		unsigned char* pixels = nullptr;
+		int font_width = 0;
+		int font_height = 0;
+		io.Fonts->GetTexDataAsRGBA32(&pixels, &font_width, &font_height);
+		io.Fonts->SetTexID(reinterpret_cast<ImTextureID>(1));
+		GuiApplyStyle();
+		GuiSetupEditor(g_gui_rom_editor, true, false);
+		GuiSetupEditor(g_gui_ram_editor, false, true);
+		GuiSetupEditor(g_gui_all_editor, false, true);
+		try {
+			g_local.Load();
+		}
+		catch (const std::exception& ex) {
+			printf("[CasioEmuCore][GUI][Locale] %s\n", ex.what());
+		}
+		g_gui_imgui_ready = true;
+		return true;
+	}
+
+	void GuiShutdown() {
+		if (g_gui_imgui_ready) {
+			ImGui::DestroyContext();
+			g_gui_imgui_ready = false;
+		}
+	}
+
+	void GuiBeginFrame() {
+		ImGuiIO& io = ImGui::GetIO();
+		io.DisplaySize = ImVec2(static_cast<float>(g_gui_width), static_cast<float>(g_gui_height));
+		io.DeltaTime = 1.0f / 30.0f;
+		io.MousePos = ImVec2(g_gui_mouse_x, g_gui_mouse_y);
+		for (int i = 0; i < IM_ARRAYSIZE(io.MouseDown) && i < static_cast<int>(g_gui_mouse_down.size()); ++i) {
+			io.MouseDown[i] = g_gui_mouse_down[i];
+		}
+		io.MouseWheelH += g_gui_wheel_x;
+		io.MouseWheel += g_gui_wheel_y;
+		g_gui_wheel_x = 0.0f;
+		g_gui_wheel_y = 0.0f;
+		ImGui::NewFrame();
+	}
+
+	void GuiRenderMainWindow() {
+		const ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(viewport->Pos, ImGuiCond_Always);
+		ImGui::SetNextWindowSize(viewport->Size, ImGuiCond_Always);
+		ImGuiWindowFlags flags =
+			ImGuiWindowFlags_NoMove |
+			ImGuiWindowFlags_NoResize |
+			ImGuiWindowFlags_NoCollapse |
+			ImGuiWindowFlags_NoBringToFrontOnFocus;
+		if (ImGui::Begin("CasioEmuMsvc Tools", nullptr, flags)) {
+			ImGui::Text("Model: %s", g_emulator->ModelDefinition.model_name.c_str());
+			ImGui::SameLine();
+			ImGui::Text("PC: %05X", static_cast<unsigned>((g_emulator->chipset.cpu.reg_csr << 16) | g_emulator->chipset.cpu.reg_pc));
+			ImGui::SameLine();
+			ImGui::Text("%s", g_emulator->GetPaused() ? "Paused" : "Running");
+			ImGui::Separator();
+			if (ImGui::BeginTabBar("##core_tools_tabs")) {
+				if (ImGui::BeginTabItem("RAM")) {
+					const auto base = casioemu::GetRamBaseAddr(g_emulator->hardware_id);
+					const auto size = casioemu::GetRamSize(g_emulator->hardware_id);
+					g_gui_ram_editor.DrawContents(reinterpret_cast<void*>(static_cast<size_t>(base)), size, base);
+					ImGui::EndTabItem();
+				}
+				if (ImGui::BeginTabItem("ROM")) {
+					g_gui_rom_editor.DrawContents(g_emulator->chipset.rom_data.data(), g_emulator->chipset.rom_data.size(), 0);
+					ImGui::EndTabItem();
+				}
+				if (ImGui::BeginTabItem("All")) {
+					g_gui_all_editor.DrawContents(nullptr, 0xfffff, 0);
+					ImGui::EndTabItem();
+				}
+				if (ImGui::BeginTabItem("State")) {
+					ImGui::Text("CPU time: %u", g_cpu_time);
+					ImGui::Text("RAM base: %04X", casioemu::GetRamBaseAddr(g_emulator->hardware_id));
+					ImGui::Text("RAM size: %04X", casioemu::GetRamSize(g_emulator->hardware_id));
+					ImGui::Text("ROM size: %zu", g_emulator->chipset.rom_data.size());
+					ImGui::Checkbox("Show ImGui demo", &g_gui_show_demo);
+					ImGui::EndTabItem();
+				}
+				ImGui::EndTabBar();
+			}
+		}
+		ImGui::End();
+		if (g_gui_show_demo) ImGui::ShowDemoWindow(&g_gui_show_demo);
+	}
+
+	void GuiClearFrame() {
+		g_gui_frame_rgba.assign(static_cast<size_t>(g_gui_width) * static_cast<size_t>(g_gui_height) * 4, 0);
+		for (size_t i = 0; i < g_gui_frame_rgba.size(); i += 4) {
+			g_gui_frame_rgba[i + 0] = 18;
+			g_gui_frame_rgba[i + 1] = 20;
+			g_gui_frame_rgba[i + 2] = 24;
+			g_gui_frame_rgba[i + 3] = 255;
+		}
+	}
+
+	void GuiBlendPixel(int x, int y, ImU32 col, const unsigned char* font_pixels, int font_width, int font_height, ImVec2 uv) {
+		if (x < 0 || y < 0 || x >= g_gui_width || y >= g_gui_height) return;
+		uint8_t sr = col & 0xff;
+		uint8_t sg = (col >> 8) & 0xff;
+		uint8_t sb = (col >> 16) & 0xff;
+		uint8_t sa = (col >> 24) & 0xff;
+		if (font_pixels && font_width > 0 && font_height > 0) {
+			const int tx = std::clamp(static_cast<int>(uv.x * font_width), 0, font_width - 1);
+			const int ty = std::clamp(static_cast<int>(uv.y * font_height), 0, font_height - 1);
+			const auto* texel = font_pixels + (static_cast<size_t>(ty) * font_width + tx) * 4;
+			sr = static_cast<uint8_t>((static_cast<int>(sr) * texel[0]) / 255);
+			sg = static_cast<uint8_t>((static_cast<int>(sg) * texel[1]) / 255);
+			sb = static_cast<uint8_t>((static_cast<int>(sb) * texel[2]) / 255);
+			sa = static_cast<uint8_t>((static_cast<int>(sa) * texel[3]) / 255);
+		}
+		if (sa == 0) return;
+		auto* dst = g_gui_frame_rgba.data() + (static_cast<size_t>(y) * g_gui_width + x) * 4;
+		const int inv = 255 - sa;
+		dst[0] = static_cast<uint8_t>((sr * sa + dst[0] * inv) / 255);
+		dst[1] = static_cast<uint8_t>((sg * sa + dst[1] * inv) / 255);
+		dst[2] = static_cast<uint8_t>((sb * sa + dst[2] * inv) / 255);
+		dst[3] = 255;
+	}
+
+	float GuiEdge(const ImVec2& a, const ImVec2& b, float x, float y) {
+		return (x - a.x) * (b.y - a.y) - (y - a.y) * (b.x - a.x);
+	}
+
+	void GuiRasterTriangle(const ImDrawVert& v0, const ImDrawVert& v1, const ImDrawVert& v2, const ImVec4& clip, const unsigned char* font_pixels, int font_width, int font_height) {
+		const float min_xf = std::max(clip.x, std::floor(std::min({v0.pos.x, v1.pos.x, v2.pos.x})));
+		const float min_yf = std::max(clip.y, std::floor(std::min({v0.pos.y, v1.pos.y, v2.pos.y})));
+		const float max_xf = std::min(clip.z, std::ceil(std::max({v0.pos.x, v1.pos.x, v2.pos.x})));
+		const float max_yf = std::min(clip.w, std::ceil(std::max({v0.pos.y, v1.pos.y, v2.pos.y})));
+		const int min_x = std::clamp(static_cast<int>(min_xf), 0, g_gui_width);
+		const int min_y = std::clamp(static_cast<int>(min_yf), 0, g_gui_height);
+		const int max_x = std::clamp(static_cast<int>(max_xf), 0, g_gui_width);
+		const int max_y = std::clamp(static_cast<int>(max_yf), 0, g_gui_height);
+		const float area = GuiEdge(v0.pos, v1.pos, v2.pos.x, v2.pos.y);
+		if (std::abs(area) < 0.0001f) return;
+		for (int y = min_y; y < max_y; ++y) {
+			for (int x = min_x; x < max_x; ++x) {
+				const float px = static_cast<float>(x) + 0.5f;
+				const float py = static_cast<float>(y) + 0.5f;
+				const float w0 = GuiEdge(v1.pos, v2.pos, px, py) / area;
+				const float w1 = GuiEdge(v2.pos, v0.pos, px, py) / area;
+				const float w2 = GuiEdge(v0.pos, v1.pos, px, py) / area;
+				if (w0 < -0.0001f || w1 < -0.0001f || w2 < -0.0001f) continue;
+				const uint8_t r = static_cast<uint8_t>((v0.col & 0xff) * w0 + (v1.col & 0xff) * w1 + (v2.col & 0xff) * w2);
+				const uint8_t g = static_cast<uint8_t>(((v0.col >> 8) & 0xff) * w0 + ((v1.col >> 8) & 0xff) * w1 + ((v2.col >> 8) & 0xff) * w2);
+				const uint8_t b = static_cast<uint8_t>(((v0.col >> 16) & 0xff) * w0 + ((v1.col >> 16) & 0xff) * w1 + ((v2.col >> 16) & 0xff) * w2);
+				const uint8_t a = static_cast<uint8_t>(((v0.col >> 24) & 0xff) * w0 + ((v1.col >> 24) & 0xff) * w1 + ((v2.col >> 24) & 0xff) * w2);
+				const ImVec2 uv(v0.uv.x * w0 + v1.uv.x * w1 + v2.uv.x * w2, v0.uv.y * w0 + v1.uv.y * w1 + v2.uv.y * w2);
+				GuiBlendPixel(x, y, IM_COL32(r, g, b, a), font_pixels, font_width, font_height, uv);
+			}
+		}
+	}
+
+	void GuiRenderDrawData(ImDrawData* draw_data) {
+		GuiClearFrame();
+		if (!draw_data) return;
+		unsigned char* font_pixels = nullptr;
+		int font_width = 0;
+		int font_height = 0;
+		ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&font_pixels, &font_width, &font_height);
+		const ImVec2 clip_off = draw_data->DisplayPos;
+		const ImVec2 clip_scale = draw_data->FramebufferScale;
+		for (int n = 0; n < draw_data->CmdListsCount; ++n) {
+			const ImDrawList* cmd_list = draw_data->CmdLists[n];
+			const ImDrawVert* vtx = cmd_list->VtxBuffer.Data;
+			const ImDrawIdx* idx = cmd_list->IdxBuffer.Data;
+			for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; ++cmd_i) {
+				const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
+				if (pcmd->UserCallback) {
+					pcmd->UserCallback(cmd_list, pcmd);
+				}
+				else {
+					ImVec4 clip_rect;
+					clip_rect.x = (pcmd->ClipRect.x - clip_off.x) * clip_scale.x;
+					clip_rect.y = (pcmd->ClipRect.y - clip_off.y) * clip_scale.y;
+					clip_rect.z = (pcmd->ClipRect.z - clip_off.x) * clip_scale.x;
+					clip_rect.w = (pcmd->ClipRect.w - clip_off.y) * clip_scale.y;
+					for (unsigned int elem = 0; elem + 2 < pcmd->ElemCount; elem += 3) {
+						const ImDrawVert& v0 = vtx[idx[elem + 0]];
+						const ImDrawVert& v1 = vtx[idx[elem + 1]];
+						const ImDrawVert& v2 = vtx[idx[elem + 2]];
+						GuiRasterTriangle(v0, v1, v2, clip_rect, font_pixels, font_width, font_height);
+					}
+				}
+				idx += pcmd->ElemCount;
+			}
+		}
+	}
+
+	int GuiFrame() {
+		if (!g_emulator) return 1;
+		if (!g_gui_attached) return 2;
+		if (!GuiEnsureImGui()) return 3;
+		++g_gui_frame_counter;
+		GuiBeginFrame();
+		GuiRenderMainWindow();
+		ImGui::Render();
+		GuiRenderDrawData(ImGui::GetDrawData());
+		return 0;
+	}
+#endif
 }
 
 extern "C" {
@@ -283,6 +579,7 @@ int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int m
 	try {
 		EnsureSdl();
 		StopMainLoop();
+		GuiResetState();
 		g_emulator.reset();
 		if (!WriteRomFile(rom, len)) return -2;
 		auto model = MakeWebModel(true, false, pd_value, model_type, legacy_ko != 0, classwiz_graph != 0);
@@ -306,6 +603,7 @@ int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, i
 	try {
 		EnsureSdl();
 		StopMainLoop();
+		GuiResetState();
 		g_emulator.reset();
 		const auto hardware_id = HardwareIdFromCoreType(model_type);
 		auto normalized_rom = NormalizeSimulatorRomForWeb(rom, len, hardware_id);
@@ -328,6 +626,7 @@ int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, i
 
 void casioemu_core_shutdown() {
 	StopMainLoop();
+	GuiResetState();
 	g_emulator.reset();
 	m_emu = nullptr;
 	me_mmu = nullptr;
@@ -554,6 +853,172 @@ int casioemu_core_load_snapshot(const uint8_t* in, int len) {
 		return 5;
 	}
 }
+
+#ifdef CASIOEMU_CORE_WEB_GUI
+int casioemu_core_gui_supported() {
+	return 1;
+}
+
+int casioemu_core_gui_attach(int width, int height) {
+	if (!g_emulator) return 1;
+	if (width <= 0 || height <= 0) return 2;
+	g_gui_width = width;
+	g_gui_height = height;
+	g_gui_frame_rgba.assign(static_cast<size_t>(width) * static_cast<size_t>(height) * 4, 0);
+	if (g_gui_imgui_ready) {
+		ImGuiIO& io = ImGui::GetIO();
+		io.DisplaySize = ImVec2(static_cast<float>(g_gui_width), static_cast<float>(g_gui_height));
+	}
+	g_gui_attached = true;
+	return 0;
+}
+
+void casioemu_core_gui_detach() {
+	GuiResetState();
+}
+
+int casioemu_core_gui_is_attached() {
+	return g_gui_attached ? 1 : 0;
+}
+
+int casioemu_core_gui_frame() {
+	return GuiFrame();
+}
+
+uint32_t casioemu_core_gui_frame_ptr() {
+	return g_gui_frame_rgba.empty() ? 0 : reinterpret_cast<uint32_t>(g_gui_frame_rgba.data());
+}
+
+int casioemu_core_gui_frame_len() {
+	return static_cast<int>(g_gui_frame_rgba.size());
+}
+
+int casioemu_core_gui_width() {
+	return g_gui_width;
+}
+
+int casioemu_core_gui_height() {
+	return g_gui_height;
+}
+
+int casioemu_core_gui_pointer(double x, double y, int button, int pressed) {
+	if (!g_gui_attached) return 2;
+	g_gui_mouse_x = static_cast<float>(x);
+	g_gui_mouse_y = static_cast<float>(y);
+	if (button >= 0 && button < static_cast<int>(g_gui_mouse_down.size())) {
+		g_gui_mouse_down[button] = pressed != 0;
+	}
+	return 0;
+}
+
+int casioemu_core_gui_wheel(double x, double y) {
+	if (!g_gui_attached) return 2;
+	g_gui_wheel_x += static_cast<float>(x);
+	g_gui_wheel_y += static_cast<float>(y);
+	return 0;
+}
+
+int casioemu_core_gui_key(int key, int pressed, int ctrl, int shift, int alt, int super_key) {
+	if (!g_gui_imgui_ready) return 2;
+	ImGuiIO& io = ImGui::GetIO();
+	io.AddKeyEvent(ImGuiMod_Ctrl, ctrl != 0);
+	io.AddKeyEvent(ImGuiMod_Shift, shift != 0);
+	io.AddKeyEvent(ImGuiMod_Alt, alt != 0);
+	io.AddKeyEvent(ImGuiMod_Super, super_key != 0);
+	ImGuiKey imgui_key = ImGuiKey_None;
+	if (key >= '0' && key <= '9') imgui_key = static_cast<ImGuiKey>(ImGuiKey_0 + (key - '0'));
+	else if (key >= 'a' && key <= 'z') imgui_key = static_cast<ImGuiKey>(ImGuiKey_A + (key - 'a'));
+	else if (key >= 'A' && key <= 'Z') imgui_key = static_cast<ImGuiKey>(ImGuiKey_A + (key - 'A'));
+	else {
+		switch (key) {
+		case 8: imgui_key = ImGuiKey_Backspace; break;
+		case 9: imgui_key = ImGuiKey_Tab; break;
+		case 13: imgui_key = ImGuiKey_Enter; break;
+		case 27: imgui_key = ImGuiKey_Escape; break;
+		case 32: imgui_key = ImGuiKey_Space; break;
+		case 39: imgui_key = ImGuiKey_Apostrophe; break;
+		case 44: imgui_key = ImGuiKey_Comma; break;
+		case 45: imgui_key = ImGuiKey_Minus; break;
+		case 46: imgui_key = ImGuiKey_Period; break;
+		case 47: imgui_key = ImGuiKey_Slash; break;
+		case 59: imgui_key = ImGuiKey_Semicolon; break;
+		case 61: imgui_key = ImGuiKey_Equal; break;
+		case 91: imgui_key = ImGuiKey_LeftBracket; break;
+		case 92: imgui_key = ImGuiKey_Backslash; break;
+		case 93: imgui_key = ImGuiKey_RightBracket; break;
+		case 96: imgui_key = ImGuiKey_GraveAccent; break;
+		case 127: imgui_key = ImGuiKey_Delete; break;
+		case 1073741904: imgui_key = ImGuiKey_LeftArrow; break;
+		case 1073741903: imgui_key = ImGuiKey_RightArrow; break;
+		case 1073741906: imgui_key = ImGuiKey_UpArrow; break;
+		case 1073741905: imgui_key = ImGuiKey_DownArrow; break;
+		case 1073741898: imgui_key = ImGuiKey_Home; break;
+		case 1073741901: imgui_key = ImGuiKey_End; break;
+		case 1073741899: imgui_key = ImGuiKey_PageUp; break;
+		case 1073741902: imgui_key = ImGuiKey_PageDown; break;
+		default: break;
+		}
+	}
+	if (imgui_key != ImGuiKey_None) io.AddKeyEvent(imgui_key, pressed != 0);
+	return 0;
+}
+
+int casioemu_core_gui_text(unsigned int codepoint) {
+	if (!g_gui_imgui_ready) return 2;
+	if (codepoint > 0) ImGui::GetIO().AddInputCharacter(codepoint);
+	return 0;
+}
+#else
+int casioemu_core_gui_supported() {
+	return 0;
+}
+
+int casioemu_core_gui_attach(int, int) {
+	return 99;
+}
+
+void casioemu_core_gui_detach() {}
+
+int casioemu_core_gui_is_attached() {
+	return 0;
+}
+
+int casioemu_core_gui_frame() {
+	return 99;
+}
+
+uint32_t casioemu_core_gui_frame_ptr() {
+	return 0;
+}
+
+int casioemu_core_gui_frame_len() {
+	return 0;
+}
+
+int casioemu_core_gui_width() {
+	return 0;
+}
+
+int casioemu_core_gui_height() {
+	return 0;
+}
+
+int casioemu_core_gui_pointer(double, double, int, int) {
+	return 99;
+}
+
+int casioemu_core_gui_wheel(double, double) {
+	return 99;
+}
+
+int casioemu_core_gui_key(int, int, int, int, int, int) {
+	return 99;
+}
+
+int casioemu_core_gui_text(unsigned int) {
+	return 99;
+}
+#endif
 
 }
 
