@@ -1,4 +1,4 @@
-﻿#include "Chipset/CPU.hpp"
+#include "Chipset/CPU.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Chipset/MMU.hpp"
 #include "Emulator.hpp"
