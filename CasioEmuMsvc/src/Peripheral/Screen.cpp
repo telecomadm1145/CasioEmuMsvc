@@ -34,6 +34,7 @@
 #include <algorithm> // for std::min, std::max
 #include <array>
 #include <climits>
+#include <cmath>
 #include <cstdio>
 #include <ctime> // for std::time
 #include <filesystem>
@@ -200,6 +201,64 @@ namespace casioemu {
 
 		bool inited = 0;
 		bool enabled_2 = 0;
+		int status_ink_alpha_on = 255;
+		int status_ink_alpha_off = 0;
+
+		bool IsClassWizGraphStatusModel() const {
+			if constexpr (hardware_id != HW_CLASSWIZ_II) {
+				return false;
+			}
+			else {
+				return emulator.ModelDefinition.extra.find("classwiz_graph") != emulator.ModelDefinition.extra.end();
+			}
+		}
+
+		bool StatusEnabled() const {
+			if (!(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) && hardware_id != HW_ES_PLUS && hardware_id != HW_EPS6800) {
+				return true;
+			}
+			if (!enabled_2 || (screen_range & 0b100000)) {
+				return false;
+			}
+			const auto mode = screen_mode & 7;
+			return mode == 5 || mode == 6;
+		}
+
+		uint8_t LogicalAlpha(float value) const {
+			return static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(value * 255.0f)), 0, 255));
+		}
+
+		uint8_t ClassWizIIStatusAlpha(uint8_t offset, uint8_t mask) const {
+			if (!StatusEnabled() || !screen_buffer || !screen_buffer1) return 0;
+			const auto status_offset = (offset + screen_offset * ROW_SIZE) % ((N_ROW + 1) * ROW_SIZE);
+			const bool lower = (screen_buffer[status_offset] & mask) != 0;
+			const bool upper = (screen_buffer1[status_offset] & mask) != 0;
+			if (!screen_residual_enabled) {
+				return LogicalAlpha((lower ? 0.2f : 0.0f) + (upper ? 0.8f : 0.0f));
+			}
+			if (!lower && !upper) return 0;
+			float alpha = static_cast<float>(status_ink_alpha_off);
+			alpha += (static_cast<float>(status_ink_alpha_on - status_ink_alpha_off)) * (lower ? 0.2f : 0.0f);
+			alpha += (static_cast<float>(status_ink_alpha_on - status_ink_alpha_off)) * (upper ? 0.8f : 0.0f);
+			if (screen_refresh_rate >= screen_flashing_threshold) {
+				alpha *= screen_scan_alpha[0];
+			}
+			return static_cast<uint8_t>(std::clamp(static_cast<int>(alpha), 0, 255));
+		}
+
+		uint8_t ClassWizIISingleStatusAlpha(uint8_t offset, uint8_t mask) const {
+			if (!StatusEnabled() || !screen_buffer) return 0;
+			const auto status_offset = (offset + screen_offset * ROW_SIZE) % ((N_ROW + 1) * ROW_SIZE);
+			const bool on = (screen_buffer[status_offset] & mask) != 0;
+			if (!screen_residual_enabled) {
+				return on ? 255 : 0;
+			}
+			float alpha = static_cast<float>(on ? status_ink_alpha_on : status_ink_alpha_off);
+			if (screen_refresh_rate >= screen_flashing_threshold) {
+				alpha *= screen_scan_alpha[0];
+			}
+			return static_cast<uint8_t>(std::clamp(static_cast<int>(alpha), 0, 255));
+		}
 
 	public:
 		Screen(Emulator& emu)
@@ -256,6 +315,40 @@ namespace casioemu {
 					out[idx + 2] = static_cast<uint8_t>(std::clamp(b, 0, 255));
 					out[idx + 3] = static_cast<uint8_t>(std::clamp(static_cast<int>(alpha), 0, 255));
 				}
+			}
+		}
+		int GetStatusAlphaCount() const override {
+			if constexpr (hardware_id == HW_CLASSWIZ_II) {
+				return IsClassWizGraphStatusModel() ? 20 : 18;
+			}
+			return SPR_MAX > 0 ? SPR_MAX - 1 : 0;
+		}
+		void WriteStatusAlpha(uint8_t* out, int max_len) const override {
+			if (!out || max_len <= 0) return;
+			const int count = std::min(max_len, GetStatusAlphaCount());
+			for (int i = 0; i < count; ++i) out[i] = 0;
+			if constexpr (hardware_id == HW_CLASSWIZ_II) {
+				if (IsClassWizGraphStatusModel()) {
+					static constexpr int base_index[] = {
+						0, 1, 2, 3, 4, 5, 6, -1, 7, 8,
+						9, 10, 11, -2, 12, 13, 14, 15, 16, 17,
+					};
+					for (int i = 0; i < count; ++i) {
+						if (base_index[i] >= 0) {
+							out[i] = static_cast<uint8_t>(std::clamp(static_cast<int>(screen_ink_alpha[base_index[i]]), 0, 255));
+						}
+						else if (base_index[i] == -1) {
+							out[i] = ClassWizIISingleStatusAlpha(0x09, 0x01);
+						}
+						else if (base_index[i] == -2) {
+							out[i] = ClassWizIISingleStatusAlpha(0x0f, 0x01);
+						}
+					}
+					return;
+				}
+			}
+			for (int i = 0; i < count; ++i) {
+				out[i] = static_cast<uint8_t>(std::clamp(static_cast<int>(screen_ink_alpha[i]), 0, 255));
 			}
 		}
 		void SaveState(std::ostream& os) override {
@@ -328,6 +421,9 @@ namespace casioemu {
 				float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);
 				ink_alpha_off = screen_residual_enabled ? ink_alpha_off * screen_residual_alpha_scale : 0.0f;
 				ink_alpha_on = std::clamp(ink_alpha_on, 0.0f, 255.0f);
+				if (!screen_residual_enabled) {
+					ink_alpha_on = 255.0f;
+				}
 				uint8_t* screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xE708;
 				if (emulator.ModelDefinition.real_hardware) {
 					screen_buffer = this->screen_buffer;
@@ -437,6 +533,10 @@ namespace casioemu {
 				ink_alpha_on = 0;
 			if (ink_alpha_off < 0)
 				ink_alpha_off = 0;
+			if (!screen_residual_enabled) {
+				ink_alpha_on = 255;
+				ink_alpha_off = 0;
+			}
 			bool enable_status, enable_dotmatrix, clear_dots;
 
 			bool mode_6 = false;
@@ -498,6 +598,8 @@ namespace casioemu {
 
 				if (enable_status) {
 					int ink_alpha = ink_alpha_off;
+					status_ink_alpha_on = ink_alpha_on;
+					status_ink_alpha_off = ink_alpha_off;
 					if constexpr (hardware_id == HW_CLASSWIZ_II) {
 						int x = 0;
 						for (int ix = 1; ix != SPR_MAX; ++ix) {

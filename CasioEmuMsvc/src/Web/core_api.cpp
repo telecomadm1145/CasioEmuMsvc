@@ -109,7 +109,7 @@ namespace {
 			g_frame_height = g_screen_provider->GetFrameHeight();
 			g_frame_rgba.resize(static_cast<size_t>(g_frame_width) * static_cast<size_t>(g_frame_height) * 4);
 			g_source_frame_rgba.resize(static_cast<size_t>(g_frame_width) * static_cast<size_t>(g_frame_height) * 4);
-			g_status_alpha.resize(static_cast<size_t>(g_frame_width));
+			g_status_alpha.resize(static_cast<size_t>(std::max(0, g_screen_provider->GetStatusAlphaCount())));
 		}
 		else {
 			g_frame_width = 0;
@@ -127,6 +127,17 @@ namespace {
 		}
 	}
 
+	void SyncStatusAlpha() {
+		if (!g_screen_provider) return;
+		const int count = g_screen_provider->GetStatusAlphaCount();
+		if (count <= 0) {
+			g_status_alpha.clear();
+			return;
+		}
+		g_status_alpha.resize(static_cast<size_t>(count));
+		g_screen_provider->WriteStatusAlpha(g_status_alpha.data(), count);
+	}
+
 	casioemu::HardwareId HardwareIdFromCoreType(int core_type) {
 		if (core_type < casioemu::HW_MIN || core_type > casioemu::HW_MAX) {
 			printf("[CasioEmuCore][Error] Invalid hardware_id from core type: %d\n", core_type);
@@ -135,7 +146,7 @@ namespace {
 		return static_cast<casioemu::HardwareId>(core_type);
 	}
 
-	casioemu::ModelInfo MakeWebModel(bool real_hardware, bool is_sample_rom, int pd_value, int model_type, bool legacy_ko) {
+	casioemu::ModelInfo MakeWebModel(bool real_hardware, bool is_sample_rom, int pd_value, int model_type, bool legacy_ko, bool classwiz_graph) {
 	const auto hardware_id = HardwareIdFromCoreType(model_type);
 		casioemu::ModelInfo model{};
 	model.csr_mask = hardware_id == casioemu::HW_ES_PLUS ? 0x1 : 0xf;
@@ -154,6 +165,9 @@ namespace {
 		model.ink_color = {0, 0, 0};
 		if (!real_hardware) {
 			model.extra["limit_spd"] = "1";
+		}
+		if (classwiz_graph) {
+			model.extra["classwiz_graph"] = "1";
 		}
 
 		for (int ko = 0; ko < 8; ++ko) {
@@ -264,14 +278,14 @@ namespace {
 
 extern "C" {
 
-int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int model_type, int legacy_ko) {
+int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int model_type, int legacy_ko, int classwiz_graph) {
 	if (!rom || len <= 0) return -1;
 	try {
 		EnsureSdl();
 		StopMainLoop();
 		g_emulator.reset();
 		if (!WriteRomFile(rom, len)) return -2;
-		auto model = MakeWebModel(true, false, pd_value, model_type, legacy_ko != 0);
+		auto model = MakeWebModel(true, false, pd_value, model_type, legacy_ko != 0, classwiz_graph != 0);
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
 		m_emu = g_emulator.get();
 		low_perf_ext = true;
@@ -287,7 +301,7 @@ int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int m
 	}
 }
 
-int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, int pd_value, int model_type, int legacy_ko) {
+int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, int pd_value, int model_type, int legacy_ko, int classwiz_graph) {
 	if (!rom || len <= 0) return -1;
 	try {
 		EnsureSdl();
@@ -296,7 +310,7 @@ int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, i
 		const auto hardware_id = HardwareIdFromCoreType(model_type);
 		auto normalized_rom = NormalizeSimulatorRomForWeb(rom, len, hardware_id);
 		if (!WriteRomFile(normalized_rom.data(), static_cast<int>(normalized_rom.size()))) return -2;
-		auto model = MakeWebModel(false, is_sample_rom != 0, pd_value, model_type, legacy_ko != 0);
+		auto model = MakeWebModel(false, is_sample_rom != 0, pd_value, model_type, legacy_ko != 0, classwiz_graph != 0);
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
 		m_emu = g_emulator.get();
 		low_perf_ext = true;
@@ -405,7 +419,6 @@ int casioemu_core_update_frame() {
 	g_frame_height = g_screen_provider->GetFrameHeight();
 	g_frame_rgba.resize(static_cast<size_t>(g_frame_width) * static_cast<size_t>(g_frame_height) * 4);
 	g_source_frame_rgba.resize(static_cast<size_t>(g_frame_width) * static_cast<size_t>(g_frame_height) * 4);
-	g_status_alpha.resize(static_cast<size_t>(g_frame_width));
 	const auto& color = g_emulator->ModelDefinition.ink_color;
 	g_screen_provider->WriteFrameRgba(g_source_frame_rgba.data(), color.r, color.g, color.b);
 	const int display_height = std::max(0, g_frame_height - 1);
@@ -421,11 +434,7 @@ int casioemu_core_update_frame() {
 			dst[x * 4 + 3] = src[x * 4 + 3];
 		}
 	}
-	if (!g_status_alpha.empty() && !g_source_frame_rgba.empty()) {
-		for (int x = 0; x < g_frame_width; ++x) {
-			g_status_alpha[x] = g_source_frame_rgba[x * 4 + 3];
-		}
-	}
+	SyncStatusAlpha();
 	g_frame_height = display_height;
 	return 0;
 }
