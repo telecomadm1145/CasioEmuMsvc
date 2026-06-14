@@ -242,17 +242,20 @@ namespace casioemu {
 			return static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(value * 255.0f)), 0, 255));
 		}
 
+		static constexpr float kClassWizIILowerPlaneWeight = 1.0f / 3.0f;
+		static constexpr float kClassWizIIUpperPlaneWeight = 2.0f / 3.0f;
+
 		uint8_t ClassWizIIStatusAlpha(uint8_t offset, uint8_t mask) const {
 			if (!StatusEnabled() || !screen_buffer || !screen_buffer1) return 0;
 			const auto status_offset = (offset + screen_offset * ROW_SIZE) % ((N_ROW + 1) * ROW_SIZE);
 			const bool lower = (screen_buffer[status_offset] & mask) != 0;
 			const bool upper = (screen_buffer1[status_offset] & mask) != 0;
 			if (!screen_residual_enabled) {
-				return LogicalAlpha((lower ? 0.2f : 0.0f) + (upper ? 0.8f : 0.0f));
+				return LogicalAlpha((lower ? kClassWizIILowerPlaneWeight : 0.0f) + (upper ? kClassWizIIUpperPlaneWeight : 0.0f));
 			}
 			float alpha = static_cast<float>(status_ink_alpha_off);
-			alpha += (static_cast<float>(status_ink_alpha_on - status_ink_alpha_off)) * (lower ? 0.2f : 0.0f);
-			alpha += (static_cast<float>(status_ink_alpha_on - status_ink_alpha_off)) * (upper ? 0.8f : 0.0f);
+			alpha += (static_cast<float>(status_ink_alpha_on - status_ink_alpha_off)) * (lower ? kClassWizIILowerPlaneWeight : 0.0f);
+			alpha += (static_cast<float>(status_ink_alpha_on - status_ink_alpha_off)) * (upper ? kClassWizIIUpperPlaneWeight : 0.0f);
 			if (screen_refresh_rate >= screen_flashing_threshold) {
 				alpha *= screen_scan_alpha[0];
 			}
@@ -616,9 +619,9 @@ namespace casioemu {
 							ink_alpha = ink_alpha_off;
 							auto off = (sprite_bitmap[ix].offset + screen_offset * row_size) % ((N_ROW + 1) * row_size);
 							if (screen_buffer[off] & sprite_bitmap[ix].mask)
-								ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.2;
+								ink_alpha += (ink_alpha_on - ink_alpha_off) * kClassWizIILowerPlaneWeight;
 							if (screen_buffer1[off] & sprite_bitmap[ix].mask)
-								ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.8;
+								ink_alpha += (ink_alpha_on - ink_alpha_off) * kClassWizIIUpperPlaneWeight;
 							if (screen_refresh_rate >= screen_flashing_threshold)
 								ink_alpha *= screen_scan_alpha[0];
 							const int status_index = HasClassWizGraphStatusLogic() ? ClassWizGraphStatusIndexFromCommonIndex(x) : x;
@@ -686,9 +689,9 @@ namespace casioemu {
 								for (uint8_t mask = 0x80; mask; mask >>= 1, dest.x += sprite_info[SPR_PIXEL].src.w) {
 									ink_alpha = ink_alpha_off;
 									if (!clear_dots && screen_buffer[index] & mask)
-										ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.2;
+										ink_alpha += (ink_alpha_on - ink_alpha_off) * kClassWizIILowerPlaneWeight;
 									if (!clear_dots && screen_buffer1[index] & mask)
-										ink_alpha += (ink_alpha_on - ink_alpha_off) * 0.8;
+										ink_alpha += (ink_alpha_on - ink_alpha_off) * kClassWizIIUpperPlaneWeight;
 									if (screen_refresh_rate >= screen_flashing_threshold)
 										ink_alpha *= screen_scan_alpha[iy];
 									if (clear)
