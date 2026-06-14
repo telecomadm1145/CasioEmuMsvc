@@ -35,6 +35,7 @@
 #pragma comment(lib, "shell32.lib")
 #endif
 #include "Ext/Random.hpp"
+#include "DiscordRPC.h"
 
 #ifdef __ANDROID__
 #include "../Gui/ThemeManager.h"
@@ -1559,6 +1560,7 @@ std::string sui_loop() {
 						outfile << selected_lang;
 						outfile.close();
 						ImGui::CloseCurrentPopup();
+						DiscordRPC::UpdatePresence("");
 					}
 				}
 				ImGui::EndPopup();
@@ -1573,6 +1575,7 @@ std::string sui_loop() {
 
 			needs_render = false;
 		}
+		DiscordRPC::Update();
 		ThemeManager::Instance().ProcessFontRebuild();
 		if (!ui.selected_path.empty()) {
 			done = true;

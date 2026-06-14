@@ -45,6 +45,7 @@
 #include <Gui.h>
 #include <Plugin/PluginMan.h>
 #include <ThemeManager.h>
+#include "DiscordRPC.h"
 
 #include "TouchMouseTranslator.h"
 
@@ -155,6 +156,10 @@ int main(int argc, char* argv[]) {
 	chdir(SDL_AndroidGetExternalStoragePath());
 #endif
 	g_local.Load();
+	ThemeManager::Instance().LoadSettings();
+
+	DiscordRPC::Init();
+  DiscordRPC::UpdatePresence("");
 
 #ifndef __ANDROID__
 	std::string rendererDriver = ReadRendererHint();
@@ -215,8 +220,9 @@ int main(int argc, char* argv[]) {
 		auto s = sui_loop();
 		argv_map["model"] = std::move(s);
 		if (argv_map["model"].empty()) {
+      DiscordRPC::Shutdown();
 			return -1;
-		}
+	  }
 	}
 
 	// After startupui has done its job:
@@ -232,6 +238,9 @@ int main(int argc, char* argv[]) {
 	m_emu = &emulator;
 
 	// static std::atomic<bool> running(true);
+	
+	DiscordRPC::UpdatePresence(emulator.ModelDefinition.model_name);
+
 #ifdef __ANDROID__
 	TouchMouseTranslator touchTranslator(
 		SDL_GetWindowID(emulator.window),
@@ -304,6 +313,7 @@ int main(int argc, char* argv[]) {
 	while (emulator.Running()) {
 		SDL_Event event{};
 		busy = false;
+		DiscordRPC::Update();
 		if (!SDL_PollEvent(&event))
 			continue;
 		busy = true;
@@ -430,6 +440,6 @@ int main(int argc, char* argv[]) {
 #ifdef ENABLE_SENTRY
 	sentry_close();
 #endif
-
+  DiscordRPC::Shutdown();
 	return 0;
 };

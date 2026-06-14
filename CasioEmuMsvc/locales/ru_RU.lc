@@ -219,6 +219,7 @@ UI.ChangeBg=Изменить фон
 Theme.Tint=Включить оттенок
 Theme.SeedColor=Базовый цвет
 Theme.MD=Извлечь из фона
+Theme.EnableDiscordRPC=Включить Discord RPC
 CodeViewer.Search=Поиск:
 CodeViewer.Hex=Hex
 CodeViewer.Inst=Инструкция

@@ -7,6 +7,8 @@
 #include <fstream>
 #include <string>
 #include <vibration.h>
+#include "Ext/DiscordRPC.h"
+
 extern SDL_Surface* background;
 extern SDL_Texture* bg_txt;
 
@@ -173,6 +175,16 @@ public:
 				seedColor = tm.ExtractDominantColor(bg_txt, renderer);
 #endif
 				tm.SetSeedColor(seedColor);
+			}
+		}
+		
+		UIHelpers::SectionHeader("Integrations");
+		if (ImGui::Checkbox("Theme.EnableDiscordRPC"_lc, &settings.enableDiscordRPC)) {
+			tm.SaveSettings();
+			if (m_emu) {
+				DiscordRPC::UpdatePresence(m_emu->ModelDefinition.model_name);
+			} else {
+				DiscordRPC::UpdatePresence("");
 			}
 		}
 

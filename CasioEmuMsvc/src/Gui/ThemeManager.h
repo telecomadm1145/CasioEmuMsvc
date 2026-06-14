@@ -19,7 +19,7 @@ struct ThemeSettings {
 	// Auto-tint (MD3 Monet)
 	bool enableAutoTint = false;
 	ImVec4 seedColor = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
-
+  bool enableDiscordRPC = true;
 	void Write(std::ostream& stm) const {
 		Binary::Write(stm, isDarkMode);
 		stm.write(language, sizeof(language));
@@ -30,6 +30,7 @@ struct ThemeSettings {
 		Binary::Write(stm, igs_dark);
 		Binary::Write(stm, enableAutoTint);
 		Binary::Write(stm, seedColor);
+		Binary::Write(stm, enableDiscordRPC);
 	}
 
 	void Read(std::istream& stm) {
@@ -45,6 +46,9 @@ struct ThemeSettings {
 		if (stm.peek() != EOF) {
 			Binary::Read(stm, enableAutoTint);
 			Binary::Read(stm, seedColor);
+		}
+		if (stm.peek() != EOF) {
+			Binary::Read(stm, enableDiscordRPC);
 		}
 	}
 };

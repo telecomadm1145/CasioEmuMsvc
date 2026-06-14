@@ -220,6 +220,7 @@ UI.ChangeBg=Thay đổi nền
 Theme.Tint=Bật lớp phủ màu
 Theme.SeedColor=Màu gốc
 Theme.MD=Trích xuất từ nền
+Theme.EnableDiscordRPC=Bật hiển thị Discord RPC
 CodeViewer.Search=Tìm kiếm:
 CodeViewer.Hex=Hệ thập lục phân
 CodeViewer.Inst=Lệnh

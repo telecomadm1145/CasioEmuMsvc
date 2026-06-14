@@ -1,5 +1,5 @@
-[submodule "CasioEmuMsvc/asmjit"]
-	path = CasioEmuMsvc/asmjit
+[submodule "CasioEmuMsvc/third_party/asmjit"]
+	path = CasioEmuMsvc/third_party/asmjit
 	url = https://github.com/asmjit/asmjit
 [submodule "SDL"]
 	path = SDL

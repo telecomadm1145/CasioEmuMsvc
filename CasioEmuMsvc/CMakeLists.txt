@@ -100,6 +100,7 @@ file(GLOB MAIN_SOURCES_WEB "${SOURCE_DIR}/Web/*.cpp")
 if(CASIOEMU_WEB)
     list(FILTER MAIN_SOURCES_ROOT EXCLUDE REGEX "casioemu\\.cpp$")
     list(FILTER MAIN_SOURCES_EXT EXCLUDE REGEX "SysDialog\\.cpp$")
+    list(FILTER MAIN_SOURCES_EXT EXCLUDE REGEX "DiscordRPC\\.cpp$")
     if(CASIOEMU_CORE_WEB)
         list(FILTER MAIN_SOURCES_WEB EXCLUDE REGEX "web_main\\.cpp$")
     else()
@@ -189,7 +190,7 @@ if(CASIOEMU_WEB)
         -sUSE_SDL_IMAGE=2
     )
     if(CASIOEMU_CORE_WEB)
-        target_compile_definitions(${TARGET_NAME} PRIVATE CASIOEMU_CORE_WEB CASIOEMU_DISABLE_RAM_IMAGE)
+        target_compile_definitions(${TARGET_NAME} PRIVATE CASIOEMU_CORE_WEB CASIOEMU_DISABLE_RAM_IMAGE CASIOEMU_ENABLE_KEYBOARD_KI_WRITE)
         target_link_options(${TARGET_NAME} PRIVATE
             -fexceptions
             -sDISABLE_EXCEPTION_CATCHING=0

@@ -1,5 +1,4 @@
 package com.tele.u8emulator;
-
 import org.libsdl.app.SDLActivity;
 import android.os.Vibrator;
 import android.os.Environment;
@@ -53,38 +52,81 @@ import java.util.zip.ZipEntry;
 import java.util.LinkedHashSet;
 import java.util.Enumeration;
 import io.sentry.Sentry;
-
 public class Game extends SDLActivity {
     private static final String TAG = "Game";
     private static Uri pendingUri = null;
     private static byte[] pendingData = null;
     private static int pendingRequestCode = -1;
     private static final String CHANNEL_ID = "emu_channel";
+    private static final int NOTIFICATION_RUNNING = 100;
+    private static final int NOTIFICATION_STOPPED = 101;
+    private static final int PERMISSION_NOTIFICATION = 102;
+    private static final long BACKGROUND_TIMEOUT_MS = 5 * 60 * 1000;
+    private static final long NOTIFICATION_POST_DELAY_MS = 1500;
 
     private Handler backgroundHandler = new Handler(Looper.getMainLooper());
+    private boolean isStoppingEmulation = false;
+
+
+    private Runnable showRunningNotificationRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isFinishing() || isStoppingEmulation) return;
+            if (!canPostNotifications()) return;
+
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(Game.this, CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.ic_media_play)
+                    .setContentTitle("Emulation Running")
+                    .setContentText("Emulation is currently running in the background.")
+                    .setPriority(NotificationCompat.PRIORITY_LOW)
+                    .setAutoCancel(false);
+
+            NotificationManagerCompat notificationManager = NotificationManagerCompat.from(Game.this);
+            notificationManager.notify(NOTIFICATION_RUNNING, builder.build());
+        }
+    };
+
     private Runnable stopEmulationRunnable = new Runnable() {
         @Override
         public void run() {
-            NotificationCompat.Builder builder = new NotificationCompat.Builder(Game.this, CHANNEL_ID)
-                    .setSmallIcon(android.R.drawable.ic_media_pause)
-                    .setContentTitle("Emulation Stopped")
-                    .setContentText("Emulation was stopped after 5 minutes in background.")
-                    .setPriority(NotificationCompat.PRIORITY_HIGH)
-                    .setAutoCancel(true);
+            isStoppingEmulation = true;
 
             NotificationManagerCompat notificationManager = NotificationManagerCompat.from(Game.this);
-            if (Build.VERSION.SDK_INT >= 33) {
-                if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                    notificationManager.notify(101, builder.build());
-                }
-            } else {
-                notificationManager.notify(101, builder.build());
+            notificationManager.cancel(NOTIFICATION_RUNNING);
+
+            if (canPostNotifications()) {
+                NotificationCompat.Builder builder = new NotificationCompat.Builder(Game.this, CHANNEL_ID)
+                        .setSmallIcon(android.R.drawable.ic_media_pause)
+                        .setContentTitle("Emulation Stopped")
+                        .setContentText("Emulation was stopped after 5 minutes in background.")
+                        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                        .setAutoCancel(true);
+                notificationManager.notify(NOTIFICATION_STOPPED, builder.build());
             }
 
             finish();
             System.exit(0);
         }
     };
+
+    private boolean canPostNotifications() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            return checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                    == PackageManager.PERMISSION_GRANTED;
+        }
+        return true;
+    }
+
+    private void cancelAllNotifications() {
+        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
+        notificationManager.cancel(NOTIFICATION_RUNNING);
+        notificationManager.cancel(NOTIFICATION_STOPPED);
+    }
+
+    private void removeAllCallbacks() {
+        backgroundHandler.removeCallbacks(showRunningNotificationRunnable);
+        backgroundHandler.removeCallbacks(stopEmulationRunnable);
+    }
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -99,7 +141,6 @@ public class Game extends SDLActivity {
             }
         }
     }
-
     private void setImmersiveMode() {
         if (Build.VERSION.SDK_INT >= 19) {
             View decorView = getWindow().getDecorView();
@@ -109,7 +150,6 @@ public class Game extends SDLActivity {
                         View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
                         View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
                         View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
-
             decorView.setSystemUiVisibility(flags);
         }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
@@ -120,7 +160,6 @@ public class Game extends SDLActivity {
         }
         SDLActivity.onNativeResize();
     }
-
     @Override
     protected String[] getArguments() {
         Intent intent = getIntent();
@@ -132,10 +171,10 @@ public class Game extends SDLActivity {
         }
         return new String[0];
     }
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        isStoppingEmulation = false;
         createNotificationChannel();
         setImmersiveMode();
         extractAssets();
@@ -144,52 +183,37 @@ public class Game extends SDLActivity {
             Os.setenv("TMPDIR", getCacheDir().getAbsolutePath(), true);
         } catch (Exception e) {}
     }
-
     @Override
     protected void onResume() {
         super.onResume();
-        backgroundHandler.removeCallbacks(stopEmulationRunnable);
-        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
-        notificationManager.cancel(100);
-
+        isStoppingEmulation = false;
+        removeAllCallbacks();
+        cancelAllNotifications();
         if (Build.VERSION.SDK_INT >= 33) {
             if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 102);
+                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, PERMISSION_NOTIFICATION);
             }
         }
     }
-
     @Override
     protected void onPause() {
         super.onPause();
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_media_play)
-                .setContentTitle("Emulation Running")
-                .setContentText("Emulation is currently running in the background.")
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setOngoing(true);
-
-        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
-        if (Build.VERSION.SDK_INT >= 33) {
-            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                notificationManager.notify(100, builder.build());
-            }
-        } else {
-            notificationManager.notify(100, builder.build());
+        if (isFinishing() || isStoppingEmulation) {
+            return;
         }
+        
+        backgroundHandler.removeCallbacks(showRunningNotificationRunnable);
+        backgroundHandler.postDelayed(showRunningNotificationRunnable, NOTIFICATION_POST_DELAY_MS);
 
-        // 5 minutes = 5 * 60 * 1000 = 300,000 ms
-        backgroundHandler.postDelayed(stopEmulationRunnable, 300000);
+        backgroundHandler.removeCallbacks(stopEmulationRunnable);
+        backgroundHandler.postDelayed(stopEmulationRunnable, BACKGROUND_TIMEOUT_MS);
     }
-
     @Override
     protected void onDestroy() {
+        removeAllCallbacks();
+        cancelAllNotifications();
         super.onDestroy();
-        backgroundHandler.removeCallbacks(stopEmulationRunnable);
-        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
-        notificationManager.cancel(100);
     }
-
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
@@ -217,7 +241,6 @@ public class Game extends SDLActivity {
         } catch (Exception e) {
             Log.e(TAG, "Failed to extract roms.db: " + e.getMessage());
         }
-
         try {
             File localesDir = new File(externalDir, "locales");
             if (!localesDir.exists()) {
@@ -244,7 +267,6 @@ public class Game extends SDLActivity {
             Log.e(TAG, "Failed to extract locales: " + e.getMessage());
         }
     }
-
     public static void checkAndExtractPluginAssets() {
         Game activity = (Game) SDLActivity.mSingleton;
         PackageManager pm = activity.getPackageManager();
@@ -257,7 +279,6 @@ public class Game extends SDLActivity {
         File infoFile = new File(pluginsDir, "plugins_info.txt");
         LinkedHashSet<String> loadOrder = new LinkedHashSet<>();
         StringBuilder infoBuilder = new StringBuilder();
-
         for (ResolveInfo info : resolveInfos) {
             try {
                 ApplicationInfo appInfo = pm.getApplicationInfo(info.activityInfo.packageName, PackageManager.GET_META_DATA);
@@ -337,7 +358,6 @@ public class Game extends SDLActivity {
             Os.setenv("CASIOEMU_PLUGINS_DIR", pluginsDir.getAbsolutePath(), true);
         } catch (Exception e) {}
     }
-
     public void onNativeCrash(String message) {
         Log.e(TAG, "Native crash: " + message);
         runOnUiThread(() -> {
@@ -349,7 +369,6 @@ public class Game extends SDLActivity {
                     ClipData clip = ClipData.newPlainText("Crash Log", message);
                     clipboard.setPrimaryClip(clip);
                     Toast.makeText(this, "Copied to clipboard", Toast.LENGTH_SHORT).show();
-                    // Exit cleanly
                     System.exit(0);
                 })
                 .setNegativeButton("Close", (dialog, which) -> {
@@ -359,39 +378,33 @@ public class Game extends SDLActivity {
                 .show();
         });
     }
-
     private static native void onFileSelected(String path, byte[] data);
     private static native void onFileSaved(String path);
     private static native void onFolderSelected(String path);
     private static native void onFolderSaved(String path);
     private static native void onExportFailed();
     private static native void onImportFailed();
-
     public void vibrate(long milliseconds) {
         Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         if (vibrator != null && vibrator.hasVibrator()) {
             vibrator.vibrate(milliseconds);
         }
     }
-
     public static void nativeVibrate(long milliseconds) {
         ((Game) SDLActivity.mSingleton).vibrate(milliseconds);
     }
-
     public static void createModelShortcut(String modelPath, String shortcutName, String iconPath) {
         Activity activity = SDLActivity.mSingleton;
         if (activity == null) {
             Log.e(TAG, "createModelShortcut: activity is null");
             return;
         }
-
         activity.runOnUiThread(() -> {
             try {
                 Intent launchIntent = new Intent(activity, Game.class);
                 launchIntent.setAction(Intent.ACTION_MAIN);
                 launchIntent.putExtra("model_path", modelPath);
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     ShortcutManager shortcutManager = activity.getSystemService(ShortcutManager.class);
                     if (shortcutManager != null && shortcutManager.isRequestPinShortcutSupported()) {
@@ -401,7 +414,6 @@ public class Game extends SDLActivity {
                             if (iconFile.exists()) {
                                 Bitmap bmp = BitmapFactory.decodeFile(iconPath);
                                 if (bmp != null) {
-                                    // Scale to reasonable size for shortcut icon
                                     Bitmap scaled = Bitmap.createScaledBitmap(bmp, 192, 192, true);
                                     icon = Icon.createWithBitmap(scaled);
                                     if (scaled != bmp) bmp.recycle();
@@ -411,25 +423,21 @@ public class Game extends SDLActivity {
                         if (icon == null) {
                             icon = Icon.createWithResource(activity, activity.getApplicationInfo().icon);
                         }
-
                         ShortcutInfo shortcutInfo = new ShortcutInfo.Builder(activity, "model_" + modelPath.hashCode())
                                 .setShortLabel(shortcutName)
                                 .setLongLabel(shortcutName)
                                 .setIcon(icon)
                                 .setIntent(launchIntent)
                                 .build();
-
                         shortcutManager.requestPinShortcut(shortcutInfo, null);
                     } else {
                         Toast.makeText(activity, "Pinned shortcuts not supported", Toast.LENGTH_SHORT).show();
                     }
                 } else {
-                    // Fallback for pre-Oreo
                     Intent shortcutIntent = new Intent("com.android.launcher.action.INSTALL_SHORTCUT");
                     shortcutIntent.putExtra(Intent.EXTRA_SHORTCUT_NAME, shortcutName);
                     shortcutIntent.putExtra(Intent.EXTRA_SHORTCUT_INTENT, launchIntent);
                     shortcutIntent.putExtra("duplicate", false);
-
                     if (iconPath != null && !iconPath.isEmpty()) {
                         File iconFile = new File(iconPath);
                         if (iconFile.exists()) {
@@ -443,10 +451,8 @@ public class Game extends SDLActivity {
                         shortcutIntent.putExtra(Intent.EXTRA_SHORTCUT_ICON_RESOURCE,
                                 Intent.ShortcutIconResource.fromContext(activity, activity.getApplicationInfo().icon));
                     }
-
                     activity.sendBroadcast(shortcutIntent);
                 }
-
                 Toast.makeText(activity, "Shortcut created: " + shortcutName, Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
                 Log.e(TAG, "Failed to create shortcut: " + e.getMessage());
@@ -454,7 +460,6 @@ public class Game extends SDLActivity {
             }
         });
     }
-
     private String getPathFromUri(Uri uri) {
         String path = uri.toString();
         if (DocumentsContract.isDocumentUri(this, uri)) {
@@ -474,11 +479,9 @@ public class Game extends SDLActivity {
         }
         return path;
     }
-
     public static void exportData(byte[] data, Uri uri) {
         Activity activity = SDLActivity.mSingleton;
         if (activity == null) return;
-
         Game game = (Game)activity;
         if (!PermissionManager.hasAllPermissions(game)) {
             pendingUri = uri;
@@ -486,52 +489,39 @@ public class Game extends SDLActivity {
             PermissionManager.checkAndRequestPermissions(game);
             return;
         }
-
         boolean success = FileUtils.writeToUri(activity, uri, data);
         if (!success) {
             onExportFailed();
         }
     }
-
     public boolean saveImageToMediaStore(ByteBuffer buffer, int width, int height, int pitch, String filename) {
-        // Processing for Android 10+
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             ContentValues values = new ContentValues();
             values.put(MediaStore.Images.Media.DISPLAY_NAME, filename);
             values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
             values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CasioEmuAndroid");
             values.put(MediaStore.Images.Media.IS_PENDING, 1);
-
             ContentResolver resolver = getContentResolver();
             Uri imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
-
             if (imageUri == null) {
                 Log.e("SDL", "Failed to create new MediaStore record.");
                 return false;
             }
-
             try {
                 OutputStream stream = resolver.openOutputStream(imageUri);
                 if (stream == null) {
                     Log.e("SDL", "Failed to open output stream.");
                     return false;
                 }
-
-                // Create a bitmap from the buffer
                 Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
                 buffer.rewind();
                 bitmap.copyPixelsFromBuffer(buffer);
-
-                // Compress and save the bitmap
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
                 stream.close();
-
                 values.clear();
                 values.put(MediaStore.Images.Media.IS_PENDING, 0);
                 resolver.update(imageUri, values, null, null);
-
                 runOnUiThread(() -> Toast.makeText(this, "Screenshot saved to Pictures/CasioEmuAndroid folder", Toast.LENGTH_SHORT).show());
-
                 return true;
             } catch (IOException e) {
                 Log.e("SDL", "Error saving bitmap: " + e.getMessage());
@@ -539,16 +529,13 @@ public class Game extends SDLActivity {
                 return false;
             }
         }
-        // Handling for Android 9 and lower
         else {
             try {
                 Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
                 buffer.rewind();
                 bitmap.copyPixelsFromBuffer(buffer);
-
                 File picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
                 File casioDir = new File(picturesDir, "CasioEmuAndroid");
-
                 if (!casioDir.exists()) {
                     boolean dirCreated = casioDir.mkdirs();
                     if (!dirCreated) {
@@ -556,23 +543,18 @@ public class Game extends SDLActivity {
                         casioDir = picturesDir;
                     }
                 }
-
                 File imageFile = new File(casioDir, filename);
                 FileOutputStream fos = new FileOutputStream(imageFile);
-
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
                 fos.flush();
                 fos.close();
-
                 MediaScannerConnection.scanFile(this,
                         new String[] { imageFile.getAbsolutePath() }, null,
                         (path, uri) -> {
                             Log.d("SDL", "Scanned: " + path);
                             Log.d("SDL", "Uri: " + uri);
                         });
-
                 runOnUiThread(() -> Toast.makeText(this, "Screenshot saved to Pictures/CasioEmuAndroid folder", Toast.LENGTH_SHORT).show());
-
                 return true;
             } catch (IOException e) {
                 Log.e("SDL", "Error saving bitmap: " + e.getMessage());
@@ -580,13 +562,11 @@ public class Game extends SDLActivity {
             }
         }
     }
-
     @Override
     public void onRequestPermissionsResult(int requestCode,
                                          String[] permissions,
                                          int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-
         if (requestCode == PermissionManager.PERMISSION_REQUEST_CODE) {
             boolean allGranted = true;
             for (int result : grantResults) {
@@ -595,37 +575,32 @@ public class Game extends SDLActivity {
                     break;
                 }
             }
-
             if (allGranted) {
                 processPendingOperations();
             } else {
                 onExportFailed();
             }
-        } else if (requestCode == 102) {
+        } else if (requestCode == PERMISSION_NOTIFICATION) {
             if (grantResults.length > 0 && grantResults[0] != PackageManager.PERMISSION_GRANTED) {
                 Log.w(TAG, "Notification permission denied");
             }
         }
     }
-
     private void processPendingOperations() {
         if (pendingUri != null && pendingData != null) {
             exportData(pendingData, pendingUri);
         } else if (pendingRequestCode != -1) {
             handlePendingRequest();
         }
-
         pendingUri = null;
         pendingData = null;
         pendingRequestCode = -1;
     }
-
     private void handlePendingRequest() {
         if (pendingRequestCode != -1 && pendingUri != null) {
             String path = getPathFromUri(pendingUri);
-
             switch (pendingRequestCode) {
-                case 1: // Open File
+                case 1:
                     byte[] fileData = FileUtils.readFromUri(this, pendingUri);
                     if (fileData != null) {
                         onFileSelected(path, fileData);
@@ -633,27 +608,24 @@ public class Game extends SDLActivity {
                         onImportFailed();
                     }
                     break;
-                case 2: // Save File
+                case 2:
                     onFileSaved(pendingUri.toString());
                     break;
-                case 3: // Open Folder
+                case 3:
                     onFolderSelected(path);
                     break;
-                case 4: // Save Folder
+                case 4:
                     onFolderSaved(path);
                     break;
             }
         }
     }
-
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-
         if (resultCode == Activity.RESULT_OK && data != null && data.getData() != null) {
             Uri uri = data.getData();
             Log.d(TAG, "File URI: " + uri.toString());
-
             try {
                 final int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION |
                                     Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
@@ -661,19 +633,16 @@ public class Game extends SDLActivity {
             } catch (Exception e) {
                 Log.e(TAG, "Failed to take persistable permission: " + e.getMessage());
             }
-
             if (!PermissionManager.hasAllPermissions(this)) {
                 pendingUri = uri;
                 pendingRequestCode = requestCode;
                 PermissionManager.checkAndRequestPermissions(this);
                 return;
             }
-
             String path = getPathFromUri(uri);
             Log.d(TAG, "File path: " + path);
-
             switch (requestCode) {
-                case 1: // Open File
+                case 1:
                     byte[] fileData = FileUtils.readFromUri(this, uri);
                     if (fileData != null && fileData.length > 0) {
                         Log.d(TAG, "Read file data: " + fileData.length + " bytes");
@@ -683,13 +652,13 @@ public class Game extends SDLActivity {
                         onImportFailed();
                     }
                     break;
-                case 2: // Save File
+                case 2:
                     onFileSaved(uri.toString());
                     break;
-                case 3: // Open Folder
+                case 3:
                     onFolderSelected(path);
                     break;
-                case 4: // Save Folder
+                case 4:
                     onFolderSaved(path);
                     break;
             }

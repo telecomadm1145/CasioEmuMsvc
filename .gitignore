@@ -385,3 +385,5 @@ build-parent-check/
 /CasioEmuMsvc/build-core-web/
 
 /CasioEmuMsvc/temp/
+
+app/src/main/assets/
