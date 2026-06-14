@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.10...3.22)
+cmake_minimum_required(VERSION 3.10...3.22)
 
 project(CasioEmuMsvc)
 #set(CMAKE_MESSAGE_LOG_LEVEL NOTICE)
