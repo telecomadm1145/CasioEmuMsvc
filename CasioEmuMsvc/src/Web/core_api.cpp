@@ -389,6 +389,39 @@ namespace {
 		style.Colors[ImGuiCol_Button] = ImVec4(0.20f, 0.36f, 0.56f, 1.0f);
 	}
 
+	const ImWchar* GuiCjkRanges() {
+		static const ImWchar ranges[] = {
+			0x0020, 0x00FF,
+			0x2000, 0x206F,
+			0x3000, 0x30FF,
+			0x31F0, 0x31FF,
+			0x4E00, 0x9FAF,
+			0xFF00, 0xFFEF,
+			0,
+		};
+		return ranges;
+	}
+
+	void GuiLoadFonts(ImGuiIO& io) {
+		ImFontConfig config;
+		config.PixelSnapH = true;
+		io.Fonts->AddFontDefault(&config);
+
+		constexpr const char* kBundledCjkFont = "/fonts/CasioEmuGuiCJKSubset.otf";
+		if (std::filesystem::exists(kBundledCjkFont)) {
+			config.MergeMode = true;
+			if (io.Fonts->AddFontFromFileTTF(kBundledCjkFont, 16.0f, &config, GuiCjkRanges())) {
+				printf("[CasioEmuCore][GUI][Font] Loaded bundled CJK font: %s\n", kBundledCjkFont);
+			}
+			else {
+				printf("[CasioEmuCore][GUI][Font] Failed to load bundled CJK font: %s\n", kBundledCjkFont);
+			}
+		}
+		else {
+			printf("[CasioEmuCore][GUI][Font] Bundled CJK font not found: %s\n", kBundledCjkFont);
+		}
+	}
+
 	bool GuiEnsureImGui() {
 		if (!g_emulator || g_gui_width <= 0 || g_gui_height <= 0) return false;
 		if (g_gui_imgui_ready) return true;
@@ -398,7 +431,7 @@ namespace {
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 		io.IniFilename = nullptr;
 		io.LogFilename = nullptr;
-		io.Fonts->AddFontDefault();
+		GuiLoadFonts(io);
 		unsigned char* pixels = nullptr;
 		int font_width = 0;
 		int font_height = 0;
