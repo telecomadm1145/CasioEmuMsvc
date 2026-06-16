@@ -19,12 +19,9 @@ set(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 set(THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
 set(ASMJIT_DIR "${THIRD_PARTY_DIR}/asmjit")
 set(MINIZ_DIR "${THIRD_PARTY_DIR}/miniz")
-set(GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/generated")
-set(GUI_FONT_SUBSET "${GENERATED_DIR}/fonts/CasioEmuGuiCJKSubset.otf")
-set(GUI_FONT_LOCALE_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/locales/en_US.lc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/locales/zh_CN.lc"
-)
+set(TEMP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/temp")
+set(GUI_FONT_SUBSET "${TEMP_DIR}/generated/fonts/CasioEmuGuiCJKSubset.otf")
+file(GLOB GUI_FONT_LOCALE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/locales/*.lc")
 
 set(ASMJIT_STATIC ON CACHE BOOL "Build AsmJit as a static library")
 set(ASMJIT_BUILD_TEST OFF CACHE BOOL "Disable AsmJit tests")
@@ -259,8 +256,7 @@ if(CASIOEMU_WEB)
             -sEXPORT_NAME=CasioEmuCoreModule
             "SHELL:-sEXPORTED_RUNTIME_METHODS=['FS','IDBFS','ccall','cwrap','HEAPU8']"
             "SHELL:-sEXPORTED_FUNCTIONS=['_main','_malloc','_free','_casioemu_core_set_model_id','_casioemu_core_init_real_rom','_casioemu_core_init_sim_rom','_casioemu_core_shutdown','_casioemu_core_start','_casioemu_core_stop','_casioemu_core_reset','_casioemu_core_is_running','_casioemu_core_cpu_time','_casioemu_core_button_event','_casioemu_core_sdl_key_event','_casioemu_core_bind_sdl_key','_casioemu_core_set_display_color','_casioemu_core_set_screen_shadow','_casioemu_core_update_frame','_casioemu_core_frame_ptr','_casioemu_core_frame_width','_casioemu_core_frame_height','_casioemu_core_status_alpha_ptr','_casioemu_core_status_alpha_len','_casioemu_core_set_solar_voltage','_casioemu_core_set_battery_voltage','_casioemu_core_user_ram_size','_casioemu_core_save_user_ram','_casioemu_core_load_user_ram','_casioemu_core_snapshot_ptr','_casioemu_core_snapshot_len','_casioemu_core_save_snapshot','_casioemu_core_load_snapshot','_casioemu_core_rom_version','_casioemu_core_gui_supported','_casioemu_core_gui_attach','_casioemu_core_gui_detach','_casioemu_core_gui_is_attached','_casioemu_core_gui_frame','_casioemu_core_gui_frame_ptr','_casioemu_core_gui_frame_len','_casioemu_core_gui_width','_casioemu_core_gui_height','_casioemu_core_gui_set_locale','_casioemu_core_gui_pointer','_casioemu_core_gui_wheel','_casioemu_core_gui_key','_casioemu_core_gui_text']"
-            "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/locales/en_US.lc@/locales/en_US.lc"
-            "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/locales/zh_CN.lc@/locales/zh_CN.lc"
+            "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/locales@/locales"
             "SHELL:--preload-file ${GUI_FONT_SUBSET}@/fonts/CasioEmuGuiCJKSubset.otf"
             "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/roms.db@/roms.db"
             -lidbfs.js

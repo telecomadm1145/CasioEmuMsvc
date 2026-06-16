@@ -85,9 +85,9 @@ inline std::string GetMonospaceFontPath() {
 inline std::string GetCJKFontPath() {
 	auto preference = "Localization.CJKPreference"_l;
 	std::vector<std::string> candidates = {
-		"generated/fonts/CasioEmuGuiCJKSubset.otf",
-		"./generated/fonts/CasioEmuGuiCJKSubset.otf",
-		"../generated/fonts/CasioEmuGuiCJKSubset.otf"};
+		"temp/generated/fonts/CasioEmuGuiCJKSubset.otf",
+		"./temp/generated/fonts/CasioEmuGuiCJKSubset.otf",
+		"../temp/generated/fonts/CasioEmuGuiCJKSubset.otf"};
 
 #ifdef _WIN32
 	if (preference == "JP") {
