@@ -387,17 +387,4 @@ ClickableAddress.RightClickHint=右键查看更多选项
 
 MemBP.ColPC=PC 地址
 
-CoreGui.Title=CasioEmuMsvc 工具
-CoreGui.ModelFmt=型号：%s
-CoreGui.PCFmt=PC：%05X
-CoreGui.TabRAM=RAM
-CoreGui.TabROM=ROM
-CoreGui.TabAll=全部
-CoreGui.TabState=状态
-CoreGui.CpuTimeFmt=CPU 时间：%u
-CoreGui.RamBaseFmt=RAM 基址：%04X
-CoreGui.RamSizeFmt=RAM 大小：%04X
-CoreGui.RomSizeFmt=ROM 大小：%zu
-CoreGui.ShowDemo=显示 ImGui demo
-
 placeholder2=a)"

@@ -370,8 +370,8 @@ namespace {
 			chdir("/");
 			const std::string locale = g_gui_locale == "zh_CN" ? "zh_CN" : "en_US";
 			g_local.ChangeLanguage(locale, false);
-			if (g_local.Get("CoreGui.Title") == "CoreGui.Title") {
-				throw LocalizationException("CoreGui.Title is still missing after locale load");
+			if (g_local.Get("StatusBar.Running") == "StatusBar.Running") {
+				throw LocalizationException("StatusBar.Running is still missing after locale load");
 			}
 		}
 		catch (const std::exception& ex) {
