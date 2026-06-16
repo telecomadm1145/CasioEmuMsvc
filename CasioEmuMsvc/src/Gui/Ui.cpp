@@ -71,7 +71,13 @@ void RenderStatusBar() {
 	ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - barHeight));
 	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, barHeight));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 2.0f));
+#ifdef CASIOEMU_CORE_WEB_GUI
+	ImVec4 statusBg = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
+	statusBg.w = std::max(statusBg.w, 0.82f);
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, statusBg);
+#else
 	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.12f, 1.0f));
+#endif
 	
 	if (ImGui::Begin("##StatusBar", nullptr, 
 		ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 

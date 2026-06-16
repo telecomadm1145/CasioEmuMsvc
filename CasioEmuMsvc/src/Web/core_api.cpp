@@ -9,6 +9,7 @@
 #include "Snapshot.h"
 
 #include <SDL.h>
+#include <SDL_image.h>
 #include <emscripten.h>
 
 #include <cmath>
@@ -27,6 +28,7 @@
 
 #ifdef CASIOEMU_CORE_WEB_GUI
 #include "Gui/Localization.h"
+#include "Gui/ThemeManager.h"
 #include "Gui/WebDebuggerGui.h"
 #include "Gui/imgui/imgui.h"
 #include "Gui/imgui/imgui_internal.h"
@@ -79,12 +81,21 @@ namespace {
 	float g_gui_mouse_x = -FLT_MAX;
 	float g_gui_mouse_y = -FLT_MAX;
 	std::array<bool, 5> g_gui_mouse_down{};
+	std::array<bool, 5> g_gui_mouse_release_pending{};
+	std::array<int, 5> g_gui_mouse_hold_frames{};
 	float g_gui_wheel_x = 0.0f;
 	float g_gui_wheel_y = 0.0f;
 	std::string g_gui_locale = "en_US";
 	std::string g_gui_file_request_kind;
 	std::string g_gui_file_request_path;
 	std::string g_gui_file_request_name;
+	std::string g_gui_file_result_path;
+	int g_gui_file_result_code = 0;
+	bool g_gui_file_result_pending = false;
+	std::vector<uint8_t> g_gui_background_rgba;
+	int g_gui_background_width = 0;
+	int g_gui_background_height = 0;
+	bool g_gui_background_checked = false;
 #endif
 
 	void EnsureSdl() {
@@ -188,6 +199,8 @@ namespace {
 		g_gui_mouse_x = -FLT_MAX;
 		g_gui_mouse_y = -FLT_MAX;
 		g_gui_mouse_down.fill(false);
+		g_gui_mouse_release_pending.fill(false);
+		g_gui_mouse_hold_frames.fill(0);
 		g_gui_wheel_x = 0.0f;
 		g_gui_wheel_y = 0.0f;
 	}
@@ -221,11 +234,20 @@ namespace {
 		g_gui_mouse_x = -FLT_MAX;
 		g_gui_mouse_y = -FLT_MAX;
 		g_gui_mouse_down.fill(false);
+		g_gui_mouse_release_pending.fill(false);
+		g_gui_mouse_hold_frames.fill(0);
 		g_gui_wheel_x = 0.0f;
 		g_gui_wheel_y = 0.0f;
 		g_gui_file_request_kind.clear();
 		g_gui_file_request_path.clear();
 		g_gui_file_request_name.clear();
+		g_gui_file_result_path.clear();
+		g_gui_file_result_code = 0;
+		g_gui_file_result_pending = false;
+		g_gui_background_rgba.clear();
+		g_gui_background_width = 0;
+		g_gui_background_height = 0;
+		g_gui_background_checked = false;
 	}
 #else
 	void GuiResetState() {
@@ -393,17 +415,15 @@ namespace {
 	}
 
 	void GuiApplyStyle() {
-		ImGui::StyleColorsDark();
+		ThemeManager::Instance().ApplyDefaultTheme();
+	}
+
+	void GuiApplyWebStyleOverrides() {
 		ImGuiStyle& style = ImGui::GetStyle();
-		style.WindowRounding = 4.0f;
-		style.FrameRounding = 3.0f;
-		style.ScrollbarRounding = 3.0f;
-		style.WindowBorderSize = 1.0f;
-		style.Colors[ImGuiCol_WindowBg] = ImVec4(0.08f, 0.09f, 0.11f, 1.0f);
-		style.Colors[ImGuiCol_TitleBg] = ImVec4(0.13f, 0.15f, 0.18f, 1.0f);
-		style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.17f, 0.22f, 0.30f, 1.0f);
-		style.Colors[ImGuiCol_Header] = ImVec4(0.20f, 0.32f, 0.48f, 1.0f);
-		style.Colors[ImGuiCol_Button] = ImVec4(0.20f, 0.36f, 0.56f, 1.0f);
+		style.Colors[ImGuiCol_WindowBg].w = std::min(style.Colors[ImGuiCol_WindowBg].w, 0.68f);
+		style.Colors[ImGuiCol_ChildBg].w = std::min(style.Colors[ImGuiCol_ChildBg].w, 0.62f);
+		style.Colors[ImGuiCol_PopupBg].w = std::min(style.Colors[ImGuiCol_PopupBg].w, 0.96f);
+		style.Colors[ImGuiCol_DockingEmptyBg].w = 0.0f;
 	}
 
 	const ImWchar* GuiCjkRanges() {
@@ -456,10 +476,110 @@ namespace {
 		io.Fonts->GetTexDataAsRGBA32(&pixels, &font_width, &font_height);
 		io.Fonts->SetTexID(reinterpret_cast<ImTextureID>(1));
 		GuiApplyStyle();
+		GuiApplyWebStyleOverrides();
 		GuiLoadLocale();
+		ThemeManager::Instance().LoadSettings();
+		GuiApplyWebStyleOverrides();
 		InitWebDebuggerGuiWindows();
 		g_gui_imgui_ready = true;
 		return true;
+	}
+
+	void GuiLoadBackground() {
+		constexpr const char* kBackgroundPath = "/persist/background.jpg";
+		g_gui_background_checked = true;
+		g_gui_background_rgba.clear();
+		g_gui_background_width = 0;
+		g_gui_background_height = 0;
+		if (!std::filesystem::exists(kBackgroundPath)) return;
+
+		SDL_Surface* loaded = IMG_Load(kBackgroundPath);
+		if (!loaded) {
+			printf("[CasioEmuCore][GUI][Background] Failed to load %s: %s\n", kBackgroundPath, IMG_GetError());
+			return;
+		}
+		SDL_Surface* rgba = SDL_ConvertSurfaceFormat(loaded, SDL_PIXELFORMAT_RGBA32, 0);
+		SDL_FreeSurface(loaded);
+		if (!rgba) {
+			printf("[CasioEmuCore][GUI][Background] Failed to convert %s: %s\n", kBackgroundPath, SDL_GetError());
+			return;
+		}
+
+		g_gui_background_width = rgba->w;
+		g_gui_background_height = rgba->h;
+		g_gui_background_rgba.resize(static_cast<size_t>(rgba->w) * static_cast<size_t>(rgba->h) * 4);
+		const auto* src = static_cast<const uint8_t*>(rgba->pixels);
+		for (int y = 0; y < rgba->h; ++y) {
+			std::memcpy(
+				g_gui_background_rgba.data() + static_cast<size_t>(y) * rgba->w * 4,
+				src + static_cast<size_t>(y) * rgba->pitch,
+				static_cast<size_t>(rgba->w) * 4);
+		}
+		SDL_FreeSurface(rgba);
+	}
+
+	void GuiFillDefaultBackground() {
+		for (size_t i = 0; i < g_gui_frame_rgba.size(); i += 4) {
+			g_gui_frame_rgba[i + 0] = 18;
+			g_gui_frame_rgba[i + 1] = 20;
+			g_gui_frame_rgba[i + 2] = 24;
+			g_gui_frame_rgba[i + 3] = 255;
+		}
+	}
+
+	void GuiDrawBackground() {
+		g_gui_frame_rgba.assign(static_cast<size_t>(g_gui_width) * static_cast<size_t>(g_gui_height) * 4, 0);
+		if (g_gui_width <= 0 || g_gui_height <= 0) return;
+		if (!g_gui_background_checked || ThemeManager::Instance().IsBgReloadRequested()) {
+			GuiLoadBackground();
+			ThemeManager::Instance().ClearBgReloadRequest();
+		}
+		if (g_gui_background_rgba.empty() || g_gui_background_width <= 0 || g_gui_background_height <= 0) {
+			GuiFillDefaultBackground();
+			return;
+		}
+
+		const float window_aspect = static_cast<float>(g_gui_width) / static_cast<float>(g_gui_height);
+		const float bg_aspect = static_cast<float>(g_gui_background_width) / static_cast<float>(g_gui_background_height);
+		int dst_x = 0;
+		int dst_y = 0;
+		int dst_w = g_gui_width;
+		int dst_h = g_gui_height;
+		if (window_aspect > bg_aspect) {
+			dst_h = static_cast<int>(static_cast<float>(g_gui_width) / bg_aspect);
+			dst_y = (g_gui_height - dst_h) / 2;
+		}
+		else {
+			dst_w = static_cast<int>(static_cast<float>(g_gui_height) * bg_aspect);
+			dst_x = (g_gui_width - dst_w) / 2;
+		}
+
+		GuiFillDefaultBackground();
+		for (int y = 0; y < g_gui_height; ++y) {
+			const int rel_y = y - dst_y;
+			if (rel_y < 0 || rel_y >= dst_h) continue;
+			const int src_y = std::clamp(static_cast<int>((static_cast<int64_t>(rel_y) * g_gui_background_height) / std::max(1, dst_h)), 0, g_gui_background_height - 1);
+			for (int x = 0; x < g_gui_width; ++x) {
+				const int rel_x = x - dst_x;
+				if (rel_x < 0 || rel_x >= dst_w) continue;
+				const int src_x = std::clamp(static_cast<int>((static_cast<int64_t>(rel_x) * g_gui_background_width) / std::max(1, dst_w)), 0, g_gui_background_width - 1);
+				const auto* src = g_gui_background_rgba.data() + (static_cast<size_t>(src_y) * g_gui_background_width + src_x) * 4;
+				auto* dst = g_gui_frame_rgba.data() + (static_cast<size_t>(y) * g_gui_width + x) * 4;
+				const int alpha = src[3];
+				const int inv = 255 - alpha;
+				dst[0] = static_cast<uint8_t>((src[0] * alpha + dst[0] * inv) / 255);
+				dst[1] = static_cast<uint8_t>((src[1] * alpha + dst[1] * inv) / 255);
+				dst[2] = static_cast<uint8_t>((src[2] * alpha + dst[2] * inv) / 255);
+				dst[3] = 255;
+			}
+		}
+
+		for (size_t i = 0; i < g_gui_frame_rgba.size(); i += 4) {
+			g_gui_frame_rgba[i + 0] = static_cast<uint8_t>((g_gui_frame_rgba[i + 0] * 235) / 255);
+			g_gui_frame_rgba[i + 1] = static_cast<uint8_t>((g_gui_frame_rgba[i + 1] * 235) / 255);
+			g_gui_frame_rgba[i + 2] = static_cast<uint8_t>((g_gui_frame_rgba[i + 2] * 235) / 255);
+			g_gui_frame_rgba[i + 3] = 255;
+		}
 	}
 
 	void GuiShutdown() {
@@ -482,17 +602,21 @@ namespace {
 		io.MouseWheel += g_gui_wheel_y;
 		g_gui_wheel_x = 0.0f;
 		g_gui_wheel_y = 0.0f;
+		GuiApplyWebStyleOverrides();
 		ImGui::NewFrame();
+		for (size_t i = 0; i < g_gui_mouse_down.size(); ++i) {
+			if (g_gui_mouse_hold_frames[i] > 0) {
+				--g_gui_mouse_hold_frames[i];
+				if (g_gui_mouse_hold_frames[i] == 0 && g_gui_mouse_release_pending[i]) {
+					g_gui_mouse_down[i] = false;
+					g_gui_mouse_release_pending[i] = false;
+				}
+			}
+		}
 	}
 
 	void GuiClearFrame() {
-		g_gui_frame_rgba.assign(static_cast<size_t>(g_gui_width) * static_cast<size_t>(g_gui_height) * 4, 0);
-		for (size_t i = 0; i < g_gui_frame_rgba.size(); i += 4) {
-			g_gui_frame_rgba[i + 0] = 18;
-			g_gui_frame_rgba[i + 1] = 20;
-			g_gui_frame_rgba[i + 2] = 24;
-			g_gui_frame_rgba[i + 3] = 255;
-		}
+		GuiDrawBackground();
 	}
 
 	void GuiBlendPixel(int x, int y, ImU32 col, const unsigned char* font_pixels, int font_width, int font_height, ImVec2 uv) {
@@ -615,6 +739,28 @@ void WebDebuggerQueueDownload(const char* path, const char* name) {
 	g_gui_file_request_kind = "download";
 	g_gui_file_request_path = path ? path : "";
 	g_gui_file_request_name = name ? name : "";
+}
+
+	void WebDebuggerQueueOpenFile(const char* target_path, const char* name) {
+		g_gui_file_request_kind = "open_file";
+		g_gui_file_request_path = target_path ? target_path : "";
+		g_gui_file_request_name = name ? name : "";
+	}
+
+	void WebDebuggerRequestFsSync() {
+		g_gui_file_request_kind = "sync";
+		g_gui_file_request_path = "/persist";
+		g_gui_file_request_name = "";
+	}
+
+	bool WebDebuggerConsumeFileResult(const char* path, int* result) {
+	if (!g_gui_file_result_pending) return false;
+	if (path && g_gui_file_result_path != path) return false;
+	if (result) *result = g_gui_file_result_code;
+	g_gui_file_result_path.clear();
+	g_gui_file_result_code = 0;
+	g_gui_file_result_pending = false;
+	return true;
 }
 #endif
 
@@ -980,7 +1126,18 @@ int casioemu_core_gui_pointer(double x, double y, int button, int pressed) {
 	g_gui_mouse_x = static_cast<float>(x);
 	g_gui_mouse_y = static_cast<float>(y);
 	if (button >= 0 && button < static_cast<int>(g_gui_mouse_down.size())) {
-		g_gui_mouse_down[button] = pressed != 0;
+		if (pressed) {
+			g_gui_mouse_down[button] = true;
+			g_gui_mouse_release_pending[button] = false;
+			g_gui_mouse_hold_frames[button] = std::max(g_gui_mouse_hold_frames[button], 1);
+		}
+		else if (g_gui_mouse_hold_frames[button] > 0) {
+			g_gui_mouse_release_pending[button] = true;
+		}
+		else {
+			g_gui_mouse_down[button] = false;
+			g_gui_mouse_release_pending[button] = false;
+		}
 	}
 	return 0;
 }
@@ -1064,6 +1221,12 @@ void casioemu_core_gui_file_request_ack() {
 	g_gui_file_request_path.clear();
 	g_gui_file_request_name.clear();
 }
+
+void casioemu_core_gui_file_request_complete(const char* path, int result) {
+	g_gui_file_result_path = path ? path : "";
+	g_gui_file_result_code = result;
+	g_gui_file_result_pending = true;
+}
 #else
 int casioemu_core_gui_supported() {
 	return 0;
@@ -1136,6 +1299,8 @@ const char* casioemu_core_gui_file_request_name() {
 }
 
 void casioemu_core_gui_file_request_ack() {}
+
+void casioemu_core_gui_file_request_complete(const char*, int) {}
 #endif
 
 }

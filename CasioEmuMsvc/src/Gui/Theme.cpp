@@ -2,6 +2,8 @@
 #include "FileDialog.hpp"
 #ifndef CASIOEMU_CORE_WEB_GUI
 #include "SysDialog.h"
+#else
+#include "WebDebuggerGui.h"
 #endif
 #include "Ui.hpp"
 #include <Gui.h>
@@ -141,11 +143,19 @@ public:
 
 		UIHelpers::SectionHeader("Background & Injection");
 
-#ifndef CASIOEMU_CORE_WEB_GUI
 		if (ImGui::Button("UI.ChangeBg"_lc)) {
+#ifdef CASIOEMU_CORE_WEB_GUI
+			WebDebuggerQueueOpenFile("/persist/background.jpg", "background.jpg");
+#else
 			SystemDialogs::OpenFileDialog([](std::filesystem::path pth) {
 				std::filesystem::copy_file(pth, "background.jpg", std::filesystem::copy_options::overwrite_existing);
 			});
+			tm.RequestBgReload();
+#endif
+		}
+#ifdef CASIOEMU_CORE_WEB_GUI
+		int bgResult = 0;
+		if (WebDebuggerConsumeFileResult("/persist/background.jpg", &bgResult) && bgResult == 0) {
 			tm.RequestBgReload();
 		}
 #endif

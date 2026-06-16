@@ -132,7 +132,7 @@ private:
 	ThemeManager& operator=(const ThemeManager&) = delete;
 
 	ThemeSettings m_settings;
-	float m_fontScale = 0.0f;
+	float m_fontScale = 1.0f;
 	bool m_fontRebuildRequested = false;
 	bool m_bgReloadRequested = false;
 	mutable std::unordered_map<uint64_t, ImVec4> m_harmonizeCache;

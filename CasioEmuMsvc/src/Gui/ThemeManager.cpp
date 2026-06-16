@@ -6,6 +6,9 @@
 #endif // !TEST_BUILD
 #include "Gui.h"
 #include "Localization.h"
+#ifdef CASIOEMU_CORE_WEB_GUI
+#include "WebDebuggerGui.h"
+#endif
 #include <SDL.h>
 #include <algorithm>
 #include <cmath>
@@ -19,19 +22,42 @@
 using namespace material_color_utilities;
 #endif
 
+namespace {
+#ifdef CASIOEMU_CORE_WEB_GUI
+constexpr const char* kThemeSettingsPath = "/persist/theme.bin";
+#else
+constexpr const char* kThemeSettingsPath = "./theme.bin";
+#endif
+
+void ApplyDefaultLayoutMetrics(ImGuiStyle& style) {
+	style.WindowRounding = 8.0f;
+	style.FrameRounding = 6.0f;
+	style.TabRounding = 6.0f;
+	style.GrabRounding = 6.0f;
+	style.ScrollbarRounding = 6.0f;
+	style.ScrollbarSize = 12.0f;
+	style.WindowPadding = ImVec2(10.0f, 10.0f);
+	style.FramePadding = ImVec2(8.0f, 4.0f);
+	style.ItemSpacing = ImVec2(8.0f, 6.0f);
+}
+}
+
 // ============================================================================
 // 设置持久化
 // ============================================================================
 void ThemeManager::SaveSettings() {
-	std::ofstream file("./theme.bin", std::ios::binary);
+	std::ofstream file(kThemeSettingsPath, std::ios::binary);
 	if (file.is_open()) {
 		Binary::Write(file, m_settings);
 		file.close();
+#ifdef CASIOEMU_CORE_WEB_GUI
+		WebDebuggerRequestFsSync();
+#endif
 	}
 }
 
 void ThemeManager::LoadSettings() {
-	std::ifstream file("./theme.bin", std::ios::binary);
+	std::ifstream file(kThemeSettingsPath, std::ios::binary);
 	if (file.is_open()) {
 		Binary::Read(file, m_settings);
 		file.close();
@@ -213,6 +239,7 @@ void ThemeManager::SetLightMode() {
 		// First time: initialize with default light theme
 		ImGuiStyle base = ImGuiStyle();
 		ImGui::StyleColorsLight(&base);
+		ApplyDefaultLayoutMetrics(base);
 		m_settings.igs_light = base;
 	}
 
@@ -230,6 +257,7 @@ void ThemeManager::SetDarkMode() {
 		// First time: initialize with default dark theme
 		ImGuiStyle base = ImGuiStyle();
 		ImGui::StyleColorsDark(&base);
+		ApplyDefaultLayoutMetrics(base);
 		m_settings.igs_dark = base;
 	}
 
@@ -247,15 +275,7 @@ void ThemeManager::ApplyDefaultTheme() {
 	ImGuiStyle& style = ImGui::GetStyle();
 	
 	// Premium modern layout styles
-	style.WindowRounding = 8.0f;
-	style.FrameRounding = 6.0f;
-	style.TabRounding = 6.0f;
-	style.GrabRounding = 6.0f;
-	style.ScrollbarRounding = 6.0f;
-	style.ScrollbarSize = 12.0f;
-	style.WindowPadding = ImVec2(10.0f, 10.0f);
-	style.FramePadding = ImVec2(8.0f, 4.0f);
-	style.ItemSpacing = ImVec2(8.0f, 6.0f);
+	ApplyDefaultLayoutMetrics(style);
 	
 	// Premium Dark Blue Palette
 	style.Colors[ImGuiCol_WindowBg] = ImVec4(0.08f, 0.08f, 0.12f, 0.97f);
