@@ -208,7 +208,7 @@ void SetDebugbreak(void) {
 
 
 void CodeViewer::PrepareDisasm() {
-	std::thread t1([this]() {
+	auto build_disasm = [this]() {
 		if (m_emu->chipset.epscpu) {
 			std::vector<CodeElem> finals;
 
@@ -362,8 +362,13 @@ void CodeViewer::PrepareDisasm() {
 #endif
 			is_loaded = true;
 		}
-	});
+	};
+#ifdef CASIOEMU_CORE_WEB_GUI
+	build_disasm();
+#else
+	std::thread t1(build_disasm);
 	t1.detach();
+#endif
 }
 
 bool CodeViewer::TryTrigBP(uint8_t seg, uint16_t offset, bool bp_mode) {
@@ -975,10 +980,12 @@ void CodeViewer::RenderCore() {
 	if (UIHelpers::ButtonWithShortcut("CodeViewer.GotoPC"_lc, "Ctrl+G")) {
 		JumpTo(pc_cache);
 	}
+#ifndef CASIOEMU_CORE_WEB_GUI
 	ImGui::SameLine();
 	if (ImGui::Button("CodeViewer.Export"_lc)) {
 		ExportDisassembly();
 	}
+#endif
 	ImGui::SameLine();
 	ImGui::Checkbox("CodeViewer.ShowHelp"_lc, &help_activated);
 }

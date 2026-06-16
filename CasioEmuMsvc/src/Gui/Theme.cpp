@@ -1,13 +1,17 @@
 #include "Theme.h"
 #include "FileDialog.hpp"
+#ifndef CASIOEMU_CORE_WEB_GUI
 #include "SysDialog.h"
+#endif
 #include "Ui.hpp"
 #include <Gui.h>
 #include <Localization.h>
 #include <fstream>
 #include <string>
 #include <vibration.h>
+#ifndef CASIOEMU_CORE_WEB_GUI
 #include "Ext/DiscordRPC.h"
+#endif
 
 extern SDL_Surface* background;
 extern SDL_Texture* bg_txt;
@@ -137,12 +141,14 @@ public:
 
 		UIHelpers::SectionHeader("Background & Injection");
 
+#ifndef CASIOEMU_CORE_WEB_GUI
 		if (ImGui::Button("UI.ChangeBg"_lc)) {
 			SystemDialogs::OpenFileDialog([](std::filesystem::path pth) {
 				std::filesystem::copy_file(pth, "background.jpg", std::filesystem::copy_options::overwrite_existing);
 			});
 			tm.RequestBgReload();
 		}
+#endif
 
 		ImGui::Spacing();
 		ImGui::TextUnformatted("Ui.InjectionFilePath"_lc);
@@ -171,13 +177,14 @@ public:
 				tm.SetSeedColor(seedColor);
 			}
 			if (ImGui::Button("Theme.MD"_lc)) {
-#ifndef TEST_BUILD
+#if !defined(TEST_BUILD) && !defined(CASIOEMU_CORE_WEB_GUI)
 				seedColor = tm.ExtractDominantColor(bg_txt, renderer);
 #endif
 				tm.SetSeedColor(seedColor);
 			}
 		}
 		
+#ifndef CASIOEMU_CORE_WEB_GUI
 		UIHelpers::SectionHeader("Integrations");
 		if (ImGui::Checkbox("Theme.EnableDiscordRPC"_lc, &settings.enableDiscordRPC)) {
 			tm.SaveSettings();
@@ -187,6 +194,7 @@ public:
 				DiscordRPC::UpdatePresence("");
 			}
 		}
+#endif
 
 		UIHelpers::SectionHeader("Advanced Style Settings");
 

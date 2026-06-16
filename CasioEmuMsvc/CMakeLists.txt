@@ -123,6 +123,22 @@ if(CASIOEMU_WEB)
     if(CASIOEMU_CORE_WEB AND CASIOEMU_CORE_WEB_GUI)
         list(APPEND MAIN_SOURCES
             ${MAIN_SOURCES_IMGUI}
+            ${SOURCE_DIR}/Gui/5800FileSystem.cpp
+            ${SOURCE_DIR}/Gui/AddressWindow.cpp
+            ${SOURCE_DIR}/Gui/BitmapViewer.cpp
+            ${SOURCE_DIR}/Gui/CallAnalysis.cpp
+            ${SOURCE_DIR}/Gui/CodeViewer.cpp
+            ${SOURCE_DIR}/Gui/Editors.cpp
+            ${SOURCE_DIR}/Gui/FileDialog.cpp
+            ${SOURCE_DIR}/Gui/HwController.cpp
+            ${SOURCE_DIR}/Gui/Injector.cpp
+            ${SOURCE_DIR}/Gui/LabelViewer.cpp
+            ${SOURCE_DIR}/Gui/MemBreakPoint.cpp
+            ${SOURCE_DIR}/Gui/Theme.cpp
+            ${SOURCE_DIR}/Gui/ThemeManager.cpp
+            ${SOURCE_DIR}/Gui/Ui.cpp
+            ${SOURCE_DIR}/Gui/VariableWindow.cpp
+            ${SOURCE_DIR}/Gui/WatchWindow.cpp
             ${SOURCE_DIR}/Gui/Localization.cpp
         )
     endif()

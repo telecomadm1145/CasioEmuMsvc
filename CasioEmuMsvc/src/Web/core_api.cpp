@@ -27,31 +27,25 @@
 
 #ifdef CASIOEMU_CORE_WEB_GUI
 #include "Gui/Localization.h"
-#include "Gui/hex.hpp"
+#include "Gui/WebDebuggerGui.h"
 #include "Gui/imgui/imgui.h"
 #include "Gui/imgui/imgui_internal.h"
 #endif
 
 bool low_perf_ext = false;
-char* n_ram_buffer = nullptr;
-casioemu::MMU* me_mmu = nullptr;
-casioemu::Emulator* m_emu = nullptr;
-uint32_t pc_cache = 0;
+extern char* n_ram_buffer;
+extern casioemu::MMU* me_mmu;
+extern casioemu::Emulator* m_emu;
+extern uint32_t pc_cache;
 
-int screen_flashing_threshold = 20;
-float screen_fading_blending_coefficient = 0.0f;
-bool enable_screen_fading = false;
-float screen_flashing_brightness_coeff = 1.5f;
-bool screen_residual_enabled = true;
-float screen_residual_alpha_scale = 1.0f;
-int screen_buffer_select = 0;
-bool audio_enable = false;
-
-#ifdef CASIOEMU_CORE_WEB_GUI
-ImVec4 ThemeManager::Harmonize(const ImVec4& source, float) const {
-	return source;
-}
-#endif
+extern int screen_flashing_threshold;
+extern float screen_fading_blending_coefficient;
+extern bool enable_screen_fading;
+extern float screen_flashing_brightness_coeff;
+extern bool screen_residual_enabled;
+extern float screen_residual_alpha_scale;
+extern int screen_buffer_select;
+extern bool audio_enable;
 
 namespace {
 	constexpr const char* kCoreDir = "/tmp/casioemu_core";
@@ -80,17 +74,12 @@ namespace {
 	std::vector<uint8_t> g_gui_frame_rgba;
 #ifdef CASIOEMU_CORE_WEB_GUI
 	bool g_gui_imgui_ready = false;
-	bool g_gui_show_demo = false;
 	float g_gui_mouse_x = -FLT_MAX;
 	float g_gui_mouse_y = -FLT_MAX;
 	std::array<bool, 5> g_gui_mouse_down{};
 	float g_gui_wheel_x = 0.0f;
 	float g_gui_wheel_y = 0.0f;
 	std::string g_gui_locale = "en_US";
-	MemoryEditor g_gui_rom_editor;
-	MemoryEditor g_gui_ram_editor;
-	MemoryEditor g_gui_all_editor;
-	std::vector<MemoryEditor::MarkedSpan> g_gui_ram_spans;
 #endif
 
 	void EnsureSdl() {
@@ -196,7 +185,19 @@ namespace {
 		g_gui_mouse_down.fill(false);
 		g_gui_wheel_x = 0.0f;
 		g_gui_wheel_y = 0.0f;
-		g_gui_ram_spans.clear();
+	}
+
+	void GuiDetachCanvas() {
+		g_gui_attached = false;
+		g_gui_width = 0;
+		g_gui_height = 0;
+		g_gui_frame_counter = 0;
+		g_gui_frame_rgba.clear();
+		g_gui_mouse_x = -FLT_MAX;
+		g_gui_mouse_y = -FLT_MAX;
+		g_gui_mouse_down.fill(false);
+		g_gui_wheel_x = 0.0f;
+		g_gui_wheel_y = 0.0f;
 	}
 #else
 	void GuiResetState() {
@@ -205,6 +206,10 @@ namespace {
 		g_gui_height = 0;
 		g_gui_frame_counter = 0;
 		g_gui_frame_rgba.clear();
+	}
+
+	void GuiDetachCanvas() {
+		GuiResetState();
 	}
 #endif
 
@@ -338,22 +343,6 @@ namespace {
 	}
 
 #ifdef CASIOEMU_CORE_WEB_GUI
-	ImU8 GuiReadMmu(const ImU8* data, size_t off) {
-		return me_mmu ? me_mmu->ReadData(static_cast<uint32_t>(reinterpret_cast<size_t>(data) + off), 0) : 0;
-	}
-
-	void GuiWriteMmu(ImU8* data, size_t off, ImU8 value) {
-		if (me_mmu) me_mmu->WriteData(static_cast<uint32_t>(reinterpret_cast<size_t>(data) + off), value, 0);
-	}
-
-	void GuiSetupEditor(MemoryEditor& editor, bool read_only, bool mmu) {
-		editor.ReadOnly = read_only;
-		editor.OptShowDataPreview = true;
-		editor.OptGreyOutZeroes = true;
-		editor.ReadFn = mmu ? GuiReadMmu : nullptr;
-		editor.WriteFn = mmu && !read_only ? GuiWriteMmu : nullptr;
-	}
-
 	void GuiLoadLocale() {
 		try {
 			chdir("/");
@@ -429,6 +418,7 @@ namespace {
 		ImGui::CreateContext();
 		ImGuiIO& io = ImGui::GetIO();
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 		io.IniFilename = nullptr;
 		io.LogFilename = nullptr;
 		GuiLoadFonts(io);
@@ -438,17 +428,15 @@ namespace {
 		io.Fonts->GetTexDataAsRGBA32(&pixels, &font_width, &font_height);
 		io.Fonts->SetTexID(reinterpret_cast<ImTextureID>(1));
 		GuiApplyStyle();
-		GuiSetupEditor(g_gui_rom_editor, true, false);
-		GuiSetupEditor(g_gui_ram_editor, false, true);
-		GuiSetupEditor(g_gui_all_editor, false, true);
-		g_gui_ram_spans = casioemu::GetCommonMemLabels(g_emulator->hardware_id);
 		GuiLoadLocale();
+		InitWebDebuggerGuiWindows();
 		g_gui_imgui_ready = true;
 		return true;
 	}
 
 	void GuiShutdown() {
 		if (g_gui_imgui_ready) {
+			CleanupWebDebuggerGuiWindows();
 			ImGui::DestroyContext();
 			g_gui_imgui_ready = false;
 		}
@@ -467,53 +455,6 @@ namespace {
 		g_gui_wheel_x = 0.0f;
 		g_gui_wheel_y = 0.0f;
 		ImGui::NewFrame();
-	}
-
-	void GuiRenderMainWindow() {
-		const ImGuiViewport* viewport = ImGui::GetMainViewport();
-		std::string title = std::string("CoreGui.Title"_lc) + "###CasioEmuMsvcTools";
-		ImGui::SetNextWindowPos(viewport->Pos, ImGuiCond_Always);
-		ImGui::SetNextWindowSize(viewport->Size, ImGuiCond_Always);
-		ImGuiWindowFlags flags =
-			ImGuiWindowFlags_NoMove |
-			ImGuiWindowFlags_NoResize |
-			ImGuiWindowFlags_NoCollapse |
-			ImGuiWindowFlags_NoBringToFrontOnFocus;
-		if (ImGui::Begin(title.c_str(), nullptr, flags)) {
-			ImGui::Text("CoreGui.ModelFmt"_lc, g_emulator->ModelDefinition.model_name.c_str());
-			ImGui::SameLine();
-			ImGui::Text("CoreGui.PCFmt"_lc, static_cast<unsigned>((g_emulator->chipset.cpu.reg_csr << 16) | g_emulator->chipset.cpu.reg_pc));
-			ImGui::SameLine();
-			ImGui::Text("%s", g_emulator->GetPaused() ? "StatusBar.Paused"_lc : "StatusBar.Running"_lc);
-			ImGui::Separator();
-			if (ImGui::BeginTabBar("##core_tools_tabs")) {
-				if (ImGui::BeginTabItem("CoreGui.TabRAM"_lc)) {
-					const auto base = casioemu::GetRamBaseAddr(g_emulator->hardware_id);
-					const auto size = casioemu::GetRamSize(g_emulator->hardware_id);
-					g_gui_ram_editor.DrawContents(reinterpret_cast<void*>(static_cast<size_t>(base)), size, base, g_gui_ram_spans);
-					ImGui::EndTabItem();
-				}
-				if (ImGui::BeginTabItem("CoreGui.TabROM"_lc)) {
-					g_gui_rom_editor.DrawContents(g_emulator->chipset.rom_data.data(), g_emulator->chipset.rom_data.size(), 0);
-					ImGui::EndTabItem();
-				}
-				if (ImGui::BeginTabItem("CoreGui.TabAll"_lc)) {
-					g_gui_all_editor.DrawContents(nullptr, 0xfffff, 0, g_gui_ram_spans);
-					ImGui::EndTabItem();
-				}
-				if (ImGui::BeginTabItem("CoreGui.TabState"_lc)) {
-					ImGui::Text("CoreGui.CpuTimeFmt"_lc, g_cpu_time);
-					ImGui::Text("CoreGui.RamBaseFmt"_lc, casioemu::GetRamBaseAddr(g_emulator->hardware_id));
-					ImGui::Text("CoreGui.RamSizeFmt"_lc, casioemu::GetRamSize(g_emulator->hardware_id));
-					ImGui::Text("CoreGui.RomSizeFmt"_lc, g_emulator->chipset.rom_data.size());
-					ImGui::Checkbox("CoreGui.ShowDemo"_lc, &g_gui_show_demo);
-					ImGui::EndTabItem();
-				}
-				ImGui::EndTabBar();
-			}
-		}
-		ImGui::End();
-		if (g_gui_show_demo) ImGui::ShowDemoWindow(&g_gui_show_demo);
 	}
 
 	void GuiClearFrame() {
@@ -625,7 +566,7 @@ namespace {
 		if (!GuiEnsureImGui()) return 3;
 		++g_gui_frame_counter;
 		GuiBeginFrame();
-		GuiRenderMainWindow();
+		RenderWebDebuggerGuiWindows();
 		ImGui::Render();
 		GuiRenderDrawData(ImGui::GetDrawData());
 		return 0;
@@ -935,7 +876,7 @@ int casioemu_core_gui_attach(int width, int height) {
 }
 
 void casioemu_core_gui_detach() {
-	GuiResetState();
+	GuiDetachCanvas();
 }
 
 int casioemu_core_gui_is_attached() {
@@ -943,7 +884,17 @@ int casioemu_core_gui_is_attached() {
 }
 
 int casioemu_core_gui_frame() {
-	return GuiFrame();
+	try {
+		return GuiFrame();
+	}
+	catch (const std::exception& ex) {
+		printf("[CasioEmuCore][GUI][Error] %s\n", ex.what());
+		return 4;
+	}
+	catch (...) {
+		printf("[CasioEmuCore][GUI][Error] Unknown GUI render exception\n");
+		return 4;
+	}
 }
 
 uint32_t casioemu_core_gui_frame_ptr() {
