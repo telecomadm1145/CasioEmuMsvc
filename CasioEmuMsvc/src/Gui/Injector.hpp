@@ -46,6 +46,7 @@ private:
 	double feedback_time = 0.0;
 	std::string feedback_msg;
 	bool is_feedback_error = false;
+	bool initialLoadRequested = false;
 	void SetFeedback(const std::string& msg, bool is_error = false) {
 		feedback_msg = msg;
 		feedback_time = ImGui::GetTime();

@@ -154,6 +154,11 @@ static void RenderSyntaxHighlight(const char* text, bool is_label) {
 }
 
 CodeElem CodeViewer::LookUp(uint32_t offset, int* idx) {
+	if (codes.empty()) {
+		if (idx)
+			*idx = 0;
+		return {};
+	}
 	auto it = std::find_if(
 		codes.begin(), codes.end(), [&](const CodeElem& a) {
 			return a.offset == offset && !a.is_label;
@@ -166,6 +171,12 @@ CodeElem CodeViewer::LookUp(uint32_t offset, int* idx) {
 	return {.offset = it->offset};
 }
 CodeViewer* cv_a;
+
+CodeViewer::~CodeViewer() {
+	if (disasm_thread.joinable()) {
+		disasm_thread.join();
+	}
+}
 
 void CodeViewer::SetupHooks() {
 	SetupHook(on_instruction,
@@ -212,9 +223,13 @@ void SetDebugbreak(void) {
 
 
 void CodeViewer::PrepareDisasm() {
+	disasm_requested = true;
+	is_loaded.store(false, std::memory_order_release);
 	auto build_disasm = [this]() {
+		std::vector<CodeElem> new_codes;
 		if (m_emu->chipset.epscpu) {
 			std::vector<CodeElem> finals;
+			finals.reserve(0x10000);
 
 #define READ_WORD_BE(ptr)         \
 	((uint32_t)(ptr)[0] << 16 |   \
@@ -253,15 +268,16 @@ void CodeViewer::PrepareDisasm() {
 				if (l)
 					i++;
 			}
-			codes = std::move(finals);
+			new_codes = std::move(finals);
 			printf("[UI][Info] Finished!\n");
-			max_row = codes.size();
-			is_loaded = true;
+			max_row = static_cast<int>(new_codes.size());
+			codes = std::move(new_codes);
+			is_loaded.store(true, std::memory_order_release);
 		}
 		else {
 #ifndef _DEBUG
 			printf("[UI][Info] Start to disasm ...\n");
-			auto dat = std::unique_ptr<uint8_t>(new uint8_t[0x80100]);
+			auto dat = std::unique_ptr<uint8_t[]>(new uint8_t[0x80100]);
 			std::memset(dat.get(), 0xff, 0x80100);
 			std::memcpy(dat.get(), m_emu->chipset.rom_data.data(), std::min((size_t)0x5e000, m_emu->chipset.rom_data.size()));
 			if (m_emu->chipset.rom_data.size() >= 0x60000) // TODO: fix this hack!!!
@@ -271,6 +287,8 @@ void CodeViewer::PrepareDisasm() {
 			auto end = rom + 0x80000;
 			printf("[UI][Info] Pass1: decoding opcodes...\n");
 			std::stringstream ss{};
+			p_labels.clear();
+			new_codes.reserve((end - rom) / 2);
 			while (rom < end) {
 				auto pc = rom - beg;
 				auto before = rom;
@@ -299,13 +317,13 @@ void CodeViewer::PrepareDisasm() {
 						ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0';
 					}
 				}
-				codes.push_back(ce);
+				new_codes.push_back(ce);
 				ss.str("");
 			}
 			printf("[UI][Info] Pass2: handling xrefs...\n");
 			std::optional<int> last_label{};
 			std::unordered_set<int> quick_find{};
-			for (auto& ce : codes) {
+			for (auto& ce : new_codes) {
 				quick_find.emplace(ce.offset);
 			}
 			std::map<int, std::string> labels;
@@ -336,8 +354,8 @@ void CodeViewer::PrepareDisasm() {
 			}
 			printf("[UI][Info] Pass3: applying xrefs...\n");
 			std::vector<CodeElem> finals;
-			finals.reserve(codes.size() + labels.size());
-			for (auto& ce : codes) {
+			finals.reserve(new_codes.size() + labels.size());
+			for (auto& ce : new_codes) {
 				auto iter = labels.find(ce.offset);
 				if (iter != labels.end()) {
 					CodeElem ce2{};
@@ -360,19 +378,18 @@ void CodeViewer::PrepareDisasm() {
 				}
 				finals.push_back(ce);
 			}
-			codes = std::move(finals);
+			new_codes = std::move(finals);
 			printf("[UI][Info] Finished!\n");
-			max_row = codes.size();
+			max_row = static_cast<int>(new_codes.size());
+			codes = std::move(new_codes);
 #endif
-			is_loaded = true;
+			is_loaded.store(true, std::memory_order_release);
 		}
 	};
-#ifdef CASIOEMU_CORE_WEB_GUI
-	build_disasm();
-#else
-	std::thread t1(build_disasm);
-	t1.detach();
-#endif
+	if (disasm_thread.joinable()) {
+		disasm_thread.join();
+	}
+	disasm_thread = std::thread(build_disasm);
 }
 
 bool CodeViewer::TryTrigBP(uint8_t seg, uint16_t offset, bool bp_mode) {
@@ -495,6 +512,11 @@ void CodeViewer::DrawMonitor() {
 }
 
 void CodeViewer::JumpTo(uint32_t offset) {
+#ifdef CASIOEMU_CORE_WEB_GUI
+	if (!disasm_requested) {
+		PrepareDisasm();
+	}
+#endif
 	int idx = 0;
 	// printf("jumpto:seg%d\n",seg);
 	LookUp(offset, &idx);
@@ -814,9 +836,14 @@ static std::string GetInstructionHelp(const std::string& mnem, const std::string
 }
 static int s(bool x) { return x ? 1 : 0; }
 void CodeViewer::RenderCore() {
+#ifdef CASIOEMU_CORE_WEB_GUI
+	if (!disasm_requested) {
+		PrepareDisasm();
+	}
+#endif
 	int h = ImGui::GetTextLineHeight() + 4;
 	int w = ImGui::CalcTextSize("F").x;
-	if (!is_loaded) {
+	if (!is_loaded.load(std::memory_order_acquire)) {
 		ImGui::SetCursorPos(ImVec2(w * 2, h * 5));
 		const char* spinner = "|/-\\";
 		int idx = (int)(ImGui::GetTime() / 0.15f) % 4;

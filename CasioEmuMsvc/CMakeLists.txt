@@ -239,13 +239,20 @@ if(CASIOEMU_WEB)
         -sUSE_SDL_IMAGE=2
     )
     if(CASIOEMU_CORE_WEB)
+        target_compile_options(${TARGET_NAME} PRIVATE
+            -pthread
+        )
         target_compile_definitions(${TARGET_NAME} PRIVATE CASIOEMU_CORE_WEB CASIOEMU_DISABLE_RAM_IMAGE CASIOEMU_ENABLE_KEYBOARD_KI_WRITE)
         if(CASIOEMU_CORE_WEB_GUI)
             target_compile_definitions(${TARGET_NAME} PRIVATE CASIOEMU_CORE_WEB_GUI)
         endif()
         target_link_options(${TARGET_NAME} PRIVATE
+            -pthread
             -fexceptions
             -sDISABLE_EXCEPTION_CATCHING=0
+            -sUSE_PTHREADS=1
+            -sPTHREAD_POOL_SIZE=4
+            -sDEFAULT_PTHREAD_STACK_SIZE=8388608
             -sUSE_SDL=2
             -sUSE_SDL_IMAGE=2
             "SHELL:-sSDL2_IMAGE_FORMATS=[\"png\"]"

@@ -26,10 +26,7 @@ Injector::Injector() : UIWindow("Rop"), needsReload(false), isReloading(false), 
 	injectors.push_back(InjectorData());
 	injectionFilePath = ThemeManager::Instance().Settings().injectionFilePath;
 	InitCustomInjectionsFile();
-#ifdef CASIOEMU_CORE_WEB_GUI
-	needsReload = true;
-	BackgroundReload();
-#else
+#ifndef CASIOEMU_CORE_WEB_GUI
 	AsyncLoadCustomInjections();
 #endif
 }
@@ -54,9 +51,6 @@ std::string Injector::GetFileModifiedTime(const std::string& filepath) {
 }
 
 void Injector::AsyncLoadCustomInjections() {
-#ifdef CASIOEMU_CORE_WEB_GUI
-	BackgroundReload();
-#else
 	try {
 		if (isShuttingDown.load()) {
 			return;
@@ -80,7 +74,6 @@ void Injector::AsyncLoadCustomInjections() {
 	catch (...) {
 		// Thread creation error handling
 	}
-#endif
 }
 
 void Injector::TrimString(std::string& str) {
@@ -525,11 +518,7 @@ void Injector::RenderCustomInjectTab(bool& show_info, std::string& info_msg) {
 		std::string currentModTime = GetFileModifiedTime(injectionFilePath);
 		if (currentModTime != lastModifiedTime) {
 			needsReload = true;
-#ifdef CASIOEMU_CORE_WEB_GUI
-			BackgroundReload();
-#else
 			AsyncLoadCustomInjections();
-#endif
 		}
 	}
 }
@@ -608,6 +597,10 @@ void Injector::RenderCore() {
 	static MemoryEditor editor;
 	static bool show_info = false;
 	static std::string info_msg;
+	if (!initialLoadRequested) {
+		initialLoadRequested = true;
+		AsyncLoadCustomInjections();
+	}
 	if (!m_emu || !me_mmu || !n_ram_buffer) {
 		ImGui::TextDisabled("Injector is unavailable until the emulator RAM is ready.");
 		return;
@@ -622,11 +615,7 @@ void Injector::RenderCore() {
 		InitCustomInjectionsFile();
 		needsReload = true;
 		if (!isReloading.load()) {
-#ifdef CASIOEMU_CORE_WEB_GUI
-			BackgroundReload();
-#else
 			AsyncLoadCustomInjections();
-#endif
 		}
 	}
 
