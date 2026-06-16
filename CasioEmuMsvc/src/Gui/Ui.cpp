@@ -287,11 +287,15 @@ void gui_loop() {
 static CodeViewer* CreateDebuggerGuiWindows() {
 	while (!me_mmu)
 		std::this_thread::sleep_for(std::chrono::microseconds(1));
+#ifdef CASIOEMU_CORE_WEB_GUI
+	auto label_file = std::filesystem::path(WebDebuggerLabelsPath());
+#else
 	auto label_file = m_emu->GetModelFilePath("labels.txt");
+#endif
 	if (std::filesystem::exists(label_file))
 		g_labels = parseFile(label_file);
 	else
-		std::cout << "[Warning] labels.txt doesn't exist. You can consider create one for better debugging experiences. Format: address(0x1234),func name(can be quoted)\n";
+		std::cout << "[Warning] " << label_file.string() << " doesn't exist. You can consider create one for better debugging experiences. Format: address(0x1234),func name(can be quoted)\n";
 
 	if (m_emu->hardware_id == casioemu::HW_FX_5800P) {
 		windows.push_back(CreateFx5800FileSystem());

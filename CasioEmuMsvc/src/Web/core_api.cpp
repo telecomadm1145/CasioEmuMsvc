@@ -73,6 +73,8 @@ namespace {
 	uint32_t g_gui_frame_counter = 0;
 	std::vector<uint8_t> g_gui_frame_rgba;
 #ifdef CASIOEMU_CORE_WEB_GUI
+	std::string g_model_id = "unknown";
+	std::string g_gui_labels_path = "/persist/unknown/labels.txt";
 	bool g_gui_imgui_ready = false;
 	float g_gui_mouse_x = -FLT_MAX;
 	float g_gui_mouse_y = -FLT_MAX;
@@ -186,6 +188,26 @@ namespace {
 		g_gui_wheel_x = 0.0f;
 		g_gui_wheel_y = 0.0f;
 	}
+
+#ifdef CASIOEMU_CORE_WEB_GUI
+	std::string SanitizeModelId(const char* model_id) {
+		std::string sanitized;
+		if (model_id) {
+			for (const char* p = model_id; *p; ++p) {
+				const unsigned char ch = static_cast<unsigned char>(*p);
+				if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-') {
+					sanitized.push_back(static_cast<char>(ch));
+				}
+			}
+		}
+		return sanitized.empty() ? "unknown" : sanitized;
+	}
+
+	void SetCoreModelId(const char* model_id) {
+		g_model_id = SanitizeModelId(model_id);
+		g_gui_labels_path = std::string("/persist/") + g_model_id + "/labels.txt";
+	}
+#endif
 
 	void GuiDetachCanvas() {
 		g_gui_attached = false;
@@ -574,7 +596,22 @@ namespace {
 #endif
 }
 
+#ifdef CASIOEMU_CORE_WEB_GUI
+const char* WebDebuggerLabelsPath() {
+	return g_gui_labels_path.c_str();
+}
+#endif
+
 extern "C" {
+
+int casioemu_core_set_model_id(const char* model_id) {
+#ifdef CASIOEMU_CORE_WEB_GUI
+	SetCoreModelId(model_id);
+	return 0;
+#else
+	return 99;
+#endif
+}
 
 int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int model_type, int legacy_ko, int classwiz_graph) {
 	if (!rom || len <= 0) return -1;
@@ -586,6 +623,7 @@ int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int m
 		if (!WriteRomFile(rom, len)) return -2;
 		auto model = MakeWebModel(true, false, pd_value, model_type, legacy_ko != 0, classwiz_graph != 0);
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
+		g_emulator->model_path = kCoreDir;
 		m_emu = g_emulator.get();
 		low_perf_ext = true;
 		RefreshScreenProvider();
@@ -612,6 +650,7 @@ int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, i
 		if (!WriteRomFile(normalized_rom.data(), static_cast<int>(normalized_rom.size()))) return -2;
 		auto model = MakeWebModel(false, is_sample_rom != 0, pd_value, model_type, legacy_ko != 0, classwiz_graph != 0);
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
+		g_emulator->model_path = kCoreDir;
 		m_emu = g_emulator.get();
 		low_perf_ext = true;
 		RefreshScreenProvider();
