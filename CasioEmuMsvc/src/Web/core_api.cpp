@@ -82,6 +82,9 @@ namespace {
 	float g_gui_wheel_x = 0.0f;
 	float g_gui_wheel_y = 0.0f;
 	std::string g_gui_locale = "en_US";
+	std::string g_gui_file_request_kind;
+	std::string g_gui_file_request_path;
+	std::string g_gui_file_request_name;
 #endif
 
 	void EnsureSdl() {
@@ -220,6 +223,9 @@ namespace {
 		g_gui_mouse_down.fill(false);
 		g_gui_wheel_x = 0.0f;
 		g_gui_wheel_y = 0.0f;
+		g_gui_file_request_kind.clear();
+		g_gui_file_request_path.clear();
+		g_gui_file_request_name.clear();
 	}
 #else
 	void GuiResetState() {
@@ -599,6 +605,16 @@ namespace {
 #ifdef CASIOEMU_CORE_WEB_GUI
 const char* WebDebuggerLabelsPath() {
 	return g_gui_labels_path.c_str();
+}
+
+const char* WebDebuggerExportDir() {
+	return "/tmp/exports";
+}
+
+void WebDebuggerQueueDownload(const char* path, const char* name) {
+	g_gui_file_request_kind = "download";
+	g_gui_file_request_path = path ? path : "";
+	g_gui_file_request_name = name ? name : "";
 }
 #endif
 
@@ -1026,6 +1042,28 @@ int casioemu_core_gui_text(unsigned int codepoint) {
 	if (codepoint > 0) ImGui::GetIO().AddInputCharacter(codepoint);
 	return 0;
 }
+
+int casioemu_core_gui_file_request_pending() {
+	return g_gui_file_request_kind.empty() ? 0 : 1;
+}
+
+const char* casioemu_core_gui_file_request_kind() {
+	return g_gui_file_request_kind.c_str();
+}
+
+const char* casioemu_core_gui_file_request_path() {
+	return g_gui_file_request_path.c_str();
+}
+
+const char* casioemu_core_gui_file_request_name() {
+	return g_gui_file_request_name.c_str();
+}
+
+void casioemu_core_gui_file_request_ack() {
+	g_gui_file_request_kind.clear();
+	g_gui_file_request_path.clear();
+	g_gui_file_request_name.clear();
+}
 #else
 int casioemu_core_gui_supported() {
 	return 0;
@@ -1080,6 +1118,24 @@ int casioemu_core_gui_key(int, int, int, int, int, int) {
 int casioemu_core_gui_text(unsigned int) {
 	return 99;
 }
+
+int casioemu_core_gui_file_request_pending() {
+	return 0;
+}
+
+const char* casioemu_core_gui_file_request_kind() {
+	return "";
+}
+
+const char* casioemu_core_gui_file_request_path() {
+	return "";
+}
+
+const char* casioemu_core_gui_file_request_name() {
+	return "";
+}
+
+void casioemu_core_gui_file_request_ack() {}
 #endif
 
 }

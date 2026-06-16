@@ -9,6 +9,9 @@
 #include "SysDialog.h"
 #include "U8Disas.h"
 #include "ePSCpu.h"
+#ifdef CASIOEMU_CORE_WEB_GUI
+#include "WebDebuggerGui.h"
+#endif
 #include "imgui/imgui.h"
 #include <Localization.h>
 #include <algorithm>
@@ -17,6 +20,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ePSDisas.h>
+#include <filesystem>
 #include <fstream>
 #include <ios>
 #include <iostream>
@@ -572,6 +576,23 @@ void CodeViewer::Search(bool next) {
 }
 
 void CodeViewer::ExportDisassembly() {
+#ifdef CASIOEMU_CORE_WEB_GUI
+	std::filesystem::create_directories(WebDebuggerExportDir());
+	const auto path = std::filesystem::path(WebDebuggerExportDir()) / "asm.txt";
+	std::ofstream out(path);
+	if (out.is_open()) {
+		for (const auto& ce : codes) {
+			if (ce.is_label) {
+				out << ce.srcbuf << "\n";
+			}
+			else {
+				out << "  " << ce.srcbuf << "\n";
+			}
+		}
+		out.close();
+		WebDebuggerQueueDownload(path.string().c_str(), "asm.txt");
+	}
+#else
 	SystemDialogs::SaveFileDialog("asm.txt", [&](std::filesystem::path pth) {
 		std::ofstream out(pth);
 		if (out.is_open()) {
@@ -586,6 +607,7 @@ void CodeViewer::ExportDisassembly() {
 			out.close();
 		}
 	});
+#endif
 }
 static void ExtractMnemAndOps(const char* src, std::string& mnem, std::string& ops) {
 	std::string_view sv(src);
@@ -980,12 +1002,10 @@ void CodeViewer::RenderCore() {
 	if (UIHelpers::ButtonWithShortcut("CodeViewer.GotoPC"_lc, "Ctrl+G")) {
 		JumpTo(pc_cache);
 	}
-#ifndef CASIOEMU_CORE_WEB_GUI
 	ImGui::SameLine();
 	if (ImGui::Button("CodeViewer.Export"_lc)) {
 		ExportDisassembly();
 	}
-#endif
 	ImGui::SameLine();
 	ImGui::Checkbox("CodeViewer.ShowHelp"_lc, &help_activated);
 }
