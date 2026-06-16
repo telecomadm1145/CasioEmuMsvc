@@ -1,12 +1,17 @@
 #include "SnapshotWindow.h"
 #include "Snapshot.h"
 #include "Ui.hpp"
+#ifdef CASIOEMU_CORE_WEB_GUI
+#include "WebDebuggerGui.h"
+#else
 #include "Ext/SysDialog.h"
+#endif
 #include "imgui/imgui.h"
 #include <SDL.h>
 #include <SDL_image.h>
 #include <chrono>
 #include <ctime>
+#include <filesystem>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -28,6 +33,20 @@ static std::string FormatTimestamp(int64_t ts) {
     strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_info);
     return buf;
 }
+
+#ifdef CASIOEMU_CORE_WEB_GUI
+static std::filesystem::path WebSnapshotExportPath(const char* fileName) {
+    const auto dir = std::filesystem::path(WebDebuggerExportDir());
+    std::filesystem::create_directories(dir);
+    return dir / fileName;
+}
+
+static std::filesystem::path WebSnapshotImportPath() {
+    const auto dir = std::filesystem::path("/tmp/imports");
+    std::filesystem::create_directories(dir);
+    return dir / "snapshot.snapshot";
+}
+#endif
 
 // ============================================================
 // SnapshotWindow
@@ -72,6 +91,25 @@ void SnapshotWindow::TryLoadPreview(uint32_t id) {
     for (const auto& n : m_Manager.Nodes)
         if (n.Id == id) { LoadPreview(n); return; }
     m_Preview.Free();
+}
+
+void SnapshotWindow::CheckWebImportResult() {
+#ifdef CASIOEMU_CORE_WEB_GUI
+    if (m_WebImportPath.empty()) return;
+    int result = 0;
+    if (!WebDebuggerConsumeFileResult(m_WebImportPath.string().c_str(), &result)) return;
+    const auto importPath = m_WebImportPath;
+    m_WebImportPath.clear();
+    if (result != 0) {
+        if (result != 1) ShowError("Snapshot import was not completed.");
+        return;
+    }
+    try {
+        m_Manager.ImportFromFile(importPath);
+    } catch (const std::exception& e) {
+        ShowError(e.what());
+    }
+#endif
 }
 
 // ============================================================
@@ -131,10 +169,18 @@ void SnapshotWindow::RenderToolbar() {
     if (ImGui::Button("SnapshotWindow.ExportNode"_lc)) {
         if (m_SelectedId != 0) {
             uint32_t exportId = m_SelectedId;
+#ifdef CASIOEMU_CORE_WEB_GUI
+            try {
+                auto path = WebSnapshotExportPath("snapshot.snapshot");
+                m_Manager.ExportNode(path, exportId);
+                WebDebuggerQueueDownload(path.string().c_str(), "snapshot.snapshot");
+            } catch (const std::exception& e) { ShowError(e.what()); }
+#else
             SystemDialogs::SaveFileDialog("snapshot.snapshot", [this, exportId](std::filesystem::path path) {
                 try { m_Manager.ExportNode(path, exportId); }
                 catch (const std::exception& e) { ShowError(e.what()); }
             });
+#endif
         }
     }
     if (!hasSelected) ImGui::EndDisabled();
@@ -145,10 +191,18 @@ void SnapshotWindow::RenderToolbar() {
     if (ImGui::Button("SnapshotWindow.ExportSubtree"_lc)) {
         if (m_SelectedId != 0) {
             uint32_t exportId = m_SelectedId;
+#ifdef CASIOEMU_CORE_WEB_GUI
+            try {
+                auto path = WebSnapshotExportPath("snapshot.snapshot");
+                m_Manager.ExportSubtree(path, exportId);
+                WebDebuggerQueueDownload(path.string().c_str(), "snapshot.snapshot");
+            } catch (const std::exception& e) { ShowError(e.what()); }
+#else
             SystemDialogs::SaveFileDialog("snapshot.snapshot", [this, exportId](std::filesystem::path path) {
                 try { m_Manager.ExportSubtree(path, exportId); }
                 catch (const std::exception& e) { ShowError(e.what()); }
             });
+#endif
         }
     }
     if (!hasSelected) ImGui::EndDisabled();
@@ -156,19 +210,32 @@ void SnapshotWindow::RenderToolbar() {
 
     // --- Export all ---
     if (ImGui::Button("SnapshotWindow.ExportAll"_lc)) {
+#ifdef CASIOEMU_CORE_WEB_GUI
+        try {
+            auto path = WebSnapshotExportPath("snapshots.snapshot");
+            m_Manager.ExportAll(path);
+            WebDebuggerQueueDownload(path.string().c_str(), "snapshots.snapshot");
+        } catch (const std::exception& e) { ShowError(e.what()); }
+#else
         SystemDialogs::SaveFileDialog("snapshots.snapshot", [this](std::filesystem::path path) {
             try { m_Manager.ExportAll(path); }
             catch (const std::exception& e) { ShowError(e.what()); }
         });
+#endif
     }
     ImGui::SameLine();
 
     // --- Import ---
     if (ImGui::Button("SnapshotWindow.Import"_lc)) {
+#ifdef CASIOEMU_CORE_WEB_GUI
+        m_WebImportPath = WebSnapshotImportPath();
+        WebDebuggerQueueOpenFile(m_WebImportPath.string().c_str(), "snapshot.snapshot");
+#else
         SystemDialogs::OpenFileDialog([this](std::filesystem::path path) {
             try { m_Manager.ImportFromFile(path); }
             catch (const std::exception& e) { ShowError(e.what()); }
         });
+#endif
     }
 
     ImGui::Separator();
@@ -314,6 +381,7 @@ void SnapshotWindow::RenderDetails() {
 // ============================================================
 
 void SnapshotWindow::RenderCore() {
+    CheckWebImportResult();
     RenderToolbar();
 
     // Error popup

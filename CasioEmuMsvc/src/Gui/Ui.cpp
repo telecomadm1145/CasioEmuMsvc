@@ -314,15 +314,15 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 			 new WatchWindow(),
 			 CreateCallAnalysisWindow(),
 			 code_viewer = new CodeViewer(),
-#ifndef CASIOEMU_CORE_WEB_GUI
 			 injector = new Injector(),
-#endif
 			 membp = new Breakpoints(),
 			 CreateAddressWindow(),
 			 // MakeAssemblerUI(),
 #if !defined(TEST_BUILD) && !defined(CASIOEMU_CORE_WEB_GUI)
 			 CreateRopCompilerWindow(),
 			 new PluginLogWindow(),
+#endif
+#if !defined(TEST_BUILD)
 			 CreateSnapshotWindow(),
 #endif
 			 MakeThemeWindow(),

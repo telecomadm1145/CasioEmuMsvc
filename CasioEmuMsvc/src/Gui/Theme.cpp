@@ -163,6 +163,7 @@ public:
 		ImGui::Spacing();
 		ImGui::TextUnformatted("Ui.InjectionFilePath"_lc);
 		ImGui::InputText("##injection_file_path", tempInjectionFilePath, sizeof(tempInjectionFilePath));
+#ifndef CASIOEMU_CORE_WEB_GUI
 		ImGui::SameLine();
 		if (ImGui::Button("Ui.Browse"_lc)) {
 			showFileDialog = true;
@@ -174,6 +175,7 @@ public:
 				showFileDialog = false;
 			}
 		}
+#endif
 
 		UIHelpers::SectionHeader("Auto-Tint (MD3 Monet)");
 		

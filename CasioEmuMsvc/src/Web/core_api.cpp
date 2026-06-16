@@ -92,6 +92,7 @@ namespace {
 	std::string g_gui_file_result_path;
 	int g_gui_file_result_code = 0;
 	bool g_gui_file_result_pending = false;
+	std::string g_gui_clipboard_text;
 	std::vector<uint8_t> g_gui_background_rgba;
 	int g_gui_background_width = 0;
 	int g_gui_background_height = 0;
@@ -244,6 +245,7 @@ namespace {
 		g_gui_file_result_path.clear();
 		g_gui_file_result_code = 0;
 		g_gui_file_result_pending = false;
+		g_gui_clipboard_text.clear();
 		g_gui_background_rgba.clear();
 		g_gui_background_width = 0;
 		g_gui_background_height = 0;
@@ -426,6 +428,14 @@ namespace {
 		style.Colors[ImGuiCol_DockingEmptyBg].w = 0.0f;
 	}
 
+	const char* GuiGetClipboardText(void*) {
+		return g_gui_clipboard_text.c_str();
+	}
+
+	void GuiSetClipboardText(void*, const char* text) {
+		g_gui_clipboard_text = text ? text : "";
+	}
+
 	const ImWchar* GuiCjkRanges() {
 		static const ImWchar ranges[] = {
 			0x0020, 0x00FF,
@@ -469,6 +479,9 @@ namespace {
 		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 		io.IniFilename = nullptr;
 		io.LogFilename = nullptr;
+		io.GetClipboardTextFn = GuiGetClipboardText;
+		io.SetClipboardTextFn = GuiSetClipboardText;
+		io.ClipboardUserData = nullptr;
 		GuiLoadFonts(io);
 		unsigned char* pixels = nullptr;
 		int font_width = 0;
@@ -1200,6 +1213,12 @@ int casioemu_core_gui_text(unsigned int codepoint) {
 	return 0;
 }
 
+int casioemu_core_gui_set_clipboard_text(const char* text) {
+	if (!text) return 1;
+	g_gui_clipboard_text = text;
+	return 0;
+}
+
 int casioemu_core_gui_file_request_pending() {
 	return g_gui_file_request_kind.empty() ? 0 : 1;
 }
@@ -1279,6 +1298,10 @@ int casioemu_core_gui_key(int, int, int, int, int, int) {
 }
 
 int casioemu_core_gui_text(unsigned int) {
+	return 99;
+}
+
+int casioemu_core_gui_set_clipboard_text(const char*) {
 	return 99;
 }
 

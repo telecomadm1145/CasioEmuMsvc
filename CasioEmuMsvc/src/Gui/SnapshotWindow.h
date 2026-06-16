@@ -2,6 +2,7 @@
 #include "Ui.hpp"
 #include "Snapshot.h"
 #include <SDL.h>
+#include <filesystem>
 #include <string>
 
 // Preview texture wrapper
@@ -28,6 +29,7 @@ private:
     std::string     m_ErrorMsg;
     uint32_t        m_NodeToDelete = 0;
     double          m_LoadSuccessTime = 0.0;
+    std::filesystem::path m_WebImportPath;
 
     // Helpers
     void RenderToolbar();
@@ -36,6 +38,7 @@ private:
     void RenderDetails();
     void LoadPreview(const SnapshotNode& node);
     void TryLoadPreview(uint32_t id);
+    void CheckWebImportResult();
 
     void ShowError(const std::string& msg);
 };

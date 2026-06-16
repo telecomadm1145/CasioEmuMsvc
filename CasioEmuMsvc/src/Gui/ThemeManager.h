@@ -14,7 +14,11 @@ struct ThemeSettings {
 	ImGuiStyle igs_dark = ImGuiStyle();
 	char language[30] = "";
 	float scale = 1.0f;
+#ifdef CASIOEMU_CORE_WEB_GUI
+	char injectionFilePath[256] = "/persist/injections.txt";
+#else
 	char injectionFilePath[256] = "./hc-inj.txt";
+#endif
 	bool lowPerformanceMode = false;
 
 	// Auto-tint (MD3 Monet)

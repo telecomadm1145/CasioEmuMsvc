@@ -25,6 +25,7 @@ using namespace material_color_utilities;
 namespace {
 #ifdef CASIOEMU_CORE_WEB_GUI
 constexpr const char* kThemeSettingsPath = "/persist/theme.bin";
+constexpr const char* kDefaultInjectionFilePath = "/persist/injections.txt";
 #else
 constexpr const char* kThemeSettingsPath = "./theme.bin";
 #endif
@@ -61,6 +62,14 @@ void ThemeManager::LoadSettings() {
 	if (file.is_open()) {
 		Binary::Read(file, m_settings);
 		file.close();
+
+#ifdef CASIOEMU_CORE_WEB_GUI
+		if (m_settings.injectionFilePath[0] == '\0' || m_settings.injectionFilePath[0] != '/') {
+			strncpy(m_settings.injectionFilePath, kDefaultInjectionFilePath, sizeof(m_settings.injectionFilePath));
+			m_settings.injectionFilePath[sizeof(m_settings.injectionFilePath) - 1] = '\0';
+			SaveSettings();
+		}
+#endif
 
 		if (m_settings.isDarkMode) {
 			SetDarkMode();

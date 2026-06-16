@@ -26,7 +26,12 @@ Injector::Injector() : UIWindow("Rop"), needsReload(false), isReloading(false), 
 	injectors.push_back(InjectorData());
 	injectionFilePath = ThemeManager::Instance().Settings().injectionFilePath;
 	InitCustomInjectionsFile();
+#ifdef CASIOEMU_CORE_WEB_GUI
+	needsReload = true;
+	BackgroundReload();
+#else
 	AsyncLoadCustomInjections();
+#endif
 }
 
 Injector::~Injector() {
@@ -49,6 +54,9 @@ std::string Injector::GetFileModifiedTime(const std::string& filepath) {
 }
 
 void Injector::AsyncLoadCustomInjections() {
+#ifdef CASIOEMU_CORE_WEB_GUI
+	BackgroundReload();
+#else
 	try {
 		if (isShuttingDown.load()) {
 			return;
@@ -72,6 +80,7 @@ void Injector::AsyncLoadCustomInjections() {
 	catch (...) {
 		// Thread creation error handling
 	}
+#endif
 }
 
 void Injector::TrimString(std::string& str) {
@@ -100,6 +109,9 @@ bool Injector::IsHexString(const std::string& str) {
 
 void Injector::InitCustomInjectionsFile() {
 	const std::filesystem::path filepath = injectionFilePath;
+	if (filepath.has_parent_path()) {
+		std::filesystem::create_directories(filepath.parent_path());
+	}
 
 	if (std::filesystem::exists(filepath)) {
 		return;
@@ -513,7 +525,11 @@ void Injector::RenderCustomInjectTab(bool& show_info, std::string& info_msg) {
 		std::string currentModTime = GetFileModifiedTime(injectionFilePath);
 		if (currentModTime != lastModifiedTime) {
 			needsReload = true;
+#ifdef CASIOEMU_CORE_WEB_GUI
+			BackgroundReload();
+#else
 			AsyncLoadCustomInjections();
+#endif
 		}
 	}
 }
@@ -592,6 +608,10 @@ void Injector::RenderCore() {
 	static MemoryEditor editor;
 	static bool show_info = false;
 	static std::string info_msg;
+	if (!m_emu || !me_mmu || !n_ram_buffer) {
+		ImGui::TextDisabled("Injector is unavailable until the emulator RAM is ready.");
+		return;
+	}
 	auto inputbase = m_emu->hardware_id == casioemu::HardwareId::HW_CLASSWIZ_II ? 0x9268 : 0xD180;
 	char* base_addr = n_ram_buffer - casioemu::GetRamBaseAddr(m_emu->hardware_id);
 
@@ -599,9 +619,14 @@ void Injector::RenderCore() {
 	std::string currentFilePath = ThemeManager::Instance().Settings().injectionFilePath;
 	if (currentFilePath != injectionFilePath) {
 		injectionFilePath = currentFilePath;
+		InitCustomInjectionsFile();
 		needsReload = true;
 		if (!isReloading.load()) {
+#ifdef CASIOEMU_CORE_WEB_GUI
+			BackgroundReload();
+#else
 			AsyncLoadCustomInjections();
+#endif
 		}
 	}
 
