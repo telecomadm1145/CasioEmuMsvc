@@ -350,10 +350,30 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 		(int)ThemeManager::Instance().windowHeight,
 		SDL_WINDOW_RESIZABLE);
 #else
+	int winX = ThemeManager::Instance().Settings().windowX;
+	int winY = ThemeManager::Instance().Settings().windowY;
+	int winW = ThemeManager::Instance().Settings().windowW;
+	int winH = ThemeManager::Instance().Settings().windowH;
+
+	SDL_Rect bounds;
+	if (SDL_GetDisplayUsableBounds(0, &bounds) == 0) {
+		if (winW > bounds.w) winW = bounds.w;
+		if (winH > bounds.h) winH = bounds.h;
+
+		if (winX != SDL_WINDOWPOS_CENTERED) {
+			if (winX < bounds.x) winX = bounds.x;
+			if (winX + winW > bounds.x + bounds.w) winX = bounds.x + bounds.w - winW;
+		}
+		if (winY != SDL_WINDOWPOS_CENTERED) {
+			if (winY < bounds.y) winY = bounds.y;
+			if (winY + winH > bounds.y + bounds.h) winY = bounds.y + bounds.h - winH;
+		}
+	}
+
 	window = SDL_CreateWindow("CasioEmuMsvc Debugger",
-		SDL_WINDOWPOS_CENTERED,
-		SDL_WINDOWPOS_CENTERED,
-		1600, 1080,
+		winX,
+		winY,
+		winW, winH,
 		SDL_WINDOW_RESIZABLE);
 #endif
 #ifdef _WIN32
@@ -497,6 +517,21 @@ namespace UIHelpers {
 
 void gui_cleanup() {
 #ifndef CASIOEMU_CORE_WEB_GUI
+#ifndef __ANDROID__
+#ifndef SINGLE_WINDOW
+	if (window) {
+		int x, y, w, h;
+		SDL_GetWindowPosition(window, &x, &y);
+		SDL_GetWindowSize(window, &w, &h);
+
+		ThemeManager::Instance().Settings().windowX = x;
+		ThemeManager::Instance().Settings().windowY = y;
+		ThemeManager::Instance().Settings().windowW = w;
+		ThemeManager::Instance().Settings().windowH = h;
+		ThemeManager::Instance().SaveSettings();
+	}
+#endif
+#endif
 	ImGui_ImplSDLRenderer2_Shutdown();
 	ImGui_ImplSDL2_Shutdown();
 	ImGui::DestroyContext();
