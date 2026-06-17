@@ -26,7 +26,7 @@
 #include <vector>
 #include <unistd.h>
 
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 #include "Gui/Localization.h"
 #include "Gui/ThemeManager.h"
 #include "Gui/WebDebuggerGui.h"
@@ -74,7 +74,7 @@ namespace {
 	int g_gui_height = 0;
 	uint32_t g_gui_frame_counter = 0;
 	std::vector<uint8_t> g_gui_frame_rgba;
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 	std::string g_model_id = "unknown";
 	std::string g_gui_model_dir = "/persist/unknown";
 	bool g_gui_imgui_ready = false;
@@ -187,7 +187,7 @@ namespace {
 		return static_cast<casioemu::HardwareId>(core_type);
 	}
 
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 	void GuiShutdown();
 
 	void GuiResetState() {
@@ -206,7 +206,7 @@ namespace {
 		g_gui_wheel_y = 0.0f;
 	}
 
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 	std::string SanitizeModelId(const char* model_id) {
 		std::string sanitized;
 		if (model_id) {
@@ -402,7 +402,7 @@ namespace {
 		return 0;
 	}
 
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 	void GuiLoadLocale() {
 		try {
 			chdir("/");
@@ -747,7 +747,7 @@ namespace {
 #endif
 }
 
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 const char* WebDebuggerExportDir() {
 	return "/tmp/exports";
 }
@@ -784,7 +784,7 @@ void WebDebuggerQueueDownload(const char* path, const char* name) {
 extern "C" {
 
 int casioemu_core_set_model_id(const char* model_id) {
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 	SetCoreModelId(model_id);
 	return 0;
 #else
@@ -801,7 +801,7 @@ int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int m
 		g_emulator.reset();
 		if (!WriteRomFile(rom, len)) return -2;
 		auto model = MakeWebModel(true, false, pd_value, model_type, legacy_ko != 0, classwiz_graph != 0);
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 		const auto model_dir = CurrentWebModelDir();
 		std::filesystem::create_directories(model_dir);
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true, model_dir);
@@ -834,7 +834,7 @@ int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, i
 		auto normalized_rom = NormalizeSimulatorRomForWeb(rom, len, hardware_id);
 		if (!WriteRomFile(normalized_rom.data(), static_cast<int>(normalized_rom.size()))) return -2;
 		auto model = MakeWebModel(false, is_sample_rom != 0, pd_value, model_type, legacy_ko != 0, classwiz_graph != 0);
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 		const auto model_dir = CurrentWebModelDir();
 		std::filesystem::create_directories(model_dir);
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true, model_dir);
@@ -1086,7 +1086,7 @@ int casioemu_core_load_snapshot(const uint8_t* in, int len) {
 	}
 }
 
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 int casioemu_core_gui_supported() {
 	return 1;
 }

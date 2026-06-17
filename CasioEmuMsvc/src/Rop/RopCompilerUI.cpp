@@ -2,7 +2,7 @@
 #include "Compiler.h"
 #include "Localization.h"
 #include "Models.h"
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 #include "WebDebuggerGui.h"
 #else
 #include "SysDialog.h"
@@ -59,7 +59,7 @@ public:
 	}
 
 	void RenderCore() override {
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 		checkWebDatabaseImportResult();
 #endif
 		drawMenuBar();
@@ -121,7 +121,7 @@ private:
 	// Database state
 	bool databaseLoaded_ = false;
 	std::string databasePath_;
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 	std::filesystem::path webDatabaseImportPath_;
 #endif
 	lc::CommandDatabase db_;
@@ -207,7 +207,7 @@ private:
 	// Database loading
 	// ============================================================
 	void openDatabaseDialog() {
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 		const auto dir = std::filesystem::path("/tmp/imports");
 		std::filesystem::create_directories(dir);
 		webDatabaseImportPath_ = dir / "rop_database.txt";
@@ -219,7 +219,7 @@ private:
 #endif
 	}
 
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 	void checkWebDatabaseImportResult() {
 		if (webDatabaseImportPath_.empty())
 			return;

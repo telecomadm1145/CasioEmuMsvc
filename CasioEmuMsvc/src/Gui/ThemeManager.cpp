@@ -6,7 +6,7 @@
 #endif // !TEST_BUILD
 #include "Gui.h"
 #include "Localization.h"
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 #include "WebDebuggerGui.h"
 #endif
 #include <SDL.h>
@@ -23,7 +23,7 @@ using namespace material_color_utilities;
 #endif
 
 namespace {
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 constexpr const char* kThemeSettingsPath = "/persist/theme.bin";
 constexpr const char* kDefaultInjectionFilePath = "/persist/injections.txt";
 #else
@@ -51,7 +51,7 @@ void ThemeManager::SaveSettings() {
 	if (file.is_open()) {
 		Binary::Write(file, m_settings);
 		file.close();
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 		WebDebuggerRequestFsSync();
 #endif
 	}
@@ -63,7 +63,7 @@ void ThemeManager::LoadSettings() {
 		m_settings.Read(file);
 		file.close();
 
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 		if (m_settings.injectionFilePath[0] == '\0' || m_settings.injectionFilePath[0] != '/') {
 			strncpy(m_settings.injectionFilePath, kDefaultInjectionFilePath, sizeof(m_settings.injectionFilePath));
 			m_settings.injectionFilePath[sizeof(m_settings.injectionFilePath) - 1] = '\0';

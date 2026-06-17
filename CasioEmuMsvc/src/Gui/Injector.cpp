@@ -5,7 +5,7 @@
 #include "Peripheral/BatteryBackedRAM.hpp"
 #include "Theme.h"
 #include "Ui.hpp"
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 #include "WebDebuggerGui.h"
 #endif
 #include "hex.hpp"
@@ -29,7 +29,7 @@ Injector::Injector() : UIWindow("Rop"), needsReload(false), isReloading(false), 
 	injectors.push_back(InjectorData());
 	injectionFilePath = ThemeManager::Instance().Settings().injectionFilePath;
 	InitCustomInjectionsFile();
-#ifndef CASIOEMU_CORE_WEB_GUI
+#ifndef CASIOEMU_CORE_WEB
 	AsyncLoadCustomInjections();
 #endif
 }
@@ -127,7 +127,7 @@ void Injector::InitCustomInjectionsFile() {
 		}
 		file << template_content;
 		file.close();
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 		WebDebuggerRequestFsSync();
 #endif
 	}

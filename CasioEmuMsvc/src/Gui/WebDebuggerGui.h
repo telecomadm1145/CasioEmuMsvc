@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 const char* WebDebuggerExportDir();
 void WebDebuggerQueueDownload(const char* path, const char* name);
 void WebDebuggerQueueOpenFile(const char* target_path, const char* name);

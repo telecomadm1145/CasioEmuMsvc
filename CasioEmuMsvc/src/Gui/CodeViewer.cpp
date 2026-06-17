@@ -9,7 +9,7 @@
 #include "SysDialog.h"
 #include "U8Disas.h"
 #include "ePSCpu.h"
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 #include "WebDebuggerGui.h"
 #endif
 #include "imgui/imgui.h"
@@ -512,7 +512,7 @@ void CodeViewer::DrawMonitor() {
 }
 
 void CodeViewer::JumpTo(uint32_t offset) {
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 	if (!disasm_requested) {
 		PrepareDisasm();
 	}
@@ -598,7 +598,7 @@ void CodeViewer::Search(bool next) {
 }
 
 void CodeViewer::ExportDisassembly() {
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 	std::filesystem::create_directories(WebDebuggerExportDir());
 	const auto path = std::filesystem::path(WebDebuggerExportDir()) / "asm.txt";
 	std::ofstream out(path);
@@ -836,7 +836,7 @@ static std::string GetInstructionHelp(const std::string& mnem, const std::string
 }
 static int s(bool x) { return x ? 1 : 0; }
 void CodeViewer::RenderCore() {
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 	if (!disasm_requested) {
 		PrepareDisasm();
 	}

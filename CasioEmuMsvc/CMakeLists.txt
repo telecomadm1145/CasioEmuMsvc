@@ -5,8 +5,11 @@ project(CasioEmuMsvc)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 option(CASIOEMU_WEB "Build the Emscripten/WebAssembly version" OFF)
-option(CASIOEMU_CORE_WEB "Build the headless Emscripten/WebAssembly core API" OFF)
-option(CASIOEMU_CORE_WEB_GUI "Expose the experimental core-web GUI attachment API" ON)
+option(CASIOEMU_CORE_WEB "Build the Emscripten/WebAssembly core API" OFF)
+
+if(CASIOEMU_CORE_WEB)
+    set(CASIOEMU_WEB ON CACHE BOOL "Core web builds use the Emscripten/WebAssembly pipeline" FORCE)
+endif()
 
 if(EMSCRIPTEN OR CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     set(CASIOEMU_WEB ON CACHE BOOL "Build the Emscripten/WebAssembly version" FORCE)
@@ -120,7 +123,7 @@ if(CASIOEMU_WEB)
         ${MAIN_SOURCES_PERIPHERAL}
         ${MAIN_SOURCES_WEB}
     )
-    if(CASIOEMU_CORE_WEB AND CASIOEMU_CORE_WEB_GUI)
+    if(CASIOEMU_CORE_WEB)
         list(APPEND MAIN_SOURCES
             ${MAIN_SOURCES_IMGUI}
             ${SOURCE_DIR}/Gui/5800FileSystem.cpp
@@ -185,7 +188,7 @@ else()
     add_library(${TARGET_NAME} SHARED ${MAIN_SOURCES})
 endif()
 
-if(CASIOEMU_CORE_WEB AND CASIOEMU_CORE_WEB_GUI)
+if(CASIOEMU_CORE_WEB)
     find_package(Python3 COMPONENTS Interpreter)
     if(NOT Python3_Interpreter_FOUND)
         message(FATAL_ERROR "Python3 is required to build the web GUI font subset")
@@ -244,9 +247,6 @@ if(CASIOEMU_WEB)
             -pthread
         )
         target_compile_definitions(${TARGET_NAME} PRIVATE CASIOEMU_CORE_WEB CASIOEMU_DISABLE_RAM_IMAGE CASIOEMU_ENABLE_KEYBOARD_KI_WRITE)
-        if(CASIOEMU_CORE_WEB_GUI)
-            target_compile_definitions(${TARGET_NAME} PRIVATE CASIOEMU_CORE_WEB_GUI)
-        endif()
         target_link_options(${TARGET_NAME} PRIVATE
             -pthread
             -fexceptions

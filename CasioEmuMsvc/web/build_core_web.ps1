@@ -44,7 +44,6 @@ New-Item -ItemType Directory -Force $env:EM_CACHE | Out-Null
 & $CMakeExe --fresh -S $ProjectRoot -B $BuildPath -G Ninja `
     "-DCMAKE_TOOLCHAIN_FILE=$ToolchainFile" `
     "-DCMAKE_BUILD_TYPE=$Config" `
-    "-DCASIOEMU_WEB=ON" `
     "-DCASIOEMU_CORE_WEB=ON" `
     "-DBUILD_EXECUTABLE=ON"
 if ($LASTEXITCODE -ne 0) {

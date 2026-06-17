@@ -7,7 +7,7 @@
 #include <cstring>
 #include <SDL.h>
 
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 #define THEME_DEFAULT_INJECTION_FILE_PATH "/persist/injections.txt"
 #else
 #define THEME_DEFAULT_INJECTION_FILE_PATH "./hc-inj.txt"

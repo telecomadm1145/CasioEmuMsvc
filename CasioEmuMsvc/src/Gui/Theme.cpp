@@ -1,6 +1,6 @@
 #include "Theme.h"
 #include "FileDialog.hpp"
-#ifndef CASIOEMU_CORE_WEB_GUI
+#ifndef CASIOEMU_CORE_WEB
 #include "SysDialog.h"
 #else
 #include "WebDebuggerGui.h"
@@ -11,7 +11,7 @@
 #include <fstream>
 #include <string>
 #include <vibration.h>
-#ifndef CASIOEMU_CORE_WEB_GUI
+#ifndef CASIOEMU_CORE_WEB
 #include "Ext/DiscordRPC.h"
 #endif
 
@@ -144,7 +144,7 @@ public:
 		UIHelpers::SectionHeader("Background & Injection");
 
 		if (ImGui::Button("UI.ChangeBg"_lc)) {
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 			WebDebuggerQueueOpenFile("/persist/background.jpg", "background.jpg");
 #else
 			SystemDialogs::OpenFileDialog([](std::filesystem::path pth) {
@@ -153,7 +153,7 @@ public:
 			tm.RequestBgReload();
 #endif
 		}
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 		int bgResult = 0;
 		if (WebDebuggerConsumeFileResult("/persist/background.jpg", &bgResult) && bgResult == 0) {
 			tm.RequestBgReload();
@@ -163,7 +163,7 @@ public:
 		ImGui::Spacing();
 		ImGui::TextUnformatted("Ui.InjectionFilePath"_lc);
 		ImGui::InputText("##injection_file_path", tempInjectionFilePath, sizeof(tempInjectionFilePath));
-#ifndef CASIOEMU_CORE_WEB_GUI
+#ifndef CASIOEMU_CORE_WEB
 		ImGui::SameLine();
 		if (ImGui::Button("Ui.Browse"_lc)) {
 			showFileDialog = true;
@@ -189,14 +189,14 @@ public:
 				tm.SetSeedColor(seedColor);
 			}
 			if (ImGui::Button("Theme.MD"_lc)) {
-#if !defined(TEST_BUILD) && !defined(CASIOEMU_CORE_WEB_GUI)
+#if !defined(TEST_BUILD) && !defined(CASIOEMU_CORE_WEB)
 				seedColor = tm.ExtractDominantColor(bg_txt, renderer);
 #endif
 				tm.SetSeedColor(seedColor);
 			}
 		}
 		
-#ifndef CASIOEMU_CORE_WEB_GUI
+#ifndef CASIOEMU_CORE_WEB
 		UIHelpers::SectionHeader("Integrations");
 		if (ImGui::Checkbox("Theme.EnableDiscordRPC"_lc, &settings.enableDiscordRPC)) {
 			tm.SaveSettings();

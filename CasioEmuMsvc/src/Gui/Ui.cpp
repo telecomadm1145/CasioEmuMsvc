@@ -23,7 +23,7 @@
 #include "SnapshotWindow.h"
 #endif
 #include "imgui/imgui.h"
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 #include "WebDebuggerGui.h"
 #else
 #include "imgui/imgui_impl_sdl2.h"
@@ -55,7 +55,7 @@ Breakpoints* membp = 0;
 
 std::vector<UIWindow*> windows{};
 
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 SDL_Surface* background = nullptr;
 SDL_Texture* bg_txt = nullptr;
 #endif
@@ -71,7 +71,7 @@ void RenderStatusBar() {
 	ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - barHeight));
 	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, barHeight));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 2.0f));
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 	ImVec4 statusBg = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
 	statusBg.w = std::max(statusBg.w, 0.82f);
 	ImGui::PushStyleColor(ImGuiCol_WindowBg, statusBg);
@@ -273,14 +273,14 @@ void gui_loop() {
 	ThemeManager::Instance().UpdateUIScale();
 #endif
 
-#ifndef CASIOEMU_CORE_WEB_GUI
+#ifndef CASIOEMU_CORE_WEB
 	ImGui_ImplSDLRenderer2_NewFrame();
 	ImGui_ImplSDL2_NewFrame();
 #endif
 	ImGui::NewFrame();
 	RenderDebuggerGuiWindows();
 	ImGui::Render();
-#ifndef CASIOEMU_CORE_WEB_GUI
+#ifndef CASIOEMU_CORE_WEB
 #ifdef SINGLE_WINDOW
 	ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
 #else
@@ -295,7 +295,7 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 		std::this_thread::sleep_for(std::chrono::microseconds(1));
 	std::filesystem::path label_file = m_emu->GetModelFilePath("labels.txt");
 	if (std::filesystem::exists(label_file))
-		g_labels = parseFile(label_file);
+		g_labels = parseFile(label_file.string());
 	else
 		std::cout << "[Warning] " << label_file.string() << " doesn't exist. You can consider create one for better debugging experiences. Format: address(0x1234),func name(can be quoted)\n";
 
@@ -317,7 +317,7 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 #if !defined(TEST_BUILD)
 			 CreateRopCompilerWindow(),
 #endif
-#if !defined(TEST_BUILD) && !defined(CASIOEMU_CORE_WEB_GUI)
+#if !defined(TEST_BUILD) && !defined(CASIOEMU_CORE_WEB)
 			 new PluginLogWindow(),
 #endif
 #if !defined(TEST_BUILD)
@@ -338,7 +338,7 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 	return 0;
 }
 
-#ifndef CASIOEMU_CORE_WEB_GUI
+#ifndef CASIOEMU_CORE_WEB
 CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 	SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
 
@@ -419,7 +419,7 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 }
 #endif
 
-#ifdef CASIOEMU_CORE_WEB_GUI
+#ifdef CASIOEMU_CORE_WEB
 void InitWebDebuggerGuiWindows() {
 	if (windows.empty()) {
 		CreateDebuggerGuiWindows();
@@ -524,7 +524,7 @@ namespace UIHelpers {
 
 
 void gui_cleanup() {
-#ifndef CASIOEMU_CORE_WEB_GUI
+#ifndef CASIOEMU_CORE_WEB
 #ifndef __ANDROID__
 #ifndef SINGLE_WINDOW
 	if (window) {

@@ -181,7 +181,6 @@ jobs:
         source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
         emcmake cmake -S CasioEmuMsvc -B CasioEmuMsvc/build-core-web -G Ninja \
           -DCMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} \
-          -DCASIOEMU_WEB=ON \
           -DCASIOEMU_CORE_WEB=ON \
           -DBUILD_EXECUTABLE=ON
         cmake --build CasioEmuMsvc/build-core-web --config ${{ env.BUILD_CONFIGURATION }} --parallel
