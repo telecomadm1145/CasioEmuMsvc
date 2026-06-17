@@ -50,8 +50,19 @@ jobs:
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: cmake --build build --config ${{ env.BUILD_CONFIGURATION }} --parallel
 
-    - name: Upload PDBs to Sentry
+    - name: Check Sentry token
       if: matrix.platform == 'windows'
+      shell: pwsh
+      run: |
+        if ("${{ secrets.SENTRY_TOKEN }}" -ne "") {
+          "HAS_SENTRY_TOKEN=true" >> $env:GITHUB_ENV
+        } else {
+          "HAS_SENTRY_TOKEN=false" >> $env:GITHUB_ENV
+          Write-Host "SENTRY_TOKEN is not configured; skipping PDB upload."
+        }
+
+    - name: Upload PDBs to Sentry
+      if: matrix.platform == 'windows' && env.HAS_SENTRY_TOKEN == 'true'
       env:
         SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_TOKEN }}
         SENTRY_ORG: "t5-j7"
