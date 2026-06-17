@@ -76,6 +76,7 @@ namespace {
 	std::vector<uint8_t> g_gui_frame_rgba;
 #ifdef CASIOEMU_CORE_WEB_GUI
 	std::string g_model_id = "unknown";
+	std::string g_gui_model_dir = "/persist/unknown";
 	std::string g_gui_labels_path = "/persist/unknown/labels.txt";
 	bool g_gui_imgui_ready = false;
 	float g_gui_mouse_x = -FLT_MAX;
@@ -222,7 +223,8 @@ namespace {
 
 	void SetCoreModelId(const char* model_id) {
 		g_model_id = SanitizeModelId(model_id);
-		g_gui_labels_path = std::string("/persist/") + g_model_id + "/labels.txt";
+		g_gui_model_dir = std::string("/persist/") + g_model_id;
+		g_gui_labels_path = g_gui_model_dir + "/labels.txt";
 	}
 #endif
 
@@ -740,9 +742,13 @@ namespace {
 }
 
 #ifdef CASIOEMU_CORE_WEB_GUI
-const char* WebDebuggerLabelsPath() {
-	return g_gui_labels_path.c_str();
-}
+	const char* WebDebuggerLabelsPath() {
+		return g_gui_labels_path.c_str();
+	}
+
+	const char* WebDebuggerModelDir() {
+		return g_gui_model_dir.c_str();
+	}
 
 const char* WebDebuggerExportDir() {
 	return "/tmp/exports";

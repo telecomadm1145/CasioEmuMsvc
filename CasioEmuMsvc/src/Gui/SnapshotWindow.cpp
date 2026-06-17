@@ -1,5 +1,6 @@
 #include "SnapshotWindow.h"
 #include "Snapshot.h"
+#include "Emulator.hpp"
 #include "Ui.hpp"
 #ifdef CASIOEMU_CORE_WEB_GUI
 #include "WebDebuggerGui.h"
@@ -16,6 +17,10 @@
 #include <sstream>
 #include <string>
 #include "Localization.h"
+
+namespace {
+constexpr const char* kSnapshotAutoSaveFileName = "snapshots.snapshot";
+}
 
 // ============================================================
 // Helpers
@@ -47,6 +52,15 @@ static std::filesystem::path WebSnapshotImportPath() {
     return dir / "snapshot.snapshot";
 }
 #endif
+
+static std::filesystem::path SnapshotAutoSavePath() {
+    if (!::m_emu) return {};
+#ifdef CASIOEMU_CORE_WEB_GUI
+    return std::filesystem::path(WebDebuggerModelDir()) / kSnapshotAutoSaveFileName;
+#else
+    return ::m_emu->GetModelFilePath(kSnapshotAutoSaveFileName);
+#endif
+}
 
 // ============================================================
 // SnapshotWindow
@@ -110,6 +124,22 @@ void SnapshotWindow::CheckWebImportResult() {
         ShowError(e.what());
     }
 #endif
+}
+
+void SnapshotWindow::EnsureAutoSaveLoaded() {
+    const auto path = SnapshotAutoSavePath();
+    if (path.empty() || path == m_AutoSavePath) return;
+
+    m_AutoSavePath = path;
+    m_Manager = SnapshotManager();
+    m_Manager.SetAutoSavePath(path);
+    m_SelectedId = 0;
+    m_Preview.Free();
+    try {
+        m_Manager.LoadAutoSaveFile();
+    } catch (const std::exception& e) {
+        ShowError(e.what());
+    }
 }
 
 // ============================================================
@@ -381,6 +411,7 @@ void SnapshotWindow::RenderDetails() {
 // ============================================================
 
 void SnapshotWindow::RenderCore() {
+    EnsureAutoSaveLoaded();
     CheckWebImportResult();
     RenderToolbar();
 

@@ -30,6 +30,7 @@ private:
     uint32_t        m_NodeToDelete = 0;
     double          m_LoadSuccessTime = 0.0;
     std::filesystem::path m_WebImportPath;
+    std::filesystem::path m_AutoSavePath;
 
     // Helpers
     void RenderToolbar();
@@ -39,6 +40,7 @@ private:
     void LoadPreview(const SnapshotNode& node);
     void TryLoadPreview(uint32_t id);
     void CheckWebImportResult();
+    void EnsureAutoSaveLoaded();
 
     void ShowError(const std::string& msg);
 };

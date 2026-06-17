@@ -55,8 +55,17 @@ public:
     // Get all child Ids of a given parentId.
     std::vector<uint32_t> GetChildren(uint32_t parentId) const;
 
+    // Bind this manager to a persistent .snapshot file. When enabled, mutating
+    // operations save the full tree automatically.
+    void SetAutoSavePath(const std::filesystem::path& path);
+    const std::filesystem::path& GetAutoSavePath() const;
+    bool HasAutoSavePath() const;
+    void LoadAutoSaveFile();
+    void FlushAutoSave() const;
+
 private:
     uint32_t m_NextId = 1;
+    std::filesystem::path m_AutoSavePath;
     static constexpr uint32_t k_Magic   = 0x5041534e; // "SNAP"
     static constexpr uint32_t k_Version = 1;
 
@@ -69,4 +78,7 @@ private:
 
     // Collect a subtree recursively.
     std::vector<SnapshotNode> CollectSubtree(uint32_t rootId) const;
+
+    void ReplaceNodes(std::vector<SnapshotNode> nodes);
+    static uint32_t NextIdAfter(const std::vector<SnapshotNode>& nodes);
 };
