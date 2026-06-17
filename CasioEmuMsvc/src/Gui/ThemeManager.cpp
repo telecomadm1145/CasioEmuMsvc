@@ -33,20 +33,19 @@ void ThemeManager::SaveSettings() {
 void ThemeManager::LoadSettings() {
 	std::ifstream file("./theme.bin", std::ios::binary);
 	if (file.is_open()) {
-		Binary::Read(file, m_settings);
+		m_settings.Read(file);
 		file.close();
-
-		if (m_settings.isDarkMode) {
-			SetDarkMode();
-		}
-		else {
-			SetLightMode();
-		}
-		if (strlen(m_settings.language) > 0) {
-			g_local.ChangeLanguage(m_settings.language);
-		}
 		m_fontScale = m_settings.scale;
-		m_fontRebuildRequested = true;
+		if (ImGui::GetCurrentContext() != nullptr) {
+			if (m_settings.isDarkMode) {
+				SetDarkMode();
+			}
+			else {
+				SetLightMode();
+			}
+		} else {
+        m_fontRebuildRequested = true;
+    }
 	}
 }
 
@@ -209,35 +208,32 @@ void ThemeManager::UpdateUIScale() {
 // 主题切换
 // ============================================================================
 void ThemeManager::SetLightMode() {
-	if (is_mem_equal(m_settings.igs_light, {})) {
-		// First time: initialize with default light theme
+	if (m_settings.igs_light.Alpha == 0.0f) {
 		ImGuiStyle base = ImGuiStyle();
-		ImGui::StyleColorsLight(&base);
+        if (ImGui::GetCurrentContext()) ImGui::StyleColorsLight(&base);
 		m_settings.igs_light = base;
 	}
-
-	// Apply the unscaled base, then scale it
-	ImGuiStyle styled = m_settings.igs_light;
-	styled.ScaleAllSizes(m_fontScale);
-	ImGui::GetStyle() = styled;
-
+  if (ImGui::GetCurrentContext()) {
+    ImGuiStyle styled = m_settings.igs_light;
+    styled.ScaleAllSizes(m_fontScale);
+    ImGui::GetStyle() = styled;
+  }
 	m_settings.isDarkMode = false;
 	SaveSettings();
 }
 
+
 void ThemeManager::SetDarkMode() {
-	if (is_mem_equal(m_settings.igs_dark, {})) {
-		// First time: initialize with default dark theme
+	if (m_settings.igs_dark.Alpha == 0.0f) {
 		ImGuiStyle base = ImGuiStyle();
-		ImGui::StyleColorsDark(&base);
+		if (ImGui::GetCurrentContext()) ImGui::StyleColorsDark(&base);
 		m_settings.igs_dark = base;
 	}
-
-	// Apply the unscaled base, then scale it
-	ImGuiStyle styled = m_settings.igs_dark;
-	styled.ScaleAllSizes(m_fontScale);
-	ImGui::GetStyle() = styled;
-
+  if (ImGui::GetCurrentContext()) {
+    ImGuiStyle styled = m_settings.igs_dark;
+    styled.ScaleAllSizes(m_fontScale);
+    ImGui::GetStyle() = styled;
+  }
 	m_settings.isDarkMode = true;
 	SaveSettings();
 }
