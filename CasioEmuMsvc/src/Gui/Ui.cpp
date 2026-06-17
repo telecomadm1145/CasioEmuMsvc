@@ -400,7 +400,7 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 	ThemeManager::Instance().UpdateUIScale();
 #endif
 
-	RebuildFont();
+	// RebuildFont();
 	// SetupDefaultTheme();
 
 	io.WantCaptureKeyboard = true;
@@ -409,6 +409,10 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 
 	ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
 	ImGui_ImplSDLRenderer2_Init(renderer);
+
+	ThemeManager::Instance().RequestFontRebuild();
+	ThemeManager::Instance().ProcessFontRebuild();
+
 	if (guiCreated)
 		*guiCreated = true;
 	return CreateDebuggerGuiWindows();

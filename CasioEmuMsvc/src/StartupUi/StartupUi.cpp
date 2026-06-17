@@ -1440,7 +1440,7 @@ std::string sui_loop() {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
-	RebuildFont();
+	// RebuildFont();
 	io.WantCaptureKeyboard = true;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
@@ -1451,6 +1451,8 @@ std::string sui_loop() {
 #endif
 	ImGui_ImplSDL2_InitForSDLRenderer(window2, renderer2);
 	ImGui_ImplSDLRenderer2_Init(renderer2);
+	ThemeManager::Instance().RequestFontRebuild();
+	ThemeManager::Instance().ProcessFontRebuild();
 	auto frame_event = SDL_RegisterEvents(1);
 	std::atomic<bool> exited = {false};
 	std::thread t3([&]() {
