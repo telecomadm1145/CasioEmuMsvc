@@ -55,12 +55,10 @@ static std::filesystem::path WebSnapshotImportPath() {
 
 static std::filesystem::path SnapshotAutoSavePath() {
     if (!::m_emu) return {};
-    return ::m_emu->GetModelFilePath(kSnapshotAutoSaveFileName);
-}
-
-static void RequestSnapshotFsSync() {
 #ifdef CASIOEMU_CORE_WEB_GUI
-    WebDebuggerRequestFsSync();
+    return std::filesystem::path(WebDebuggerModelDir()) / kSnapshotAutoSaveFileName;
+#else
+    return ::m_emu->GetModelFilePath(kSnapshotAutoSaveFileName);
 #endif
 }
 
@@ -122,7 +120,6 @@ void SnapshotWindow::CheckWebImportResult() {
     }
     try {
         m_Manager.ImportFromFile(importPath);
-        RequestSnapshotFsSync();
     } catch (const std::exception& e) {
         ShowError(e.what());
     }
@@ -159,7 +156,6 @@ void SnapshotWindow::RenderToolbar() {
             std::string lbl(m_LabelBuf);
             if (lbl.empty()) lbl = std::string("SnapshotWindow.SnapshotPrefix"_lc) + std::to_string(m_Manager.Nodes.size() + 1);
             uint32_t newId = m_Manager.SaveSnapshot(*::m_emu, m_SelectedId, lbl);
-            RequestSnapshotFsSync();
             m_SelectedId = newId;
             TryLoadPreview(newId);
             memset(m_LabelBuf, 0, sizeof(m_LabelBuf));
@@ -268,7 +264,6 @@ void SnapshotWindow::RenderToolbar() {
         SystemDialogs::OpenFileDialog([this](std::filesystem::path path) {
             try { m_Manager.ImportFromFile(path); }
             catch (const std::exception& e) { ShowError(e.what()); }
-            RequestSnapshotFsSync();
         });
 #endif
     }
@@ -322,7 +317,6 @@ void SnapshotWindow::RenderTreeNode(uint32_t parentId, int depth) {
                         std::string lbl(m_LabelBuf);
                         if (lbl.empty()) lbl = std::string("SnapshotWindow.ChildOf"_lc) + std::to_string(node.Id);
                         uint32_t newId = m_Manager.SaveSnapshot(*::m_emu, node.Id, lbl);
-                        RequestSnapshotFsSync();
                         m_SelectedId = newId;
                         TryLoadPreview(newId);
                         memset(m_LabelBuf, 0, sizeof(m_LabelBuf));
@@ -447,7 +441,6 @@ void SnapshotWindow::RenderCore() {
         if (ImGui::Button("Button.Positive"_lc, ImVec2(120, 0))) {
             if (m_NodeToDelete != 0) {
                 m_Manager.DeleteNode(m_NodeToDelete);
-                RequestSnapshotFsSync();
                 if (m_SelectedId == m_NodeToDelete) {
                     m_SelectedId = 0;
                     m_Preview.Free();

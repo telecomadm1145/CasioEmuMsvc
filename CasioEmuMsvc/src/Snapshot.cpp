@@ -137,10 +137,6 @@ void SnapshotManager::ReplaceNodes(std::vector<SnapshotNode> nodes) {
 // ============================================================
 
 std::vector<uint8_t> SnapshotManager::CaptureScreenPng(casioemu::Emulator& emu) {
-#ifdef CASIOEMU_CORE_WEB
-    (void)emu;
-    return {};
-#else
     SDL_Renderer* renderer = emu.GetRenderer();
     if (!renderer) return {};
 
@@ -201,7 +197,6 @@ std::vector<uint8_t> SnapshotManager::CaptureScreenPng(casioemu::Emulator& emu) 
     if (saveResult != 0 || written <= 0) return {};
     bmpBuf.resize(static_cast<size_t>(written));
     return bmpBuf;
-#endif
 }
 
 // ============================================================
