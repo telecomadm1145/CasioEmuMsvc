@@ -32,6 +32,8 @@ constexpr const char* kThemeSettingsPath = "./theme.bin";
 
 void ApplyDefaultLayoutMetrics(ImGuiStyle& style) {
 	style.WindowRounding = 8.0f;
+	style.ChildRounding = 8.0f;
+	style.PopupRounding = 8.0f;
 	style.FrameRounding = 6.0f;
 	style.TabRounding = 6.0f;
 	style.GrabRounding = 6.0f;
@@ -40,6 +42,71 @@ void ApplyDefaultLayoutMetrics(ImGuiStyle& style) {
 	style.WindowPadding = ImVec2(10.0f, 10.0f);
 	style.FramePadding = ImVec2(8.0f, 4.0f);
 	style.ItemSpacing = ImVec2(8.0f, 6.0f);
+}
+
+bool FloatEquals(float lhs, float rhs) {
+	return std::fabs(lhs - rhs) < 0.001f;
+}
+
+bool VecEquals(const ImVec2& lhs, const ImVec2& rhs) {
+	return FloatEquals(lhs.x, rhs.x) && FloatEquals(lhs.y, rhs.y);
+}
+
+bool HasImGuiDefaultLayoutMetrics(const ImGuiStyle& style) {
+	ImGuiStyle defaultStyle;
+	return FloatEquals(style.WindowRounding, defaultStyle.WindowRounding)
+		&& FloatEquals(style.ChildRounding, defaultStyle.ChildRounding)
+		&& FloatEquals(style.FrameRounding, defaultStyle.FrameRounding)
+		&& FloatEquals(style.GrabRounding, defaultStyle.GrabRounding)
+		&& VecEquals(style.WindowPadding, defaultStyle.WindowPadding)
+		&& VecEquals(style.FramePadding, defaultStyle.FramePadding)
+		&& VecEquals(style.ItemSpacing, defaultStyle.ItemSpacing);
+}
+
+bool ColorEquals(const ImVec4& lhs, const ImVec4& rhs) {
+	return FloatEquals(lhs.x, rhs.x)
+		&& FloatEquals(lhs.y, rhs.y)
+		&& FloatEquals(lhs.z, rhs.z)
+		&& FloatEquals(lhs.w, rhs.w);
+}
+
+bool HasImGuiDefaultDarkColors(const ImGuiStyle& style) {
+	ImGuiStyle defaultStyle;
+	return ColorEquals(style.Colors[ImGuiCol_WindowBg], defaultStyle.Colors[ImGuiCol_WindowBg])
+		&& ColorEquals(style.Colors[ImGuiCol_Text], defaultStyle.Colors[ImGuiCol_Text])
+		&& ColorEquals(style.Colors[ImGuiCol_FrameBg], defaultStyle.Colors[ImGuiCol_FrameBg])
+		&& ColorEquals(style.Colors[ImGuiCol_Button], defaultStyle.Colors[ImGuiCol_Button]);
+}
+
+ImGuiStyle CreateBaseThemeStyle(bool isDark) {
+	ImGuiStyle style;
+	if (isDark) {
+		ImGui::StyleColorsDark(&style);
+	}
+	else {
+		ImGui::StyleColorsLight(&style);
+	}
+	ApplyDefaultLayoutMetrics(style);
+	return style;
+}
+
+bool EnsureThemeStyleInitialized(ImGuiStyle& style, bool isDark) {
+	if (is_mem_equal(style, ImGuiStyle{})) {
+		style = CreateBaseThemeStyle(isDark);
+		return true;
+	}
+
+	if (!isDark && HasImGuiDefaultDarkColors(style)) {
+		style = CreateBaseThemeStyle(false);
+		return true;
+	}
+
+	if (HasImGuiDefaultLayoutMetrics(style)) {
+		ApplyDefaultLayoutMetrics(style);
+		return true;
+	}
+
+	return false;
 }
 }
 
@@ -70,6 +137,13 @@ void ThemeManager::LoadSettings() {
 			SaveSettings();
 		}
 #endif
+
+		bool migratedStyle = false;
+		migratedStyle |= EnsureThemeStyleInitialized(m_settings.igs_dark, true);
+		migratedStyle |= EnsureThemeStyleInitialized(m_settings.igs_light, false);
+		if (migratedStyle) {
+			SaveSettings();
+		}
 
 		m_fontScale = m_settings.scale;
 		if (m_settings.isDarkMode) {
@@ -108,22 +182,12 @@ void ThemeManager::ProcessFontRebuild() {
 
 		// Load the user's saved unscaled base style (includes custom sizes + colors)
 		if (m_settings.isDarkMode) {
-			if (!is_mem_equal(m_settings.igs_dark, ImGuiStyle{})) {
-				igs = m_settings.igs_dark;
-			}
-			else {
-				igs = ImGuiStyle();
-				ImGui::StyleColorsDark(&igs);
-			}
+			EnsureThemeStyleInitialized(m_settings.igs_dark, true);
+			igs = m_settings.igs_dark;
 		}
 		else {
-			if (!is_mem_equal(m_settings.igs_light, ImGuiStyle{})) {
-				igs = m_settings.igs_light;
-			}
-			else {
-				igs = ImGuiStyle();
-				ImGui::StyleColorsLight(&igs);
-			}
+			EnsureThemeStyleInitialized(m_settings.igs_light, false);
+			igs = m_settings.igs_light;
 		}
 
 		// Apply scale to the unscaled base
@@ -246,12 +310,7 @@ void ThemeManager::UpdateUIScale() {
 // 主题切换
 // ============================================================================
 void ThemeManager::SetLightMode() {
-	if (m_settings.igs_light.Alpha == 0.0f) {
-		ImGuiStyle base = ImGuiStyle();
-		if (ImGui::GetCurrentContext())
-			ImGui::StyleColorsLight(&base);
-		m_settings.igs_light = base;
-	}
+	EnsureThemeStyleInitialized(m_settings.igs_light, false);
 	if (ImGui::GetCurrentContext()) {
 		ImGuiStyle styled = m_settings.igs_light;
 		styled.ScaleAllSizes(m_fontScale);
@@ -263,12 +322,7 @@ void ThemeManager::SetLightMode() {
 
 
 void ThemeManager::SetDarkMode() {
-	if (m_settings.igs_dark.Alpha == 0.0f) {
-		ImGuiStyle base = ImGuiStyle();
-		if (ImGui::GetCurrentContext())
-			ImGui::StyleColorsDark(&base);
-		m_settings.igs_dark = base;
-	}
+	EnsureThemeStyleInitialized(m_settings.igs_dark, true);
 	if (ImGui::GetCurrentContext()) {
 		ImGuiStyle styled = m_settings.igs_dark;
 		styled.ScaleAllSizes(m_fontScale);
