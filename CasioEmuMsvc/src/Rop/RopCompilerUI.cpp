@@ -2,7 +2,11 @@
 #include "Compiler.h"
 #include "Localization.h"
 #include "Models.h"
+#ifdef CASIOEMU_CORE_WEB_GUI
+#include "WebDebuggerGui.h"
+#else
 #include "SysDialog.h"
+#endif
 #include "TextEditor.h"
 #include "Ui.hpp"
 #include "hex.hpp"
@@ -55,6 +59,9 @@ public:
 	}
 
 	void RenderCore() override {
+#ifdef CASIOEMU_CORE_WEB_GUI
+		checkWebDatabaseImportResult();
+#endif
 		drawMenuBar();
 		drawToolbar();
 		ImGui::Separator();
@@ -114,6 +121,9 @@ private:
 	// Database state
 	bool databaseLoaded_ = false;
 	std::string databasePath_;
+#ifdef CASIOEMU_CORE_WEB_GUI
+	std::filesystem::path webDatabaseImportPath_;
+#endif
 	lc::CommandDatabase db_;
 	int dbCommandCount_ = 0;
 	int dbDataLabelCount_ = 0;
@@ -197,10 +207,32 @@ private:
 	// Database loading
 	// ============================================================
 	void openDatabaseDialog() {
+#ifdef CASIOEMU_CORE_WEB_GUI
+		const auto dir = std::filesystem::path("/tmp/imports");
+		std::filesystem::create_directories(dir);
+		webDatabaseImportPath_ = dir / "rop_database.txt";
+		WebDebuggerQueueOpenFile(webDatabaseImportPath_.string().c_str(), "rop_database.txt");
+#else
 		SystemDialogs::OpenFileDialog([this](std::filesystem::path f) {
 			loadDatabase(f.string());
 		});
+#endif
 	}
+
+#ifdef CASIOEMU_CORE_WEB_GUI
+	void checkWebDatabaseImportResult() {
+		if (webDatabaseImportPath_.empty())
+			return;
+		int result = 0;
+		if (!WebDebuggerConsumeFileResult(webDatabaseImportPath_.string().c_str(), &result))
+			return;
+		const auto importPath = webDatabaseImportPath_;
+		webDatabaseImportPath_.clear();
+		if (result == 0) {
+			loadDatabase(importPath.string());
+		}
+	}
+#endif
 
 	void loadDatabase(const std::string& path) {
 		db_ = lc::CommandDatabase();

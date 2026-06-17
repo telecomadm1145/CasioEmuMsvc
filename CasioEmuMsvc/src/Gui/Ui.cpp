@@ -318,8 +318,10 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 			 membp = new Breakpoints(),
 			 CreateAddressWindow(),
 			 // MakeAssemblerUI(),
-#if !defined(TEST_BUILD) && !defined(CASIOEMU_CORE_WEB_GUI)
+#if !defined(TEST_BUILD)
 			 CreateRopCompilerWindow(),
+#endif
+#if !defined(TEST_BUILD) && !defined(CASIOEMU_CORE_WEB_GUI)
 			 new PluginLogWindow(),
 #endif
 #if !defined(TEST_BUILD)

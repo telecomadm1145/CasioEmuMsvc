@@ -14,6 +14,13 @@ $ToolchainFile = Join-Path $EmscriptenRoot "cmake\Modules\Platform\Emscripten.cm
 $CMakeExe = "cmake"
 if (Test-Path "C:\Program Files\CMake\bin\cmake.exe") {
     $CMakeExe = "C:\Program Files\CMake\bin\cmake.exe"
+} elseif (Get-Command cmake -ErrorAction SilentlyContinue) {
+    $CMakeExe = (Get-Command cmake).Source
+} else {
+    $PythonCMakeExe = Join-Path $env:APPDATA "Python\Python313\site-packages\cmake\data\bin\cmake.exe"
+    if (Test-Path $PythonCMakeExe) {
+        $CMakeExe = $PythonCMakeExe
+    }
 }
 
 if (-not (Test-Path $ToolchainFile)) {
@@ -26,6 +33,10 @@ $env:EMSDK_NODE = Join-Path $EmsdkPath "node\22.16.0_64bit\bin\node.exe"
 $env:EMSDK_PYTHON = Join-Path $EmsdkPath "python\3.13.3_64bit\python.exe"
 $env:EM_CACHE = Join-Path $BuildPath "emscripten_cache"
 $env:PATH = "$EmsdkPath;$EmscriptenRoot;$env:PATH"
+$PythonScripts = Join-Path $env:APPDATA "Python\Python313\Scripts"
+if (Test-Path $PythonScripts) {
+    $env:PATH = "$PythonScripts;$env:PATH"
+}
 
 New-Item -ItemType Directory -Force $BuildPath | Out-Null
 New-Item -ItemType Directory -Force $env:EM_CACHE | Out-Null

@@ -141,6 +141,7 @@ if(CASIOEMU_WEB)
             ${SOURCE_DIR}/Gui/VariableWindow.cpp
             ${SOURCE_DIR}/Gui/WatchWindow.cpp
             ${SOURCE_DIR}/Gui/Localization.cpp
+            ${MAIN_SOURCES_ROP}
         )
     endif()
 else()
