@@ -5,6 +5,9 @@
 #include "Peripheral/BatteryBackedRAM.hpp"
 #include "Theme.h"
 #include "Ui.hpp"
+#ifdef CASIOEMU_CORE_WEB_GUI
+#include "WebDebuggerGui.h"
+#endif
 #include "hex.hpp"
 #include "imgui/imgui.h"
 #include <Gui.h>
@@ -124,6 +127,9 @@ void Injector::InitCustomInjectionsFile() {
 		}
 		file << template_content;
 		file.close();
+#ifdef CASIOEMU_CORE_WEB_GUI
+		WebDebuggerRequestFsSync();
+#endif
 	}
 	catch (const std::exception& e) {
 		// Handle error

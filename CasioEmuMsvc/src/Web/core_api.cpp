@@ -77,7 +77,6 @@ namespace {
 #ifdef CASIOEMU_CORE_WEB_GUI
 	std::string g_model_id = "unknown";
 	std::string g_gui_model_dir = "/persist/unknown";
-	std::string g_gui_labels_path = "/persist/unknown/labels.txt";
 	bool g_gui_imgui_ready = false;
 	float g_gui_mouse_x = -FLT_MAX;
 	float g_gui_mouse_y = -FLT_MAX;
@@ -224,7 +223,14 @@ namespace {
 	void SetCoreModelId(const char* model_id) {
 		g_model_id = SanitizeModelId(model_id);
 		g_gui_model_dir = std::string("/persist/") + g_model_id;
-		g_gui_labels_path = g_gui_model_dir + "/labels.txt";
+		std::filesystem::create_directories(g_gui_model_dir);
+		if (g_emulator) {
+			g_emulator->model_path = g_gui_model_dir;
+		}
+	}
+
+	std::string CurrentWebModelDir() {
+		return g_gui_model_dir.empty() ? std::string("/persist/unknown") : g_gui_model_dir;
 	}
 #endif
 
@@ -742,14 +748,6 @@ namespace {
 }
 
 #ifdef CASIOEMU_CORE_WEB_GUI
-	const char* WebDebuggerLabelsPath() {
-		return g_gui_labels_path.c_str();
-	}
-
-	const char* WebDebuggerModelDir() {
-		return g_gui_model_dir.c_str();
-	}
-
 const char* WebDebuggerExportDir() {
 	return "/tmp/exports";
 }
@@ -803,8 +801,14 @@ int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int m
 		g_emulator.reset();
 		if (!WriteRomFile(rom, len)) return -2;
 		auto model = MakeWebModel(true, false, pd_value, model_type, legacy_ko != 0, classwiz_graph != 0);
+#ifdef CASIOEMU_CORE_WEB_GUI
+		const auto model_dir = CurrentWebModelDir();
+		std::filesystem::create_directories(model_dir);
+		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true, model_dir);
+#else
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
 		g_emulator->model_path = kCoreDir;
+#endif
 		m_emu = g_emulator.get();
 		low_perf_ext = true;
 		RefreshScreenProvider();
@@ -830,8 +834,14 @@ int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, i
 		auto normalized_rom = NormalizeSimulatorRomForWeb(rom, len, hardware_id);
 		if (!WriteRomFile(normalized_rom.data(), static_cast<int>(normalized_rom.size()))) return -2;
 		auto model = MakeWebModel(false, is_sample_rom != 0, pd_value, model_type, legacy_ko != 0, classwiz_graph != 0);
+#ifdef CASIOEMU_CORE_WEB_GUI
+		const auto model_dir = CurrentWebModelDir();
+		std::filesystem::create_directories(model_dir);
+		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true, model_dir);
+#else
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
 		g_emulator->model_path = kCoreDir;
+#endif
 		m_emu = g_emulator.get();
 		low_perf_ext = true;
 		RefreshScreenProvider();

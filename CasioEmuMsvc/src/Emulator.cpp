@@ -10,6 +10,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <utility>
 
 namespace casioemu {
 	Emulator::Emulator(std::map<std::string, std::string>& _argv_map, bool _paused) : Paused(_paused), argv_map(_argv_map), chipset(*new Chipset(*this)), m_step_requested(false) {
@@ -150,9 +151,9 @@ namespace casioemu {
 		pause_on_mem_error = argv_map.find("pause_on_mem_error") != argv_map.end();
 	}
 
-	Emulator::Emulator(ModelInfo def, bool paused, bool headless) : Paused(paused), argv_map(*new std::map<std::string, std::string>()), chipset(*new Chipset(*this)), m_step_requested(false), headless(headless) {
+	Emulator::Emulator(ModelInfo def, bool paused, bool headless, std::string modelPath) : Paused(paused), argv_map(*new std::map<std::string, std::string>()), chipset(*new Chipset(*this)), m_step_requested(false), headless(headless) {
 		running = true;
-		model_path = argv_map["model"];
+		model_path = modelPath.empty() ? argv_map["model"] : std::move(modelPath);
 
 		ModelDefinition = def;
 
