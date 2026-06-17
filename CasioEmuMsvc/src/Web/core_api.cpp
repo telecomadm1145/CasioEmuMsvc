@@ -1229,6 +1229,11 @@ int casioemu_core_gui_text(unsigned int codepoint) {
 	return 0;
 }
 
+int casioemu_core_gui_want_text_input() {
+	if (!g_gui_imgui_ready) return 0;
+	return ImGui::GetIO().WantTextInput ? 1 : 0;
+}
+
 int casioemu_core_gui_set_clipboard_text(const char* text) {
 	if (!text) return 1;
 	g_gui_clipboard_text = text;
@@ -1315,6 +1320,10 @@ int casioemu_core_gui_key(int, int, int, int, int, int) {
 
 int casioemu_core_gui_text(unsigned int) {
 	return 99;
+}
+
+int casioemu_core_gui_want_text_input() {
+	return 0;
 }
 
 int casioemu_core_gui_set_clipboard_text(const char*) {
