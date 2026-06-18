@@ -52,7 +52,11 @@ public:
 			bring_to_front_requested = false;
 		}
 		ImGui::SetNextWindowSize(inital_size, ImGuiCond_FirstUseEver);
+#ifdef CASIOEMU_CORE_WEB
+		if (ImGui::Begin(name, nullptr, flags)) {
+#else
 		if (ImGui::Begin(name, &open, flags)) {
+#endif
 			RenderCore();
 		}
 		ImGui::End();
