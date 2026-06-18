@@ -62,6 +62,7 @@ public:
 #endif
 	}
 	void BringToFront() {
+		open = true;
 		bring_to_front_requested = true;
 	}
 	virtual void RenderCore() = 0;

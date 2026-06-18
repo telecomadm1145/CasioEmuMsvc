@@ -93,6 +93,9 @@ namespace {
 	int g_gui_file_result_code = 0;
 	bool g_gui_file_result_pending = false;
 	std::string g_gui_clipboard_text;
+	std::string g_gui_clipboard_write_text;
+	uint32_t g_gui_clipboard_write_revision = 0;
+	uint32_t g_gui_clipboard_ack_revision = 0;
 	bool g_gui_ime_visible = false;
 	float g_gui_ime_x = 0.0f;
 	float g_gui_ime_y = 0.0f;
@@ -258,6 +261,9 @@ namespace {
 		g_gui_file_result_code = 0;
 		g_gui_file_result_pending = false;
 		g_gui_clipboard_text.clear();
+		g_gui_clipboard_write_text.clear();
+		g_gui_clipboard_write_revision = 0;
+		g_gui_clipboard_ack_revision = 0;
 		g_gui_ime_visible = false;
 		g_gui_ime_x = 0.0f;
 		g_gui_ime_y = 0.0f;
@@ -450,6 +456,8 @@ namespace {
 
 	void GuiSetClipboardText(void*, const char* text) {
 		g_gui_clipboard_text = text ? text : "";
+		g_gui_clipboard_write_text = g_gui_clipboard_text;
+		++g_gui_clipboard_write_revision;
 	}
 
 	void GuiSetImeData(ImGuiContext*, ImGuiViewport*, ImGuiPlatformImeData* data) {
@@ -1279,6 +1287,25 @@ int casioemu_core_gui_set_clipboard_text(const char* text) {
 	return 0;
 }
 
+int casioemu_core_gui_clipboard_write_pending() {
+	if (!g_gui_imgui_ready) return 0;
+	return g_gui_clipboard_write_revision != g_gui_clipboard_ack_revision ? 1 : 0;
+}
+
+const char* casioemu_core_gui_clipboard_write_text() {
+	return g_gui_clipboard_write_text.c_str();
+}
+
+uint32_t casioemu_core_gui_clipboard_write_revision() {
+	return g_gui_clipboard_write_revision;
+}
+
+void casioemu_core_gui_clipboard_write_ack(uint32_t revision) {
+	if (revision == g_gui_clipboard_write_revision) {
+		g_gui_clipboard_ack_revision = revision;
+	}
+}
+
 int casioemu_core_gui_file_request_pending() {
 	return g_gui_file_request_kind.empty() ? 0 : 1;
 }
@@ -1384,6 +1411,20 @@ double casioemu_core_gui_ime_line_height() {
 int casioemu_core_gui_set_clipboard_text(const char*) {
 	return 99;
 }
+
+int casioemu_core_gui_clipboard_write_pending() {
+	return 0;
+}
+
+const char* casioemu_core_gui_clipboard_write_text() {
+	return "";
+}
+
+uint32_t casioemu_core_gui_clipboard_write_revision() {
+	return 0;
+}
+
+void casioemu_core_gui_clipboard_write_ack(uint32_t) {}
 
 int casioemu_core_gui_file_request_pending() {
 	return 0;

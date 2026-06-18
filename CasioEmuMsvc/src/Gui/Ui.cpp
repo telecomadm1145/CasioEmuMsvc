@@ -451,6 +451,7 @@ namespace UIHelpers {
 			const char* n = win->name;
 			if (n && strcmp(n, "Ram") == 0) {
 				win->GotoMemoryAddress(addr);
+				win->BringToFront();
 				return;
 			}
 			// Track first editor-like window as fallback
@@ -461,18 +462,29 @@ namespace UIHelpers {
 		}
 		if (fallback) {
 			fallback->GotoMemoryAddress(addr);
+			fallback->BringToFront();
 		}
 	}
 
 	void ClickableAddress(uint32_t addr, JumpTarget defaultTarget) {
-		// Render the colored address text
-		ImGui::PushStyleColor(ImGuiCol_Text, kColorInfo);
 		char addrLabel[16];
 		snprintf(addrLabel, sizeof(addrLabel), "%05X", addr);
-		ImGui::TextUnformatted(addrLabel);
-		ImGui::PopStyleColor();
+		ImGui::PushID(addrLabel);
+		const ImVec2 textSize = ImGui::CalcTextSize(addrLabel);
+		const ImVec2 textPos = ImGui::GetCursorScreenPos();
+		ImGui::InvisibleButton("##clickable_address", textSize);
+		const bool hovered = ImGui::IsItemHovered();
+		const bool leftClicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+		const bool rightClicked = ImGui::IsItemClicked(ImGuiMouseButton_Right);
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		const ImU32 textColor = ImGui::GetColorU32(hovered ? ImVec4(0.55f, 0.72f, 1.0f, 1.0f) : kColorInfo);
+		drawList->AddText(textPos, textColor, addrLabel);
+		if (hovered) {
+			const float underlineY = textPos.y + textSize.y;
+			drawList->AddLine(ImVec2(textPos.x, underlineY), ImVec2(textPos.x + textSize.x, underlineY), textColor);
+		}
 
-		if (ImGui::IsItemHovered()) {
+		if (hovered) {
 			ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 			ImGui::BeginTooltip();
 			if (defaultTarget == JumpTarget::Code) {
@@ -488,7 +500,7 @@ namespace UIHelpers {
 		}
 
 		// Left-click: default action
-		if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+		if (leftClicked) {
 			if (defaultTarget == JumpTarget::Code || defaultTarget == JumpTarget::Both) {
 				if (code_viewer) {
 					code_viewer->JumpTo(addr);
@@ -502,7 +514,7 @@ namespace UIHelpers {
 		// Right-click: context menu with both options
 		char popupId[32];
 		snprintf(popupId, sizeof(popupId), "##ca_popup_%05X", addr);
-		if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+		if (rightClicked) {
 			ImGui::OpenPopup(popupId);
 		}
 		if (ImGui::BeginPopup(popupId)) {
@@ -519,6 +531,7 @@ namespace UIHelpers {
 			}
 			ImGui::EndPopup();
 		}
+		ImGui::PopID();
 	}
 }
 
