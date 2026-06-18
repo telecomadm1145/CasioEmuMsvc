@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 option(CASIOEMU_WEB "Build the Emscripten/WebAssembly version" OFF)
 option(CASIOEMU_CORE_WEB "Build the Emscripten/WebAssembly core API" OFF)
+option(CASIOEMU_WEB_DEBUG_INFO "Enable heavier Emscripten runtime and source-map diagnostics" OFF)
 
 if(CASIOEMU_CORE_WEB)
     set(CASIOEMU_WEB ON CACHE BOOL "Core web builds use the Emscripten/WebAssembly pipeline" FORCE)
@@ -259,6 +260,7 @@ if(CASIOEMU_WEB)
             "SHELL:-sSDL2_IMAGE_FORMATS=[\"png\"]"
             -sALLOW_MEMORY_GROWTH=1
             -sINITIAL_MEMORY=134217728
+            -sSTACK_SIZE=8388608
             -sEXIT_RUNTIME=0
             -sFORCE_FILESYSTEM=1
             -sMODULARIZE=1
@@ -270,6 +272,19 @@ if(CASIOEMU_WEB)
             "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/roms.db@/roms.db"
             -lidbfs.js
         )
+        if(CASIOEMU_WEB_DEBUG_INFO)
+            target_compile_options(${TARGET_NAME} PRIVATE
+                -gsource-map
+                -fno-omit-frame-pointer
+            )
+            target_link_options(${TARGET_NAME} PRIVATE
+                -gsource-map
+                --profiling-funcs
+                -sASSERTIONS=2
+                -sSAFE_HEAP=1
+                -sSTACK_OVERFLOW_CHECK=2
+            )
+        endif()
         set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX ".js")
     else()
         target_link_options(${TARGET_NAME} PRIVATE

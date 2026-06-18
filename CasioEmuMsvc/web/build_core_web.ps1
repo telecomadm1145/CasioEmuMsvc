@@ -2,7 +2,8 @@ param(
     [string]$BuildDir = "build-core-web",
     [string]$Config = "Release",
     [string]$EmsdkPath = "C:\Users\Administrator\emsdk",
-    [string]$CopyTo = ""
+    [string]$CopyTo = "",
+    [switch]$DebugInfo
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,7 +46,8 @@ New-Item -ItemType Directory -Force $env:EM_CACHE | Out-Null
     "-DCMAKE_TOOLCHAIN_FILE=$ToolchainFile" `
     "-DCMAKE_BUILD_TYPE=$Config" `
     "-DCASIOEMU_CORE_WEB=ON" `
-    "-DBUILD_EXECUTABLE=ON"
+    "-DBUILD_EXECUTABLE=ON" `
+    "-DCASIOEMU_WEB_DEBUG_INFO=$(if ($DebugInfo) { 'ON' } else { 'OFF' })"
 if ($LASTEXITCODE -ne 0) {
     throw "CMake configure failed with exit code $LASTEXITCODE."
 }
