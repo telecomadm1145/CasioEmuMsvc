@@ -1378,7 +1378,7 @@ extern "C" const char* casioemu_core_rom_version() {
 	rom.seekg(addr); rom.read(name, 6);
 	rom.seekg(addr + 6); rom.read(ver, 2);
 	rom.seekg(addr + 8); rom.read(reinterpret_cast<char*>(sum), 2);
-	snprintf(buffer, sizeof(buffer), "%.6s %.2s (%02X)", name, ver, sum[1] * 0x100 + sum[0]);
+	snprintf(buffer, sizeof(buffer), "%.6s %.2s (%04X)", name, ver, sum[1] * 0x100 + sum[0]);
 	return buffer;
 }
 
