@@ -93,6 +93,10 @@ namespace {
 	int g_gui_file_result_code = 0;
 	bool g_gui_file_result_pending = false;
 	std::string g_gui_clipboard_text;
+	bool g_gui_ime_visible = false;
+	float g_gui_ime_x = 0.0f;
+	float g_gui_ime_y = 0.0f;
+	float g_gui_ime_line_height = 0.0f;
 	std::vector<uint8_t> g_gui_background_rgba;
 	int g_gui_background_width = 0;
 	int g_gui_background_height = 0;
@@ -254,6 +258,10 @@ namespace {
 		g_gui_file_result_code = 0;
 		g_gui_file_result_pending = false;
 		g_gui_clipboard_text.clear();
+		g_gui_ime_visible = false;
+		g_gui_ime_x = 0.0f;
+		g_gui_ime_y = 0.0f;
+		g_gui_ime_line_height = 0.0f;
 		g_gui_background_rgba.clear();
 		g_gui_background_width = 0;
 		g_gui_background_height = 0;
@@ -444,6 +452,19 @@ namespace {
 		g_gui_clipboard_text = text ? text : "";
 	}
 
+	void GuiSetImeData(ImGuiContext*, ImGuiViewport*, ImGuiPlatformImeData* data) {
+		g_gui_ime_visible = data && data->WantVisible;
+		if (!data) {
+			g_gui_ime_x = 0.0f;
+			g_gui_ime_y = 0.0f;
+			g_gui_ime_line_height = 0.0f;
+			return;
+		}
+		g_gui_ime_x = data->InputPos.x;
+		g_gui_ime_y = data->InputPos.y;
+		g_gui_ime_line_height = data->InputLineHeight;
+	}
+
 	const ImWchar* GuiCjkRanges() {
 		static const ImWchar ranges[] = {
 			0x0020, 0x00FF,
@@ -490,6 +511,7 @@ namespace {
 		io.GetClipboardTextFn = GuiGetClipboardText;
 		io.SetClipboardTextFn = GuiSetClipboardText;
 		io.ClipboardUserData = nullptr;
+		io.PlatformSetImeDataFn = GuiSetImeData;
 		GuiLoadFonts(io);
 		unsigned char* pixels = nullptr;
 		int font_width = 0;
@@ -1234,6 +1256,23 @@ int casioemu_core_gui_want_text_input() {
 	return ImGui::GetIO().WantTextInput ? 1 : 0;
 }
 
+int casioemu_core_gui_ime_visible() {
+	if (!g_gui_imgui_ready) return 0;
+	return g_gui_ime_visible ? 1 : 0;
+}
+
+double casioemu_core_gui_ime_x() {
+	return g_gui_ime_x;
+}
+
+double casioemu_core_gui_ime_y() {
+	return g_gui_ime_y;
+}
+
+double casioemu_core_gui_ime_line_height() {
+	return g_gui_ime_line_height;
+}
+
 int casioemu_core_gui_set_clipboard_text(const char* text) {
 	if (!text) return 1;
 	g_gui_clipboard_text = text;
@@ -1324,6 +1363,22 @@ int casioemu_core_gui_text(unsigned int) {
 
 int casioemu_core_gui_want_text_input() {
 	return 0;
+}
+
+int casioemu_core_gui_ime_visible() {
+	return 0;
+}
+
+double casioemu_core_gui_ime_x() {
+	return 0.0;
+}
+
+double casioemu_core_gui_ime_y() {
+	return 0.0;
+}
+
+double casioemu_core_gui_ime_line_height() {
+	return 0.0;
 }
 
 int casioemu_core_gui_set_clipboard_text(const char*) {
