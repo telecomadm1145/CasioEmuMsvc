@@ -4,14 +4,16 @@ import hashlib
 import subprocess
 import sys
 import urllib.request
+import zipfile
 from pathlib import Path
 
 
-FONT_URL = (
-    "https://github.com/notofonts/noto-cjk/raw/main/"
-    "Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf"
+FONT_ARCHIVE_URL = (
+    "https://github.com/TakWolf/fusion-pixel-font/releases/download/"
+    "2026.05.07/fusion-pixel-font-12px-monospaced-ttf-v2026.05.07.zip"
 )
-FONT_SHA256 = "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
+FONT_ARCHIVE_SHA256 = "bb8ad772030d7671abee86aa53c281701efd8fd38259278c89549371cca1070c"
+FONT_ARCHIVE_MEMBER = "fusion-pixel-12px-monospaced-zh_hans.ttf"
 
 
 def sha256(path: Path) -> str:
@@ -22,18 +24,34 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def download_font(path: Path) -> None:
+def extract_font_from_archive(archive: Path, member: str, output: Path) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(archive) as zf:
+        with zf.open(member) as src, output.open("wb") as dst:
+            for chunk in iter(lambda: src.read(1024 * 1024), b""):
+                dst.write(chunk)
+
+
+def download_font_archive(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists() and sha256(path) == FONT_SHA256:
+    if path.exists() and sha256(path) == FONT_ARCHIVE_SHA256:
         return
     tmp = path.with_suffix(path.suffix + ".tmp")
-    print(f"[gui-font] downloading {FONT_URL}", flush=True)
-    urllib.request.urlretrieve(FONT_URL, tmp)
+    print(f"[gui-font] downloading {FONT_ARCHIVE_URL}", flush=True)
+    urllib.request.urlretrieve(FONT_ARCHIVE_URL, tmp)
     digest = sha256(tmp)
-    if digest != FONT_SHA256:
+    if digest != FONT_ARCHIVE_SHA256:
         tmp.unlink(missing_ok=True)
-        raise RuntimeError(f"font sha256 mismatch: expected {FONT_SHA256}, got {digest}")
+        raise RuntimeError(f"font archive sha256 mismatch: expected {FONT_ARCHIVE_SHA256}, got {digest}")
     tmp.replace(path)
+
+
+def ensure_default_font(project_root: Path, source: Path) -> None:
+    if source.exists():
+        return
+    archive = project_root / "third_party" / "fonts" / "fusion-pixel-font-12px-monospaced-ttf-v2026.05.07.zip"
+    download_font_archive(archive)
+    extract_font_from_archive(archive, FONT_ARCHIVE_MEMBER, source)
 
 
 def strip_raw_line(line: str) -> bool:
@@ -103,7 +121,7 @@ def subset_font(python: str, source: Path, text_file: Path, output: Path) -> Non
         "--name-legacy",
         "--name-languages=*",
     ]
-    print("[gui-font] subsetting Noto Sans CJK SC", flush=True)
+    print("[gui-font] subsetting Fusion Pixel 12px Monospaced SC", flush=True)
     subprocess.check_call(cmd)
 
 
@@ -118,10 +136,11 @@ def main() -> int:
 
     project_root = Path(args.project_root)
     output = Path(args.output)
-    source = Path(args.source) if args.source else project_root / "third_party" / "fonts" / "NotoSansCJKsc-Regular.otf"
+    source = Path(args.source) if args.source else project_root / "third_party" / "fonts" / FONT_ARCHIVE_MEMBER
     chars_output = Path(args.chars_output) if args.chars_output else output.with_suffix(".chars.txt")
 
-    download_font(source)
+    if not args.source:
+        ensure_default_font(project_root, source)
     chars_output.parent.mkdir(parents=True, exist_ok=True)
     chars_output.write_text(collect_locale_chars(project_root / "locales"), encoding="utf-8")
     ensure_fonttools(args.python)

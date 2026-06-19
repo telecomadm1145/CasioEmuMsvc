@@ -487,6 +487,7 @@ namespace {
 	}
 
 	void GuiLoadFonts(ImGuiIO& io) {
+		constexpr float kWebCjkFallbackFontSize = 12.0f;
 		ImFontConfig config;
 		config.PixelSnapH = true;
 		io.Fonts->AddFontDefault(&config);
@@ -494,7 +495,7 @@ namespace {
 		constexpr const char* kBundledCjkFont = "/fonts/CasioEmuGuiCJKSubset.otf";
 		if (std::filesystem::exists(kBundledCjkFont)) {
 			config.MergeMode = true;
-			if (io.Fonts->AddFontFromFileTTF(kBundledCjkFont, 16.0f, &config, GuiCjkRanges())) {
+			if (io.Fonts->AddFontFromFileTTF(kBundledCjkFont, kWebCjkFallbackFontSize, &config, GuiCjkRanges())) {
 				printf("[CasioEmuCore][GUI][Font] Loaded bundled CJK font: %s\n", kBundledCjkFont);
 			}
 			else {
