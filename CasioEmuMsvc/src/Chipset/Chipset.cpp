@@ -76,9 +76,7 @@ namespace casioemu {
 
 	Chipset::~Chipset() {
 		DestructPeripherals();
-		if (emulator.hardware_id != HW_SOLARII) {
-			DestructClockGenerator();
-		}
+		DestructClockGenerator();
 		DestructInterruptSFR();
 		delete epscpu;
 		delete& mmu;
@@ -444,18 +442,6 @@ namespace casioemu {
 			peripherals.push_front(CreateKeyboard(emulator));
 			return;
 		}
-		if (emulator.hardware_id == HW_SOLARII) {
-			EXIhandle = new ExternalInterrupts(emulator);
-			peripherals.push_front(EXIhandle);
-			peripherals.push_front(CreateStbCtrl(emulator));
-			peripherals.push_front(CreateMiscellaneous(emulator));
-			peripherals.push_front(CreateRomWindow(emulator));
-			peripherals.push_front(CreateBatteryBackedRAM(emulator));
-			peripherals.push_front(CreateScreen(emulator));
-			peripherals.push_front(CreateKeyboard(emulator));
-			peripherals.push_front(CreateTimer(emulator));
-			return;
-		}
 		// Only tested on fx-991cnx
 		if (emulator.hardware_id != HW_TI) {
 			BLKCON_mask = emulator.hardware_id == HW_CLASSWIZ ? 0x1F : 0xFF;
@@ -569,9 +555,7 @@ namespace casioemu {
 			peripheral->Initialise();
 
 		ConstructInterruptSFR();
-		if (emulator.hardware_id != HW_SOLARII) {
-			ConstructClockGenerator();
-		}
+		ConstructClockGenerator();
 
 		cpu.SetupInternals();
 		mmu.SetupInternals();
@@ -579,9 +563,7 @@ namespace casioemu {
 
 	void Chipset::Reset() {
 		ResetInterruptSFR();
-		if (emulator.hardware_id != HW_SOLARII) {
-			ResetClockGenerator();
-		}
+		ResetClockGenerator();
 		isMIBlocked = false;
 
 		SegmentAccess = false;

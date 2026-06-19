@@ -10,8 +10,7 @@
 
 namespace casioemu {
 	class Miscellaneous : public Peripheral {
-		MMURegion region_dsr, region_F004, region_F00A, region_F046;
-		uint8_t data_F00A = 0;
+		MMURegion region_dsr, region_F004, region_F046;
 
 	public:
 		using Peripheral::Peripheral;
@@ -33,9 +32,6 @@ namespace casioemu {
 				0xF004, 1, "Miscellaneous/DataSegAccess", this, [](MMURegion* region, size_t) { return (uint8_t)((Miscellaneous*)region->userdata)->emulator.chipset.SegmentAccess; }, [](MMURegion* region, size_t, uint8_t data) {
 				Miscellaneous* self = (Miscellaneous *)region->userdata;
 				self->emulator.chipset.SegmentAccess = data & 1; }, emulator);
-		}
-		if (emulator.hardware_id == HW_SOLARII) {
-			region_F00A.Setup(0xF00A, 1, "Miscellaneous/SolarII_F00A", &data_F00A, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
 		}
 	}
 
