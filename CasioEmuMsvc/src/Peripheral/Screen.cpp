@@ -174,6 +174,19 @@ namespace casioemu {
             return display_data.data();
         }
 
+        uint8_t CalculateSolarIIStatusAlpha(bool enabled) const {
+            if (!screen_residual_enabled) {
+                return enabled ? 255 : 0;
+            }
+
+            constexpr int contrast_bias = 9;
+            const int sb = 3;
+            const int contrast = static_cast<int>(screen_contrast) + contrast_bias;
+            const int ink_alpha_on = -240 + contrast * 28 - sb * 8;
+            const int ink_alpha_off = static_cast<int>((-220 + contrast * 17 - sb * 13) * screen_residual_alpha_scale);
+            return static_cast<uint8_t>(std::clamp(enabled ? ink_alpha_on : ink_alpha_off, 0, 255));
+        }
+
     public:
         using Peripheral::Peripheral;
 
@@ -192,8 +205,8 @@ namespace casioemu {
                 emulator);
             region_range.Setup(0xF030, 1, "SolarIIScreen/Range", &screen_range, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
             region_mode.Setup(0xF031, 1, "SolarIIScreen/Mode", &screen_mode, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
-            region_contrast.Setup(0xF032, 1, "SolarIIScreen/Contrast", &screen_contrast, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
-            region_brightness.Setup(0xF033, 1, "SolarIIScreen/Brightness", &screen_brightness, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
+            region_contrast.Setup(0xF032, 1, "SolarIIScreen/Contrast", &screen_contrast, MMURegion::DefaultRead<uint8_t, 0x1F>, MMURegion::DefaultWrite<uint8_t, 0x1F>, emulator);
+            region_brightness.Setup(0xF033, 1, "SolarIIScreen/Brightness", &screen_brightness, MMURegion::DefaultRead<uint8_t, 0x07>, MMURegion::DefaultWrite<uint8_t, 0x07>, emulator);
             region_refresh_rate.Setup(0xF034, 1, "SolarIIScreen/RefreshRate", &screen_refresh_rate, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
         }
 
@@ -213,7 +226,7 @@ namespace casioemu {
             for (size_t i = 0; i < STATUS_BITS.size(); ++i) {
                 const auto bit = STATUS_BITS[i];
                 const bool enabled = bit.offset < DISPLAY_STORAGE_LEN && (data[bit.offset] & (1 << bit.bit));
-                const uint8_t target = enabled ? 255 : (screen_residual_enabled ? 13 : 0);
+                const uint8_t target = CalculateSolarIIStatusAlpha(enabled);
                 if (screen_residual_enabled) {
                     const float alpha = static_cast<float>(status_alpha[i]) * 0.80f + static_cast<float>(target) * 0.20f;
                     status_alpha[i] = static_cast<uint8_t>(std::clamp(alpha, 0.0f, 255.0f));
