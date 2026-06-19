@@ -290,7 +290,7 @@ namespace {
 	casioemu::ModelInfo MakeWebModel(bool real_hardware, bool is_sample_rom, int pd_value, int model_type, bool legacy_ko, bool classwiz_graph) {
 	const auto hardware_id = HardwareIdFromCoreType(model_type);
 		casioemu::ModelInfo model{};
-	model.csr_mask = hardware_id == casioemu::HW_ES_PLUS ? 0x1 : 0xf;
+	model.csr_mask = hardware_id == casioemu::HW_SOLARII ? 0x0 : (hardware_id == casioemu::HW_ES_PLUS ? 0x1 : 0xf);
 		model.hardware_id = hardware_id;
 		model.real_hardware = real_hardware;
 		model.pd_value = static_cast<unsigned char>(pd_value & 0xff);
@@ -300,8 +300,8 @@ namespace {
 		model.enable_new_screen = false;
 		model.is_sample_rom = is_sample_rom;
 		model.legacy_ko = legacy_ko;
-		model.u16_mode = hardware_id != casioemu::HW_ES_PLUS;
-		model.LARGE_model = true;
+		model.u16_mode = hardware_id == casioemu::HW_CLASSWIZ || hardware_id == casioemu::HW_CLASSWIZ_II || hardware_id == casioemu::HW_TI;
+		model.LARGE_model = hardware_id != casioemu::HW_SOLARII;
 		model.ml620_mirroring = hardware_id != casioemu::HW_CLASSWIZ;
 		model.ink_color = {0, 0, 0};
 		if (!real_hardware) {
@@ -375,6 +375,10 @@ namespace {
 		case casioemu::HW_EPS6800:
 			addr = 0x8000;
 			len = 0x2000;
+			return true;
+		case casioemu::HW_SOLARII:
+			addr = 0xE000;
+			len = 0x1000;
 			return true;
 		default:
 			addr = 0xD000;

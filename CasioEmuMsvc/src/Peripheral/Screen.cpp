@@ -129,6 +129,117 @@ inline void fillRandomData(unsigned char* buf, size_t size) {
 #pragma warning(disable : 4244)
 
 namespace casioemu {
+    class SolarIIScreen : public Peripheral, public IScreenFrameProvider {
+        struct StatusBit {
+            uint8_t offset;
+            uint8_t bit;
+        };
+
+        static constexpr int FRAME_WIDTH = 64;
+        static constexpr int FRAME_HEIGHT_WITH_STATUS_ROW = 9;
+        static constexpr size_t DISPLAY_BASE_ADDR = 0xF800;
+        static constexpr size_t DISPLAY_ADDR = 0xF801;
+        static constexpr size_t DISPLAY_LEN = 0x17;
+        static constexpr size_t DISPLAY_STORAGE_LEN = 0x18;
+        static constexpr std::array<StatusBit, 109> STATUS_BITS = {{
+            {0x11, 6}, {0x11, 2}, {0x12, 6}, {0x12, 2}, {0x13, 6}, {0x13, 2},
+            {0x14, 6}, {0x14, 2}, {0x15, 6}, {0x15, 2}, {0x16, 4}, {0x16, 2},
+            {0x16, 0}, {0x08, 1}, {0x01, 5}, {0x01, 6}, {0x01, 4}, {0x09, 5},
+            {0x09, 6}, {0x09, 4}, {0x11, 5}, {0x11, 4}, {0x01, 1}, {0x01, 2},
+            {0x01, 0}, {0x09, 1}, {0x09, 2}, {0x09, 0}, {0x11, 1}, {0x11, 0},
+            {0x02, 5}, {0x02, 6}, {0x02, 4}, {0x0A, 5}, {0x0A, 6}, {0x0A, 4},
+            {0x12, 5}, {0x12, 4}, {0x02, 1}, {0x02, 2}, {0x02, 0}, {0x0A, 1},
+            {0x0A, 2}, {0x0A, 0}, {0x12, 1}, {0x12, 0}, {0x03, 5}, {0x03, 6},
+            {0x03, 4}, {0x0B, 5}, {0x0B, 6}, {0x0B, 4}, {0x13, 5}, {0x13, 4},
+            {0x03, 1}, {0x03, 2}, {0x03, 0}, {0x0B, 1}, {0x0B, 2}, {0x0B, 0},
+            {0x13, 1}, {0x13, 0}, {0x04, 5}, {0x04, 6}, {0x04, 4}, {0x0C, 5},
+            {0x0C, 6}, {0x0C, 4}, {0x14, 5}, {0x14, 4}, {0x04, 1}, {0x04, 2},
+            {0x04, 0}, {0x0C, 1}, {0x0C, 2}, {0x0C, 0}, {0x14, 1}, {0x14, 0},
+            {0x05, 5}, {0x05, 6}, {0x05, 4}, {0x0D, 5}, {0x0D, 6}, {0x0D, 4},
+            {0x15, 5}, {0x15, 4}, {0x05, 1}, {0x05, 2}, {0x05, 0}, {0x0D, 1},
+            {0x0D, 2}, {0x0D, 0}, {0x15, 1}, {0x15, 0}, {0x16, 6}, {0x06, 5},
+            {0x06, 6}, {0x06, 4}, {0x0E, 5}, {0x0E, 6}, {0x0E, 4}, {0x16, 5},
+            {0x06, 1}, {0x06, 2}, {0x06, 0}, {0x0E, 1}, {0x0E, 2}, {0x0E, 0},
+            {0x16, 1},
+        }};
+
+        std::array<uint8_t, STATUS_BITS.size()> status_alpha{};
+        std::array<uint8_t, DISPLAY_STORAGE_LEN> display_data{};
+        MMURegion region_display_control{}, region_display{};
+        MMURegion region_range{}, region_mode{}, region_contrast{}, region_brightness{}, region_refresh_rate{};
+        uint8_t display_control = 0;
+        uint8_t screen_range = 0, screen_mode = 0, screen_contrast = 0, screen_brightness = 0, screen_refresh_rate = 0;
+
+        const uint8_t* DisplayData() const {
+            return display_data.data();
+        }
+
+    public:
+        using Peripheral::Peripheral;
+
+        void Initialise() override {
+            region_display_control.Setup(0xF800, 1, "SolarIIScreen/Control", &display_control, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
+            region_display.Setup(
+                DISPLAY_ADDR, DISPLAY_LEN, "SolarIIScreen/Buffer", this,
+                [](MMURegion* region, size_t offset) {
+                    auto* screen = static_cast<SolarIIScreen*>(region->userdata);
+                    return screen->display_data[offset - DISPLAY_BASE_ADDR];
+                },
+                [](MMURegion* region, size_t offset, uint8_t data) {
+                    auto* screen = static_cast<SolarIIScreen*>(region->userdata);
+                    screen->display_data[offset - DISPLAY_BASE_ADDR] = data;
+                },
+                emulator);
+            region_range.Setup(0xF030, 1, "SolarIIScreen/Range", &screen_range, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
+            region_mode.Setup(0xF031, 1, "SolarIIScreen/Mode", &screen_mode, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
+            region_contrast.Setup(0xF032, 1, "SolarIIScreen/Contrast", &screen_contrast, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
+            region_brightness.Setup(0xF033, 1, "SolarIIScreen/Brightness", &screen_brightness, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
+            region_refresh_rate.Setup(0xF034, 1, "SolarIIScreen/RefreshRate", &screen_refresh_rate, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
+        }
+
+        void* QueryInterface(const char* name) override {
+            if (strcmp(name, typeid(IScreenFrameProvider).name()) == 0) {
+                return static_cast<IScreenFrameProvider*>(this);
+            }
+            return Peripheral::QueryInterface(name);
+        }
+
+        void UpdateFrameAlpha() override {
+            const uint8_t* data = DisplayData();
+            if (!data) {
+                status_alpha.fill(0);
+                return;
+            }
+            for (size_t i = 0; i < STATUS_BITS.size(); ++i) {
+                const auto bit = STATUS_BITS[i];
+                const bool enabled = bit.offset < DISPLAY_STORAGE_LEN && (data[bit.offset] & (1 << bit.bit));
+                const uint8_t target = enabled ? 255 : (screen_residual_enabled ? 13 : 0);
+                if (screen_residual_enabled) {
+                    const float alpha = static_cast<float>(status_alpha[i]) * 0.80f + static_cast<float>(target) * 0.20f;
+                    status_alpha[i] = static_cast<uint8_t>(std::clamp(alpha, 0.0f, 255.0f));
+                }
+                else {
+                    status_alpha[i] = target;
+                }
+            }
+        }
+
+        int GetFrameWidth() const override { return FRAME_WIDTH; }
+        int GetFrameHeight() const override { return FRAME_HEIGHT_WITH_STATUS_ROW; }
+        void WriteFrameRgba(uint8_t* out, int r, int g, int b) const override {
+            (void)r;
+            (void)g;
+            (void)b;
+            if (!out) return;
+            std::fill(out, out + FRAME_WIDTH * FRAME_HEIGHT_WITH_STATUS_ROW * 4, 0);
+        }
+        int GetStatusAlphaCount() const override { return static_cast<int>(status_alpha.size()); }
+        void WriteStatusAlpha(uint8_t* out, int max_len) const override {
+            if (!out || max_len <= 0) return;
+            const int count = std::min(max_len, GetStatusAlphaCount());
+            std::copy(status_alpha.begin(), status_alpha.begin() + count, out);
+        }
+    };
 	struct SpriteBitmap {
 		const char* name;
 		uint8_t mask, offset;
@@ -2285,6 +2396,9 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 
 		case HW_CLASSWIZ_II:
 			return new Screen<HW_CLASSWIZ_II>(emulator);
+
+		case HW_SOLARII:
+			return new SolarIIScreen(emulator);
 
 		case HW_TI:
 			return new Screen<HW_TI>(emulator);

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Gui/hex.hpp"
 #include "ModelInfo.h"
 #include <vector>
@@ -9,6 +9,8 @@ namespace casioemu {
 			return 0;
 		if (hid == HW_TI)
 			return 0xB000;
+		if (hid == HW_SOLARII)
+			return 0xE000;
 		return (hid == HW_FX_5800P || hid == HW_ES_PLUS) ? 0x8000 : hid == HW_CLASSWIZ ? 0xD000
 																					   : 0x9000;
 	}
@@ -17,6 +19,8 @@ namespace casioemu {
 			return 64 * 128;
 		if (hid == HW_TI)
 			return 0xF000 - 0xB000;
+		if (hid == HW_SOLARII)
+			return 0x1000;
 		return (hid == HW_FX_5800P || hid == HW_ES_PLUS) ? 0x0E00 : hid == HW_CLASSWIZ ? 0x2000
 																					   : 0x6000;
 	}

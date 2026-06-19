@@ -72,7 +72,8 @@ namespace casioemu {
 		bool real_hardware = emulator.ModelDefinition.real_hardware;
 		size_t sim_ram_size = 0;
 		if (!real_hardware) {
-			sim_ram_size = emulator.hardware_id == HW_ES_PLUS	 ? ES_PLUS_SIM_RAM_SIZE
+			sim_ram_size = emulator.hardware_id == HW_SOLARII   ? 0
+						 : emulator.hardware_id == HW_ES_PLUS	 ? ES_PLUS_SIM_RAM_SIZE
 						 : emulator.hardware_id == HW_CLASSWIZ	 ? CLASSWIZ_SIM_RAM_SIZE
 						 : emulator.hardware_id == HW_CLASSWIZ_II ? CLASSWIZ_II_SIM_RAM_SIZE
 																 : 0x100;
@@ -83,15 +84,30 @@ namespace casioemu {
 		fillRandomData(ram_buffer, ram_size);
 
 #ifndef CASIOEMU_DISABLE_RAM_IMAGE
-		LoadRAMImage();
+		if (emulator.hardware_id != HW_SOLARII)
+			LoadRAMImage();
 #endif
 
-		region.Setup(
-			GetRamBaseAddr(emulator.hardware_id), GetRamSize(emulator.hardware_id),
-			"BatteryBackedRAM", ram_buffer,
-			[](MMURegion* r, size_t o) { return static_cast<uint8_t*>(r->userdata)[o - r->base]; },
-			[](MMURegion* r, size_t o, uint8_t d) { static_cast<uint8_t*>(r->userdata)[o - r->base] = d; },
-			emulator);
+		if (emulator.hardware_id == HW_SOLARII) {
+			region.Setup(
+				0xE000, 0x0800, "BatteryBackedRAM", ram_buffer,
+				[](MMURegion* r, size_t o) { return static_cast<uint8_t*>(r->userdata)[o - r->base]; },
+				[](MMURegion* r, size_t o, uint8_t d) { static_cast<uint8_t*>(r->userdata)[o - r->base] = d; },
+				emulator);
+			region_2.Setup(
+				0xE803, 0x07FD, "BatteryBackedRAM/2", ram_buffer + 0x0803,
+				[](MMURegion* r, size_t o) { return static_cast<uint8_t*>(r->userdata)[o - r->base]; },
+				[](MMURegion* r, size_t o, uint8_t d) { static_cast<uint8_t*>(r->userdata)[o - r->base] = d; },
+				emulator);
+		}
+		else {
+			region.Setup(
+				GetRamBaseAddr(emulator.hardware_id), GetRamSize(emulator.hardware_id),
+				"BatteryBackedRAM", ram_buffer,
+				[](MMURegion* r, size_t o) { return static_cast<uint8_t*>(r->userdata)[o - r->base]; },
+				[](MMURegion* r, size_t o, uint8_t d) { static_cast<uint8_t*>(r->userdata)[o - r->base] = d; },
+				emulator);
+		}
 
 		if (emulator.hardware_id == HW_FX_5800P) {
 			pram_buffer = new uint8_t[0x8000];
@@ -103,7 +119,7 @@ namespace casioemu {
 				emulator);
 		}
 
-		if (!real_hardware) {
+		if (!real_hardware && emulator.hardware_id != HW_SOLARII) {
 			region_2.Setup(
 				emulator.hardware_id == HW_ES_PLUS		 ? ES_PLUS_SIM_RAM_BASE
 				: emulator.hardware_id == HW_CLASSWIZ	 ? CLASSWIZ_SIM_RAM_BASE
@@ -116,7 +132,8 @@ namespace casioemu {
 		}
 
 #ifndef CASIOEMU_DISABLE_RAM_IMAGE
-		save_timer_id = SDL_AddTimer(SAVE_INTERVAL_MS, SaveRamCallback, this);
+		if (emulator.hardware_id != HW_SOLARII)
+			save_timer_id = SDL_AddTimer(SAVE_INTERVAL_MS, SaveRamCallback, this);
 #endif
 		n_ram_buffer = (char*)ram_buffer;
 	}
@@ -171,7 +188,8 @@ namespace casioemu {
 
 	void BatteryBackedRAM::Uninitialise() {
 #ifndef CASIOEMU_DISABLE_RAM_IMAGE
-		SaveRAMImage();
+		if (emulator.hardware_id != HW_SOLARII)
+			SaveRAMImage();
 		if (save_timer_id)
 			SDL_RemoveTimer(save_timer_id);
 #endif

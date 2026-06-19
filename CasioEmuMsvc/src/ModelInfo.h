@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <map>
 #include <string>
 #include <vector>
@@ -21,9 +21,9 @@ namespace casioemu {
 		HW_CLASSWIZ_II = 5,
 		HW_FX_5800P = 6,
 		HW_TI = 7,
-		// our test ends here, so we can add new models without worrying about breaking old configs
-		HW_MAX = HW_TI,
 		HW_SOLARII = 8,
+		// our test ends here, so we can add new models without worrying about breaking old configs
+		HW_MAX = HW_SOLARII,
 		HW_EPS6800 = 9,
 	};
 	struct SpriteInfo {
@@ -108,7 +108,7 @@ namespace casioemu {
 			Binary::Read(is, is_sample_rom);
 			Binary::Read(is, legacy_ko);
 			// set default value if loaded a old config
-			if (hardware_id == HW_ES_PLUS) {
+			if (hardware_id == HW_ES_PLUS || hardware_id == HW_SOLARII) {
 				u16_mode = false;
 			}
 			else {

@@ -248,7 +248,6 @@ namespace casioemu {
 			};
 			goto init_kbd;
 		}
-
 		region_ki.Setup(0xF040, 1, "Keyboard/KI", this,
 			[](MMURegion* region, size_t) {
 				return ((Keyboard*)region->userdata)->keyboard_in;
@@ -328,11 +327,11 @@ namespace casioemu {
 			keyboard_ready_emu = 1;
 			emu_ki_readcount = 0;
 			emu_ko_readcount = 0;
-			int offset = emulator.hardware_id == HW_ES_PLUS ? 0 : emulator.hardware_id == HW_CLASSWIZ ? 0x40000
+			int offset = emulator.hardware_id == HW_ES_PLUS || emulator.hardware_id == HW_SOLARII ? 0 : emulator.hardware_id == HW_CLASSWIZ ? 0x40000
 																									  : 0x80000;
-			size_t rse = 0x8E00;
-			size_t ki = 0x8E01;
-			size_t ko = 0x8E02;
+			size_t rse = emulator.hardware_id == HW_SOLARII ? 0xE800 : 0x8E00;
+			size_t ki = emulator.hardware_id == HW_SOLARII ? 0xE801 : 0x8E01;
+			size_t ko = emulator.hardware_id == HW_SOLARII ? 0xE802 : 0x8E02;
 			if (emulator.ModelDefinition.is_sample_rom) {
 				rse += 7;
 				ki += 4;
@@ -386,7 +385,7 @@ namespace casioemu {
 		if (emulator.hardware_id == HW_CLASSWIZ_II) {
 			region_pd_emu.Setup(0xF058, 1, "Keyboard/PdValue", &emulator.ModelDefinition.pd_value, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
 		}
-		else if (emulator.hardware_id == HW_ES_PLUS || emulator.hardware_id == HW_CLASSWIZ) {
+		else if (emulator.hardware_id == HW_ES_PLUS || emulator.hardware_id == HW_CLASSWIZ || emulator.hardware_id == HW_SOLARII) {
 			region_pd_emu.Setup(0xF050, 1, "Keyboard/PdValue", &emulator.ModelDefinition.pd_value, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
 		}
 
