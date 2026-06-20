@@ -84,8 +84,6 @@
     </label>
     <button id="downloadJson" type="button">Save JSON</button>
     <button id="downloadBin" type="button">Save config.bin</button>
-    <button id="addSolarII" type="button">Add SOLARII status sprites</button>
-    <button id="applySolarIIStatus" type="button">Apply SOLARII status layout</button>
     <button id="formatJson" type="button">Format JSON</button>
   </div>
   <div id="status" class="status">Open a config.bin or paste JSON below.</div>
@@ -195,6 +193,46 @@
     { rect: { x: 215.65, y: 489.7, w: 43.5, h: 33.5 }, ki: 2, ko: 64 },
     { rect: { x: 268.5, y: 489.7, w: 43.5, h: 33.5 }, ki: 1, ko: 64 },
   ];
+  const SOLARII_DEFAULT_KEY_NAMES = {
+    "32,1": "F1",
+    "32,2": "F3",
+    "32,4": "I",
+    "32,8": "L",
+    "32,16": "",
+    "0,0": "F4",
+    "16,1": "D",
+    "16,2": "",
+    "16,4": "",
+    "16,8": "S",
+    "16,16": "C",
+    "16,32": "T",
+    "8,1": "",
+    "8,2": "Delete",
+    "8,4": "(",
+    "8,8": ")",
+    "8,16": "^",
+    "8,32": "",
+    "4,1": "7",
+    "4,2": "8",
+    "4,4": "9",
+    "4,8": "",
+    "4,16": "Space",
+    "2,1": "4",
+    "2,2": "5",
+    "2,4": "6",
+    "2,8": "*",
+    "2,16": "/",
+    "1,1": "1",
+    "1,2": "2",
+    "1,4": "3",
+    "1,8": "+",
+    "1,16": "-",
+    "16,64": "0",
+    "8,64": ".",
+    "4,64": "E",
+    "2,64": "Return",
+    "1,64": "",
+  };
 
   const textEncoder = new TextEncoder();
   const textDecoder = new TextDecoder();
@@ -540,7 +578,7 @@
     return SOLARII_KEYPAD_BUTTONS.map(button => ({
       rect: scaleSolarIIRect(button.rect),
       kiko: kikoFromMask(button.ki, button.ko),
-      keyname: "",
+      keyname: SOLARII_DEFAULT_KEY_NAMES[`${button.ki},${button.ko}`] || "",
     }));
   }
 
@@ -673,31 +711,6 @@
     }
     catch (error) {
       setStatus(`Failed to write config.bin: ${error.message}`);
-    }
-  });
-
-  document.getElementById("addSolarII").addEventListener("click", () => {
-    try {
-      const model = parseEditorJson();
-      const added = addSolarIIStatusSprites(model);
-      setEditorJson(model);
-      setStatus(`Added ${added} missing SOLARII status sprites.`);
-    }
-    catch (error) {
-      setStatus(`JSON error: ${error.message}`);
-    }
-  });
-
-  document.getElementById("applySolarIIStatus").addEventListener("click", () => {
-    try {
-      const model = parseEditorJson();
-      model.sprites ||= {};
-      Object.assign(model.sprites, createSolarIIStatusSpriteMap());
-      setEditorJson(model);
-      setStatus(`Applied ${SOLARII_STATUS_SPRITES.length} SOLARII status sprite rectangles.`);
-    }
-    catch (error) {
-      setStatus(`JSON error: ${error.message}`);
     }
   });
 
