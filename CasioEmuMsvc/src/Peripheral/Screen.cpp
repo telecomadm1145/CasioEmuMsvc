@@ -179,12 +179,11 @@ namespace casioemu {
                 return enabled ? 255 : 0;
             }
 
-            constexpr int contrast_bias = 9;
-            const int sb = 3;
-            const int contrast = static_cast<int>(screen_contrast) + contrast_bias;
-            const int ink_alpha_on = -240 + contrast * 28 - sb * 8;
-            const int ink_alpha_off = static_cast<int>((-220 + contrast * 17 - sb * 13) * screen_residual_alpha_scale);
-            return static_cast<uint8_t>(std::clamp(enabled ? ink_alpha_on : ink_alpha_off, 0, 255));
+            const float contrast = static_cast<float>(std::clamp<int>(screen_contrast, 0, 0x1F));
+            const float ink_alpha_on = 255.0f * std::clamp(0.75f + contrast / 36.0f, 0.0f, 1.0f);
+            const float ink_alpha_off = 255.0f * std::clamp(0.01f + contrast * 0.0045f, 0.0f, 1.0f);
+            const float alpha = enabled ? ink_alpha_on : ink_alpha_off * screen_residual_alpha_scale;
+            return static_cast<uint8_t>(std::clamp(static_cast<int>(alpha + 0.5f), 0, 255));
         }
 
     public:
@@ -250,8 +249,9 @@ namespace casioemu {
                 const bool enabled = bit.offset < DISPLAY_STORAGE_LEN && (data[bit.offset] & (1 << bit.bit));
                 const uint8_t target = CalculateSolarIIStatusAlpha(enabled);
                 if (screen_residual_enabled) {
-                    const float alpha = static_cast<float>(status_alpha[i]) * 0.80f + static_cast<float>(target) * 0.20f;
-                    status_alpha[i] = static_cast<uint8_t>(std::clamp(alpha, 0.0f, 255.0f));
+                    constexpr float kResidualFadeRatio = 0.50f;
+                    const float alpha = static_cast<float>(status_alpha[i]) * kResidualFadeRatio + static_cast<float>(target) * (1.0f - kResidualFadeRatio);
+                    status_alpha[i] = static_cast<uint8_t>(std::clamp(static_cast<int>(alpha + 0.5f), 0, 255));
                 }
                 else {
                     status_alpha[i] = target;
