@@ -1,4 +1,4 @@
-﻿#include "Emulator.hpp"
+#include "Emulator.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Logger.hpp"
 #include "ModelInfo.h"
@@ -30,7 +30,7 @@ namespace casioemu {
 			full_spd = false;
 		}
 		if (!full_spd) {
-			cycles_per_second = hardware_id == HW_ES_PLUS ? 128 * 1024 * 2 : hardware_id == HW_CLASSWIZ ? 1024 * 1024 * 2
+			cycles_per_second = hardware_id == HW_ES_PLUS ? 128 * 1024 * 2 : hardware_id == HW_SOLARII ? 64 * 1024 * 2 : hardware_id == HW_CLASSWIZ ? 1024 * 1024 * 2
 				: 2048 * 1024 * 2;
 		}
 		else {
@@ -166,7 +166,7 @@ namespace casioemu {
 			full_spd = false;
 		}
 		if (!full_spd) {
-			cycles_per_second = hardware_id == HW_ES_PLUS ? 128 * 1024 * 2 : hardware_id == HW_CLASSWIZ ? 1024 * 1024 * 2
+			cycles_per_second = hardware_id == HW_ES_PLUS ? 128 * 1024 * 2 : hardware_id == HW_SOLARII ? 64 * 1024 * 2 : hardware_id == HW_CLASSWIZ ? 1024 * 1024 * 2
 				: 2048 * 1024 * 2;
 		}
 		else {

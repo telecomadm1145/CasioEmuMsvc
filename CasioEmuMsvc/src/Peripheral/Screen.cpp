@@ -186,6 +186,11 @@ namespace casioemu {
             return static_cast<uint8_t>(std::clamp(static_cast<int>(alpha + 0.5f), 0, 255));
         }
 
+        bool IsSolarIIDisplayEnabled() const {
+            const uint8_t mode = screen_mode & 0x07;
+            return mode == 0x05 || mode == 0x06;
+        }
+
     public:
         using Peripheral::Peripheral;
 
@@ -244,12 +249,24 @@ namespace casioemu {
                 status_alpha.fill(0);
                 return;
             }
+            constexpr float kResidualFadeRatio = 0.50f;
+            const bool display_enabled = IsSolarIIDisplayEnabled();
+            if (!display_enabled) {
+                if (screen_residual_enabled) {
+                    for (auto& alpha : status_alpha) {
+                        alpha = static_cast<uint8_t>(std::clamp(static_cast<int>(static_cast<float>(alpha) * kResidualFadeRatio + 0.5f), 0, 255));
+                    }
+                }
+                else {
+                    status_alpha.fill(0);
+                }
+                return;
+            }
             for (size_t i = 0; i < STATUS_BITS.size(); ++i) {
                 const auto bit = STATUS_BITS[i];
                 const bool enabled = bit.offset < DISPLAY_STORAGE_LEN && (data[bit.offset] & (1 << bit.bit));
                 const uint8_t target = CalculateSolarIIStatusAlpha(enabled);
                 if (screen_residual_enabled) {
-                    constexpr float kResidualFadeRatio = 0.50f;
                     const float alpha = static_cast<float>(status_alpha[i]) * kResidualFadeRatio + static_cast<float>(target) * (1.0f - kResidualFadeRatio);
                     status_alpha[i] = static_cast<uint8_t>(std::clamp(static_cast<int>(alpha + 0.5f), 0, 255));
                 }
