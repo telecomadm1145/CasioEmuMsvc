@@ -563,8 +563,9 @@ namespace casioemu {
 
 	void Chipset::Reset() {
 		ResetInterruptSFR();
-		ResetClockGenerator();
 		isMIBlocked = false;
+
+		ResetClockGenerator();
 
 		SegmentAccess = false;
 		data_BLKCON = 0;
