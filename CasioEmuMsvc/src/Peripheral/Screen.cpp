@@ -162,11 +162,127 @@ namespace casioemu {
             {0x06, 1}, {0x06, 2}, {0x06, 0}, {0x0E, 1}, {0x0E, 2}, {0x0E, 0},
             {0x16, 1},
         }};
+        static constexpr std::array<const char*, STATUS_BITS.size()> STATUS_SPRITE_NAMES = {{
+            "rsd_shift",
+            "rsd_mode",
+            "rsd_sto",
+            "rsd_rcl",
+            "rsd_hyp",
+            "rsd_m",
+            "rsd_k",
+            "rsd_deg",
+            "rsd_rad",
+            "rsd_gra",
+            "rsd_fix",
+            "rsd_sci",
+            "rsd_sd",
+            "rsd_b_minus",
+            "rsd_b_1_up",
+            "rsd_b_1_up_left",
+            "rsd_b_1_up_right",
+            "rsd_b_1_mid",
+            "rsd_b_1_down_left",
+            "rsd_b_1_down_right",
+            "rsd_b_1_down",
+            "rsd_b_1_dot",
+            "rsd_b_2_up",
+            "rsd_b_2_up_left",
+            "rsd_b_2_up_right",
+            "rsd_b_2_mid",
+            "rsd_b_2_down_left",
+            "rsd_b_2_down_right",
+            "rsd_b_2_down",
+            "rsd_b_2_dot",
+            "rsd_b_3_up",
+            "rsd_b_3_up_left",
+            "rsd_b_3_up_right",
+            "rsd_b_3_mid",
+            "rsd_b_3_down_left",
+            "rsd_b_3_down_right",
+            "rsd_b_3_down",
+            "rsd_b_3_dot",
+            "rsd_b_4_up",
+            "rsd_b_4_up_left",
+            "rsd_b_4_up_right",
+            "rsd_b_4_mid",
+            "rsd_b_4_down_left",
+            "rsd_b_4_down_right",
+            "rsd_b_4_down",
+            "rsd_b_4_dot",
+            "rsd_b_5_up",
+            "rsd_b_5_up_left",
+            "rsd_b_5_up_right",
+            "rsd_b_5_mid",
+            "rsd_b_5_down_left",
+            "rsd_b_5_down_right",
+            "rsd_b_5_down",
+            "rsd_b_5_dot",
+            "rsd_b_6_up",
+            "rsd_b_6_up_left",
+            "rsd_b_6_up_right",
+            "rsd_b_6_mid",
+            "rsd_b_6_down_left",
+            "rsd_b_6_down_right",
+            "rsd_b_6_down",
+            "rsd_b_6_dot",
+            "rsd_b_7_up",
+            "rsd_b_7_up_left",
+            "rsd_b_7_up_right",
+            "rsd_b_7_mid",
+            "rsd_b_7_down_left",
+            "rsd_b_7_down_right",
+            "rsd_b_7_down",
+            "rsd_b_7_dot",
+            "rsd_b_8_up",
+            "rsd_b_8_up_left",
+            "rsd_b_8_up_right",
+            "rsd_b_8_mid",
+            "rsd_b_8_down_left",
+            "rsd_b_8_down_right",
+            "rsd_b_8_down",
+            "rsd_b_8_dot",
+            "rsd_b_9_up",
+            "rsd_b_9_up_left",
+            "rsd_b_9_up_right",
+            "rsd_b_9_mid",
+            "rsd_b_9_down_left",
+            "rsd_b_9_down_right",
+            "rsd_b_9_down",
+            "rsd_b_9_dot",
+            "rsd_b_10_up",
+            "rsd_b_10_up_left",
+            "rsd_b_10_up_right",
+            "rsd_b_10_mid",
+            "rsd_b_10_down_left",
+            "rsd_b_10_down_right",
+            "rsd_b_10_down",
+            "rsd_b_10_dot",
+            "rsd_s_minus",
+            "rsd_s_1_up",
+            "rsd_s_1_up_left",
+            "rsd_s_1_up_right",
+            "rsd_s_1_mid",
+            "rsd_s_1_down_left",
+            "rsd_s_1_down_right",
+            "rsd_s_1_down",
+            "rsd_s_2_up",
+            "rsd_s_2_up_left",
+            "rsd_s_2_up_right",
+            "rsd_s_2_mid",
+            "rsd_s_2_down_left",
+            "rsd_s_2_down_right",
+            "rsd_s_2_down",
+        }};
 
         std::array<uint8_t, STATUS_BITS.size()> status_alpha{};
+        std::array<SpriteInfo, STATUS_BITS.size()> status_sprite_info{};
+        std::array<bool, STATUS_BITS.size()> status_sprite_present{};
         std::array<uint8_t, DISPLAY_STORAGE_LEN> display_data{};
         MMURegion region_display_control{}, region_display{};
         MMURegion region_range{}, region_mode{}, region_contrast{}, region_brightness{}, region_refresh_rate{};
+        SDL_Renderer* renderer{};
+        SDL_Texture* interface_texture{};
+        ColourInfo ink_colour{};
         uint8_t display_control = 0;
         uint8_t screen_range = 0, screen_mode = 0, screen_contrast = 0, screen_brightness = 0, screen_refresh_rate = 0;
 
@@ -195,6 +311,18 @@ namespace casioemu {
         using Peripheral::Peripheral;
 
         void Initialise() override {
+            renderer = emulator.GetRenderer();
+            interface_texture = emulator.GetInterfaceTexture();
+            ink_colour = emulator.ModelDefinition.ink_color;
+            status_sprite_present.fill(false);
+            for (size_t i = 0; i < STATUS_SPRITE_NAMES.size(); ++i) {
+                auto iter = emulator.ModelDefinition.sprites.find(STATUS_SPRITE_NAMES[i]);
+                if (iter == emulator.ModelDefinition.sprites.end())
+                    continue;
+                status_sprite_info[i] = iter->second;
+                status_sprite_present[i] = true;
+            }
+
             region_display_control.Setup(0xF800, 1, "SolarIIScreen/Control", &display_control, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
             region_display.Setup(
                 DISPLAY_ADDR, DISPLAY_LEN, "SolarIIScreen/Buffer", this,
@@ -290,6 +418,23 @@ namespace casioemu {
             if (!out || max_len <= 0) return;
             const int count = std::min(max_len, GetStatusAlphaCount());
             std::copy(status_alpha.begin(), status_alpha.begin() + count, out);
+        }
+        void Frame() override {
+            if (!renderer || !interface_texture)
+                return;
+
+            UpdateFrameAlpha();
+            SDL_SetTextureColorMod(interface_texture, ink_colour.r, ink_colour.g, ink_colour.b);
+            for (size_t i = 0; i < status_alpha.size(); ++i) {
+                if (!status_sprite_present[i])
+                    continue;
+                SDL_SetTextureAlphaMod(interface_texture, status_alpha[i]);
+                SDL_Rect src = status_sprite_info[i].src;
+                SDL_Rect dest = status_sprite_info[i].dest;
+                SDL_RenderCopy(renderer, interface_texture, &src, &dest);
+            }
+            SDL_SetTextureAlphaMod(interface_texture, 255);
+            SDL_SetTextureColorMod(interface_texture, 255, 255, 255);
         }
     };
 	struct SpriteBitmap {
