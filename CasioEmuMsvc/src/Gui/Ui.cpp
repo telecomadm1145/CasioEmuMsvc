@@ -303,8 +303,11 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 		windows.push_back(CreateFx5800FileSystem());
 	}
 
+	if (m_emu->hardware_id != casioemu::HW_SOLARII) {
+		windows.push_back(new VariableWindow());
+	}
+
 	for (auto item : std::initializer_list<UIWindow*>{
-			 new VariableWindow(),
 			 new HwController(),
 			 new LabelViewer(),
 			 new WatchWindow(),
