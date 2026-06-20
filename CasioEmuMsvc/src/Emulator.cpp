@@ -99,7 +99,8 @@ namespace casioemu {
 		#ifdef __EMSCRIPTEN__
 		tick_thread = nullptr;
 		#else
-		if (ModelDefinition.real_hardware) {
+		bool limit_spd = ModelDefinition.extra.find("limit_spd") != ModelDefinition.extra.end();
+		if (ModelDefinition.real_hardware || limit_spd) {
 			tick_thread = new std::thread([this] {
 				auto iteration_end = std::chrono::steady_clock::now();
 				while (1) {
@@ -130,6 +131,16 @@ namespace casioemu {
 					}
 				}
 				});
+			SDL_AddTimer(
+				25,
+				[](Uint32 interval, void* param) -> Uint32 {
+					auto emu = ((Emulator*)param);
+					emu->chipset.EmulatorTick();
+					return interval;
+				},
+				this);
+		}
+		if (!ModelDefinition.real_hardware && limit_spd) {
 			SDL_AddTimer(
 				25,
 				[](Uint32 interval, void* param) -> Uint32 {
@@ -236,7 +247,8 @@ namespace casioemu {
 		#ifdef __EMSCRIPTEN__
 			tick_thread = nullptr;
 		#else
-			if (ModelDefinition.real_hardware) {
+			bool limit_spd = ModelDefinition.extra.find("limit_spd") != ModelDefinition.extra.end();
+			if (ModelDefinition.real_hardware || limit_spd) {
 				tick_thread = new std::thread([this] {
 					auto iteration_end = std::chrono::steady_clock::now();
 					while (1) {
@@ -267,6 +279,16 @@ namespace casioemu {
 						}
 					}
 					});
+				SDL_AddTimer(
+					25,
+					[](Uint32 interval, void* param) -> Uint32 {
+						auto emu = ((Emulator*)param);
+						emu->chipset.EmulatorTick();
+						return interval;
+					},
+					this);
+			}
+			if (!ModelDefinition.real_hardware && limit_spd) {
 				SDL_AddTimer(
 					25,
 					[](Uint32 interval, void* param) -> Uint32 {
