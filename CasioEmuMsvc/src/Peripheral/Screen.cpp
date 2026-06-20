@@ -217,6 +217,28 @@ namespace casioemu {
             return Peripheral::QueryInterface(name);
         }
 
+        void SaveState(std::ostream& os) override {
+            os.write(reinterpret_cast<const char*>(&display_control), 1);
+            os.write(reinterpret_cast<const char*>(display_data.data()), display_data.size());
+            os.write(reinterpret_cast<const char*>(&screen_range), 1);
+            os.write(reinterpret_cast<const char*>(&screen_mode), 1);
+            os.write(reinterpret_cast<const char*>(&screen_contrast), 1);
+            os.write(reinterpret_cast<const char*>(&screen_brightness), 1);
+            os.write(reinterpret_cast<const char*>(&screen_refresh_rate), 1);
+            os.write(reinterpret_cast<const char*>(status_alpha.data()), status_alpha.size());
+        }
+
+        void LoadState(std::istream& is) override {
+            is.read(reinterpret_cast<char*>(&display_control), 1);
+            is.read(reinterpret_cast<char*>(display_data.data()), display_data.size());
+            is.read(reinterpret_cast<char*>(&screen_range), 1);
+            is.read(reinterpret_cast<char*>(&screen_mode), 1);
+            is.read(reinterpret_cast<char*>(&screen_contrast), 1);
+            is.read(reinterpret_cast<char*>(&screen_brightness), 1);
+            is.read(reinterpret_cast<char*>(&screen_refresh_rate), 1);
+            is.read(reinterpret_cast<char*>(status_alpha.data()), status_alpha.size());
+        }
+
         void UpdateFrameAlpha() override {
             const uint8_t* data = DisplayData();
             if (!data) {
