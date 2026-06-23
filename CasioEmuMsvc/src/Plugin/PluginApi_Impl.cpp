@@ -230,15 +230,9 @@ class PluginApi_Impl : public PluginApi {
 	void AddWindow(UIWindow* wnd) override {
 		windows.push_back(wnd);
 	}
-	bool RegisterPlugin(const char* id, const char* name, const char* version, const char* author, const char* desc) override {
-		std::cout << (name ? name : "Unknown") << " loaded.\n";
-		g_loadedPlugins.push_back({id ? id : "",
-			name ? name : "",
-			/*version ? version :*/ "",
-			/*author ? author :*/ "",
-			/*desc ? desc :*/ ""}); // Hack: 兼容性问题
-		return true;
-	}
+	bool RegisterPlugin(const char* id, const char* name, int version) override {
+        return RegisterPlugin(id, name, std::to_string(version).c_str(), "", "Legacy Plugin");
+    }
 	void* QueryInterface(const char* name) override {
 		if (strcmp(name, typeid(IPlatformHost).name()) == 0)
 			return &platform_impl;
@@ -264,5 +258,16 @@ class PluginApi_Impl : public PluginApi {
 			PANIC("STL size mismatch.");
 		}
 	}
+	bool RegisterPlugin(const char* id, const char* name, const char* version, const char* author, const char* desc) override {
+    std::cout << (name ? name : "Unknown") << " loaded.\n";
+    g_loadedPlugins.push_back({
+        id ? id : "",
+        name ? name : "",
+        version ? version : "",
+        author ? author : "",
+        desc ? desc : ""
+    });
+    return true;
+  }
 };
 PluginApi* g_pluginapi = new PluginApi_Impl();

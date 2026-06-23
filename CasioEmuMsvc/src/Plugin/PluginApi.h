@@ -172,7 +172,7 @@ public:
 	/// <param name="id">Id of the plugin</param>
 	/// <param name="version">Version of the plugin</param>
 	/// <returns>Whether the plugin should be loaded</returns>
-	[[nodiscard]] virtual bool RegisterPlugin(const char* id, const char* name, const char* version, const char* author, const char* desc) = 0;
+	[[nodiscard]] virtual bool RegisterPlugin(const char* id, const char* name, int version) = 0;
 	/// <summary>
 	/// Check if the STL is the same.
 	/// </summary>
@@ -183,6 +183,7 @@ public:
 		return reinterpret_cast<T*>(QueryInterface(typeid(T).name()));
 	}
 	virtual void* GetImGuiContext() = 0;
+	[[nodiscard]] virtual bool RegisterPlugin(const char* id, const char* name, const char* version, const char* author = nullptr, const char* desc = nullptr) = 0;
 };
 
 #define PLUGINASSERTSTL(x) x->AssertFundamentalSTL(sizeof(std::string), sizeof(std::vector<int>), sizeof(std::map<int, int>), sizeof(std::mutex))
