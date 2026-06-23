@@ -189,7 +189,7 @@ private:
 		while (std::getline(file, line)) {
 			lineNumber++;
 			std::string trimmed = Trim(line);
-			if (trimmed.empty() || trimmed[0] == '#' || trimmed == "R\"(placeholder=a" || trimmed == "placeholder2=a)\"")
+			if (trimmed.empty() || trimmed[0] == '#')
 				continue;
 
 			try {
@@ -211,7 +211,7 @@ private:
 		while (std::getline(stream, line)) {
 			lineNumber++;
 			std::string trimmed = Trim(line);
-			if (trimmed.empty() || trimmed[0] == '#' || trimmed == "R\"(placeholder=a" || trimmed == "placeholder2=a)\"")
+			if (trimmed.empty() || trimmed[0] == '#')
 				continue;
 
 			try {

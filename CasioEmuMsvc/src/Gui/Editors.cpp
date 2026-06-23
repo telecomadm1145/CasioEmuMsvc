@@ -99,7 +99,8 @@ inline auto Highlight_Default(auto he) {
 		if ((size_t)(data + off) == m_emu->chipset.cpu.reg_sp) {
 			return true;
 		}
-		if ((size_t)(data + off) == casioemu::GetInputAreaOffset(m_emu->hardware_id) + *((unsigned char*)n_ram_buffer - casioemu::GetRamBaseAddr(m_emu->hardware_id) + casioemu::GetCursorOffset(m_emu->hardware_id))) {
+		if (casioemu::HasInputArea(m_emu->hardware_id) &&
+			(size_t)(data + off) == casioemu::GetInputAreaOffset(m_emu->hardware_id) + *((unsigned char*)n_ram_buffer - casioemu::GetRamBaseAddr(m_emu->hardware_id) + casioemu::GetCursorOffset(m_emu->hardware_id))) {
 			return true;
 		}
 		return false;
@@ -120,19 +121,15 @@ std::vector<UIWindow*> GetEditors() {
 		windows.push_back(new HexEditor{"VRam", m_emu->chipset.epscpu->vram, 0x2000, 0});
 	}
 	else {
-		size_t ram_size = 0x10000 - casioemu::GetRamBaseAddr(m_emu->hardware_id);
-		if (m_emu->hardware_id == casioemu::HW_SOLARII) {
-			ram_size = casioemu::GetRamSize(m_emu->hardware_id);
-		}
-
-		auto ram_editor = MMU_Hex(
-			new SpansHexEditor{
-				"Ram",
-				(void*)casioemu::GetRamBaseAddr(m_emu->hardware_id),
-				ram_size,
-				casioemu::GetRamBaseAddr(m_emu->hardware_id),
-				GetCommonMemLabels(m_emu->hardware_id)});
-		windows.push_back(m_emu->hardware_id == casioemu::HW_SOLARII ? ram_editor : Highlight_Default(ram_editor));
+		windows.push_back(
+			Highlight_Default(
+				MMU_Hex(
+					new SpansHexEditor{
+						"Ram",
+						(void*)casioemu::GetRamBaseAddr(m_emu->hardware_id),
+						casioemu::GetRamEditorSize(m_emu->hardware_id),
+						casioemu::GetRamBaseAddr(m_emu->hardware_id),
+						GetCommonMemLabels(m_emu->hardware_id)})));
 		if (m_emu->hardware_id == casioemu::HW_FX_5800P) {
 			windows.push_back(MMU_Hex(new SpansHexEditor{"PRam", (void*)0x40000, 0x8000, 0x40000, GetCommonMemLabels(m_emu->hardware_id)}));
 			windows.push_back(new HexEditor{"Flash", m_emu->chipset.flash_data.data(), m_emu->chipset.flash_data.size(), 0});

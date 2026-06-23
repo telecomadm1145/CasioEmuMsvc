@@ -24,6 +24,9 @@ namespace casioemu {
 		return (hid == HW_FX_5800P || hid == HW_ES_PLUS) ? 0x0E00 : hid == HW_CLASSWIZ ? 0x2000
 																					   : 0x6000;
 	}
+	inline constexpr size_t GetRamEditorSize(HardwareId hid) {
+		return hid == HW_SOLARII ? GetRamSize(hid) : 0x10000 - GetRamBaseAddr(hid);
+	}
 #define ColorA ImColor{40, 150, 40, 255}
 #define ColorB ImColor{40, 40, 150, 255}
 
@@ -557,6 +560,9 @@ namespace casioemu {
 			return 0xC33C;
 		return hid == HW_ES_PLUS ? 0x8154 : hid == HW_CLASSWIZ ? 0xD180
 															   : 0x9268;
+	}
+	inline constexpr bool HasInputArea(HardwareId hid) {
+		return hid != HW_SOLARII;
 	}
 	inline constexpr size_t GetInputAreaSize(HardwareId hid) {
 		return hid == HW_ES_PLUS ? 100 : 200;
