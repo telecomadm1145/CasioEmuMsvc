@@ -19,6 +19,8 @@ public:
     SnapshotWindow();
     ~SnapshotWindow();
     void RenderCore() override;
+    void DebugEnsureLoaded() { EnsureAutoSaveLoaded(); }
+    SnapshotManager& DebugManager() { return m_Manager; }
 
 private:
     SnapshotManager m_Manager;

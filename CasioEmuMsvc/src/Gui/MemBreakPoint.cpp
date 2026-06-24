@@ -105,32 +105,10 @@ void Breakpoints::DrawFindContent() {
 
 void Breakpoints::SetupHooks() {
 	SetupHook(on_memory_read, [&](casioemu::MMU& sender, MemoryEventArgs& mea) {
-		if (break_on_cv) {
-			if (target_addr == -1) {
-				return;
-			}
-			MemBPData_t& bp = break_point_hash.at(target_addr);
-			if (bp.addr == mea.offset && !bp.enableWrite) {
-				SetDebugbreak();
-			}
-		}
-		else {
-			TryTrigBp(mea.offset, 0);
-		}
+		TryTrigBp(mea.offset, false);
 	});
 	SetupHook(on_memory_write, [&](casioemu::MMU& sender, MemoryEventArgs& mea) {
-		if (break_on_cv) {
-			if (target_addr == -1) {
-				return;
-			}
-			MemBPData_t& bp = break_point_hash.at(target_addr);
-			if (bp.addr == mea.offset && bp.enableWrite) {
-				SetDebugbreak();
-			}
-		}
-		else {
-			TryTrigBp(mea.offset, 1);
-		}
+		TryTrigBp(mea.offset, true);
 	});
 	SetupHook(on_instruction, [&](casioemu::CPU& sender, InstructionEventArgs& iea) {
 		if (break_on_sp) {
@@ -164,16 +142,23 @@ void Breakpoints::SetupHooks() {
 }
 
 void Breakpoints::TryTrigBp(uint32_t addr, bool write) {
-	if (target_addr == -1) {
-		return;
-	}
-	MemBPData_t& bp = break_point_hash.at(target_addr);
-	if (bp.addr == addr && bp.enableWrite == write) {
-		bp.records[(m_emu->chipset.cpu.reg_csr << 16) | m_emu->chipset.cpu.reg_pc] = Record{m_emu->chipset.cpu.GetBacktrace(), (unsigned int)(m_emu->chipset.cpu.reg_lcsr << 16) | m_emu->chipset.cpu.reg_lr};
+	std::lock_guard lock(breakpoints_mutex);
+	for (auto& bp : break_point_hash) {
+		if (bp.addr != addr || bp.enableWrite != write)
+			continue;
+		if (bp.breakWhenHit) {
+			SetDebugbreak();
+		}
+		else {
+			bp.records[(m_emu->chipset.cpu.reg_csr << 16) | m_emu->chipset.cpu.reg_pc] =
+				Record{m_emu->chipset.cpu.GetBacktrace(),
+					(unsigned int)(m_emu->chipset.cpu.reg_lcsr << 16) | m_emu->chipset.cpu.reg_lr};
+		}
 	}
 }
 
 void Breakpoints::RenderCore() {
+	std::lock_guard lock(breakpoints_mutex);
 	if (ImGui::BeginTabBar("Breakpoints")) {
 		if (ImGui::BeginTabItem("Memory")) {
 			static char buf[10] = {0};
@@ -190,6 +175,8 @@ void Breakpoints::RenderCore() {
 			}
 			ImGui::Checkbox("MemBP.BreakWhenHit"_lc,
 				&break_on_cv);
+			if (target_addr >= 0 && static_cast<size_t>(target_addr) < break_point_hash.size())
+				break_point_hash[target_addr].breakWhenHit = break_on_cv;
 			if (!break_on_cv) {
 				ImGui::BeginChild("##findoutput");
 				DrawFindContent();
@@ -216,8 +203,56 @@ void Breakpoints::RenderCore() {
 }
 
 void Breakpoints::ExternalAddBp(uint32_t addr, bool write) {
-	break_point_hash.push_back({.enableWrite = write, .addr = addr});
+	ExternalAddBp(addr, write, false);
+}
+
+void Breakpoints::ExternalAddBp(uint32_t addr, bool write, bool breakWhenHit) {
+	std::lock_guard lock(breakpoints_mutex);
+	break_point_hash.push_back({.enableWrite = write, .breakWhenHit = breakWhenHit, .addr = addr});
 	target_addr = break_point_hash.size() - 1;
+	break_on_cv = breakWhenHit;
+}
+
+bool Breakpoints::ExternalRemoveBp(uint32_t addr, bool write) {
+	std::lock_guard lock(breakpoints_mutex);
+	auto it = std::find_if(break_point_hash.begin(), break_point_hash.end(), [&](const MemBPData_t& bp) {
+		return bp.addr == addr && bp.enableWrite == write;
+	});
+	if (it == break_point_hash.end())
+		return false;
+	const auto removed = static_cast<int>(std::distance(break_point_hash.begin(), it));
+	break_point_hash.erase(it);
+	if (target_addr == removed)
+		target_addr = -1;
+	else if (target_addr > removed)
+		--target_addr;
+	return true;
+}
+
+void Breakpoints::ExternalClearBps() {
+	std::lock_guard lock(breakpoints_mutex);
+	break_point_hash.clear();
+	target_addr = -1;
+	break_on_cv = false;
+}
+
+std::vector<MemBPData_t> Breakpoints::ExternalListBps() const {
+	std::lock_guard lock(breakpoints_mutex);
+	return break_point_hash;
+}
+
+std::vector<std::pair<uint32_t, Record>> Breakpoints::ExternalListHits(uint32_t addr, bool write) const {
+	std::lock_guard lock(breakpoints_mutex);
+	std::vector<std::pair<uint32_t, Record>> result;
+	auto it = std::find_if(break_point_hash.begin(), break_point_hash.end(), [&](const MemBPData_t& bp) {
+		return bp.addr == addr && bp.enableWrite == write;
+	});
+	if (it == break_point_hash.end())
+		return result;
+	result.reserve(it->records.size());
+	for (const auto& record : it->records)
+		result.push_back(record);
+	return result;
 }
 
 void SetMemBp(uint32_t addr, bool write) {

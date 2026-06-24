@@ -1042,14 +1042,64 @@ void CodeViewer::RequestStep() {
 	m_emu->SetPaused(false);
 }
 
+void CodeViewer::RequestTrace() {
+	tracing = true;
+	m_emu->SetPaused(false);
+}
+
+bool CodeViewer::RequestStepOut() {
+	auto stk = m_emu->chipset.cpu.stack.get();
+	if (stk->empty() || stk->back().is_jump)
+		return false;
+	trace_bp = stk->back().lr_pushed
+		? stk->back().lr
+		: (uint32_t)(m_emu->chipset.cpu.reg_lcsr << 16) | m_emu->chipset.cpu.reg_lr;
+	m_emu->SetPaused(false);
+	return true;
+}
+
 void CodeViewer::AddBreakpoint(uint32_t address) {
+	if (!is_loaded.load(std::memory_order_acquire))
+		return;
 	int idx = 0;
 	LookUp(address, &idx);
 	break_points[idx] = 1;
 }
 
 void CodeViewer::RemoveBreakpoint(uint32_t address) {
+	if (!is_loaded.load(std::memory_order_acquire))
+		return;
 	int idx = 0;
 	LookUp(address, &idx);
 	break_points.erase(idx);
+}
+
+void CodeViewer::ClearBreakpoints() {
+	break_points.clear();
+}
+
+std::vector<uint32_t> CodeViewer::GetBreakpoints() const {
+	std::vector<uint32_t> result;
+	for (const auto& [index, state] : break_points) {
+		if (state == 1 && index >= 0 && static_cast<size_t>(index) < codes.size())
+			result.push_back(codes[index].offset);
+	}
+	return result;
+}
+
+std::vector<CodeElem> CodeViewer::GetDisassembly(uint32_t address, size_t count) const {
+	std::vector<CodeElem> result;
+	if (!is_loaded.load(std::memory_order_acquire) || count == 0)
+		return result;
+	result.reserve(count);
+	for (const auto& line : codes) {
+		if (!line.is_label && line.offset < address)
+			continue;
+		if (line.is_label && result.empty())
+			continue;
+		result.push_back(line);
+		if (!line.is_label && --count == 0)
+			break;
+	}
+	return result;
 }

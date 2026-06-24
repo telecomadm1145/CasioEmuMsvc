@@ -52,6 +52,7 @@ CodeViewer* code_viewer = 0;
 Injector* injector = 0;
 int top_bar_size = 0;
 Breakpoints* membp = 0;
+SnapshotWindow* snapshot_window = 0;
 
 std::vector<UIWindow*> windows{};
 
@@ -324,7 +325,7 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 			 new PluginLogWindow(),
 #endif
 #if !defined(TEST_BUILD)
-			 CreateSnapshotWindow(),
+			 snapshot_window = static_cast<SnapshotWindow*>(CreateSnapshotWindow()),
 #endif
 			 MakeThemeWindow(),
 			 CreateBitmapViewer(), })

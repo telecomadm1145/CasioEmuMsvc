@@ -4,6 +4,7 @@ project(GAME)
 
 set(SDL_TEST OFF CACHE BOOL "Disable building the SDL_test library" FORCE)
 option(BUILD_EXECUTABLE "Build a statically linked executable" OFF)
+option(BUILD_MCP_PLUGIN "Build the MCP debugger plugin" ON)
 
 if(NOT DEFINED BUILD_EXECUTABLE)
     if(ANDROID OR IOS)
@@ -66,3 +67,7 @@ endif()
 
 # Your game and its CMakeLists.txt are in a subfolder named "src"
 add_subdirectory(CasioEmuMsvc)
+
+if(WIN32 AND BUILD_EXECUTABLE AND BUILD_MCP_PLUGIN)
+    add_subdirectory(McpPlugin)
+endif()

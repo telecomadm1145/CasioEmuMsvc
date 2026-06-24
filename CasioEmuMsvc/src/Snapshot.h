@@ -32,7 +32,11 @@ public:
 
     // Save current emulator state as a child of parentId (0 = root).
     // Returns the new node's Id.
-    uint32_t SaveSnapshot(casioemu::Emulator& emu, uint32_t parentId, const std::string& label);
+    uint32_t SaveSnapshot(
+        casioemu::Emulator& emu,
+        uint32_t parentId,
+        const std::string& label,
+        bool capturePreview = true);
 
     // Restore the emulator to the state stored in node with given Id.
     void LoadSnapshot(casioemu::Emulator& emu, uint32_t id);

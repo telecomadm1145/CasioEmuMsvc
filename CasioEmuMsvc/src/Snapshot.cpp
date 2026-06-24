@@ -208,7 +208,11 @@ std::vector<uint8_t> SnapshotManager::CaptureScreenPng(casioemu::Emulator& emu) 
 // Public API
 // ============================================================
 
-uint32_t SnapshotManager::SaveSnapshot(casioemu::Emulator& emu, uint32_t parentId, const std::string& label) {
+uint32_t SnapshotManager::SaveSnapshot(
+    casioemu::Emulator& emu,
+    uint32_t parentId,
+    const std::string& label,
+    bool capturePreview) {
     // Pause emulator during save
     bool wasPaused = emu.GetPaused();
     emu.SetPaused(true);
@@ -224,7 +228,7 @@ uint32_t SnapshotManager::SaveSnapshot(casioemu::Emulator& emu, uint32_t parentI
     auto compressed = Compress::Deflate(rawData, rawSize);
 
     // Capture screen preview
-    auto preview = CaptureScreenPng(emu);
+    auto preview = capturePreview ? CaptureScreenPng(emu) : std::vector<uint8_t>{};
 
     // Assign Id and timestamp
     SnapshotNode node;

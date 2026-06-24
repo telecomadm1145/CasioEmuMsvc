@@ -70,8 +70,13 @@ public:
 	void DrawMonitor();
 	void JumpTo(uint32_t offset);
 	void RequestStep();
+	void RequestTrace();
+	bool RequestStepOut();
 	void AddBreakpoint(uint32_t address);
 	void RemoveBreakpoint(uint32_t address);
+	void ClearBreakpoints();
+	std::vector<uint32_t> GetBreakpoints() const;
+	std::vector<CodeElem> GetDisassembly(uint32_t address, size_t count) const;
 	void Search(bool next);
 	void ExportDisassembly();
 	size_t GetBreakpointCount() const { return break_points.size(); }
