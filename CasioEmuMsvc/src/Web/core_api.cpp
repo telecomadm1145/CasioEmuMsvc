@@ -26,13 +26,11 @@
 #include <vector>
 #include <unistd.h>
 
-#ifdef CASIOEMU_CORE_WEB
 #include "Gui/Localization.h"
 #include "Gui/ThemeManager.h"
 #include "Gui/WebDebuggerGui.h"
 #include "Gui/imgui/imgui.h"
 #include "Gui/imgui/imgui_internal.h"
-#endif
 
 bool low_perf_ext = false;
 extern char* n_ram_buffer;
@@ -74,7 +72,6 @@ namespace {
 	int g_gui_height = 0;
 	uint32_t g_gui_frame_counter = 0;
 	std::vector<uint8_t> g_gui_frame_rgba;
-#ifdef CASIOEMU_CORE_WEB
 	std::string g_model_id = "unknown";
 	std::string g_gui_model_dir = "/persist/unknown";
 	bool g_gui_imgui_ready = false;
@@ -104,7 +101,6 @@ namespace {
 	int g_gui_background_width = 0;
 	int g_gui_background_height = 0;
 	bool g_gui_background_checked = false;
-#endif
 
 	void EnsureSdl() {
 		if (!g_sdl_ready) {
@@ -194,7 +190,6 @@ namespace {
 		return static_cast<casioemu::HardwareId>(core_type);
 	}
 
-#ifdef CASIOEMU_CORE_WEB
 	void GuiShutdown();
 
 	void GuiResetState() {
@@ -213,7 +208,6 @@ namespace {
 		g_gui_wheel_y = 0.0f;
 	}
 
-#ifdef CASIOEMU_CORE_WEB
 	std::string SanitizeModelId(const char* model_id) {
 		std::string sanitized;
 		if (model_id) {
@@ -239,7 +233,6 @@ namespace {
 	std::string CurrentWebModelDir() {
 		return g_gui_model_dir.empty() ? std::string("/persist/unknown") : g_gui_model_dir;
 	}
-#endif
 
 	void GuiDetachCanvas() {
 		g_gui_attached = false;
@@ -273,19 +266,6 @@ namespace {
 		g_gui_background_height = 0;
 		g_gui_background_checked = false;
 	}
-#else
-	void GuiResetState() {
-		g_gui_attached = false;
-		g_gui_width = 0;
-		g_gui_height = 0;
-		g_gui_frame_counter = 0;
-		g_gui_frame_rgba.clear();
-	}
-
-	void GuiDetachCanvas() {
-		GuiResetState();
-	}
-#endif
 
 	casioemu::ModelInfo MakeWebModel(bool real_hardware, bool is_sample_rom, int pd_value, int model_type, bool legacy_ko, bool classwiz_graph) {
 	const auto hardware_id = HardwareIdFromCoreType(model_type);
@@ -420,7 +400,6 @@ namespace {
 		return 0;
 	}
 
-#ifdef CASIOEMU_CORE_WEB
 	void GuiLoadLocale() {
 		try {
 			chdir("/");
@@ -779,10 +758,8 @@ namespace {
 		GuiRenderDrawData(ImGui::GetDrawData());
 		return 0;
 	}
-#endif
 }
 
-#ifdef CASIOEMU_CORE_WEB
 const char* WebDebuggerExportDir() {
 	return "/tmp/exports";
 }
@@ -814,17 +791,12 @@ void WebDebuggerQueueDownload(const char* path, const char* name) {
 	g_gui_file_result_pending = false;
 	return true;
 }
-#endif
 
 extern "C" {
 
 int casioemu_core_set_model_id(const char* model_id) {
-#ifdef CASIOEMU_CORE_WEB
 	SetCoreModelId(model_id);
 	return 0;
-#else
-	return 99;
-#endif
 }
 
 int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int model_type, int legacy_ko, int classwiz_graph) {
@@ -836,14 +808,9 @@ int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int m
 		g_emulator.reset();
 		if (!WriteRomFile(rom, len)) return -2;
 		auto model = MakeWebModel(true, false, pd_value, model_type, legacy_ko != 0, classwiz_graph != 0);
-#ifdef CASIOEMU_CORE_WEB
 		const auto model_dir = CurrentWebModelDir();
 		std::filesystem::create_directories(model_dir);
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true, model_dir);
-#else
-		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
-		g_emulator->model_path = kCoreDir;
-#endif
 		m_emu = g_emulator.get();
 		low_perf_ext = true;
 		RefreshScreenProvider();
@@ -869,14 +836,9 @@ int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, i
 		auto normalized_rom = NormalizeSimulatorRomForWeb(rom, len, hardware_id);
 		if (!WriteRomFile(normalized_rom.data(), static_cast<int>(normalized_rom.size()))) return -2;
 		auto model = MakeWebModel(false, is_sample_rom != 0, pd_value, model_type, legacy_ko != 0, classwiz_graph != 0);
-#ifdef CASIOEMU_CORE_WEB
 		const auto model_dir = CurrentWebModelDir();
 		std::filesystem::create_directories(model_dir);
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true, model_dir);
-#else
-		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true);
-		g_emulator->model_path = kCoreDir;
-#endif
 		m_emu = g_emulator.get();
 		low_perf_ext = true;
 		RefreshScreenProvider();
@@ -1121,7 +1083,6 @@ int casioemu_core_load_snapshot(const uint8_t* in, int len) {
 	}
 }
 
-#ifdef CASIOEMU_CORE_WEB
 int casioemu_core_gui_supported() {
 	return 1;
 }
@@ -1338,119 +1299,6 @@ void casioemu_core_gui_file_request_complete(const char* path, int result) {
 	g_gui_file_result_code = result;
 	g_gui_file_result_pending = true;
 }
-#else
-int casioemu_core_gui_supported() {
-	return 0;
-}
-
-int casioemu_core_gui_attach(int, int) {
-	return 99;
-}
-
-void casioemu_core_gui_detach() {}
-
-int casioemu_core_gui_is_attached() {
-	return 0;
-}
-
-int casioemu_core_gui_frame() {
-	return 99;
-}
-
-uint32_t casioemu_core_gui_frame_ptr() {
-	return 0;
-}
-
-int casioemu_core_gui_frame_len() {
-	return 0;
-}
-
-int casioemu_core_gui_width() {
-	return 0;
-}
-
-int casioemu_core_gui_height() {
-	return 0;
-}
-
-int casioemu_core_gui_set_locale(const char*) {
-	return 99;
-}
-
-int casioemu_core_gui_pointer(double, double, int, int) {
-	return 99;
-}
-
-int casioemu_core_gui_wheel(double, double) {
-	return 99;
-}
-
-int casioemu_core_gui_key(int, int, int, int, int, int) {
-	return 99;
-}
-
-int casioemu_core_gui_text(unsigned int) {
-	return 99;
-}
-
-int casioemu_core_gui_want_text_input() {
-	return 0;
-}
-
-int casioemu_core_gui_ime_visible() {
-	return 0;
-}
-
-double casioemu_core_gui_ime_x() {
-	return 0.0;
-}
-
-double casioemu_core_gui_ime_y() {
-	return 0.0;
-}
-
-double casioemu_core_gui_ime_line_height() {
-	return 0.0;
-}
-
-int casioemu_core_gui_set_clipboard_text(const char*) {
-	return 99;
-}
-
-int casioemu_core_gui_clipboard_write_pending() {
-	return 0;
-}
-
-const char* casioemu_core_gui_clipboard_write_text() {
-	return "";
-}
-
-uint32_t casioemu_core_gui_clipboard_write_revision() {
-	return 0;
-}
-
-void casioemu_core_gui_clipboard_write_ack(uint32_t) {}
-
-int casioemu_core_gui_file_request_pending() {
-	return 0;
-}
-
-const char* casioemu_core_gui_file_request_kind() {
-	return "";
-}
-
-const char* casioemu_core_gui_file_request_path() {
-	return "";
-}
-
-const char* casioemu_core_gui_file_request_name() {
-	return "";
-}
-
-void casioemu_core_gui_file_request_ack() {}
-
-void casioemu_core_gui_file_request_complete(const char*, int) {}
-#endif
 
 }
 
