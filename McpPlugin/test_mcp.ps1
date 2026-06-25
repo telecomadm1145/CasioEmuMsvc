@@ -25,7 +25,6 @@ try {
     $process = Start-Process -FilePath $exe `
         -ArgumentList $Model, "paused=1" `
         -WorkingDirectory $ReleaseDirectory `
-        -WindowStyle Hidden `
         -PassThru
 
     $deadline = (Get-Date).AddSeconds(20)
