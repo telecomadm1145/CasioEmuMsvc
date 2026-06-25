@@ -530,7 +530,7 @@ void Injector::RenderCustomInjectTab(bool& show_info, std::string& info_msg) {
 			ImGui::Text("%s:", "Rop.Address"_lc);
 			for (const auto& pair : inj.pairs) {
 				std::string displayAddr = pair.address;
-				if ((displayAddr.substr(0, 2) != "0x" && displayAddr.substr(0, 2) != "0X") && (displayAddr != "PC" && displayAddr != "SP" ) {
+				if ((displayAddr.substr(0, 2) != "0x" && displayAddr.substr(0, 2) != "0X") && (displayAddr != "PC" && displayAddr != "SP" )) {
 					displayAddr = "0x" + displayAddr;
 				} else if (displayAddr == "PC" || displayAddr == "SP") {
 				std::stringstream ss;
