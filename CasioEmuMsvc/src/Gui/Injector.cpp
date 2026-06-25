@@ -1,6 +1,6 @@
 #include "Injector.hpp"
 #include "Chipset/Chipset.hpp"
-#include "Chipset/CPU.h
+#include "Chipset/CPU.h"
 #include "Config.hpp"
 #include "Models.h"
 #include "Peripheral/BatteryBackedRAM.hpp"
@@ -229,6 +229,7 @@ void Injector::PrecomputeInjectionValues(InjectionPair& pair) {
 			s = s.substr(2);
 		pair.addr_value = std::stoul(s, nullptr, 16);
 	} else if (addr == "SP") {
+		std::string s = pair.data;
 		if (s.rfind("0x", 0) == 0 || s.rfind("0X", 0) == 0)
 			s = s.substr(2);
 		pair.addr_value = std::stoul(s, nullptr, 16);
@@ -383,7 +384,7 @@ bool Injector::ParseCustomInjections(const std::string& content) {
 				else if (current_address == "PC" || current_address == "SP") {
 					InjectionPair pair;
 					pair.address = current_address;
-					pair.data = current_value
+					pair.data = current_value;
 					PrecomputeInjectionValues(pair);
 					if (!pair.addr_value) {
 						current_injection.pairs.push_back(std::move(pair));
@@ -461,12 +462,12 @@ uint8_t Injector::HexToByte(const std::string& hex) {
 bool Injector::ApplyInjection(const CustomInjection& inj, bool& show_info, std::string& info_msg) {
 	try {
 		for (const auto& pair : inj.pairs) {
-			if (pair.addr == "PC") {
+			if (pair.address == "PC") {
 				m_emu->chipset.cpu.reg_pc = (uint16_t)pair.addr_value;
 				m_emu->chipset.cpu.reg_csr = pair.addr_value >> 16;
 			}
-			else if (pair.addr == "SP") {
-				m_emu->chipset.cpu.reg_sp = (uint16_t)pair.addr_value
+			else if (pair.address == "SP") {
+				m_emu->chipset.cpu.reg_sp = (uint16_t)pair.addr_value;
 			} else {
 				for (size_t i = 0; i < pair.data_bytes.size(); ++i) {
 					me_mmu->WriteData(pair.addr_value + i, pair.data_bytes[i]);
