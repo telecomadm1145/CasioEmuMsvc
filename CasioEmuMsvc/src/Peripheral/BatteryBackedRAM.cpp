@@ -83,6 +83,15 @@ namespace casioemu {
 		ram_buffer = new uint8_t[ram_size];
 		fillRandomData(ram_buffer, ram_size);
 
+		if (!real_hardware && emulator.hardware_id == HW_CLASSWIZ_II) {
+			// The ClassWiz II simulator ROM uses this extra range for emulated
+			// hardware state, so give it deterministic defaults on first use.
+			std::memset(
+				ram_buffer + GetRamSize(emulator.hardware_id),
+				0,
+				CLASSWIZ_II_SIM_RAM_SIZE);
+		}
+
 #ifndef CASIOEMU_DISABLE_RAM_IMAGE
 		if (emulator.hardware_id != HW_SOLARII)
 			LoadRAMImage();
