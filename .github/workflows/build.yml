@@ -50,18 +50,18 @@ jobs:
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: cmake --build build --config ${{ env.BUILD_CONFIGURATION }} --parallel
 
-    - name: Upload PDBs to Sentry
-      if: matrix.platform == 'windows'
-      env:
-        SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_TOKEN }}
-        SENTRY_ORG: "t5-j7"
-        SENTRY_PROJECT: "native"
-        COMMIT_HASH: ${{ github.sha }}
-        RELEASE_TAG: "CasioEmuMsvc@${{ github.sha }}"
-      working-directory: build/CasioEmuMsvc/${{ env.BUILD_CONFIGURATION }}
-      run: |
-            $sentry_cli = "${{ github.workspace }}\CasioEmuMsvc\sentry-cli.exe"
-            & $sentry_cli debug-files upload -o $env:SENTRY_ORG -p $env:SENTRY_PROJECT .
+    #- name: Upload PDBs to Sentry
+    #  if: matrix.platform == 'windows'
+    #  env:
+    #    SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_TOKEN }}
+    #    SENTRY_ORG: "t5-j7"
+    #    SENTRY_PROJECT: "native"
+    #    COMMIT_HASH: ${{ github.sha }}
+    #    RELEASE_TAG: "CasioEmuMsvc@${{ github.sha }}"
+    #  working-directory: build/CasioEmuMsvc/${{ env.BUILD_CONFIGURATION }}
+    #  run: |
+    #        $sentry_cli = "${{ github.workspace }}\CasioEmuMsvc\sentry-cli.exe"
+    #        & $sentry_cli debug-files upload -o $env:SENTRY_ORG -p $env:SENTRY_PROJECT .
 
     - name: Upload ${{ matrix.platform_arch }} Build Artifact
       if: matrix.platform == 'windows'

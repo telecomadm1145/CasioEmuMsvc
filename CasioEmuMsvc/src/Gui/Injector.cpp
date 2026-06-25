@@ -200,7 +200,7 @@ void Injector::BackgroundReload() {
 void Injector::PrecomputeInjectionValues(InjectionPair& pair) {
 	// Process address
 	std::string addr = pair.address;
-	if (addr != "PC" || addr != "SP") {
+	if (addr != "PC" && addr != "SP") {
 		if (addr.substr(0, 2) == "0x" || addr.substr(0, 2) == "0X") {
 			addr = addr.substr(2);
 		}
@@ -213,7 +213,7 @@ void Injector::PrecomputeInjectionValues(InjectionPair& pair) {
 		std::remove_if(cleaned_data.begin(), cleaned_data.end(),
 			[](char c) { return std::isspace(c); }),
 		cleaned_data.end());
-	if (addr != "PC" || addr != "SP") {
+	if (addr != "PC" && addr != "SP") {
 		pair.data_bytes.clear();
 		pair.data_bytes.reserve(cleaned_data.length() / 2);
 	
@@ -385,11 +385,13 @@ bool Injector::ParseCustomInjections(const std::string& content) {
 					InjectionPair pair;
 					pair.address = current_address;
 					pair.data = current_value;
-					PrecomputeInjectionValues(pair);
-					if (!pair.addr_value) {
-						current_injection.pairs.push_back(std::move(pair));
+					try {
+						PrecomputeInjectionValues(pair);
+						if (!pair.addr_value) {
+							current_injection.pairs.push_back(std::move(pair));
+						}
+					} catch (...) {}
 					}
-				}
 
 				current_address.clear();
 				current_value.clear();
