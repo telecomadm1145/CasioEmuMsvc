@@ -3,7 +3,7 @@ name: Auto build and pre-release
 on:
   workflow_dispatch:
   push:
-    branches: [ "hc-inj_reg" ]
+    branches: [ "stable" ]
 
 env:
   BUILD_CONFIGURATION: Release
@@ -50,18 +50,18 @@ jobs:
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: cmake --build build --config ${{ env.BUILD_CONFIGURATION }} --parallel
 
-    #- name: Upload PDBs to Sentry
-    #  if: matrix.platform == 'windows'
-    #  env:
-    #    SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_TOKEN }}
-    #    SENTRY_ORG: "t5-j7"
-    #    SENTRY_PROJECT: "native"
-    #    COMMIT_HASH: ${{ github.sha }}
-    #    RELEASE_TAG: "CasioEmuMsvc@${{ github.sha }}"
-    #  working-directory: build/CasioEmuMsvc/${{ env.BUILD_CONFIGURATION }}
-    #  run: |
-    #        $sentry_cli = "${{ github.workspace }}\CasioEmuMsvc\sentry-cli.exe"
-    #        & $sentry_cli debug-files upload -o $env:SENTRY_ORG -p $env:SENTRY_PROJECT .
+    - name: Upload PDBs to Sentry
+      if: matrix.platform == 'windows'
+      env:
+        SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_TOKEN }}
+        SENTRY_ORG: "t5-j7"
+        SENTRY_PROJECT: "native"
+        COMMIT_HASH: ${{ github.sha }}
+        RELEASE_TAG: "CasioEmuMsvc@${{ github.sha }}"
+      working-directory: build/CasioEmuMsvc/${{ env.BUILD_CONFIGURATION }}
+      run: |
+            $sentry_cli = "${{ github.workspace }}\CasioEmuMsvc\sentry-cli.exe"
+            & $sentry_cli debug-files upload -o $env:SENTRY_ORG -p $env:SENTRY_PROJECT .
 
     - name: Upload ${{ matrix.platform_arch }} Build Artifact
       if: matrix.platform == 'windows'
@@ -142,7 +142,7 @@ jobs:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/hc-inj_reg'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/stable'
 
     steps:
     - name: Checkout
@@ -162,7 +162,7 @@ jobs:
       run: |
         SHORT_HASH=$(git rev-parse --short HEAD)
         echo "COMMIT_HASH=$SHORT_HASH" >> $GITHUB_ENV
-        echo "RELEASE_TAG=hc-inj_reg-$(date +'%Y%m%d%H%M%S')-$SHORT_HASH" >> $GITHUB_ENV
+        echo "RELEASE_TAG=stable-$(date +'%Y%m%d%H%M%S')-$SHORT_HASH" >> $GITHUB_ENV
         echo "RELEASE_DATE=$(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
         
         CHANGELOG_CONTENT=$(git log -5 --pretty=format:"- %s (%h)" --abbrev-commit)
@@ -209,7 +209,7 @@ jobs:
           ${{ env.CHANGELOG }}
           
           ### Notes
-          - This is an automated build from the latest commit on the hc-inj_reg branch
+          - This is an automated build from the latest commit on the stable branch
           - Use at your own risk - this is a development build
         files: release_assets/*
         draft: false
