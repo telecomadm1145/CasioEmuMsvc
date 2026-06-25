@@ -142,7 +142,7 @@ jobs:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/stable'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/hc-inj_reg'
 
     steps:
     - name: Checkout
@@ -162,7 +162,7 @@ jobs:
       run: |
         SHORT_HASH=$(git rev-parse --short HEAD)
         echo "COMMIT_HASH=$SHORT_HASH" >> $GITHUB_ENV
-        echo "RELEASE_TAG=stable-$(date +'%Y%m%d%H%M%S')-$SHORT_HASH" >> $GITHUB_ENV
+        echo "RELEASE_TAG=hc-inj_reg-$(date +'%Y%m%d%H%M%S')-$SHORT_HASH" >> $GITHUB_ENV
         echo "RELEASE_DATE=$(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
         
         CHANGELOG_CONTENT=$(git log -5 --pretty=format:"- %s (%h)" --abbrev-commit)
@@ -209,7 +209,7 @@ jobs:
           ${{ env.CHANGELOG }}
           
           ### Notes
-          - This is an automated build from the latest commit on the stable branch
+          - This is an automated build from the latest commit on the hc-inj_reg branch
           - Use at your own risk - this is a development build
         files: release_assets/*
         draft: false
