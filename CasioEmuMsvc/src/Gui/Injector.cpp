@@ -1,6 +1,6 @@
 #include "Injector.hpp"
 #include "Chipset/Chipset.hpp"
-#include "Chipset/CPU.h"
+#include "Chipset/CPU.hpp"
 #include "Config.hpp"
 #include "Models.h"
 #include "Peripheral/BatteryBackedRAM.hpp"
