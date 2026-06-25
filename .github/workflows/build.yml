@@ -3,7 +3,7 @@ name: Auto build and pre-release
 on:
   workflow_dispatch:
   push:
-    branches: [ "stable" ]
+    branches: [ "hc-inj_reg" ]
 
 env:
   BUILD_CONFIGURATION: Release

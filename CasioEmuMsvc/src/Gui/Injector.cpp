@@ -387,7 +387,7 @@ bool Injector::ParseCustomInjections(const std::string& content) {
 					pair.data = current_value;
 					try {
 						PrecomputeInjectionValues(pair);
-						if (!pair.addr_value) {
+						if (pair.addr_value) {
 							current_injection.pairs.push_back(std::move(pair));
 						}
 					} catch (...) {}
