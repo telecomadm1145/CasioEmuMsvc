@@ -8,6 +8,7 @@
 
 
 class CodeViewer;
+class SnapshotWindow;
 CodeViewer* test_gui(bool* guiCreated, SDL_Window*, SDL_Renderer*);
 void gui_cleanup();
 void gui_loop();
@@ -20,6 +21,7 @@ extern SDL_Renderer* renderer;
 extern std::vector<Label> g_labels;
 extern uint32_t pc_cache;
 extern CodeViewer* code_viewer;
+extern SnapshotWindow* snapshot_window;
 extern std::vector<class UIWindow*> windows;
 
 void SetDebugbreak(void); 
@@ -52,7 +54,11 @@ public:
 			bring_to_front_requested = false;
 		}
 		ImGui::SetNextWindowSize(inital_size, ImGuiCond_FirstUseEver);
+#ifdef CASIOEMU_CORE_WEB
+		if (ImGui::Begin(name, nullptr, flags)) {
+#else
 		if (ImGui::Begin(name, &open, flags)) {
+#endif
 			RenderCore();
 		}
 		ImGui::End();
@@ -62,6 +68,7 @@ public:
 #endif
 	}
 	void BringToFront() {
+		open = true;
 		bring_to_front_requested = true;
 	}
 	virtual void RenderCore() = 0;

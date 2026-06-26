@@ -15,5 +15,8 @@ namespace casioemu {
 		virtual void ReleaseAll() = 0;
 		/// Press/release a button by raw kiko code byte (same encoding as ModelInfo::buttons[].kiko).
 		virtual void PressCode(uint8_t code, bool pressed) = 0;
+		/// Bind and drive buttons through SDL keycode semantics for headless web input.
+		virtual void BindKeycode(int keycode, uint8_t code) = 0;
+		virtual void HandleKeycode(int keycode, bool pressed) = 0;
 	};
 } // namespace casioemu

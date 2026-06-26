@@ -4,7 +4,14 @@
 #include <iostream>
 #include <unordered_map>
 #include <string_view>
+#include <cstring>
 #include <SDL.h>
+
+#ifdef CASIOEMU_CORE_WEB
+#define THEME_DEFAULT_INJECTION_FILE_PATH "/persist/injections.txt"
+#else
+#define THEME_DEFAULT_INJECTION_FILE_PATH "./hc-inj.txt"
+#endif
 
 #define THEME_CONFIG_MAP(CFG_VAR, CFG_STR)\
 	CFG_VAR(bool, isDarkMode, true)\
@@ -12,7 +19,7 @@
 	CFG_VAR(ImGuiStyle, igs_dark, ImGuiStyle())\
 	CFG_STR(language, 30, "en_US")\
 	CFG_VAR(float, scale, 1.0f)\
-	CFG_STR(injectionFilePath, 256, "./hc-inj.txt")\
+	CFG_STR(injectionFilePath, 256, THEME_DEFAULT_INJECTION_FILE_PATH)\
 	CFG_VAR(bool, lowPerformanceMode, false)\
 	CFG_VAR(bool, enableAutoTint, false)\
 	CFG_VAR(ImVec4, seedColor, ImVec4(0.5f, 0.5f, 0.5f, 1.0f))\
@@ -106,7 +113,7 @@ struct ThemeSettings {
 	void Read(std::istream& stm) {
 		stm.seekg(0, std::ios::end);
 		std::streamsize fsz = stm.tellg();
-		stm.seekg(0, std::ios::beg);	
+		stm.seekg(0, std::ios::beg);
 		if (fsz < static_cast<std::streamsize>(sizeof(uint32_t))) return;
 		uint32_t magic = 0;
 		stm.read((char*)&magic, 4);
@@ -261,7 +268,7 @@ private:
 	ThemeManager& operator=(const ThemeManager&) = delete;
 
 	ThemeSettings m_settings;
-	float m_fontScale = 0.0f;
+	float m_fontScale = 1.0f;
 	bool m_fontRebuildRequested = false;
 	bool m_bgReloadRequested = false;
 	mutable std::unordered_map<uint64_t, ImVec4> m_harmonizeCache;

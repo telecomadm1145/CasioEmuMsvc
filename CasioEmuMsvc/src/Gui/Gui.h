@@ -84,42 +84,47 @@ inline std::string GetMonospaceFontPath() {
 // -----------------------------------------------------------------------------
 inline std::string GetCJKFontPath() {
 	auto preference = "Localization.CJKPreference"_l;
-	std::vector<std::string> candidates;
+	std::vector<std::string> candidates = {
+		"temp/generated/fonts/CasioEmuGuiCJKSubset.otf",
+		"./temp/generated/fonts/CasioEmuGuiCJKSubset.otf",
+		"../temp/generated/fonts/CasioEmuGuiCJKSubset.otf"};
 
 #ifdef _WIN32
 	if (preference == "JP") {
-		candidates = {
+		candidates.insert(candidates.end(), {
 			"C:\\Windows\\Fonts\\msgothic.ttc", // MS Gothic 是日文等宽的首选
 			"C:\\Windows\\Fonts\\YuGothM.ttc",
-			"C:\\Windows\\Fonts\\meiryo.ttc"};
+			"C:\\Windows\\Fonts\\meiryo.ttc"});
 	}
 	else if (preference == "KR") {
-		candidates = {
+		candidates.insert(candidates.end(), {
 			"C:\\Windows\\Fonts\\malgun.ttf",  // Malgun Gothic (맑은 고딕)
 			"C:\\Windows\\Fonts\\gulim.ttc",   // Gulim (굴림)
 			"C:\\Windows\\Fonts\\batang.ttc"   // Batang (바탕)
-		};
+		});
 	}
 	else {
-		candidates = {
+		candidates.insert(candidates.end(), {
 			"C:\\Windows\\Fonts\\msyh.ttc",	  // 雅黑
 			"C:\\Windows\\Fonts\\simhei.ttf", // 黑体 (较粗，但在某些低分屏上可读性好)
 			"C:\\Windows\\Fonts\\simsun.ttc"  // 宋体 (最传统)
-		};
+		});
 	}
 #elif defined(__ANDROID__)
-	candidates = {
+	candidates.insert(candidates.end(), {
+		"/android_asset/fonts/CasioEmuGuiCJKSubset.otf",
+		"/data/data/com.casioemu/files/fonts/CasioEmuGuiCJKSubset.otf",
 		"/system/fonts/NotoSansCJK-Regular.ttc",
-		"/system/fonts/DroidSansFallback.ttf"};
+		"/system/fonts/DroidSansFallback.ttf"});
 #else // Linux
 	// 尝试寻找 CJK 的 Mono 版本 (如果有)，否则使用 Regular
-	candidates = {
+	candidates.insert(candidates.end(), {
 		"/usr/share/fonts/noto-cjk/NotoSansCJK-Mono.ttc", // 最佳：Noto 的等宽版本
 		"/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
 		"/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
 		"/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
 		"/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",
-		"/usr/share/fonts/droid/DroidSansFallbackFull.ttf"};
+		"/usr/share/fonts/droid/DroidSansFallbackFull.ttf"});
 #endif
 
 	return FindBestFont(candidates);

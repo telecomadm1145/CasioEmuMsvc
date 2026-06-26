@@ -36,9 +36,9 @@ namespace casioemu {
 
 	class Emulator {
 	public:
-		SDL_Renderer* renderer;
-		SDL_Surface* interface_surface;
-		SDL_Texture* interface_texture;
+		SDL_Renderer* renderer = nullptr;
+		SDL_Surface* interface_surface = nullptr;
+		SDL_Texture* interface_texture = nullptr;
 		unsigned int cycles_per_second;
 		unsigned int timer_interval;
 		bool running, Paused;
@@ -71,9 +71,9 @@ namespace casioemu {
 
 	public:
 		ModelInfo ModelDefinition{};
-		SDL_Window* window;
+		SDL_Window* window = nullptr;
 		Emulator(std::map<std::string, std::string>& argv_map, bool Paused = false);
-		Emulator(ModelInfo def, bool paused = false, bool headless = true);
+		Emulator(ModelInfo def, bool paused = false, bool headless = true, std::string modelPath = "");
 		~Emulator();
 
 		FairRecursiveMutex access_mx;

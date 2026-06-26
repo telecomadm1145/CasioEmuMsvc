@@ -1,13 +1,19 @@
 #include "Theme.h"
 #include "FileDialog.hpp"
+#ifndef CASIOEMU_CORE_WEB
 #include "SysDialog.h"
+#else
+#include "WebDebuggerGui.h"
+#endif
 #include "Ui.hpp"
 #include <Gui.h>
 #include <Localization.h>
 #include <fstream>
 #include <string>
 #include <vibration.h>
+#ifndef CASIOEMU_CORE_WEB
 #include "Ext/DiscordRPC.h"
+#endif
 
 extern SDL_Surface* background;
 extern SDL_Texture* bg_txt;
@@ -138,15 +144,26 @@ public:
 		UIHelpers::SectionHeader("Background & Injection");
 
 		if (ImGui::Button("UI.ChangeBg"_lc)) {
+#ifdef CASIOEMU_CORE_WEB
+			WebDebuggerQueueOpenFile("/persist/background.jpg", "background.jpg");
+#else
 			SystemDialogs::OpenFileDialog([](std::filesystem::path pth) {
 				std::filesystem::copy_file(pth, "background.jpg", std::filesystem::copy_options::overwrite_existing);
 			});
 			tm.RequestBgReload();
+#endif
 		}
+#ifdef CASIOEMU_CORE_WEB
+		int bgResult = 0;
+		if (WebDebuggerConsumeFileResult("/persist/background.jpg", &bgResult) && bgResult == 0) {
+			tm.RequestBgReload();
+		}
+#endif
 
 		ImGui::Spacing();
 		ImGui::TextUnformatted("Ui.InjectionFilePath"_lc);
 		ImGui::InputText("##injection_file_path", tempInjectionFilePath, sizeof(tempInjectionFilePath));
+#ifndef CASIOEMU_CORE_WEB
 		ImGui::SameLine();
 		if (ImGui::Button("Ui.Browse"_lc)) {
 			showFileDialog = true;
@@ -158,6 +175,7 @@ public:
 				showFileDialog = false;
 			}
 		}
+#endif
 
 		UIHelpers::SectionHeader("Auto-Tint (MD3 Monet)");
 		
@@ -171,13 +189,14 @@ public:
 				tm.SetSeedColor(seedColor);
 			}
 			if (ImGui::Button("Theme.MD"_lc)) {
-#ifndef TEST_BUILD
+#if !defined(TEST_BUILD) && !defined(CASIOEMU_CORE_WEB)
 				seedColor = tm.ExtractDominantColor(bg_txt, renderer);
 #endif
 				tm.SetSeedColor(seedColor);
 			}
 		}
 		
+#ifndef CASIOEMU_CORE_WEB
 		UIHelpers::SectionHeader("Integrations");
 		if (ImGui::Checkbox("Theme.EnableDiscordRPC"_lc, &settings.enableDiscordRPC)) {
 			tm.SaveSettings();
@@ -187,6 +206,7 @@ public:
 				DiscordRPC::UpdatePresence("");
 			}
 		}
+#endif
 
 		UIHelpers::SectionHeader("Advanced Style Settings");
 

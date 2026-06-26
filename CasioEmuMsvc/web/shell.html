@@ -482,6 +482,10 @@
 
     window.addEventListener("resize", resizeRuntime);
     canvas.addEventListener("click", () => canvas.focus());
+    canvas.addEventListener("contextmenu", event => {
+      event.preventDefault();
+      canvas.focus();
+    });
     buttons.pickFolder.disabled = true;
     buttons.pickFiles.disabled = true;
   </script>

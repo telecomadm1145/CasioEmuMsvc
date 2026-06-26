@@ -50,8 +50,19 @@ jobs:
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: cmake --build build --config ${{ env.BUILD_CONFIGURATION }} --parallel
 
-    - name: Upload PDBs to Sentry
+    - name: Check Sentry token
       if: matrix.platform == 'windows'
+      shell: pwsh
+      run: |
+        if ("${{ secrets.SENTRY_TOKEN }}" -ne "") {
+          "HAS_SENTRY_TOKEN=true" >> $env:GITHUB_ENV
+        } else {
+          "HAS_SENTRY_TOKEN=false" >> $env:GITHUB_ENV
+          Write-Host "SENTRY_TOKEN is not configured; skipping PDB upload."
+        }
+
+    - name: Upload PDBs to Sentry
+      if: matrix.platform == 'windows' && env.HAS_SENTRY_TOKEN == 'true'
       env:
         SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_TOKEN }}
         SENTRY_ORG: "t5-j7"
@@ -138,9 +149,64 @@ jobs:
           build/CasioEmuMsvc/roms.db
         if-no-files-found: error
 
+  web-build:
+    runs-on: ubuntu-latest
+    name: Build Web
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+      with:
+        submodules: recursive
+
+    - name: Install build tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build python3 python3-pip
+
+    - name: Install Emscripten
+      run: |
+        git clone https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+        "$RUNNER_TEMP/emsdk/emsdk" install latest
+        "$RUNNER_TEMP/emsdk/emsdk" activate latest
+
+    - name: Build CASIOEMU_WEB
+      run: |
+        source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+        emcmake cmake -S CasioEmuMsvc -B CasioEmuMsvc/build-web -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} \
+          -DCASIOEMU_WEB=ON \
+          -DBUILD_EXECUTABLE=ON
+        cmake --build CasioEmuMsvc/build-web --config ${{ env.BUILD_CONFIGURATION }} --parallel
+
+    - name: Upload CASIOEMU_WEB Artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: Release-Web-CASIOEMU_WEB
+        path: |
+          CasioEmuMsvc/build-web/CasioEmuWeb.*
+        if-no-files-found: error
+
+    - name: Build CASIOEMU_CORE_WEB
+      run: |
+        source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+        emcmake cmake -S CasioEmuMsvc -B CasioEmuMsvc/build-core-web -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_CONFIGURATION }} \
+          -DCASIOEMU_CORE_WEB=ON \
+          -DBUILD_EXECUTABLE=ON
+        cmake --build CasioEmuMsvc/build-core-web --config ${{ env.BUILD_CONFIGURATION }} --parallel
+
+    - name: Upload CASIOEMU_CORE_WEB Artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: Release-Web-CASIOEMU_CORE_WEB
+        path: |
+          CasioEmuMsvc/build-core-web/CasioEmuCore.*
+        if-no-files-found: error
+
   release:
     name: Create Release
-    needs: build
+    needs: [build, web-build]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/stable'
 
@@ -187,6 +253,14 @@ jobs:
         
         if [ -f "./artifacts/Release-Linux-x64.zip" ]; then
           mv "./artifacts/Release-Linux-x64.zip" "./release_assets/linux-x64-${{ env.COMMIT_HASH }}.zip"
+        fi
+
+        if [ -f "./artifacts/Release-Web-CASIOEMU_WEB.zip" ]; then
+          mv "./artifacts/Release-Web-CASIOEMU_WEB.zip" "./release_assets/web-casioemu-web-${{ env.COMMIT_HASH }}.zip"
+        fi
+
+        if [ -f "./artifacts/Release-Web-CASIOEMU_CORE_WEB.zip" ]; then
+          mv "./artifacts/Release-Web-CASIOEMU_CORE_WEB.zip" "./release_assets/web-casioemu-core-web-${{ env.COMMIT_HASH }}.zip"
         fi
         
         ls -la release_assets/

@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CasioEmu config converter</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      font-size: 14px;
+    }
+    body {
+      margin: 0;
+      background: Canvas;
+      color: CanvasText;
+    }
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1 {
+      margin: 0 0 16px;
+      font-size: 22px;
+      font-weight: 650;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    button,
+    .file-button {
+      border: 1px solid color-mix(in srgb, CanvasText 24%, transparent);
+      background: color-mix(in srgb, CanvasText 8%, Canvas);
+      color: CanvasText;
+      border-radius: 6px;
+      padding: 7px 10px;
+      cursor: pointer;
+    }
+    button:hover,
+    .file-button:hover {
+      background: color-mix(in srgb, CanvasText 14%, Canvas);
+    }
+    input[type="file"] {
+      display: none;
+    }
+    textarea {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 70vh;
+      resize: vertical;
+      border: 1px solid color-mix(in srgb, CanvasText 24%, transparent);
+      border-radius: 6px;
+      padding: 12px;
+      font: 13px/1.45 Consolas, "Cascadia Mono", monospace;
+      tab-size: 2;
+      background: color-mix(in srgb, CanvasText 4%, Canvas);
+      color: CanvasText;
+    }
+    .status {
+      min-height: 20px;
+      margin: 8px 0 12px;
+      color: color-mix(in srgb, CanvasText 70%, transparent);
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>CasioEmu config converter</h1>
+  <div class="toolbar">
+    <button id="newConfig" type="button">New blank config</button>
+    <button id="newSolarII" type="button">New SOLARII config</button>
+    <label class="file-button">
+      Open config.bin
+      <input id="binInput" type="file" accept=".bin,application/octet-stream">
+    </label>
+    <label class="file-button">
+      Open config.json
+      <input id="jsonInput" type="file" accept=".json,application/json">
+    </label>
+    <button id="downloadJson" type="button">Save JSON</button>
+    <button id="downloadBin" type="button">Save config.bin</button>
+    <button id="formatJson" type="button">Format JSON</button>
+  </div>
+  <div id="status" class="status">Open a config.bin or paste JSON below.</div>
+  <textarea id="editor" spellcheck="false" placeholder="JSON will appear here."></textarea>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  const CONFIG_HEADER = "\n\nnx-U16/U8 Emulator Configuration file v52\n\n";
+  const SOLARII_STATUS_SPRITES = [
+    "rsd_shift", "rsd_mode", "rsd_sto", "rsd_rcl", "rsd_hyp", "rsd_m", "rsd_k",
+    "rsd_deg", "rsd_rad", "rsd_gra", "rsd_fix", "rsd_sci", "rsd_sd",
+    "rsd_b_minus",
+    "rsd_b_1_up", "rsd_b_1_up_left", "rsd_b_1_up_right", "rsd_b_1_mid",
+    "rsd_b_1_down_left", "rsd_b_1_down_right", "rsd_b_1_down", "rsd_b_1_dot",
+    "rsd_b_2_up", "rsd_b_2_up_left", "rsd_b_2_up_right", "rsd_b_2_mid",
+    "rsd_b_2_down_left", "rsd_b_2_down_right", "rsd_b_2_down", "rsd_b_2_dot",
+    "rsd_b_3_up", "rsd_b_3_up_left", "rsd_b_3_up_right", "rsd_b_3_mid",
+    "rsd_b_3_down_left", "rsd_b_3_down_right", "rsd_b_3_down", "rsd_b_3_dot",
+    "rsd_b_4_up", "rsd_b_4_up_left", "rsd_b_4_up_right", "rsd_b_4_mid",
+    "rsd_b_4_down_left", "rsd_b_4_down_right", "rsd_b_4_down", "rsd_b_4_dot",
+    "rsd_b_5_up", "rsd_b_5_up_left", "rsd_b_5_up_right", "rsd_b_5_mid",
+    "rsd_b_5_down_left", "rsd_b_5_down_right", "rsd_b_5_down", "rsd_b_5_dot",
+    "rsd_b_6_up", "rsd_b_6_up_left", "rsd_b_6_up_right", "rsd_b_6_mid",
+    "rsd_b_6_down_left", "rsd_b_6_down_right", "rsd_b_6_down", "rsd_b_6_dot",
+    "rsd_b_7_up", "rsd_b_7_up_left", "rsd_b_7_up_right", "rsd_b_7_mid",
+    "rsd_b_7_down_left", "rsd_b_7_down_right", "rsd_b_7_down", "rsd_b_7_dot",
+    "rsd_b_8_up", "rsd_b_8_up_left", "rsd_b_8_up_right", "rsd_b_8_mid",
+    "rsd_b_8_down_left", "rsd_b_8_down_right", "rsd_b_8_down", "rsd_b_8_dot",
+    "rsd_b_9_up", "rsd_b_9_up_left", "rsd_b_9_up_right", "rsd_b_9_mid",
+    "rsd_b_9_down_left", "rsd_b_9_down_right", "rsd_b_9_down", "rsd_b_9_dot",
+    "rsd_b_10_up", "rsd_b_10_up_left", "rsd_b_10_up_right", "rsd_b_10_mid",
+    "rsd_b_10_down_left", "rsd_b_10_down_right", "rsd_b_10_down", "rsd_b_10_dot",
+    "rsd_s_minus",
+    "rsd_s_1_up", "rsd_s_1_up_left", "rsd_s_1_up_right", "rsd_s_1_mid",
+    "rsd_s_1_down_left", "rsd_s_1_down_right", "rsd_s_1_down",
+    "rsd_s_2_up", "rsd_s_2_up_left", "rsd_s_2_up_right", "rsd_s_2_mid",
+    "rsd_s_2_down_left", "rsd_s_2_down_right", "rsd_s_2_down",
+  ];
+  const SOLARII_INTERFACE_WIDTH = 1230;
+  const SOLARII_INTERFACE_HEIGHT = 1930;
+  const SOLARII_WEB_VIEWBOX_WIDTH = 369;
+  const SOLARII_WEB_VIEWBOX_HEIGHT = 579;
+  const SOLARII_STATUS_LEFT = 230;
+  const SOLARII_STATUS_TOP = 350;
+  const SOLARII_STATUS_SHEET_TOP = SOLARII_INTERFACE_HEIGHT;
+  const SOLARII_STATUS_TEXT_RECTS = [
+    { x: 18, y: 10, w: 72, h: 28 },
+    { x: 100, y: 10, w: 72, h: 28 },
+    { x: 182, y: 10, w: 48, h: 28 },
+    { x: 243, y: 10, w: 48, h: 28 },
+    { x: 305, y: 10, w: 44, h: 28 },
+    { x: 365, y: 10, w: 24, h: 28 },
+    { x: 397, y: 10, w: 20, h: 28 },
+    { x: 432, y: 10, w: 50, h: 28 },
+    { x: 495, y: 10, w: 50, h: 28 },
+    { x: 559, y: 10, w: 50, h: 28 },
+    { x: 623, y: 10, w: 42, h: 28 },
+    { x: 672, y: 10, w: 42, h: 28 },
+    { x: 722, y: 10, w: 36, h: 28 },
+  ];
+  const SOLARII_BIG_CELL = { x: 50, y: 48, w: 64, h: 137 };
+  const SOLARII_SML_CELL = { x: 692, y: 49, w: 30, h: 72 };
+  const SOLARII_BIG_STEP = 62.5889;
+  const SOLARII_SML_STEP = 33.3;
+  const SOLARII_BIG_SOURCE = { x: 0, y: 70, gapX: 72, columns: 8 };
+  const SOLARII_SML_SOURCE = { x: 0, y: 230, gapX: 36, columns: 7 };
+  const SOLARII_KEYPAD_BUTTONS = [
+    { rect: { x: 56.7, y: 208.5, w: 35.3, h: 26.5 }, ki: 32, ko: 1 },
+    { rect: { x: 100.74, y: 208.5, w: 35.3, h: 26.5 }, ki: 32, ko: 2 },
+    { rect: { x: 144.78, y: 208.5, w: 35.3, h: 26.5 }, ki: 32, ko: 4 },
+    { rect: { x: 188.82, y: 208.5, w: 35.3, h: 26.5 }, ki: 32, ko: 8 },
+    { rect: { x: 232.86, y: 208.5, w: 35.3, h: 26.5 }, ki: 32, ko: 16 },
+    { rect: { x: 276.9, y: 208.5, w: 35.3, h: 26.5 }, ki: 0, ko: 0 },
+    { rect: { x: 56.7, y: 250.1, w: 35.3, h: 26.5 }, ki: 16, ko: 1 },
+    { rect: { x: 100.74, y: 250.1, w: 35.3, h: 26.5 }, ki: 16, ko: 2 },
+    { rect: { x: 144.78, y: 250.1, w: 35.3, h: 26.5 }, ki: 16, ko: 4 },
+    { rect: { x: 188.82, y: 250.1, w: 35.3, h: 26.5 }, ki: 16, ko: 8 },
+    { rect: { x: 232.86, y: 250.1, w: 35.3, h: 26.5 }, ki: 16, ko: 16 },
+    { rect: { x: 276.9, y: 250.1, w: 35.3, h: 26.5 }, ki: 16, ko: 32 },
+    { rect: { x: 56.7, y: 291.7, w: 35.3, h: 26.5 }, ki: 8, ko: 1 },
+    { rect: { x: 100.74, y: 291.7, w: 35.3, h: 26.5 }, ki: 8, ko: 2 },
+    { rect: { x: 144.78, y: 291.7, w: 35.3, h: 26.5 }, ki: 8, ko: 4 },
+    { rect: { x: 188.82, y: 291.7, w: 35.3, h: 26.5 }, ki: 8, ko: 8 },
+    { rect: { x: 232.86, y: 291.7, w: 35.3, h: 26.5 }, ki: 8, ko: 16 },
+    { rect: { x: 276.9, y: 291.7, w: 35.3, h: 26.5 }, ki: 8, ko: 32 },
+    { rect: { x: 57.1, y: 342.1, w: 43.5, h: 33.5 }, ki: 4, ko: 1 },
+    { rect: { x: 109.95, y: 342.1, w: 43.5, h: 33.5 }, ki: 4, ko: 2 },
+    { rect: { x: 162.8, y: 342.1, w: 43.5, h: 33.5 }, ki: 4, ko: 4 },
+    { rect: { x: 215.65, y: 342.1, w: 43.5, h: 33.5 }, ki: 4, ko: 8 },
+    { rect: { x: 268.5, y: 342.1, w: 43.5, h: 33.5 }, ki: 4, ko: 16 },
+    { rect: { x: 57.1, y: 391.3, w: 43.5, h: 33.5 }, ki: 2, ko: 1 },
+    { rect: { x: 109.95, y: 391.3, w: 43.5, h: 33.5 }, ki: 2, ko: 2 },
+    { rect: { x: 162.8, y: 391.3, w: 43.5, h: 33.5 }, ki: 2, ko: 4 },
+    { rect: { x: 215.65, y: 391.3, w: 43.5, h: 33.5 }, ki: 2, ko: 8 },
+    { rect: { x: 268.5, y: 391.3, w: 43.5, h: 33.5 }, ki: 2, ko: 16 },
+    { rect: { x: 57.1, y: 440.5, w: 43.5, h: 33.5 }, ki: 1, ko: 1 },
+    { rect: { x: 109.95, y: 440.5, w: 43.5, h: 33.5 }, ki: 1, ko: 2 },
+    { rect: { x: 162.8, y: 440.5, w: 43.5, h: 33.5 }, ki: 1, ko: 4 },
+    { rect: { x: 215.65, y: 440.5, w: 43.5, h: 33.5 }, ki: 1, ko: 8 },
+    { rect: { x: 268.5, y: 440.5, w: 43.5, h: 33.5 }, ki: 1, ko: 16 },
+    { rect: { x: 57.1, y: 489.7, w: 43.5, h: 33.5 }, ki: 16, ko: 64 },
+    { rect: { x: 109.95, y: 489.7, w: 43.5, h: 33.5 }, ki: 8, ko: 64 },
+    { rect: { x: 162.8, y: 489.7, w: 43.5, h: 33.5 }, ki: 4, ko: 64 },
+    { rect: { x: 215.65, y: 489.7, w: 43.5, h: 33.5 }, ki: 2, ko: 64 },
+    { rect: { x: 268.5, y: 489.7, w: 43.5, h: 33.5 }, ki: 1, ko: 64 },
+  ];
+  const SOLARII_DEFAULT_KEY_NAMES = {
+    "32,1": "F1",
+    "32,2": "F3",
+    "32,4": "I",
+    "32,8": "L",
+    "32,16": "",
+    "0,0": "F4",
+    "16,1": "D",
+    "16,2": "",
+    "16,4": "",
+    "16,8": "S",
+    "16,16": "C",
+    "16,32": "T",
+    "8,1": "",
+    "8,2": "Delete",
+    "8,4": "(",
+    "8,8": ")",
+    "8,16": "^",
+    "8,32": "",
+    "4,1": "7",
+    "4,2": "8",
+    "4,4": "9",
+    "4,8": "",
+    "4,16": "Space",
+    "2,1": "4",
+    "2,2": "5",
+    "2,4": "6",
+    "2,8": "*",
+    "2,16": "/",
+    "1,1": "1",
+    "1,2": "2",
+    "1,4": "3",
+    "1,8": "+",
+    "1,16": "-",
+    "16,64": "0",
+    "8,64": ".",
+    "4,64": "E",
+    "2,64": "Return",
+    "1,64": "",
+  };
+
+  const textEncoder = new TextEncoder();
+  const textDecoder = new TextDecoder();
+  const editor = document.getElementById("editor");
+  const statusEl = document.getElementById("status");
+
+  function setStatus(text) {
+    statusEl.textContent = text;
+  }
+
+  class BinaryReader {
+    constructor(buffer) {
+      this.view = new DataView(buffer);
+      this.offset = 0;
+    }
+    ensure(size) {
+      if (this.offset + size > this.view.byteLength) {
+        throw new Error(`Unexpected end of file at 0x${this.offset.toString(16)}`);
+      }
+    }
+    remaining() {
+      return this.view.byteLength - this.offset;
+    }
+    u8() {
+      this.ensure(1);
+      return this.view.getUint8(this.offset++);
+    }
+    bool() {
+      return this.u8() !== 0;
+    }
+    u16() {
+      this.ensure(2);
+      const value = this.view.getUint16(this.offset, true);
+      this.offset += 2;
+      return value;
+    }
+    i32() {
+      this.ensure(4);
+      const value = this.view.getInt32(this.offset, true);
+      this.offset += 4;
+      return value;
+    }
+    u64Number() {
+      this.ensure(8);
+      const value = this.view.getBigUint64(this.offset, true);
+      this.offset += 8;
+      if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
+        throw new Error(`Container size is too large: ${value}`);
+      }
+      return Number(value);
+    }
+    string() {
+      const length = this.u64Number();
+      this.ensure(length);
+      const bytes = new Uint8Array(this.view.buffer, this.view.byteOffset + this.offset, length);
+      this.offset += length;
+      return textDecoder.decode(bytes);
+    }
+    rect() {
+      return { x: this.i32(), y: this.i32(), w: this.i32(), h: this.i32() };
+    }
+    spriteInfo() {
+      return { src: this.rect(), dest: this.rect() };
+    }
+    buttonInfo() {
+      return { rect: this.rect(), kiko: this.i32(), keyname: this.string() };
+    }
+    colorInfo() {
+      return { r: this.i32(), g: this.i32(), b: this.i32() };
+    }
+    vector(readItem) {
+      const length = this.u64Number();
+      const out = [];
+      for (let i = 0; i < length; ++i) out.push(readItem());
+      return out;
+    }
+    map(readValue) {
+      const length = this.u64Number();
+      const out = {};
+      for (let i = 0; i < length; ++i) {
+        const key = this.string();
+        out[key] = readValue();
+      }
+      return out;
+    }
+  }
+
+  class BinaryWriter {
+    constructor() {
+      this.parts = [];
+    }
+    pushBytes(bytes) {
+      this.parts.push(bytes);
+    }
+    u8(value) {
+      this.pushBytes(Uint8Array.of(Number(value) & 0xff));
+    }
+    bool(value) {
+      this.u8(value ? 1 : 0);
+    }
+    u16(value) {
+      const bytes = new Uint8Array(2);
+      new DataView(bytes.buffer).setUint16(0, Number(value) & 0xffff, true);
+      this.pushBytes(bytes);
+    }
+    i32(value) {
+      const bytes = new Uint8Array(4);
+      new DataView(bytes.buffer).setInt32(0, Number(value) | 0, true);
+      this.pushBytes(bytes);
+    }
+    u64(value) {
+      const bytes = new Uint8Array(8);
+      new DataView(bytes.buffer).setBigUint64(0, BigInt(value), true);
+      this.pushBytes(bytes);
+    }
+    string(value) {
+      const bytes = textEncoder.encode(String(value ?? ""));
+      this.u64(bytes.length);
+      this.pushBytes(bytes);
+    }
+    rect(rect) {
+      const r = rect || {};
+      this.i32(r.x ?? 0);
+      this.i32(r.y ?? 0);
+      this.i32(r.w ?? 0);
+      this.i32(r.h ?? 0);
+    }
+    spriteInfo(sprite) {
+      const s = sprite || {};
+      this.rect(s.src);
+      this.rect(s.dest);
+    }
+    buttonInfo(button) {
+      const b = button || {};
+      this.rect(b.rect);
+      this.i32(b.kiko ?? 0);
+      this.string(b.keyname ?? "");
+    }
+    colorInfo(color) {
+      const c = color || {};
+      this.i32(c.r ?? 0);
+      this.i32(c.g ?? 0);
+      this.i32(c.b ?? 0);
+    }
+    vector(items, writeItem) {
+      const list = Array.isArray(items) ? items : [];
+      this.u64(list.length);
+      for (const item of list) writeItem(item);
+    }
+    map(object, writeValue) {
+      const entries = Object.entries(object || {}).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+      this.u64(entries.length);
+      for (const [key, value] of entries) {
+        this.string(key);
+        writeValue(value);
+      }
+    }
+    finish() {
+      let total = 0;
+      for (const part of this.parts) total += part.length;
+      const out = new Uint8Array(total);
+      let offset = 0;
+      for (const part of this.parts) {
+        out.set(part, offset);
+        offset += part.length;
+      }
+      return out;
+    }
+  }
+
+  function defaultU16Mode(model) {
+    return !(model.hardware_id === 3 || model.hardware_id === 8);
+  }
+
+  function defaultLargeModel(model) {
+    return model.hardware_id !== 8;
+  }
+
+  function defaultMl620Mirroring(model) {
+    return model.hardware_id !== 4;
+  }
+
+  function parseModelInfo(buffer) {
+    const r = new BinaryReader(buffer);
+    const model = {};
+    model.header = r.string();
+    model.csr_mask = r.u16();
+    model.hardware_id = r.u16();
+    model.real_hardware = r.bool();
+    model.pd_value = r.u8();
+    model.buttons = r.vector(() => r.buttonInfo());
+    model.sprites = r.map(() => r.spriteInfo());
+    model.ink_color = r.colorInfo();
+    model.interface_path = r.string();
+    model.model_name = r.string();
+    model.rom_path = r.string();
+    model.flash_path = r.string();
+    model.enable_new_screen = r.bool();
+    model.is_sample_rom = r.bool();
+    model.legacy_ko = r.bool();
+    model.u16_mode = defaultU16Mode(model);
+    model.LARGE_model = defaultLargeModel(model);
+    model.ml620_mirroring = defaultMl620Mirroring(model);
+    model.extra = {};
+    if (r.remaining() > 0) model.u16_mode = r.bool();
+    if (r.remaining() > 0) model.LARGE_model = r.bool();
+    if (r.remaining() > 0) model.ml620_mirroring = r.bool();
+    if (r.remaining() > 0) model.extra = r.map(() => r.string());
+    model._trailing_bytes = r.remaining();
+    return model;
+  }
+
+  function writeModelInfo(model) {
+    const w = new BinaryWriter();
+    w.string(model.header ?? CONFIG_HEADER);
+    w.u16(model.csr_mask ?? 0);
+    w.u16(model.hardware_id ?? 0);
+    w.bool(model.real_hardware);
+    w.u8(model.pd_value ?? 0);
+    w.vector(model.buttons, item => w.buttonInfo(item));
+    w.map(model.sprites, item => w.spriteInfo(item));
+    w.colorInfo(model.ink_color);
+    w.string(model.interface_path ?? "");
+    w.string(model.model_name ?? "");
+    w.string(model.rom_path ?? "");
+    w.string(model.flash_path ?? "");
+    w.bool(model.enable_new_screen);
+    w.bool(model.is_sample_rom);
+    w.bool(model.legacy_ko);
+    w.bool(model.u16_mode ?? defaultU16Mode(model));
+    w.bool(model.LARGE_model ?? defaultLargeModel(model));
+    w.bool(model.ml620_mirroring ?? defaultMl620Mirroring(model));
+    w.map(model.extra, value => w.string(value));
+    return w.finish();
+  }
+
+  function parseEditorJson() {
+    return JSON.parse(editor.value);
+  }
+
+  function setEditorJson(model) {
+    delete model._trailing_bytes;
+    editor.value = JSON.stringify(model, null, 2);
+  }
+
+  function createRect(x = 0, y = 0, w = 1, h = 1) {
+    return { x, y, w, h };
+  }
+
+  function createSprite(src = createRect(), dest = createRect()) {
+    return { src, dest };
+  }
+
+  function offsetRect(rect, dx, dy) {
+    return {
+      x: Math.round(rect.x + dx),
+      y: Math.round(rect.y + dy),
+      w: Math.round(rect.w),
+      h: Math.round(rect.h),
+    };
+  }
+
+  function sourceGridRect(layout, index, cell) {
+    const column = index % layout.columns;
+    return {
+      x: layout.x + column * layout.gapX,
+      y: SOLARII_STATUS_SHEET_TOP + layout.y,
+      w: cell.w,
+      h: cell.h,
+    };
+  }
+
+  function createSolarIIStatusSpriteMap() {
+    const sprites = {};
+    for (let i = 0; i < SOLARII_STATUS_TEXT_RECTS.length; ++i) {
+      const rect = SOLARII_STATUS_TEXT_RECTS[i];
+      sprites[SOLARII_STATUS_SPRITES[i]] = createSprite(
+        offsetRect(rect, 0, SOLARII_STATUS_SHEET_TOP),
+        offsetRect(rect, SOLARII_STATUS_LEFT, SOLARII_STATUS_TOP)
+      );
+    }
+
+    let nameIndex = SOLARII_STATUS_TEXT_RECTS.length;
+    sprites[SOLARII_STATUS_SPRITES[nameIndex++]] = createSprite(
+      sourceGridRect(SOLARII_BIG_SOURCE, 3, SOLARII_BIG_CELL),
+      offsetRect(SOLARII_BIG_CELL, SOLARII_STATUS_LEFT - 45.8568, SOLARII_STATUS_TOP)
+    );
+    for (let digit = 0; digit < 10; ++digit) {
+      const dest = offsetRect(SOLARII_BIG_CELL, SOLARII_STATUS_LEFT + digit * SOLARII_BIG_STEP, SOLARII_STATUS_TOP);
+      for (let segment = 0; segment < 8; ++segment) {
+        sprites[SOLARII_STATUS_SPRITES[nameIndex++]] = createSprite(
+          sourceGridRect(SOLARII_BIG_SOURCE, segment, SOLARII_BIG_CELL),
+          dest
+        );
+      }
+    }
+
+    sprites[SOLARII_STATUS_SPRITES[nameIndex++]] = createSprite(
+      sourceGridRect(SOLARII_SML_SOURCE, 3, SOLARII_SML_CELL),
+      offsetRect(SOLARII_SML_CELL, SOLARII_STATUS_LEFT - 26.3, SOLARII_STATUS_TOP)
+    );
+    for (let digit = 0; digit < 2; ++digit) {
+      const dest = offsetRect(SOLARII_SML_CELL, SOLARII_STATUS_LEFT + digit * SOLARII_SML_STEP, SOLARII_STATUS_TOP);
+      for (let segment = 0; segment < 7; ++segment) {
+        sprites[SOLARII_STATUS_SPRITES[nameIndex++]] = createSprite(
+          sourceGridRect(SOLARII_SML_SOURCE, segment, SOLARII_SML_CELL),
+          dest
+        );
+      }
+    }
+    return sprites;
+  }
+
+  function scaleSolarIIRect(rect) {
+    const scaleX = SOLARII_INTERFACE_WIDTH / SOLARII_WEB_VIEWBOX_WIDTH;
+    const scaleY = SOLARII_INTERFACE_HEIGHT / SOLARII_WEB_VIEWBOX_HEIGHT;
+    return {
+      x: Math.round(rect.x * scaleX),
+      y: Math.round(rect.y * scaleY),
+      w: Math.round(rect.w * scaleX),
+      h: Math.round(rect.h * scaleY),
+    };
+  }
+
+  function bitIndex(mask) {
+    mask = Number(mask) & 0xff;
+    if (!mask || (mask & (mask - 1)) !== 0) return -1;
+    for (let i = 0; i < 8; ++i) {
+      if (mask === (1 << i)) return i;
+    }
+    return -1;
+  }
+
+  function kikoFromMask(ki, ko) {
+    if ((ki | 0) === 0 && (ko | 0) === 0) return 0xff;
+    const kiIndex = bitIndex(ki);
+    const koIndex = bitIndex(ko);
+    if (kiIndex < 0 || koIndex < 0) return -1;
+    return (koIndex << 4) | kiIndex;
+  }
+
+  function createSolarIIButtons() {
+    return SOLARII_KEYPAD_BUTTONS.map(button => ({
+      rect: scaleSolarIIRect(button.rect),
+      kiko: kikoFromMask(button.ki, button.ko),
+      keyname: SOLARII_DEFAULT_KEY_NAMES[`${button.ki},${button.ko}`] || "",
+    }));
+  }
+
+  function createBlankModel() {
+    return {
+      header: CONFIG_HEADER,
+      csr_mask: 0,
+      hardware_id: 3,
+      real_hardware: false,
+      pd_value: 0,
+      buttons: [],
+      sprites: {
+        rsd_interface: createSprite(createRect(0, 0, 320, 640), createRect(0, 0, 320, 640)),
+      },
+      ink_color: { r: 0, g: 0, b: 0 },
+      interface_path: "interface.png",
+      model_name: "",
+      rom_path: "rom.bin",
+      flash_path: "",
+      enable_new_screen: false,
+      is_sample_rom: false,
+      legacy_ko: false,
+      u16_mode: false,
+      LARGE_model: true,
+      ml620_mirroring: true,
+      extra: {},
+    };
+  }
+
+  function addSolarIIStatusSprites(model) {
+    model.sprites ||= {};
+    const defaults = createSolarIIStatusSpriteMap();
+    let added = 0;
+    for (const name of SOLARII_STATUS_SPRITES) {
+      if (model.sprites[name]) continue;
+      model.sprites[name] = defaults[name] || createSprite();
+      ++added;
+    }
+    return added;
+  }
+
+  function createSolarIIModel() {
+    const model = createBlankModel();
+    model.hardware_id = 8;
+    model.real_hardware = false;
+    model.interface_path = "interface.png";
+    model.model_name = "fx-82SOLAR II";
+    model.rom_path = "rom.bin";
+    model.sprites.rsd_interface = createSprite(
+      createRect(0, 0, SOLARII_INTERFACE_WIDTH, SOLARII_INTERFACE_HEIGHT),
+      createRect(0, 0, SOLARII_INTERFACE_WIDTH, SOLARII_INTERFACE_HEIGHT)
+    );
+    model.buttons = createSolarIIButtons();
+    model.enable_new_screen = true;
+    model.legacy_ko = false;
+    model.u16_mode = false;
+    model.LARGE_model = false;
+    model.ml620_mirroring = true;
+    addSolarIIStatusSprites(model);
+    return model;
+  }
+
+  function downloadBytes(filename, bytes, type) {
+    const blob = new Blob([bytes], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  document.getElementById("binInput").addEventListener("change", async event => {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      const model = parseModelInfo(await file.arrayBuffer());
+      const trailing = model._trailing_bytes;
+      setEditorJson(model);
+      setStatus(`Loaded ${file.name}. Buttons: ${model.buttons.length}, sprites: ${Object.keys(model.sprites).length}, trailing bytes: ${trailing}.`);
+    }
+    catch (error) {
+      setStatus(`Failed to read config.bin: ${error.message}`);
+    }
+  });
+
+  document.getElementById("newConfig").addEventListener("click", () => {
+    setEditorJson(createBlankModel());
+    setStatus("Created a blank config template.");
+  });
+
+  document.getElementById("newSolarII").addEventListener("click", () => {
+    setEditorJson(createSolarIIModel());
+    setStatus(`Created a SOLARII config template with ${SOLARII_STATUS_SPRITES.length} status sprites.`);
+  });
+
+  document.getElementById("jsonInput").addEventListener("change", async event => {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      editor.value = await file.text();
+      parseEditorJson();
+      setStatus(`Loaded ${file.name}.`);
+    }
+    catch (error) {
+      setStatus(`Failed to read config.json: ${error.message}`);
+    }
+  });
+
+  document.getElementById("downloadJson").addEventListener("click", () => {
+    try {
+      const model = parseEditorJson();
+      const bytes = textEncoder.encode(JSON.stringify(model, null, 2));
+      downloadBytes("config.json", bytes, "application/json");
+      setStatus("Saved config.json.");
+    }
+    catch (error) {
+      setStatus(`JSON error: ${error.message}`);
+    }
+  });
+
+  document.getElementById("downloadBin").addEventListener("click", () => {
+    try {
+      const model = parseEditorJson();
+      const bytes = writeModelInfo(model);
+      downloadBytes("config.bin", bytes, "application/octet-stream");
+      setStatus("Saved config.bin.");
+    }
+    catch (error) {
+      setStatus(`Failed to write config.bin: ${error.message}`);
+    }
+  });
+
+  document.getElementById("formatJson").addEventListener("click", () => {
+    try {
+      setEditorJson(parseEditorJson());
+      setStatus("Formatted JSON.");
+    }
+    catch (error) {
+      setStatus(`JSON error: ${error.message}`);
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-﻿#include "Miscellaneous.hpp"
+#include "Miscellaneous.hpp"
 
 #include "Chipset/CPU.hpp"
 #include "Chipset/Chipset.hpp"

@@ -7,9 +7,14 @@ namespace casioemu {
 #include "ModelInfo.h"
 #endif
 #include <cstdint>
+#include <cstddef>
 #include <functional>
+#ifndef CASIOEMU_HEADLESS_PLUGIN
 #include <imgui.h>
+#endif
 #include <string>
+#include <vector>
+#include "DebuggerTypes.h"
 #ifdef _NO_FUND_API
 #include "Hooks.h"
 #include "Ui.hpp"
@@ -130,7 +135,71 @@ public:
 	virtual void PressCode(uint8_t code, bool pressed) = 0;
 };
 
-#ifndef _NO_FUND_API
+/// Headless access to the same debugger state used by the ImGui windows.
+/// Obtained via PluginApi::QueryInterface<IDebugger>().
+class IDebugger {
+public:
+	virtual uint32_t GetProgramCounter() = 0;
+	virtual std::vector<DebugRegisterInfo> GetRegisters() = 0;
+	virtual bool ReadRegister(const char* name, uint32_t& value, uint32_t& bitWidth) = 0;
+	virtual bool WriteRegister(const char* name, uint32_t value) = 0;
+
+	virtual std::vector<uint8_t> ReadMemory(uint32_t address, size_t size) = 0;
+	virtual void WriteMemory(uint32_t address, const std::vector<uint8_t>& data) = 0;
+	virtual std::vector<uint16_t> ReadCode(uint32_t address, size_t count) = 0;
+	virtual void WriteCode(uint32_t address, const std::vector<uint8_t>& data) = 0;
+	virtual std::vector<DebugDisassemblyLine> GetDisassembly(uint32_t address, size_t count) = 0;
+
+	virtual void Pause() = 0;
+	virtual void Resume() = 0;
+	virtual void Reset() = 0;
+	virtual bool StepInto() = 0;
+	virtual bool StepOver() = 0;
+	virtual bool StepOut() = 0;
+
+	virtual std::vector<uint32_t> GetExecutionBreakpoints() = 0;
+	virtual bool AddExecutionBreakpoint(uint32_t address) = 0;
+	virtual bool RemoveExecutionBreakpoint(uint32_t address) = 0;
+	virtual void ClearExecutionBreakpoints() = 0;
+
+	virtual std::vector<DebugMemoryBreakpointInfo> GetMemoryBreakpoints() = 0;
+	virtual std::vector<DebugMemoryBreakpointHitInfo> GetMemoryBreakpointHits(uint32_t address, bool write) = 0;
+	virtual bool AddMemoryBreakpoint(uint32_t address, bool write, bool breakWhenHit) = 0;
+	virtual bool RemoveMemoryBreakpoint(uint32_t address, bool write) = 0;
+	virtual void ClearMemoryBreakpoints() = 0;
+
+	virtual std::string GetBacktrace() = 0;
+	virtual std::vector<DebugStackFrameInfo> GetStackFrames() = 0;
+	virtual std::vector<DebugLabelInfo> GetLabels(const char* query, size_t limit) = 0;
+	virtual std::vector<DebugVariableInfo> GetVariables() = 0;
+
+	virtual std::vector<DebugSnapshotInfo> GetSnapshots() = 0;
+	virtual uint32_t SaveSnapshot(uint32_t parentId, const char* label) = 0;
+	virtual bool LoadSnapshot(uint32_t id, std::string& error) = 0;
+	virtual bool DeleteSnapshot(uint32_t id) = 0;
+	virtual bool ExportSnapshots(const char* path, uint32_t id, bool subtree, std::string& error) = 0;
+	virtual bool ImportSnapshots(const char* path, std::string& error) = 0;
+
+	virtual std::vector<DebugAddressLockInfo> GetAddressLocks() = 0;
+	virtual void SetAddressLock(uint32_t address, uint8_t value, bool locked) = 0;
+	virtual bool RemoveAddressLock(uint32_t address) = 0;
+	virtual void ClearAddressLocks() = 0;
+
+	virtual void StartCallRecording(bool filterCaller, uint32_t caller, bool filterCallee, uint32_t callee) = 0;
+	virtual void StopCallRecording() = 0;
+	virtual void ClearCallRecording() = 0;
+	virtual std::vector<DebugFunctionCallInfo> GetFunctionCalls(uint32_t function) = 0;
+
+	virtual void SetCyclesPerSecond(uint32_t cps) = 0;
+	virtual void SetPdValue(uint8_t value) = 0;
+	virtual DebugDisplaySettings GetDisplaySettings() = 0;
+	virtual void SetDisplaySettings(const DebugDisplaySettings& settings) = 0;
+	virtual void RequestScreenshot() = 0;
+	virtual void RequestRecording(bool start) = 0;
+	virtual bool HotReloadRom(std::string& error) = 0;
+};
+
+#if !defined(_NO_FUND_API) && !defined(CASIOEMU_HEADLESS_PLUGIN)
 class UIWindow {
 public:
 	UIWindow(const char* name) : name(name) {}
@@ -151,6 +220,8 @@ public:
 	virtual ~UIWindow() {
 	}
 };
+#elif defined(CASIOEMU_HEADLESS_PLUGIN)
+class UIWindow;
 #endif
 
 class PluginApi {

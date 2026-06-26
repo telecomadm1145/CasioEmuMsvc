@@ -42,6 +42,10 @@ public:
 		try {
 			m_translations.clear();
 			m_pluralRules.clear();
+			{
+				std::lock_guard<std::mutex> lock(m_missingMutex);
+				m_missingKeys.clear();
+			}
 			m_currentLocale = localeName;
 			std::filesystem::path filePath =
 				std::filesystem::path(m_basePath) / (localeName + ".lc");
@@ -184,11 +188,12 @@ private:
 		int lineNumber = 0;
 		while (std::getline(file, line)) {
 			lineNumber++;
-			if (line.empty() || line[0] == '#')
+			std::string trimmed = Trim(line);
+			if (trimmed.empty() || trimmed[0] == '#')
 				continue;
 
 			try {
-				ProcessLine(line);
+				ProcessLine(trimmed);
 			}
 			catch (const std::exception& e) {
 				char buffer[512];
@@ -205,11 +210,12 @@ private:
 		int lineNumber = 0;
 		while (std::getline(stream, line)) {
 			lineNumber++;
-			if (line.empty() || line[0] == '#')
+			std::string trimmed = Trim(line);
+			if (trimmed.empty() || trimmed[0] == '#')
 				continue;
 
 			try {
-				ProcessLine(line);
+				ProcessLine(trimmed);
 			}
 			catch (const std::exception& e) {
 				char buffer[512];

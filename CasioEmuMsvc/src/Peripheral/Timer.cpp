@@ -9,6 +9,13 @@
 #include <iostream>
 
 namespace casioemu {
+	static void WakeSolarIIStopOnTimer(Emulator& emulator) {
+		if (emulator.hardware_id != HW_SOLARII || emulator.chipset.run_mode != Chipset::RM_STOP)
+			return;
+
+		emulator.chipset.run_mode = Chipset::RM_RUN;
+	}
+
 	// ML61X
 	class Timer : public Peripheral {
 		MMURegion region_counter, region_interval, region_F024, region_control;
@@ -128,6 +135,7 @@ namespace casioemu {
             if (++ext_to_int_counter >= (v * TimerFreqDiv) / 32678.0 / 0.025 * 2) {
 				ext_to_int_counter = 0;
 				emulator.chipset.MaskableInterrupts[TM0INT].TryRaise();
+				WakeSolarIIStopOnTimer(emulator);
 			}
 			return;
 		}
@@ -137,6 +145,7 @@ namespace casioemu {
                 if (++data_counter >= v) {
 					data_counter = 0;
 					emulator.chipset.MaskableInterrupts[TM0INT].TryRaise();
+					WakeSolarIIStopOnTimer(emulator);
 				}
 			}
 		}

@@ -99,7 +99,8 @@ inline auto Highlight_Default(auto he) {
 		if ((size_t)(data + off) == m_emu->chipset.cpu.reg_sp) {
 			return true;
 		}
-		if ((size_t)(data + off) == casioemu::GetInputAreaOffset(m_emu->hardware_id) + *((unsigned char*)n_ram_buffer - casioemu::GetRamBaseAddr(m_emu->hardware_id) + casioemu::GetCursorOffset(m_emu->hardware_id))) {
+		if (casioemu::HasInputArea(m_emu->hardware_id) &&
+			(size_t)(data + off) == casioemu::GetInputAreaOffset(m_emu->hardware_id) + *((unsigned char*)n_ram_buffer - casioemu::GetRamBaseAddr(m_emu->hardware_id) + casioemu::GetCursorOffset(m_emu->hardware_id))) {
 			return true;
 		}
 		return false;
@@ -126,7 +127,7 @@ std::vector<UIWindow*> GetEditors() {
 					new SpansHexEditor{
 						"Ram",
 						(void*)casioemu::GetRamBaseAddr(m_emu->hardware_id),
-						0x10000 - casioemu::GetRamBaseAddr(m_emu->hardware_id),
+						casioemu::GetRamEditorSize(m_emu->hardware_id),
 						casioemu::GetRamBaseAddr(m_emu->hardware_id),
 						GetCommonMemLabels(m_emu->hardware_id)})));
 		if (m_emu->hardware_id == casioemu::HW_FX_5800P) {

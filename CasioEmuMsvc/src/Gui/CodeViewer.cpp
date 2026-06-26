@@ -9,6 +9,9 @@
 #include "SysDialog.h"
 #include "U8Disas.h"
 #include "ePSCpu.h"
+#ifdef CASIOEMU_CORE_WEB
+#include "WebDebuggerGui.h"
+#endif
 #include "imgui/imgui.h"
 #include <Localization.h>
 #include <algorithm>
@@ -17,6 +20,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ePSDisas.h>
+#include <filesystem>
 #include <fstream>
 #include <ios>
 #include <iostream>
@@ -150,6 +154,11 @@ static void RenderSyntaxHighlight(const char* text, bool is_label) {
 }
 
 CodeElem CodeViewer::LookUp(uint32_t offset, int* idx) {
+	if (codes.empty()) {
+		if (idx)
+			*idx = 0;
+		return {};
+	}
 	auto it = std::find_if(
 		codes.begin(), codes.end(), [&](const CodeElem& a) {
 			return a.offset == offset && !a.is_label;
@@ -162,6 +171,12 @@ CodeElem CodeViewer::LookUp(uint32_t offset, int* idx) {
 	return {.offset = it->offset};
 }
 CodeViewer* cv_a;
+
+CodeViewer::~CodeViewer() {
+	if (disasm_thread.joinable()) {
+		disasm_thread.join();
+	}
+}
 
 void CodeViewer::SetupHooks() {
 	SetupHook(on_instruction,
@@ -208,9 +223,13 @@ void SetDebugbreak(void) {
 
 
 void CodeViewer::PrepareDisasm() {
-	std::thread t1([this]() {
+	disasm_requested = true;
+	is_loaded.store(false, std::memory_order_release);
+	auto build_disasm = [this]() {
+		std::vector<CodeElem> new_codes;
 		if (m_emu->chipset.epscpu) {
 			std::vector<CodeElem> finals;
+			finals.reserve(0x10000);
 
 #define READ_WORD_BE(ptr)         \
 	((uint32_t)(ptr)[0] << 16 |   \
@@ -249,15 +268,16 @@ void CodeViewer::PrepareDisasm() {
 				if (l)
 					i++;
 			}
-			codes = std::move(finals);
+			new_codes = std::move(finals);
 			printf("[UI][Info] Finished!\n");
-			max_row = codes.size();
-			is_loaded = true;
+			max_row = static_cast<int>(new_codes.size());
+			codes = std::move(new_codes);
+			is_loaded.store(true, std::memory_order_release);
 		}
 		else {
 #ifndef _DEBUG
 			printf("[UI][Info] Start to disasm ...\n");
-			auto dat = std::unique_ptr<uint8_t>(new uint8_t[0x80100]);
+			auto dat = std::unique_ptr<uint8_t[]>(new uint8_t[0x80100]);
 			std::memset(dat.get(), 0xff, 0x80100);
 			std::memcpy(dat.get(), m_emu->chipset.rom_data.data(), std::min((size_t)0x5e000, m_emu->chipset.rom_data.size()));
 			if (m_emu->chipset.rom_data.size() >= 0x60000) // TODO: fix this hack!!!
@@ -267,6 +287,8 @@ void CodeViewer::PrepareDisasm() {
 			auto end = rom + 0x80000;
 			printf("[UI][Info] Pass1: decoding opcodes...\n");
 			std::stringstream ss{};
+			p_labels.clear();
+			new_codes.reserve((end - rom) / 2);
 			while (rom < end) {
 				auto pc = rom - beg;
 				auto before = rom;
@@ -295,13 +317,13 @@ void CodeViewer::PrepareDisasm() {
 						ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0';
 					}
 				}
-				codes.push_back(ce);
+				new_codes.push_back(ce);
 				ss.str("");
 			}
 			printf("[UI][Info] Pass2: handling xrefs...\n");
 			std::optional<int> last_label{};
 			std::unordered_set<int> quick_find{};
-			for (auto& ce : codes) {
+			for (auto& ce : new_codes) {
 				quick_find.emplace(ce.offset);
 			}
 			std::map<int, std::string> labels;
@@ -332,8 +354,8 @@ void CodeViewer::PrepareDisasm() {
 			}
 			printf("[UI][Info] Pass3: applying xrefs...\n");
 			std::vector<CodeElem> finals;
-			finals.reserve(codes.size() + labels.size());
-			for (auto& ce : codes) {
+			finals.reserve(new_codes.size() + labels.size());
+			for (auto& ce : new_codes) {
 				auto iter = labels.find(ce.offset);
 				if (iter != labels.end()) {
 					CodeElem ce2{};
@@ -356,14 +378,18 @@ void CodeViewer::PrepareDisasm() {
 				}
 				finals.push_back(ce);
 			}
-			codes = std::move(finals);
+			new_codes = std::move(finals);
 			printf("[UI][Info] Finished!\n");
-			max_row = codes.size();
+			max_row = static_cast<int>(new_codes.size());
+			codes = std::move(new_codes);
 #endif
-			is_loaded = true;
+			is_loaded.store(true, std::memory_order_release);
 		}
-	});
-	t1.detach();
+	};
+	if (disasm_thread.joinable()) {
+		disasm_thread.join();
+	}
+	disasm_thread = std::thread(build_disasm);
 }
 
 bool CodeViewer::TryTrigBP(uint8_t seg, uint16_t offset, bool bp_mode) {
@@ -486,6 +512,11 @@ void CodeViewer::DrawMonitor() {
 }
 
 void CodeViewer::JumpTo(uint32_t offset) {
+#ifdef CASIOEMU_CORE_WEB
+	if (!disasm_requested) {
+		PrepareDisasm();
+	}
+#endif
 	int idx = 0;
 	// printf("jumpto:seg%d\n",seg);
 	LookUp(offset, &idx);
@@ -567,6 +598,23 @@ void CodeViewer::Search(bool next) {
 }
 
 void CodeViewer::ExportDisassembly() {
+#ifdef CASIOEMU_CORE_WEB
+	std::filesystem::create_directories(WebDebuggerExportDir());
+	const auto path = std::filesystem::path(WebDebuggerExportDir()) / "asm.txt";
+	std::ofstream out(path);
+	if (out.is_open()) {
+		for (const auto& ce : codes) {
+			if (ce.is_label) {
+				out << ce.srcbuf << "\n";
+			}
+			else {
+				out << "  " << ce.srcbuf << "\n";
+			}
+		}
+		out.close();
+		WebDebuggerQueueDownload(path.string().c_str(), "asm.txt");
+	}
+#else
 	SystemDialogs::SaveFileDialog("asm.txt", [&](std::filesystem::path pth) {
 		std::ofstream out(pth);
 		if (out.is_open()) {
@@ -581,6 +629,7 @@ void CodeViewer::ExportDisassembly() {
 			out.close();
 		}
 	});
+#endif
 }
 static void ExtractMnemAndOps(const char* src, std::string& mnem, std::string& ops) {
 	std::string_view sv(src);
@@ -787,9 +836,14 @@ static std::string GetInstructionHelp(const std::string& mnem, const std::string
 }
 static int s(bool x) { return x ? 1 : 0; }
 void CodeViewer::RenderCore() {
+#ifdef CASIOEMU_CORE_WEB
+	if (!disasm_requested) {
+		PrepareDisasm();
+	}
+#endif
 	int h = ImGui::GetTextLineHeight() + 4;
 	int w = ImGui::CalcTextSize("F").x;
-	if (!is_loaded) {
+	if (!is_loaded.load(std::memory_order_acquire)) {
 		ImGui::SetCursorPos(ImVec2(w * 2, h * 5));
 		const char* spinner = "|/-\\";
 		int idx = (int)(ImGui::GetTime() / 0.15f) % 4;
@@ -988,14 +1042,64 @@ void CodeViewer::RequestStep() {
 	m_emu->SetPaused(false);
 }
 
+void CodeViewer::RequestTrace() {
+	tracing = true;
+	m_emu->SetPaused(false);
+}
+
+bool CodeViewer::RequestStepOut() {
+	auto stk = m_emu->chipset.cpu.stack.get();
+	if (stk->empty() || stk->back().is_jump)
+		return false;
+	trace_bp = stk->back().lr_pushed
+		? stk->back().lr
+		: (uint32_t)(m_emu->chipset.cpu.reg_lcsr << 16) | m_emu->chipset.cpu.reg_lr;
+	m_emu->SetPaused(false);
+	return true;
+}
+
 void CodeViewer::AddBreakpoint(uint32_t address) {
+	if (!is_loaded.load(std::memory_order_acquire))
+		return;
 	int idx = 0;
 	LookUp(address, &idx);
 	break_points[idx] = 1;
 }
 
 void CodeViewer::RemoveBreakpoint(uint32_t address) {
+	if (!is_loaded.load(std::memory_order_acquire))
+		return;
 	int idx = 0;
 	LookUp(address, &idx);
 	break_points.erase(idx);
+}
+
+void CodeViewer::ClearBreakpoints() {
+	break_points.clear();
+}
+
+std::vector<uint32_t> CodeViewer::GetBreakpoints() const {
+	std::vector<uint32_t> result;
+	for (const auto& [index, state] : break_points) {
+		if (state == 1 && index >= 0 && static_cast<size_t>(index) < codes.size())
+			result.push_back(codes[index].offset);
+	}
+	return result;
+}
+
+std::vector<CodeElem> CodeViewer::GetDisassembly(uint32_t address, size_t count) const {
+	std::vector<CodeElem> result;
+	if (!is_loaded.load(std::memory_order_acquire) || count == 0)
+		return result;
+	result.reserve(count);
+	for (const auto& line : codes) {
+		if (!line.is_label && line.offset < address)
+			continue;
+		if (line.is_label && result.empty())
+			continue;
+		result.push_back(line);
+		if (!line.is_label && --count == 0)
+			break;
+	}
+	return result;
 }

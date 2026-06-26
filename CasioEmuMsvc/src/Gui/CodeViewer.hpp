@@ -1,10 +1,12 @@
 #pragma once
 #include "Ui.hpp"
+#include <atomic>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <map>
 #include <string>
+#include <thread>
 #include <vector>
 typedef struct {
 	uint32_t offset;
@@ -22,6 +24,7 @@ class CodeViewer : public UIWindow {
 private:
 	std::map<int, uint8_t> break_points;
 	std::vector<CodeElem> codes;
+	std::thread disasm_thread;
 	std::string src_path;
 	char adrbuf[9]{0};
 	int max_row = 0;
@@ -33,7 +36,8 @@ private:
 	bool tracing = false;
 	uint32_t trace_bp = 0;
 
-	bool is_loaded = false;
+	std::atomic_bool is_loaded{false};
+	bool disasm_requested = false;
 	bool need_roll = false;
 	bool search_activated = false;
 	bool help_activated = true;
@@ -50,9 +54,12 @@ private:
 public:
 	uint8_t debug_flags = DEBUG_BREAKPOINT;
 	CodeViewer() : UIWindow("Code") {
+#ifndef CASIOEMU_CORE_WEB
 		PrepareDisasm();
+#endif
 		SetupHooks();
 	}
+	~CodeViewer() override;
 	void SetupHooks();
 	void PrepareDisasm();
 	bool TryTrigBP(uint8_t seg, uint16_t offset, bool bp_mode = true);
@@ -63,8 +70,13 @@ public:
 	void DrawMonitor();
 	void JumpTo(uint32_t offset);
 	void RequestStep();
+	void RequestTrace();
+	bool RequestStepOut();
 	void AddBreakpoint(uint32_t address);
 	void RemoveBreakpoint(uint32_t address);
+	void ClearBreakpoints();
+	std::vector<uint32_t> GetBreakpoints() const;
+	std::vector<CodeElem> GetDisassembly(uint32_t address, size_t count) const;
 	void Search(bool next);
 	void ExportDisassembly();
 	size_t GetBreakpointCount() const { return break_points.size(); }

@@ -1,6 +1,7 @@
 #include "AddressWindow.h"
 #include <Hooks.h>
 #include <Localization.h>
+#include <mutex>
 struct AddressInfo {
 	uint32_t address;
 	uint8_t value;
@@ -15,6 +16,7 @@ public:
 	}
 
 	void RenderCore() override {
+		std::lock_guard lock(addresses_mutex);
 		ImGui::TextUnformatted("AddressWindow.Header"_lc);
 		ImGui::Separator();
 
@@ -24,7 +26,48 @@ public:
 		RenderAddAddressControls();
 	}
 
+	std::vector<DebugAddressLockInfo> DebugList() const {
+		std::lock_guard lock(addresses_mutex);
+		std::vector<DebugAddressLockInfo> result;
+		result.reserve(addresses.size());
+		for (const auto& info : addresses)
+			result.push_back({info.address, info.value, info.locked});
+		return result;
+	}
+
+	void DebugSet(uint32_t address, uint8_t value, bool locked) {
+		std::lock_guard lock(addresses_mutex);
+		auto it = std::find_if(addresses.begin(), addresses.end(), [&](const AddressInfo& info) {
+			return info.address == address;
+		});
+		if (it == addresses.end())
+			addresses.emplace_back(address, value, locked);
+		else {
+			it->value = value;
+			it->locked = locked;
+		}
+		if (!locked)
+			UpdateMemoryValue(address, value);
+	}
+
+	bool DebugRemove(uint32_t address) {
+		std::lock_guard lock(addresses_mutex);
+		auto it = std::find_if(addresses.begin(), addresses.end(), [&](const AddressInfo& info) {
+			return info.address == address;
+		});
+		if (it == addresses.end())
+			return false;
+		addresses.erase(it);
+		return true;
+	}
+
+	void DebugClear() {
+		std::lock_guard lock(addresses_mutex);
+		addresses.clear();
+	}
+
 private:
+	mutable std::recursive_mutex addresses_mutex;
 	std::vector<AddressInfo> addresses;
 	uint32_t newAddress = 0;
 
@@ -84,6 +127,7 @@ private:
 
 	void SetupHooks() {
 		SetupHook(on_memory_write, [this](casioemu::MMU& mmu, MemoryEventArgs& args) {
+			std::lock_guard lock(addresses_mutex);
 			for (const auto& info : addresses) {
 				if (info.locked && info.address == args.offset) {
 					args.handled = true;
@@ -91,6 +135,7 @@ private:
 			}
 		});
 		SetupHook(on_memory_read, [this](casioemu::MMU& mmu, MemoryEventArgs& args) {
+			std::lock_guard lock(addresses_mutex);
 			for (const auto& info : addresses) {
 				if (info.locked && info.address == args.offset) {
 					args.value = info.value;
@@ -101,6 +146,27 @@ private:
 	}
 };
 
+static AddressWindow* g_addressWindow = nullptr;
+
 UIWindow* CreateAddressWindow() {
-	return new AddressWindow();
+	g_addressWindow = new AddressWindow();
+	return g_addressWindow;
+}
+
+std::vector<DebugAddressLockInfo> DebugGetAddressLocks() {
+	return g_addressWindow ? g_addressWindow->DebugList() : std::vector<DebugAddressLockInfo>{};
+}
+
+void DebugSetAddressLock(uint32_t address, uint8_t value, bool locked) {
+	if (g_addressWindow)
+		g_addressWindow->DebugSet(address, value, locked);
+}
+
+bool DebugRemoveAddressLock(uint32_t address) {
+	return g_addressWindow && g_addressWindow->DebugRemove(address);
+}
+
+void DebugClearAddressLocks() {
+	if (g_addressWindow)
+		g_addressWindow->DebugClear();
 }

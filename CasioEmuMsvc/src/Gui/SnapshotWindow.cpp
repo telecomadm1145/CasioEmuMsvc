@@ -1,16 +1,26 @@
 #include "SnapshotWindow.h"
 #include "Snapshot.h"
+#include "Emulator.hpp"
 #include "Ui.hpp"
+#ifdef CASIOEMU_CORE_WEB
+#include "WebDebuggerGui.h"
+#else
 #include "Ext/SysDialog.h"
+#endif
 #include "imgui/imgui.h"
 #include <SDL.h>
 #include <SDL_image.h>
 #include <chrono>
 #include <ctime>
+#include <filesystem>
 #include <iomanip>
 #include <sstream>
 #include <string>
 #include "Localization.h"
+
+namespace {
+constexpr const char* kSnapshotAutoSaveFileName = "snapshots.snapshot";
+}
 
 // ============================================================
 // Helpers
@@ -27,6 +37,31 @@ static std::string FormatTimestamp(int64_t ts) {
     char buf[64];
     strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_info);
     return buf;
+}
+
+#ifdef CASIOEMU_CORE_WEB
+static std::filesystem::path WebSnapshotExportPath(const char* fileName) {
+    const auto dir = std::filesystem::path(WebDebuggerExportDir());
+    std::filesystem::create_directories(dir);
+    return dir / fileName;
+}
+
+static std::filesystem::path WebSnapshotImportPath() {
+    const auto dir = std::filesystem::path("/tmp/imports");
+    std::filesystem::create_directories(dir);
+    return dir / "snapshot.snapshot";
+}
+#endif
+
+static std::filesystem::path SnapshotAutoSavePath() {
+    if (!::m_emu) return {};
+    return ::m_emu->GetModelFilePath(kSnapshotAutoSaveFileName);
+}
+
+static void RequestSnapshotFsSync() {
+#ifdef CASIOEMU_CORE_WEB
+    WebDebuggerRequestFsSync();
+#endif
 }
 
 // ============================================================
@@ -74,6 +109,42 @@ void SnapshotWindow::TryLoadPreview(uint32_t id) {
     m_Preview.Free();
 }
 
+void SnapshotWindow::CheckWebImportResult() {
+#ifdef CASIOEMU_CORE_WEB
+    if (m_WebImportPath.empty()) return;
+    int result = 0;
+    if (!WebDebuggerConsumeFileResult(m_WebImportPath.string().c_str(), &result)) return;
+    const auto importPath = m_WebImportPath;
+    m_WebImportPath.clear();
+    if (result != 0) {
+        if (result != 1) ShowError("Snapshot import was not completed.");
+        return;
+    }
+    try {
+        m_Manager.ImportFromFile(importPath);
+        RequestSnapshotFsSync();
+    } catch (const std::exception& e) {
+        ShowError(e.what());
+    }
+#endif
+}
+
+void SnapshotWindow::EnsureAutoSaveLoaded() {
+    const auto path = SnapshotAutoSavePath();
+    if (path.empty() || path == m_AutoSavePath) return;
+
+    m_AutoSavePath = path;
+    m_Manager = SnapshotManager();
+    m_Manager.SetAutoSavePath(path);
+    m_SelectedId = 0;
+    m_Preview.Free();
+    try {
+        m_Manager.LoadAutoSaveFile();
+    } catch (const std::exception& e) {
+        ShowError(e.what());
+    }
+}
+
 // ============================================================
 // Toolbar
 // ============================================================
@@ -88,6 +159,7 @@ void SnapshotWindow::RenderToolbar() {
             std::string lbl(m_LabelBuf);
             if (lbl.empty()) lbl = std::string("SnapshotWindow.SnapshotPrefix"_lc) + std::to_string(m_Manager.Nodes.size() + 1);
             uint32_t newId = m_Manager.SaveSnapshot(*::m_emu, m_SelectedId, lbl);
+            RequestSnapshotFsSync();
             m_SelectedId = newId;
             TryLoadPreview(newId);
             memset(m_LabelBuf, 0, sizeof(m_LabelBuf));
@@ -131,10 +203,18 @@ void SnapshotWindow::RenderToolbar() {
     if (ImGui::Button("SnapshotWindow.ExportNode"_lc)) {
         if (m_SelectedId != 0) {
             uint32_t exportId = m_SelectedId;
+#ifdef CASIOEMU_CORE_WEB
+            try {
+                auto path = WebSnapshotExportPath("snapshot.snapshot");
+                m_Manager.ExportNode(path, exportId);
+                WebDebuggerQueueDownload(path.string().c_str(), "snapshot.snapshot");
+            } catch (const std::exception& e) { ShowError(e.what()); }
+#else
             SystemDialogs::SaveFileDialog("snapshot.snapshot", [this, exportId](std::filesystem::path path) {
                 try { m_Manager.ExportNode(path, exportId); }
                 catch (const std::exception& e) { ShowError(e.what()); }
             });
+#endif
         }
     }
     if (!hasSelected) ImGui::EndDisabled();
@@ -145,10 +225,18 @@ void SnapshotWindow::RenderToolbar() {
     if (ImGui::Button("SnapshotWindow.ExportSubtree"_lc)) {
         if (m_SelectedId != 0) {
             uint32_t exportId = m_SelectedId;
+#ifdef CASIOEMU_CORE_WEB
+            try {
+                auto path = WebSnapshotExportPath("snapshot.snapshot");
+                m_Manager.ExportSubtree(path, exportId);
+                WebDebuggerQueueDownload(path.string().c_str(), "snapshot.snapshot");
+            } catch (const std::exception& e) { ShowError(e.what()); }
+#else
             SystemDialogs::SaveFileDialog("snapshot.snapshot", [this, exportId](std::filesystem::path path) {
                 try { m_Manager.ExportSubtree(path, exportId); }
                 catch (const std::exception& e) { ShowError(e.what()); }
             });
+#endif
         }
     }
     if (!hasSelected) ImGui::EndDisabled();
@@ -156,19 +244,33 @@ void SnapshotWindow::RenderToolbar() {
 
     // --- Export all ---
     if (ImGui::Button("SnapshotWindow.ExportAll"_lc)) {
+#ifdef CASIOEMU_CORE_WEB
+        try {
+            auto path = WebSnapshotExportPath("snapshots.snapshot");
+            m_Manager.ExportAll(path);
+            WebDebuggerQueueDownload(path.string().c_str(), "snapshots.snapshot");
+        } catch (const std::exception& e) { ShowError(e.what()); }
+#else
         SystemDialogs::SaveFileDialog("snapshots.snapshot", [this](std::filesystem::path path) {
             try { m_Manager.ExportAll(path); }
             catch (const std::exception& e) { ShowError(e.what()); }
         });
+#endif
     }
     ImGui::SameLine();
 
     // --- Import ---
     if (ImGui::Button("SnapshotWindow.Import"_lc)) {
+#ifdef CASIOEMU_CORE_WEB
+        m_WebImportPath = WebSnapshotImportPath();
+        WebDebuggerQueueOpenFile(m_WebImportPath.string().c_str(), "snapshot.snapshot");
+#else
         SystemDialogs::OpenFileDialog([this](std::filesystem::path path) {
             try { m_Manager.ImportFromFile(path); }
             catch (const std::exception& e) { ShowError(e.what()); }
+            RequestSnapshotFsSync();
         });
+#endif
     }
 
     ImGui::Separator();
@@ -220,6 +322,7 @@ void SnapshotWindow::RenderTreeNode(uint32_t parentId, int depth) {
                         std::string lbl(m_LabelBuf);
                         if (lbl.empty()) lbl = std::string("SnapshotWindow.ChildOf"_lc) + std::to_string(node.Id);
                         uint32_t newId = m_Manager.SaveSnapshot(*::m_emu, node.Id, lbl);
+                        RequestSnapshotFsSync();
                         m_SelectedId = newId;
                         TryLoadPreview(newId);
                         memset(m_LabelBuf, 0, sizeof(m_LabelBuf));
@@ -314,6 +417,8 @@ void SnapshotWindow::RenderDetails() {
 // ============================================================
 
 void SnapshotWindow::RenderCore() {
+    EnsureAutoSaveLoaded();
+    CheckWebImportResult();
     RenderToolbar();
 
     // Error popup
@@ -342,6 +447,7 @@ void SnapshotWindow::RenderCore() {
         if (ImGui::Button("Button.Positive"_lc, ImVec2(120, 0))) {
             if (m_NodeToDelete != 0) {
                 m_Manager.DeleteNode(m_NodeToDelete);
+                RequestSnapshotFsSync();
                 if (m_SelectedId == m_NodeToDelete) {
                     m_SelectedId = 0;
                     m_Preview.Free();

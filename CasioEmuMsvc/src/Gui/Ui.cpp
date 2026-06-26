@@ -23,8 +23,12 @@
 #include "SnapshotWindow.h"
 #endif
 #include "imgui/imgui.h"
+#ifdef CASIOEMU_CORE_WEB
+#include "WebDebuggerGui.h"
+#else
 #include "imgui/imgui_impl_sdl2.h"
 #include "imgui/imgui_impl_sdlrenderer2.h"
+#endif
 #include <Gui.h>
 #include <SDL.h>
 #include <filesystem>
@@ -48,17 +52,33 @@ CodeViewer* code_viewer = 0;
 Injector* injector = 0;
 int top_bar_size = 0;
 Breakpoints* membp = 0;
+SnapshotWindow* snapshot_window = 0;
 
 std::vector<UIWindow*> windows{};
 
+#ifdef CASIOEMU_CORE_WEB
+SDL_Surface* background = nullptr;
+SDL_Texture* bg_txt = nullptr;
+#endif
+
+static float GetStatusBarHeight() {
+	return ImGui::GetFrameHeight() + 4.0f;
+}
+
 void RenderStatusBar() {
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
-	float barHeight = ImGui::GetFrameHeight() + 4.0f;
+	float barHeight = GetStatusBarHeight();
 	
 	ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - barHeight));
 	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, barHeight));
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 2.0f));
+#ifdef CASIOEMU_CORE_WEB
+	ImVec4 statusBg = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
+	statusBg.w = std::max(statusBg.w, 0.82f);
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, statusBg);
+#else
 	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.12f, 1.0f));
+#endif
 	
 	if (ImGui::Begin("##StatusBar", nullptr, 
 		ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 
@@ -92,26 +112,45 @@ void RenderStatusBar() {
 	ImGui::PopStyleVar();
 }
 
-void gui_loop() {
-	if (!m_emu->Running())
-		return;
+static ImGuiID RenderDockSpace(float reservedBottom) {
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+	float dockHeight = viewport->Size.y - reservedBottom;
+	if (dockHeight < 1.0f) dockHeight = 1.0f;
 
-	ImGuiIO& io = ImGui::GetIO();
-
-#ifdef __ANDROID__
-	ThemeManager::Instance().UpdateUIScale();
-#endif
-
-	ImGui_ImplSDLRenderer2_NewFrame();
-	ImGui_ImplSDL2_NewFrame();
-	ImGui::NewFrame();
-#ifndef __ANDROID__
+	ImGui::SetNextWindowPos(viewport->Pos);
+	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, dockHeight));
+	ImGui::SetNextWindowViewport(viewport->ID);
 	ImGui::SetNextWindowBgAlpha(0.0f);
-	ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	ImGuiWindowFlags flags =
+		ImGuiWindowFlags_NoDocking |
+		ImGuiWindowFlags_NoTitleBar |
+		ImGuiWindowFlags_NoCollapse |
+		ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_NoMove |
+		ImGuiWindowFlags_NoBringToFrontOnFocus |
+		ImGuiWindowFlags_NoNavFocus |
+		ImGuiWindowFlags_NoBackground;
+
+	ImGui::Begin("##DebuggerDockSpaceHost", nullptr, flags);
+	ImGuiID dockspace_id = ImGui::GetID("DebuggerDockSpace");
+	ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
+	ImGui::End();
+	ImGui::PopStyleVar(3);
+	return dockspace_id;
+}
+
+static void RenderDebuggerGuiWindows() {
+#ifndef __ANDROID__
+	ImGuiID dockspace_id = RenderDockSpace(GetStatusBarHeight());
 #endif
 	for (auto win : windows) {
 #ifndef __ANDROID__
-		ImGui::SetNextWindowDockID(ImGui::GetCurrentContext()->DockContext.Nodes.Data[0].key, ImGuiCond_FirstUseEver);
+		if (dockspace_id != 0) {
+			ImGui::SetNextWindowDockID(dockspace_id, ImGuiCond_FirstUseEver);
+		}
 #endif
 		win->Render();
 	}
@@ -223,15 +262,87 @@ void gui_loop() {
 	top_bar_size = ImGui::GetCursorPosY();
 	ImGui::End();
 #endif
+}
+
+void gui_loop() {
+	if (!m_emu->Running())
+		return;
+
+	ImGuiIO& io = ImGui::GetIO();
+
+#ifdef __ANDROID__
+	ThemeManager::Instance().UpdateUIScale();
+#endif
+
+#ifndef CASIOEMU_CORE_WEB
+	ImGui_ImplSDLRenderer2_NewFrame();
+	ImGui_ImplSDL2_NewFrame();
+#endif
+	ImGui::NewFrame();
+	RenderDebuggerGuiWindows();
 	ImGui::Render();
+#ifndef CASIOEMU_CORE_WEB
 #ifdef SINGLE_WINDOW
 	ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
 #else
 	ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
 	SDL_RenderPresent(renderer);
 #endif
+#endif
 }
 
+static CodeViewer* CreateDebuggerGuiWindows() {
+	while (!me_mmu)
+		std::this_thread::sleep_for(std::chrono::microseconds(1));
+	std::filesystem::path label_file = m_emu->GetModelFilePath("labels.txt");
+	if (std::filesystem::exists(label_file))
+		g_labels = parseFile(label_file.string());
+	else
+		std::cout << "[Warning] " << label_file.string() << " doesn't exist. You can consider create one for better debugging experiences. Format: address(0x1234),func name(can be quoted)\n";
+
+	if (m_emu->hardware_id == casioemu::HW_FX_5800P) {
+		windows.push_back(CreateFx5800FileSystem());
+	}
+
+	if (m_emu->hardware_id != casioemu::HW_SOLARII) {
+		windows.push_back(new VariableWindow());
+	}
+
+	for (auto item : std::initializer_list<UIWindow*>{
+			 new HwController(),
+			 new LabelViewer(),
+			 new WatchWindow(),
+			 CreateCallAnalysisWindow(),
+			 code_viewer = new CodeViewer(),
+			 injector = new Injector(),
+			 membp = new Breakpoints(),
+			 CreateAddressWindow(),
+			 // MakeAssemblerUI(),
+#if !defined(TEST_BUILD)
+			 CreateRopCompilerWindow(),
+#endif
+#if !defined(TEST_BUILD) && !defined(CASIOEMU_CORE_WEB)
+			 new PluginLogWindow(),
+#endif
+#if !defined(TEST_BUILD)
+			 snapshot_window = static_cast<SnapshotWindow*>(CreateSnapshotWindow()),
+#endif
+			 MakeThemeWindow(),
+			 CreateBitmapViewer(), })
+		windows.push_back(item);
+	for (auto item : GetEditors())
+		windows.push_back(item);
+
+#ifdef __ANDROID__
+	for (auto item : windows) {
+		item->open = false;
+	}
+#endif
+
+	return 0;
+}
+
+#ifndef CASIOEMU_CORE_WEB
 CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 	SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
 
@@ -308,48 +419,32 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 
 	if (guiCreated)
 		*guiCreated = true;
-	while (!me_mmu)
-		std::this_thread::sleep_for(std::chrono::microseconds(1));
-	auto label_file = m_emu->GetModelFilePath("labels.txt");
-	if (std::filesystem::exists(label_file))
-		g_labels = parseFile(label_file);
-	else
-		std::cout << "[Warning] labels.txt doesn't exist. You can consider create one for better debugging experiences. Format: address(0x1234),func name(can be quoted)\n";
-
-	if (m_emu->hardware_id == casioemu::HW_FX_5800P) {
-		windows.push_back(CreateFx5800FileSystem());
-	}
-
-	for (auto item : std::initializer_list<UIWindow*>{
-			 new VariableWindow(),
-			 new HwController(),
-			 new LabelViewer(),
-			 new WatchWindow(),
-			 CreateCallAnalysisWindow(),
-			 code_viewer = new CodeViewer(),
-			 injector = new Injector(),
-			 membp = new Breakpoints(),
-			 CreateAddressWindow(),
-			 // MakeAssemblerUI(),
-#ifndef TEST_BUILD
-			 CreateRopCompilerWindow(),
-			 new PluginLogWindow(),
-			 CreateSnapshotWindow(),
-#endif
-			 MakeThemeWindow(),
-			 CreateBitmapViewer(), })
-		windows.push_back(item);
-	for (auto item : GetEditors())
-		windows.push_back(item);
-
-#ifdef __ANDROID__
-	for (auto item : windows) {
-		item->open = false;
-	}
-#endif
-
-	return 0;
+	return CreateDebuggerGuiWindows();
 }
+#endif
+
+#ifdef CASIOEMU_CORE_WEB
+void InitWebDebuggerGuiWindows() {
+	if (windows.empty()) {
+		CreateDebuggerGuiWindows();
+	}
+}
+
+void RenderWebDebuggerGuiWindows() {
+	RenderDebuggerGuiWindows();
+}
+
+void CleanupWebDebuggerGuiWindows() {
+	for (auto* win : windows) {
+		delete win;
+	}
+	windows.clear();
+	code_viewer = nullptr;
+	injector = nullptr;
+	membp = nullptr;
+	g_labels.clear();
+}
+#endif
 
 namespace UIHelpers {
 
@@ -360,6 +455,7 @@ namespace UIHelpers {
 			const char* n = win->name;
 			if (n && strcmp(n, "Ram") == 0) {
 				win->GotoMemoryAddress(addr);
+				win->BringToFront();
 				return;
 			}
 			// Track first editor-like window as fallback
@@ -370,18 +466,29 @@ namespace UIHelpers {
 		}
 		if (fallback) {
 			fallback->GotoMemoryAddress(addr);
+			fallback->BringToFront();
 		}
 	}
 
 	void ClickableAddress(uint32_t addr, JumpTarget defaultTarget) {
-		// Render the colored address text
-		ImGui::PushStyleColor(ImGuiCol_Text, kColorInfo);
 		char addrLabel[16];
 		snprintf(addrLabel, sizeof(addrLabel), "%05X", addr);
-		ImGui::TextUnformatted(addrLabel);
-		ImGui::PopStyleColor();
+		ImGui::PushID(addrLabel);
+		const ImVec2 textSize = ImGui::CalcTextSize(addrLabel);
+		const ImVec2 textPos = ImGui::GetCursorScreenPos();
+		ImGui::InvisibleButton("##clickable_address", textSize);
+		const bool hovered = ImGui::IsItemHovered();
+		const bool leftClicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+		const bool rightClicked = ImGui::IsItemClicked(ImGuiMouseButton_Right);
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		const ImU32 textColor = ImGui::GetColorU32(hovered ? ImVec4(0.55f, 0.72f, 1.0f, 1.0f) : kColorInfo);
+		drawList->AddText(textPos, textColor, addrLabel);
+		if (hovered) {
+			const float underlineY = textPos.y + textSize.y;
+			drawList->AddLine(ImVec2(textPos.x, underlineY), ImVec2(textPos.x + textSize.x, underlineY), textColor);
+		}
 
-		if (ImGui::IsItemHovered()) {
+		if (hovered) {
 			ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 			ImGui::BeginTooltip();
 			if (defaultTarget == JumpTarget::Code) {
@@ -397,7 +504,7 @@ namespace UIHelpers {
 		}
 
 		// Left-click: default action
-		if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+		if (leftClicked) {
 			if (defaultTarget == JumpTarget::Code || defaultTarget == JumpTarget::Both) {
 				if (code_viewer) {
 					code_viewer->JumpTo(addr);
@@ -411,7 +518,7 @@ namespace UIHelpers {
 		// Right-click: context menu with both options
 		char popupId[32];
 		snprintf(popupId, sizeof(popupId), "##ca_popup_%05X", addr);
-		if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+		if (rightClicked) {
 			ImGui::OpenPopup(popupId);
 		}
 		if (ImGui::BeginPopup(popupId)) {
@@ -428,11 +535,13 @@ namespace UIHelpers {
 			}
 			ImGui::EndPopup();
 		}
+		ImGui::PopID();
 	}
 }
 
 
 void gui_cleanup() {
+#ifndef CASIOEMU_CORE_WEB
 #ifndef __ANDROID__
 #ifndef SINGLE_WINDOW
 	if (window) {
@@ -448,7 +557,6 @@ void gui_cleanup() {
 	}
 #endif
 #endif
-
 	ImGui_ImplSDLRenderer2_Shutdown();
 	ImGui_ImplSDL2_Shutdown();
 	ImGui::DestroyContext();
@@ -456,4 +564,7 @@ void gui_cleanup() {
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	SDL_Quit();
+#else
+	CleanupWebDebuggerGuiWindows();
+#endif
 }

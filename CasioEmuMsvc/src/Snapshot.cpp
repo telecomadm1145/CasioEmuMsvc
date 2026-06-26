@@ -119,11 +119,28 @@ std::vector<SnapshotNode> SnapshotManager::ReadNodes(std::istream& is) {
     return nodes;
 }
 
+uint32_t SnapshotManager::NextIdAfter(const std::vector<SnapshotNode>& nodes) {
+    uint32_t nextId = 1;
+    for (const auto& node : nodes) {
+        nextId = std::max(nextId, node.Id + 1);
+    }
+    return nextId;
+}
+
+void SnapshotManager::ReplaceNodes(std::vector<SnapshotNode> nodes) {
+    Nodes = std::move(nodes);
+    m_NextId = NextIdAfter(Nodes);
+}
+
 // ============================================================
 // Screen capture helper
 // ============================================================
 
 std::vector<uint8_t> SnapshotManager::CaptureScreenPng(casioemu::Emulator& emu) {
+#ifdef CASIOEMU_CORE_WEB
+    (void)emu;
+    return {};
+#else
     SDL_Renderer* renderer = emu.GetRenderer();
     if (!renderer) return {};
 
@@ -184,13 +201,18 @@ std::vector<uint8_t> SnapshotManager::CaptureScreenPng(casioemu::Emulator& emu) 
     if (saveResult != 0 || written <= 0) return {};
     bmpBuf.resize(static_cast<size_t>(written));
     return bmpBuf;
+#endif
 }
 
 // ============================================================
 // Public API
 // ============================================================
 
-uint32_t SnapshotManager::SaveSnapshot(casioemu::Emulator& emu, uint32_t parentId, const std::string& label) {
+uint32_t SnapshotManager::SaveSnapshot(
+    casioemu::Emulator& emu,
+    uint32_t parentId,
+    const std::string& label,
+    bool capturePreview) {
     // Pause emulator during save
     bool wasPaused = emu.GetPaused();
     emu.SetPaused(true);
@@ -206,7 +228,7 @@ uint32_t SnapshotManager::SaveSnapshot(casioemu::Emulator& emu, uint32_t parentI
     auto compressed = Compress::Deflate(rawData, rawSize);
 
     // Capture screen preview
-    auto preview = CaptureScreenPng(emu);
+    auto preview = capturePreview ? CaptureScreenPng(emu) : std::vector<uint8_t>{};
 
     // Assign Id and timestamp
     SnapshotNode node;
@@ -224,6 +246,7 @@ uint32_t SnapshotManager::SaveSnapshot(casioemu::Emulator& emu, uint32_t parentI
     Nodes.push_back(std::move(node));
 
     emu.SetPaused(wasPaused);
+    FlushAutoSave();
     return newId;
 }
 
@@ -301,6 +324,7 @@ void SnapshotManager::ImportFromFile(const std::filesystem::path& path) {
         n.Id = newId;
         Nodes.push_back(std::move(n));
     }
+    FlushAutoSave();
 }
 
 void SnapshotManager::DeleteNode(uint32_t id) {
@@ -312,6 +336,7 @@ void SnapshotManager::DeleteNode(uint32_t id) {
         [&](const SnapshotNode& n) {
             return std::find(toDelete.begin(), toDelete.end(), n.Id) != toDelete.end();
         }), Nodes.end());
+    FlushAutoSave();
 }
 
 std::vector<uint32_t> SnapshotManager::GetChildren(uint32_t parentId) const {
@@ -320,4 +345,35 @@ std::vector<uint32_t> SnapshotManager::GetChildren(uint32_t parentId) const {
         if (n.ParentId == parentId && n.Id != parentId)
             result.push_back(n.Id);
     return result;
+}
+
+void SnapshotManager::SetAutoSavePath(const std::filesystem::path& path) {
+    m_AutoSavePath = path;
+}
+
+const std::filesystem::path& SnapshotManager::GetAutoSavePath() const {
+    return m_AutoSavePath;
+}
+
+bool SnapshotManager::HasAutoSavePath() const {
+    return !m_AutoSavePath.empty();
+}
+
+void SnapshotManager::LoadAutoSaveFile() {
+    if (m_AutoSavePath.empty() || !std::filesystem::exists(m_AutoSavePath)) return;
+
+    std::ifstream fs(m_AutoSavePath, std::ios::binary);
+    if (!fs) throw std::runtime_error("Cannot open snapshot file: " + m_AutoSavePath.string());
+    ReplaceNodes(ReadNodes(fs));
+}
+
+void SnapshotManager::FlushAutoSave() const {
+    if (m_AutoSavePath.empty()) return;
+
+    const auto parentPath = m_AutoSavePath.parent_path();
+    if (!parentPath.empty()) std::filesystem::create_directories(parentPath);
+
+    std::ofstream fs(m_AutoSavePath, std::ios::binary);
+    if (!fs) throw std::runtime_error("Cannot open file for writing: " + m_AutoSavePath.string());
+    WriteNodes(fs, Nodes);
 }

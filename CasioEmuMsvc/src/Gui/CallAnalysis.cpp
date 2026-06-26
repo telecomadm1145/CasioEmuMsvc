@@ -6,6 +6,7 @@
 #include <Localization.h>
 
 struct CallAnalysis : public UIWindow {
+	std::mutex data_mutex;
 	bool is_call_recoding = false;
 	bool check_caller = false;
 	std::string message;
@@ -30,6 +31,7 @@ struct CallAnalysis : public UIWindow {
 	}
 
 	void OnCallFunction(casioemu::CPU& sender, uint32_t pc, uint32_t lr) {
+		std::lock_guard lock(data_mutex);
 		if (is_call_recoding) {
 			if (check_caller)
 				if (lr != caller_v)
@@ -47,7 +49,43 @@ struct CallAnalysis : public UIWindow {
 			funcs[pc].push_back(fc);
 		}
 	}
+
+	void DebugStart(bool filterCaller, uint32_t callerAddress, bool filterCallee, uint32_t calleeAddress) {
+		std::lock_guard lock(data_mutex);
+		check_caller = filterCaller;
+		caller_v = callerAddress;
+		check_callee = filterCallee;
+		callee_v = calleeAddress;
+		funcs.clear();
+		is_call_recoding = true;
+	}
+
+	void DebugStop() {
+		std::lock_guard lock(data_mutex);
+		is_call_recoding = false;
+	}
+
+	void DebugClear() {
+		std::lock_guard lock(data_mutex);
+		funcs.clear();
+		viewing_calls.clear();
+		message.clear();
+	}
+
+	std::vector<DebugFunctionCallInfo> DebugList(uint32_t function) {
+		std::lock_guard lock(data_mutex);
+		std::vector<DebugFunctionCallInfo> result;
+		for (const auto& [address, calls] : funcs) {
+			if (function && function != address)
+				continue;
+			for (const auto& call : calls)
+				result.push_back({call.pc, call.lr, call.xr0, call.stack});
+		}
+		return result;
+	}
+
 	void RenderCore() override {
+		std::lock_guard lock(data_mutex);
 		if (message.size()) {
 			if (ImGui::Button("CallAnalysis.Close"_lc)) {
 				message.clear();
@@ -193,6 +231,28 @@ struct CallAnalysis : public UIWindow {
 	}
 };
 
+static CallAnalysis* g_callAnalysis = nullptr;
+
 UIWindow* CreateCallAnalysisWindow() {
-	return new CallAnalysis();
+	g_callAnalysis = new CallAnalysis();
+	return g_callAnalysis;
+}
+
+void DebugStartCallRecording(bool filterCaller, uint32_t caller, bool filterCallee, uint32_t callee) {
+	if (g_callAnalysis)
+		g_callAnalysis->DebugStart(filterCaller, caller, filterCallee, callee);
+}
+
+void DebugStopCallRecording() {
+	if (g_callAnalysis)
+		g_callAnalysis->DebugStop();
+}
+
+void DebugClearCallRecording() {
+	if (g_callAnalysis)
+		g_callAnalysis->DebugClear();
+}
+
+std::vector<DebugFunctionCallInfo> DebugGetFunctionCalls(uint32_t function) {
+	return g_callAnalysis ? g_callAnalysis->DebugList(function) : std::vector<DebugFunctionCallInfo>{};
 }

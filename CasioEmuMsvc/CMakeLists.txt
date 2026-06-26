@@ -5,7 +5,12 @@ project(CasioEmuMsvc)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 option(CASIOEMU_WEB "Build the Emscripten/WebAssembly version" OFF)
-option(CASIOEMU_CORE_WEB "Build the headless Emscripten/WebAssembly core API" OFF)
+option(CASIOEMU_CORE_WEB "Build the Emscripten/WebAssembly core API" OFF)
+option(CASIOEMU_WEB_DEBUG_INFO "Enable heavier Emscripten runtime and source-map diagnostics" OFF)
+
+if(CASIOEMU_CORE_WEB)
+    set(CASIOEMU_WEB ON CACHE BOOL "Core web builds use the Emscripten/WebAssembly pipeline" FORCE)
+endif()
 
 if(EMSCRIPTEN OR CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
     set(CASIOEMU_WEB ON CACHE BOOL "Build the Emscripten/WebAssembly version" FORCE)
@@ -18,6 +23,9 @@ set(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 set(THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
 set(ASMJIT_DIR "${THIRD_PARTY_DIR}/asmjit")
 set(MINIZ_DIR "${THIRD_PARTY_DIR}/miniz")
+set(TEMP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/temp")
+set(GUI_FONT_SUBSET "${TEMP_DIR}/generated/fonts/CasioEmuGuiCJKSubset.otf")
+file(GLOB GUI_FONT_LOCALE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/locales/*.lc")
 
 set(ASMJIT_STATIC ON CACHE BOOL "Build AsmJit as a static library")
 set(ASMJIT_BUILD_TEST OFF CACHE BOOL "Disable AsmJit tests")
@@ -100,6 +108,7 @@ file(GLOB MAIN_SOURCES_WEB "${SOURCE_DIR}/Web/*.cpp")
 if(CASIOEMU_WEB)
     list(FILTER MAIN_SOURCES_ROOT EXCLUDE REGEX "casioemu\\.cpp$")
     list(FILTER MAIN_SOURCES_EXT EXCLUDE REGEX "SysDialog\\.cpp$")
+    list(FILTER MAIN_SOURCES_EXT EXCLUDE REGEX "DiscordRPC\\.cpp$")
     if(CASIOEMU_CORE_WEB)
         list(FILTER MAIN_SOURCES_WEB EXCLUDE REGEX "web_main\\.cpp$")
     else()
@@ -115,6 +124,30 @@ if(CASIOEMU_WEB)
         ${MAIN_SOURCES_PERIPHERAL}
         ${MAIN_SOURCES_WEB}
     )
+    if(CASIOEMU_CORE_WEB)
+        list(APPEND MAIN_SOURCES
+            ${MAIN_SOURCES_IMGUI}
+            ${SOURCE_DIR}/Gui/5800FileSystem.cpp
+            ${SOURCE_DIR}/Gui/AddressWindow.cpp
+            ${SOURCE_DIR}/Gui/BitmapViewer.cpp
+            ${SOURCE_DIR}/Gui/CallAnalysis.cpp
+            ${SOURCE_DIR}/Gui/CodeViewer.cpp
+            ${SOURCE_DIR}/Gui/Editors.cpp
+            ${SOURCE_DIR}/Gui/FileDialog.cpp
+            ${SOURCE_DIR}/Gui/HwController.cpp
+            ${SOURCE_DIR}/Gui/Injector.cpp
+            ${SOURCE_DIR}/Gui/LabelViewer.cpp
+            ${SOURCE_DIR}/Gui/MemBreakPoint.cpp
+            ${SOURCE_DIR}/Gui/SnapshotWindow.cpp
+            ${SOURCE_DIR}/Gui/Theme.cpp
+            ${SOURCE_DIR}/Gui/ThemeManager.cpp
+            ${SOURCE_DIR}/Gui/Ui.cpp
+            ${SOURCE_DIR}/Gui/VariableWindow.cpp
+            ${SOURCE_DIR}/Gui/WatchWindow.cpp
+            ${SOURCE_DIR}/Gui/Localization.cpp
+            ${MAIN_SOURCES_ROP}
+        )
+    endif()
 else()
     set(MAIN_SOURCES
         ${MAIN_SOURCES_ROOT}
@@ -156,6 +189,28 @@ else()
     add_library(${TARGET_NAME} SHARED ${MAIN_SOURCES})
 endif()
 
+if(CASIOEMU_CORE_WEB)
+    find_package(Python3 COMPONENTS Interpreter)
+    if(NOT Python3_Interpreter_FOUND)
+        message(FATAL_ERROR "Python3 is required to build the web GUI font subset")
+    endif()
+    add_custom_command(
+        OUTPUT "${GUI_FONT_SUBSET}"
+        COMMAND ${Python3_EXECUTABLE}
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/build_gui_font_subset.py"
+            "--project-root" "${CMAKE_CURRENT_SOURCE_DIR}"
+            "--output" "${GUI_FONT_SUBSET}"
+            "--python" "${Python3_EXECUTABLE}"
+        DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/build_gui_font_subset.py"
+            ${GUI_FONT_LOCALE_SOURCES}
+        COMMENT "Building bundled ImGui CJK fallback font subset"
+        VERBATIM
+    )
+    add_custom_target(CasioEmuGuiFontSubset DEPENDS "${GUI_FONT_SUBSET}")
+    add_dependencies(${TARGET_NAME} CasioEmuGuiFontSubset)
+endif()
+
 # Apply include dirs to target (scoped) to reduce global includes and compiler parsing
 target_include_directories(${TARGET_NAME} PRIVATE ${PROJECT_INCLUDE_DIRS})
 
@@ -189,24 +244,47 @@ if(CASIOEMU_WEB)
         -sUSE_SDL_IMAGE=2
     )
     if(CASIOEMU_CORE_WEB)
+        target_compile_options(${TARGET_NAME} PRIVATE
+            -pthread
+        )
         target_compile_definitions(${TARGET_NAME} PRIVATE CASIOEMU_CORE_WEB CASIOEMU_DISABLE_RAM_IMAGE CASIOEMU_ENABLE_KEYBOARD_KI_WRITE)
         target_link_options(${TARGET_NAME} PRIVATE
+            -pthread
             -fexceptions
             -sDISABLE_EXCEPTION_CATCHING=0
+            -sUSE_PTHREADS=1
+            -sPTHREAD_POOL_SIZE=4
+            -sDEFAULT_PTHREAD_STACK_SIZE=8388608
             -sUSE_SDL=2
             -sUSE_SDL_IMAGE=2
             "SHELL:-sSDL2_IMAGE_FORMATS=[\"png\"]"
             -sALLOW_MEMORY_GROWTH=1
             -sINITIAL_MEMORY=134217728
+            -sSTACK_SIZE=8388608
             -sEXIT_RUNTIME=0
             -sFORCE_FILESYSTEM=1
             -sMODULARIZE=1
             -sEXPORT_NAME=CasioEmuCoreModule
-            "SHELL:-sEXPORTED_RUNTIME_METHODS=['FS','ccall','cwrap','HEAPU8']"
-            "SHELL:-sEXPORTED_FUNCTIONS=['_main','_malloc','_free','_casioemu_core_init_real_rom','_casioemu_core_init_sim_rom','_casioemu_core_shutdown','_casioemu_core_reset','_casioemu_core_step','_casioemu_core_is_running','_casioemu_core_cpu_time','_casioemu_core_key_mask','_casioemu_core_read_data','_casioemu_core_write_data','_casioemu_core_read_code','_casioemu_core_write_code','_casioemu_core_read_reg','_casioemu_core_write_reg','_casioemu_core_set_solar_voltage','_casioemu_core_set_battery_voltage','_casioemu_core_save_state','_casioemu_core_load_state']"
+            "SHELL:-sEXPORTED_RUNTIME_METHODS=['FS','IDBFS','ccall','cwrap','HEAPU8']"
+            "SHELL:-sEXPORTED_FUNCTIONS=['_main','_malloc','_free','_casioemu_core_set_model_id','_casioemu_core_init_real_rom','_casioemu_core_init_sim_rom','_casioemu_core_shutdown','_casioemu_core_start','_casioemu_core_stop','_casioemu_core_reset','_casioemu_core_is_running','_casioemu_core_cpu_time','_casioemu_core_button_event','_casioemu_core_sdl_key_event','_casioemu_core_bind_sdl_key','_casioemu_core_set_display_color','_casioemu_core_set_screen_shadow','_casioemu_core_update_frame','_casioemu_core_frame_ptr','_casioemu_core_frame_width','_casioemu_core_frame_height','_casioemu_core_status_alpha_ptr','_casioemu_core_status_alpha_len','_casioemu_core_set_solar_voltage','_casioemu_core_set_battery_voltage','_casioemu_core_user_ram_size','_casioemu_core_save_user_ram','_casioemu_core_load_user_ram','_casioemu_core_snapshot_ptr','_casioemu_core_snapshot_len','_casioemu_core_save_snapshot','_casioemu_core_load_snapshot','_casioemu_core_rom_version','_casioemu_core_gui_supported','_casioemu_core_gui_attach','_casioemu_core_gui_detach','_casioemu_core_gui_is_attached','_casioemu_core_gui_frame','_casioemu_core_gui_frame_ptr','_casioemu_core_gui_frame_len','_casioemu_core_gui_width','_casioemu_core_gui_height','_casioemu_core_gui_set_locale','_casioemu_core_gui_pointer','_casioemu_core_gui_wheel','_casioemu_core_gui_key','_casioemu_core_gui_text','_casioemu_core_gui_want_text_input','_casioemu_core_gui_ime_visible','_casioemu_core_gui_ime_x','_casioemu_core_gui_ime_y','_casioemu_core_gui_ime_line_height','_casioemu_core_gui_set_clipboard_text','_casioemu_core_gui_clipboard_write_pending','_casioemu_core_gui_clipboard_write_text','_casioemu_core_gui_clipboard_write_revision','_casioemu_core_gui_clipboard_write_ack','_casioemu_core_gui_file_request_pending','_casioemu_core_gui_file_request_kind','_casioemu_core_gui_file_request_path','_casioemu_core_gui_file_request_name','_casioemu_core_gui_file_request_ack','_casioemu_core_gui_file_request_complete']"
             "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/locales@/locales"
+            "SHELL:--preload-file ${GUI_FONT_SUBSET}@/fonts/CasioEmuGuiCJKSubset.otf"
             "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/roms.db@/roms.db"
+            -lidbfs.js
         )
+        if(CASIOEMU_WEB_DEBUG_INFO)
+            target_compile_options(${TARGET_NAME} PRIVATE
+                -gsource-map
+                -fno-omit-frame-pointer
+            )
+            target_link_options(${TARGET_NAME} PRIVATE
+                -gsource-map
+                --profiling-funcs
+                -sASSERTIONS=2
+                -sSAFE_HEAP=1
+                -sSTACK_OVERFLOW_CHECK=2
+            )
+        endif()
         set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX ".js")
     else()
         target_link_options(${TARGET_NAME} PRIVATE
