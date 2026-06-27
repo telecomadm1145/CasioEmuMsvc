@@ -423,7 +423,10 @@ namespace {
 				return state == 1 || state == 2 || state == 3;
 			}
 		case casioemu::HW_CLASSWIZ_II:
-			return emulator.chipset.mmu.ReadData(0xf000, false) == 5;
+			{
+				const auto state = emulator.chipset.mmu.ReadData(0x91a3, false);
+				return state >= 1 && state <= 4;
+			}
 		default:
 			return false;
 		}
