@@ -5,6 +5,8 @@
 #include "Emulator.hpp"
 #include "ModelInfo.h"
 #include <algorithm>
+#include <array>
+#include <vector>
 
 namespace {
 	constexpr uint8_t kQrVersion11 = 0x05;
@@ -12,27 +14,171 @@ namespace {
 	constexpr uint8_t kQrVersion3 = 0x07;
 	constexpr size_t kQrBufferCapacity = 0x1800;
 	constexpr size_t kRealQrBufferCapacity = 0x300;
+	constexpr size_t kRealQrEncodedBufferCapacity = 0x300;
 	constexpr uint32_t kRealQrContextScanStart = 0xef00;
 	constexpr uint32_t kRealQrContextScanEnd = 0xf000;
 
-	bool ReadRealQrData(
-		casioemu::Emulator& emulator,
-		uint32_t dataAddress,
+	class BitReader {
+		const std::vector<uint8_t>& data_;
+		size_t bit_pos_ = 0;
+
+	public:
+		explicit BitReader(const std::vector<uint8_t>& data) : data_(data) {}
+
+		bool Read(size_t bitCount, uint32_t& value) {
+			if (bitCount > 32 || bit_pos_ + bitCount > data_.size() * 8)
+				return false;
+			value = 0;
+			for (size_t i = 0; i < bitCount; ++i) {
+				const auto byte = data_[bit_pos_ / 8];
+				const auto bit = (byte >> (7 - (bit_pos_ & 7))) & 1;
+				value = (value << 1) | bit;
+				++bit_pos_;
+			}
+			return true;
+		}
+	};
+
+	bool DecodeQrPayloadSegments(
+		const std::vector<uint8_t>& encodedData,
+		int qrVersion,
 		std::string& data) {
 		data.clear();
-		data.reserve(256);
-		bool terminated = false;
-		for (size_t i = 0; i < kRealQrBufferCapacity; ++i) {
-			const auto value = emulator.chipset.mmu.ReadData(dataAddress + i, false);
-			if (value == 0) {
-				terminated = true;
-				break;
-			}
-			if (value < 0x20 || value > 0x7e)
+		BitReader reader(encodedData);
+		constexpr std::array<char, 45> kAlphanumeric = {
+			'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+			'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+			'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
+			'U', 'V', 'W', 'X', 'Y', 'Z', ' ', '$', '%', '*',
+			'+', '-', '.', '/', ':'};
+		for (size_t segment = 0; segment < 16; ++segment) {
+			uint32_t mode = 0;
+			if (!reader.Read(4, mode))
 				return false;
-			data.push_back(static_cast<char>(value));
+			if (mode == 0)
+				return !data.empty();
+			if (mode == 3) {
+				uint32_t structuredAppend = 0;
+				if (!reader.Read(16, structuredAppend))
+					return false;
+				continue;
+			}
+
+			size_t countBits = 0;
+			switch (mode) {
+			case 1:
+				countBits = qrVersion <= 9 ? 10 : qrVersion <= 26 ? 12 : 14;
+				break;
+			case 2:
+				countBits = qrVersion <= 9 ? 9 : qrVersion <= 26 ? 11 : 13;
+				break;
+			case 4:
+				countBits = qrVersion <= 9 ? 8 : 16;
+				break;
+			default:
+				return false;
+			}
+
+			uint32_t count = 0;
+			if (!reader.Read(countBits, count))
+				return false;
+			if (count > kRealQrBufferCapacity)
+				return false;
+
+			if (mode == 1) {
+				while (count >= 3) {
+					uint32_t value = 0;
+					if (!reader.Read(10, value) || value > 999)
+						return false;
+					data.push_back(static_cast<char>('0' + value / 100));
+					data.push_back(static_cast<char>('0' + (value / 10) % 10));
+					data.push_back(static_cast<char>('0' + value % 10));
+					count -= 3;
+				}
+				if (count == 2) {
+					uint32_t value = 0;
+					if (!reader.Read(7, value) || value > 99)
+						return false;
+					data.push_back(static_cast<char>('0' + value / 10));
+					data.push_back(static_cast<char>('0' + value % 10));
+				}
+				else if (count == 1) {
+					uint32_t value = 0;
+					if (!reader.Read(4, value) || value > 9)
+						return false;
+					data.push_back(static_cast<char>('0' + value));
+				}
+			}
+			else if (mode == 2) {
+				while (count >= 2) {
+					uint32_t value = 0;
+					if (!reader.Read(11, value) || value >= 45 * 45)
+						return false;
+					data.push_back(kAlphanumeric[value / 45]);
+					data.push_back(kAlphanumeric[value % 45]);
+					count -= 2;
+				}
+				if (count == 1) {
+					uint32_t value = 0;
+					if (!reader.Read(6, value) || value >= 45)
+						return false;
+					data.push_back(kAlphanumeric[value]);
+				}
+			}
+			else if (mode == 4) {
+				for (uint32_t i = 0; i < count; ++i) {
+					uint32_t value = 0;
+					if (!reader.Read(8, value) || value < 0x20 || value > 0x7e)
+						return false;
+					data.push_back(static_cast<char>(value));
+				}
+			}
+
+			if (data.size() > kRealQrBufferCapacity)
+				return false;
 		}
-		return terminated && !data.empty();
+		return false;
+	}
+
+	bool ReadRealQrEncodedPayload(
+		casioemu::Emulator& emulator,
+		uint32_t encodedDataAddress,
+		uint32_t dataAddress,
+		int qrVersion,
+		std::string& data) {
+		if (encodedDataAddress < 0xea00 || encodedDataAddress >= 0xef00)
+			return false;
+		std::vector<uint8_t> encodedData;
+		encodedData.reserve(kRealQrEncodedBufferCapacity);
+		for (size_t i = 0; i < kRealQrEncodedBufferCapacity; ++i)
+			encodedData.push_back(emulator.chipset.mmu.ReadData(encodedDataAddress + i, false));
+		if (!DecodeQrPayloadSegments(encodedData, qrVersion, data))
+			return false;
+		if (dataAddress < 0xed00 || dataAddress >= 0xef00 || dataAddress + data.size() > 0xef00)
+			return false;
+		for (size_t i = 0; i < data.size(); ++i) {
+			if (emulator.chipset.mmu.ReadData(dataAddress + i, false) != static_cast<uint8_t>(data[i]))
+				return false;
+		}
+		return true;
+	}
+
+	bool FindRealQrEncodedPayload(
+		casioemu::Emulator& emulator,
+		uint32_t encodedDataAddress,
+		uint32_t dataAddress,
+		int qrVersion,
+		std::string& data) {
+		if (ReadRealQrEncodedPayload(emulator, encodedDataAddress, dataAddress, qrVersion, data))
+			return true;
+
+		for (uint32_t address = 0xea00; address + kRealQrEncodedBufferCapacity <= 0xef00; ++address) {
+			if (address == encodedDataAddress)
+				continue;
+			if (ReadRealQrEncodedPayload(emulator, address, dataAddress, qrVersion, data))
+				return true;
+		}
+		return false;
 	}
 
 	bool RealQrDataAddress(
@@ -93,7 +239,7 @@ namespace {
 			}
 		}
 
-		for (uint32_t address = kRealQrContextScanStart; address + 0x10 <= kRealQrContextScanEnd; ++address) {
+		for (uint32_t address = kRealQrContextScanStart; address + 0x12 <= kRealQrContextScanEnd; ++address) {
 			const auto ptrLo = emulator.chipset.mmu.ReadData(address, false);
 			if (ptrLo != (dataAddress & 0xff))
 				continue;
@@ -116,8 +262,9 @@ namespace {
 		uint32_t& dataAddress,
 		uint8_t& currentPage,
 		uint8_t& totalPages,
+		int& qrVersion,
 		std::string& data) {
-		for (uint32_t address = kRealQrContextScanStart; address + 0x10 <= kRealQrContextScanEnd; ++address) {
+		for (uint32_t address = kRealQrContextScanStart; address + 0x12 <= kRealQrContextScanEnd; ++address) {
 			const auto ptrLo = emulator.chipset.mmu.ReadData(address, false);
 			const auto ptrHi = emulator.chipset.mmu.ReadData(address + 1, false);
 			const uint32_t candidateDataAddress = ptrLo | (ptrHi << 8);
@@ -130,12 +277,19 @@ namespace {
 				continue;
 
 			std::string candidateData;
-			if (!ReadRealQrData(emulator, candidateDataAddress, candidateData))
+			const auto candidateQrVersion = emulator.chipset.mmu.ReadData(address + 0x0e, false);
+			if (candidateQrVersion < 1 || candidateQrVersion > 40)
+				continue;
+			const uint32_t encodedDataAddress =
+				emulator.chipset.mmu.ReadData(address + 0x10, false)
+				| (emulator.chipset.mmu.ReadData(address + 0x11, false) << 8);
+			if (!FindRealQrEncodedPayload(emulator, encodedDataAddress, candidateDataAddress, candidateQrVersion, candidateData))
 				continue;
 
 			dataAddress = candidateDataAddress;
 			currentPage = page;
 			totalPages = total;
+			qrVersion = candidateQrVersion;
 			data = std::move(candidateData);
 			return true;
 		}
@@ -261,7 +415,7 @@ namespace casioemu {
 			&& !RealQrDataAddress(emulator, dataAddress))
 			return false;
 
-		if (!IsRealQrActive(emulator)) {
+		auto markInactive = [this]() {
 			std::lock_guard lock(mutex_);
 			real_seen_inactive_ = true;
 			real_active_session_recorded_ = false;
@@ -293,21 +447,21 @@ namespace casioemu {
 			real_total_pages_ = 0;
 			++revision_;
 			return true;
-		}
+		};
+
+		if (!IsRealQrActive(emulator))
+			return markInactive();
 
 		uint8_t page = 0;
 		uint8_t totalPages = 0;
+		int qrVersion = 11;
 		std::string data;
-		if (!FindRealQrContext(emulator, dataAddress, page, totalPages, data)) {
-			if (!FindRealQrPages(emulator, dataAddress, pageAddress, page, totalPages))
-				return false;
-			if (!ReadRealQrData(emulator, dataAddress, data))
-				return false;
-		}
+		if (!FindRealQrContext(emulator, dataAddress, page, totalPages, qrVersion, data))
+			return markInactive();
 		if (page == 0 || totalPages == 0)
-			return false;
+			return markInactive();
 		if (data.empty())
-			return false;
+			return markInactive();
 
 		std::lock_guard lock(mutex_);
 		const bool wasActive = active_;
@@ -361,7 +515,7 @@ namespace casioemu {
 			if (real_pages_.empty() && page != 1) {
 				if (!active_ || previousPage != real_current_page_) {
 					active_ = true;
-					version_ = 11;
+					version_ = qrVersion;
 					++revision_;
 					return true;
 				}
@@ -380,7 +534,7 @@ namespace casioemu {
 		}
 
 		active_ = true;
-		version_ = 11;
+		version_ = qrVersion;
 
 		const bool hasAllPages =
 			real_total_pages_ > 0
