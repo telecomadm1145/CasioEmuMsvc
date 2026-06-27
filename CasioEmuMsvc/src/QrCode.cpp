@@ -545,7 +545,7 @@ namespace casioemu {
 					real_inactive_since_ = now;
 					return false;
 				}
-				if (now - real_inactive_since_ < std::chrono::seconds(4))
+				if (now - real_inactive_since_ < std::chrono::seconds(2))
 					return false;
 				real_inactive_pending_ = false;
 				real_session_recorded_ = false;
