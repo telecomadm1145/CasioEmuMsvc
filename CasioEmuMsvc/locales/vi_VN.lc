@@ -389,4 +389,23 @@ ClickableAddress.RightClickHint=Nhấp chuột phải để xem thêm tùy chọ
 MemBP.ColPC=Địa chỉ PC
 
 
+QrCode.Copy=Sao chép
+QrCode.OpenUrl=Mở URL
+QrCode.StatusFmt=Trạng thái: %s
+QrCode.Active=Đang hoạt động
+QrCode.Inactive=Không hoạt động
+QrCode.CompleteFmt=Hoàn tất: %s
+QrCode.Yes=Có
+QrCode.No=Không
+QrCode.VersionFmt=Phiên bản: %d
+QrCode.LengthFmt=Độ dài: %zu
+QrCode.HistoryFmt=Lịch sử: %zu
+QrCode.RealRomProgressFmt=Tiến trình bắt QR ROM thật: trang %u / %u, đã bắt %zu / %u
+QrCode.Current=Hiện tại
+QrCode.IncompleteCapture=Mã QR đang được hiển thị, nhưng nội dung nhiều trang chưa được bắt đầy đủ.
+QrCode.NoCurrent=Máy tính hiện không hiển thị mã QR.
+QrCode.History=Lịch sử
+QrCode.NoHistory=Chưa bắt được mã QR nào trong phiên này.
+QrCode.HistoryEntryFmt=#%llu  Phiên bản %d  Độ dài %zu
+
 placeholder2=a)"

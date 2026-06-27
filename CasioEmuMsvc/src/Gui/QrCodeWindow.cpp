@@ -1,25 +1,22 @@
 #include "QrCodeWindow.h"
 
 #include "Emulator.hpp"
+#include "Localization.h"
 #include "imgui/imgui.h"
 #include <string>
-#ifndef CASIOEMU_CORE_WEB
 #include <SDL.h>
-#endif
 
 namespace {
 	void RenderPayloadActions(const std::string& data) {
-		if (ImGui::Button("Copy")) {
+		if (ImGui::Button("QrCode.Copy"_lc)) {
 			ImGui::SetClipboardText(data.c_str());
 		}
-#ifndef CASIOEMU_CORE_WEB
 		if (data.starts_with("http://") || data.starts_with("https://")) {
 			ImGui::SameLine();
-			if (ImGui::Button("Open URL")) {
+			if (ImGui::Button("QrCode.OpenUrl"_lc)) {
 				SDL_OpenURL(data.c_str());
 			}
 		}
-#endif
 	}
 }
 
@@ -30,25 +27,25 @@ QrCodeWindow::QrCodeWindow() : UIWindow("QR Code") {
 void QrCodeWindow::RenderCore() {
 	m_emu->qr_code.Poll(*m_emu);
 	const auto qr = m_emu->qr_code.GetState();
-	ImGui::Text("Status: %s", qr.Active ? "Active" : "Inactive");
+	ImGui::Text("QrCode.StatusFmt"_lc, qr.Active ? "QrCode.Active"_lc : "QrCode.Inactive"_lc);
 	ImGui::SameLine();
-	ImGui::Text("Complete: %s", qr.Complete ? "Yes" : "No");
+	ImGui::Text("QrCode.CompleteFmt"_lc, qr.Complete ? "QrCode.Yes"_lc : "QrCode.No"_lc);
 	ImGui::SameLine();
-	ImGui::Text("Version: %d", qr.Version);
+	ImGui::Text("QrCode.VersionFmt"_lc, qr.Version);
 	ImGui::SameLine();
-	ImGui::Text("Length: %zu", qr.Data.size());
+	ImGui::Text("QrCode.LengthFmt"_lc, qr.Data.size());
 	ImGui::SameLine();
-	ImGui::Text("History: %zu", qr.History.size());
+	ImGui::Text("QrCode.HistoryFmt"_lc, qr.History.size());
 	if (qr.Active && qr.RealTotalPages != 0) {
-		ImGui::Text("Real ROM capture progress: page %u / %u, captured %zu / %u",
-			qr.RealCurrentPage,
-			qr.RealTotalPages,
+		ImGui::Text("QrCode.RealRomProgressFmt"_lc,
+			static_cast<unsigned>(qr.RealCurrentPage),
+			static_cast<unsigned>(qr.RealTotalPages),
 			qr.RealPageLengths.size(),
-			qr.RealTotalPages);
+			static_cast<unsigned>(qr.RealTotalPages));
 	}
 
 	ImGui::Separator();
-	ImGui::TextUnformatted("Current");
+	ImGui::TextUnformatted("QrCode.Current"_lc);
 
 	if (qr.Active && qr.Complete) {
 		RenderPayloadActions(qr.Data);
@@ -57,7 +54,7 @@ void QrCodeWindow::RenderCore() {
 		ImGui::EndChild();
 	}
 	else if (qr.Active) {
-		ImGui::TextWrapped("QR code is displayed, but full multi-page payload has not been captured yet.");
+		ImGui::TextWrapped("%s", "QrCode.IncompleteCapture"_lc);
 		if (!qr.RealCurrentPageData.empty()) {
 			ImGui::BeginChild("##qr_current_page_payload", ImVec2(-1, 90), true);
 			ImGui::TextWrapped("%s", qr.RealCurrentPageData.c_str());
@@ -65,23 +62,24 @@ void QrCodeWindow::RenderCore() {
 		}
 	}
 	else {
-		ImGui::TextWrapped("No QR code is currently displayed by the calculator.");
+		ImGui::TextWrapped("%s", "QrCode.NoCurrent"_lc);
 	}
 
 	ImGui::Separator();
-	ImGui::TextUnformatted("History");
+	ImGui::TextUnformatted("QrCode.History"_lc);
 	if (qr.History.empty()) {
-		ImGui::TextWrapped("No QR code has been captured in this session.");
+		ImGui::TextWrapped("%s", "QrCode.NoHistory"_lc);
 		return;
 	}
 
 	ImGui::BeginChild("##qr_history", ImVec2(-1, -1), true);
 	for (auto it = qr.History.rbegin(); it != qr.History.rend(); ++it) {
 		ImGui::PushID(static_cast<int>(it->Id));
-		const std::string header =
-			"#" + std::to_string(it->Id) +
-			"  Version " + std::to_string(it->Version) +
-			"  Length " + std::to_string(it->Data.size());
+		const auto header = localstr(
+			"QrCode.HistoryEntryFmt",
+			static_cast<unsigned long long>(it->Id),
+			it->Version,
+			it->Data.size());
 		if (ImGui::CollapsingHeader(header.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
 			RenderPayloadActions(it->Data);
 			ImGui::BeginChild("payload", ImVec2(-1, 80), true);

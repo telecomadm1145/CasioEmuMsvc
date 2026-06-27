@@ -387,4 +387,23 @@ ClickableAddress.RightClickHint=Rechtsklick für mehr Optionen
 
 MemBP.ColPC=PC-Adresse
 
+QrCode.Copy=Kopieren
+QrCode.OpenUrl=URL öffnen
+QrCode.StatusFmt=Status: %s
+QrCode.Active=Aktiv
+QrCode.Inactive=Inaktiv
+QrCode.CompleteFmt=Vollständig: %s
+QrCode.Yes=Ja
+QrCode.No=Nein
+QrCode.VersionFmt=Version: %d
+QrCode.LengthFmt=Länge: %zu
+QrCode.HistoryFmt=Verlauf: %zu
+QrCode.RealRomProgressFmt=Erfassungsfortschritt der echten ROM: Seite %u / %u, erfasst %zu / %u
+QrCode.Current=Aktuell
+QrCode.IncompleteCapture=Der QR-Code wird angezeigt, aber der vollständige mehrseitige Inhalt wurde noch nicht erfasst.
+QrCode.NoCurrent=Der Rechner zeigt derzeit keinen QR-Code an.
+QrCode.History=Verlauf
+QrCode.NoHistory=In dieser Sitzung wurde noch kein QR-Code erfasst.
+QrCode.HistoryEntryFmt=#%llu  Version %d  Länge %zu
+
 placeholder2=a)"

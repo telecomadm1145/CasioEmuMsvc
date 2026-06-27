@@ -385,4 +385,23 @@ RopCompiler.DiagLine=%d行目：
 RopCompiler.DiagError=エラー
 RopCompiler.DiagWarning=警告
 
+QrCode.Copy=コピー
+QrCode.OpenUrl=URL を開く
+QrCode.StatusFmt=状態: %s
+QrCode.Active=アクティブ
+QrCode.Inactive=非アクティブ
+QrCode.CompleteFmt=完了: %s
+QrCode.Yes=はい
+QrCode.No=いいえ
+QrCode.VersionFmt=バージョン: %d
+QrCode.LengthFmt=長さ: %zu
+QrCode.HistoryFmt=履歴: %zu
+QrCode.RealRomProgressFmt=実機 ROM キャプチャ進捗: ページ %u / %u、取得済み %zu / %u
+QrCode.Current=現在
+QrCode.IncompleteCapture=QR コードは表示されていますが、複数ページの内容はまだ完全には取得されていません。
+QrCode.NoCurrent=現在、電卓に QR コードは表示されていません。
+QrCode.History=履歴
+QrCode.NoHistory=このセッションではまだ QR コードを取得していません。
+QrCode.HistoryEntryFmt=#%llu  バージョン %d  長さ %zu
+
 placeholder2=a)"
