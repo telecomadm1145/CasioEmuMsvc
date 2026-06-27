@@ -12,6 +12,8 @@ namespace {
 	constexpr uint8_t kQrVersion3 = 0x07;
 	constexpr size_t kQrBufferCapacity = 0x1800;
 	constexpr size_t kRealQrBufferCapacity = 0x300;
+	constexpr uint32_t kRealQrContextScanStart = 0xef00;
+	constexpr uint32_t kRealQrContextScanEnd = 0xf000;
 
 	bool ReadRealQrData(
 		casioemu::Emulator& emulator,
@@ -91,7 +93,7 @@ namespace {
 			}
 		}
 
-		for (uint32_t address = 0xef00; address + 0x10 < 0xf020; ++address) {
+		for (uint32_t address = kRealQrContextScanStart; address + 0x10 <= kRealQrContextScanEnd; ++address) {
 			const auto ptrLo = emulator.chipset.mmu.ReadData(address, false);
 			if (ptrLo != (dataAddress & 0xff))
 				continue;
@@ -115,7 +117,7 @@ namespace {
 		uint8_t& currentPage,
 		uint8_t& totalPages,
 		std::string& data) {
-		for (uint32_t address = 0xef00; address + 0x10 < 0xf020; ++address) {
+		for (uint32_t address = kRealQrContextScanStart; address + 0x10 <= kRealQrContextScanEnd; ++address) {
 			const auto ptrLo = emulator.chipset.mmu.ReadData(address, false);
 			const auto ptrHi = emulator.chipset.mmu.ReadData(address + 1, false);
 			const uint32_t candidateDataAddress = ptrLo | (ptrHi << 8);
