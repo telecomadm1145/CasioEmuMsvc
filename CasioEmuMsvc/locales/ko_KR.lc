@@ -387,4 +387,23 @@ ClickableAddress.RightClickHint=우클릭하여 추가 옵션 표시
 
 MemBP.ColPC=PC 주소
 
+QrCode.Copy=복사
+QrCode.OpenUrl=URL 열기
+QrCode.StatusFmt=상태: %s
+QrCode.Active=활성
+QrCode.Inactive=비활성
+QrCode.CompleteFmt=완료: %s
+QrCode.Yes=예
+QrCode.No=아니요
+QrCode.VersionFmt=버전: %d
+QrCode.LengthFmt=길이: %zu
+QrCode.HistoryFmt=기록: %zu
+QrCode.RealRomProgressFmt=실기 ROM 캡처 진행률: %u / %u 페이지, 캡처됨 %zu / %u
+QrCode.Current=현재
+QrCode.IncompleteCapture=QR 코드가 표시되어 있지만 여러 페이지의 전체 내용은 아직 캡처되지 않았습니다.
+QrCode.NoCurrent=현재 계산기에 QR 코드가 표시되어 있지 않습니다.
+QrCode.History=기록
+QrCode.NoHistory=이 세션에서 캡처된 QR 코드가 없습니다.
+QrCode.HistoryEntryFmt=#%llu  버전 %d  길이 %zu
+
 placeholder2=a)"

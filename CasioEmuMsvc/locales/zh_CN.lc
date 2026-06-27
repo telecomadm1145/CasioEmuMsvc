@@ -387,4 +387,23 @@ ClickableAddress.RightClickHint=右键查看更多选项
 
 MemBP.ColPC=PC 地址
 
+QrCode.Copy=复制
+QrCode.OpenUrl=打开 URL
+QrCode.StatusFmt=状态：%s
+QrCode.Active=活动
+QrCode.Inactive=未活动
+QrCode.CompleteFmt=完整：%s
+QrCode.Yes=是
+QrCode.No=否
+QrCode.VersionFmt=版本：%d
+QrCode.LengthFmt=长度：%zu
+QrCode.HistoryFmt=历史：%zu
+QrCode.RealRomProgressFmt=真机 ROM 捕获进度：第 %u / %u 页，已捕获 %zu / %u
+QrCode.Current=当前
+QrCode.IncompleteCapture=计算器正在显示 QR 码，但尚未捕获完整的多页内容。
+QrCode.NoCurrent=计算器当前未显示 QR 码。
+QrCode.History=历史
+QrCode.NoHistory=本次运行尚未捕获 QR 码。
+QrCode.HistoryEntryFmt=#%llu  版本 %d  长度 %zu
+
 placeholder2=a)"

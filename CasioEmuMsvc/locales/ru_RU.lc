@@ -387,4 +387,23 @@ ClickableAddress.RightClickHint=Нажмите правой кнопкой дл�
 
 MemBP.ColPC=Адрес PC
 
+QrCode.Copy=Копировать
+QrCode.OpenUrl=Открыть URL
+QrCode.StatusFmt=Статус: %s
+QrCode.Active=Активен
+QrCode.Inactive=Неактивен
+QrCode.CompleteFmt=Завершено: %s
+QrCode.Yes=Да
+QrCode.No=Нет
+QrCode.VersionFmt=Версия: %d
+QrCode.LengthFmt=Длина: %zu
+QrCode.HistoryFmt=История: %zu
+QrCode.RealRomProgressFmt=Прогресс захвата ROM устройства: страница %u / %u, захвачено %zu / %u
+QrCode.Current=Текущий
+QrCode.IncompleteCapture=QR-код отображается, но полный многостраничный набор данных еще не захвачен.
+QrCode.NoCurrent=Сейчас калькулятор не отображает QR-код.
+QrCode.History=История
+QrCode.NoHistory=В этом сеансе QR-коды еще не захвачены.
+QrCode.HistoryEntryFmt=#%llu  Версия %d  Длина %zu
+
 placeholder2=a)"

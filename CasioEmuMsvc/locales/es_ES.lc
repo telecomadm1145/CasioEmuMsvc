@@ -387,4 +387,23 @@ ClickableAddress.RightClickHint=Clic derecho para más opciones
 
 MemBP.ColPC=Dirección PC
 
+QrCode.Copy=Copiar
+QrCode.OpenUrl=Abrir URL
+QrCode.StatusFmt=Estado: %s
+QrCode.Active=Activo
+QrCode.Inactive=Inactivo
+QrCode.CompleteFmt=Completo: %s
+QrCode.Yes=Sí
+QrCode.No=No
+QrCode.VersionFmt=Versión: %d
+QrCode.LengthFmt=Longitud: %zu
+QrCode.HistoryFmt=Historial: %zu
+QrCode.RealRomProgressFmt=Progreso de captura de ROM real: página %u / %u, capturado %zu / %u
+QrCode.Current=Actual
+QrCode.IncompleteCapture=El código QR se muestra, pero aún no se ha capturado todo el contenido de varias páginas.
+QrCode.NoCurrent=La calculadora no muestra ningún código QR actualmente.
+QrCode.History=Historial
+QrCode.NoHistory=No se ha capturado ningún código QR en esta sesión.
+QrCode.HistoryEntryFmt=#%llu  Versión %d  Longitud %zu
+
 placeholder2=a)"
