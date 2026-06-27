@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "Ui.hpp"
 #include <cstdint>
+#include <map>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -9,6 +10,7 @@
 struct Record {
 	std::string stacktrace;
 	uint32_t lr;
+	std::map<std::string, uint32_t> registers;
 };
 
 struct MemBPData_t {

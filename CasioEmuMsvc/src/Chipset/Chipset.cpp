@@ -583,6 +583,7 @@ namespace casioemu {
 		pending_interrupt_count = 1;
 
 		run_mode = RM_RUN;
+		emulator.qr_code.Reset(false);
 	}
 
 	void Chipset::Break() {
@@ -609,6 +610,7 @@ namespace casioemu {
 
 	void Chipset::Stop() {
 		run_mode = RM_STOP;
+		emulator.qr_code.HandleStop(emulator);
 	}
 
 	bool Chipset::GetRunningState() {
