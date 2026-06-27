@@ -39,11 +39,19 @@ namespace {
 		}
 	};
 
+	struct DecodedQrPayload {
+		std::string Data;
+		bool HasStructuredAppend = false;
+		uint8_t StructuredAppendPage = 0;
+		uint8_t StructuredAppendTotal = 0;
+		uint8_t StructuredAppendParity = 0;
+	};
+
 	bool DecodeQrPayloadSegments(
 		const std::vector<uint8_t>& encodedData,
 		int qrVersion,
-		std::string& data) {
-		data.clear();
+		DecodedQrPayload& payload) {
+		payload = {};
 		BitReader reader(encodedData);
 		constexpr std::array<char, 45> kAlphanumeric = {
 			'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
@@ -56,11 +64,21 @@ namespace {
 			if (!reader.Read(4, mode))
 				return false;
 			if (mode == 0)
-				return !data.empty();
+				return !payload.Data.empty();
 			if (mode == 3) {
-				uint32_t structuredAppend = 0;
-				if (!reader.Read(16, structuredAppend))
+				uint32_t sequence = 0;
+				uint32_t total = 0;
+				uint32_t parity = 0;
+				if (payload.HasStructuredAppend
+					|| !reader.Read(4, sequence)
+					|| !reader.Read(4, total)
+					|| !reader.Read(8, parity)
+					|| sequence > total)
 					return false;
+				payload.HasStructuredAppend = true;
+				payload.StructuredAppendPage = static_cast<uint8_t>(sequence + 1);
+				payload.StructuredAppendTotal = static_cast<uint8_t>(total + 1);
+				payload.StructuredAppendParity = static_cast<uint8_t>(parity);
 				continue;
 			}
 
@@ -90,23 +108,23 @@ namespace {
 					uint32_t value = 0;
 					if (!reader.Read(10, value) || value > 999)
 						return false;
-					data.push_back(static_cast<char>('0' + value / 100));
-					data.push_back(static_cast<char>('0' + (value / 10) % 10));
-					data.push_back(static_cast<char>('0' + value % 10));
+					payload.Data.push_back(static_cast<char>('0' + value / 100));
+					payload.Data.push_back(static_cast<char>('0' + (value / 10) % 10));
+					payload.Data.push_back(static_cast<char>('0' + value % 10));
 					count -= 3;
 				}
 				if (count == 2) {
 					uint32_t value = 0;
 					if (!reader.Read(7, value) || value > 99)
 						return false;
-					data.push_back(static_cast<char>('0' + value / 10));
-					data.push_back(static_cast<char>('0' + value % 10));
+					payload.Data.push_back(static_cast<char>('0' + value / 10));
+					payload.Data.push_back(static_cast<char>('0' + value % 10));
 				}
 				else if (count == 1) {
 					uint32_t value = 0;
 					if (!reader.Read(4, value) || value > 9)
 						return false;
-					data.push_back(static_cast<char>('0' + value));
+					payload.Data.push_back(static_cast<char>('0' + value));
 				}
 			}
 			else if (mode == 2) {
@@ -114,15 +132,15 @@ namespace {
 					uint32_t value = 0;
 					if (!reader.Read(11, value) || value >= 45 * 45)
 						return false;
-					data.push_back(kAlphanumeric[value / 45]);
-					data.push_back(kAlphanumeric[value % 45]);
+					payload.Data.push_back(kAlphanumeric[value / 45]);
+					payload.Data.push_back(kAlphanumeric[value % 45]);
 					count -= 2;
 				}
 				if (count == 1) {
 					uint32_t value = 0;
 					if (!reader.Read(6, value) || value >= 45)
 						return false;
-					data.push_back(kAlphanumeric[value]);
+					payload.Data.push_back(kAlphanumeric[value]);
 				}
 			}
 			else if (mode == 4) {
@@ -130,11 +148,11 @@ namespace {
 					uint32_t value = 0;
 					if (!reader.Read(8, value) || value < 0x20 || value > 0x7e)
 						return false;
-					data.push_back(static_cast<char>(value));
+					payload.Data.push_back(static_cast<char>(value));
 				}
 			}
 
-			if (data.size() > kRealQrBufferCapacity)
+			if (payload.Data.size() > kRealQrBufferCapacity)
 				return false;
 		}
 		return false;
@@ -143,42 +161,108 @@ namespace {
 	bool ReadRealQrEncodedPayload(
 		casioemu::Emulator& emulator,
 		uint32_t encodedDataAddress,
-		uint32_t dataAddress,
 		int qrVersion,
+		uint8_t currentPage,
+		uint8_t totalPages,
 		std::string& data) {
 		if (encodedDataAddress < 0xea00 || encodedDataAddress >= 0xef00)
 			return false;
 		std::vector<uint8_t> encodedData;
 		encodedData.reserve(kRealQrEncodedBufferCapacity);
-		for (size_t i = 0; i < kRealQrEncodedBufferCapacity; ++i)
-			encodedData.push_back(emulator.chipset.mmu.ReadData(encodedDataAddress + i, false));
-		if (!DecodeQrPayloadSegments(encodedData, qrVersion, data))
+		for (size_t i = 0; i < kRealQrEncodedBufferCapacity; ++i) {
+			const auto address = encodedDataAddress + static_cast<uint32_t>(i);
+			if (address >= 0xef00)
+				break;
+			encodedData.push_back(emulator.chipset.mmu.ReadData(address, false));
+		}
+		DecodedQrPayload payload;
+		if (!DecodeQrPayloadSegments(encodedData, qrVersion, payload))
 			return false;
-		if (dataAddress < 0xed00 || dataAddress >= 0xef00 || dataAddress + data.size() > 0xef00)
-			return false;
-		for (size_t i = 0; i < data.size(); ++i) {
-			if (emulator.chipset.mmu.ReadData(dataAddress + i, false) != static_cast<uint8_t>(data[i]))
+		if (totalPages > 1) {
+			if (!payload.HasStructuredAppend
+				|| payload.StructuredAppendPage != currentPage
+				|| payload.StructuredAppendTotal != totalPages)
 				return false;
 		}
+		else if (payload.HasStructuredAppend
+			&& (payload.StructuredAppendPage != 1 || payload.StructuredAppendTotal != 1))
+			return false;
+		data = std::move(payload.Data);
+		return true;
+	}
+
+	bool ReadStrideEncodedPrefix(
+		casioemu::Emulator& emulator,
+		uint32_t encodedDataAddress,
+		std::vector<uint8_t>& prefix) {
+		constexpr size_t kPrefixSize = 16;
+		constexpr uint32_t kStride = 5;
+		prefix.clear();
+		if (encodedDataAddress < 0xea00 || encodedDataAddress >= 0xef00)
+			return false;
+		for (size_t i = 0; i < kPrefixSize; ++i) {
+			const auto address = encodedDataAddress + static_cast<uint32_t>(i) * kStride;
+			if (address >= 0xef00)
+				return false;
+			prefix.push_back(emulator.chipset.mmu.ReadData(address, false));
+		}
+		return true;
+	}
+
+	bool FindContinuousPayloadByPrefix(
+		casioemu::Emulator& emulator,
+		const std::vector<uint8_t>& prefix,
+		uint32_t skipAddress,
+		int qrVersion,
+		uint8_t currentPage,
+		uint8_t totalPages,
+		std::string& data) {
+		if (prefix.empty())
+			return false;
+		bool found = false;
+		std::string foundData;
+		for (uint32_t address = 0xea00; address + prefix.size() <= 0xef00; ++address) {
+			if (address == skipAddress)
+				continue;
+			bool match = true;
+			for (size_t i = 0; i < prefix.size(); ++i) {
+				if (emulator.chipset.mmu.ReadData(address + static_cast<uint32_t>(i), false) != prefix[i]) {
+					match = false;
+					break;
+				}
+			}
+			if (!match)
+				continue;
+
+			std::string candidateData;
+			if (!ReadRealQrEncodedPayload(emulator, address, qrVersion, currentPage, totalPages, candidateData))
+				continue;
+			if (found && foundData != candidateData)
+				return false;
+			found = true;
+			foundData = std::move(candidateData);
+		}
+		if (!found)
+			return false;
+		data = std::move(foundData);
 		return true;
 	}
 
 	bool FindRealQrEncodedPayload(
 		casioemu::Emulator& emulator,
 		uint32_t encodedDataAddress,
-		uint32_t dataAddress,
 		int qrVersion,
+		uint8_t currentPage,
+		uint8_t totalPages,
 		std::string& data) {
-		if (ReadRealQrEncodedPayload(emulator, encodedDataAddress, dataAddress, qrVersion, data))
+		if (ReadRealQrEncodedPayload(emulator, encodedDataAddress, qrVersion, currentPage, totalPages, data))
 			return true;
 
-		for (uint32_t address = 0xea00; address + kRealQrEncodedBufferCapacity <= 0xef00; ++address) {
-			if (address == encodedDataAddress)
-				continue;
-			if (ReadRealQrEncodedPayload(emulator, address, dataAddress, qrVersion, data))
-				return true;
-		}
-		return false;
+		std::vector<uint8_t> stridePrefix;
+		if (!ReadStrideEncodedPrefix(emulator, encodedDataAddress, stridePrefix))
+			return false;
+		return FindContinuousPayloadByPrefix(
+			emulator, stridePrefix, encodedDataAddress, qrVersion, currentPage, totalPages, data);
 	}
 
 	bool RealQrDataAddress(
@@ -283,7 +367,7 @@ namespace {
 			const uint32_t encodedDataAddress =
 				emulator.chipset.mmu.ReadData(address + 0x10, false)
 				| (emulator.chipset.mmu.ReadData(address + 0x11, false) << 8);
-			if (!FindRealQrEncodedPayload(emulator, encodedDataAddress, candidateDataAddress, candidateQrVersion, candidateData))
+			if (!FindRealQrEncodedPayload(emulator, encodedDataAddress, candidateQrVersion, page, total, candidateData))
 				continue;
 
 			dataAddress = candidateDataAddress;
@@ -418,7 +502,6 @@ namespace casioemu {
 		auto markInactive = [this]() {
 			std::lock_guard lock(mutex_);
 			real_seen_inactive_ = true;
-			real_active_session_recorded_ = false;
 			if (active_ || real_session_recorded_) {
 				const auto now = std::chrono::steady_clock::now();
 				if (!real_inactive_pending_) {
