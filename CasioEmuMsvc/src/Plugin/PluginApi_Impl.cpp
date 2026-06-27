@@ -370,8 +370,13 @@ class PluginApi_Impl : public PluginApi {
 			std::vector<DebugMemoryBreakpointHitInfo> result;
 			if (!membp)
 				return result;
-			for (const auto& [pc, record] : membp->ExternalListHits(address, write))
-				result.push_back({pc, record.lr, record.stacktrace});
+			for (const auto& [pc, record] : membp->ExternalListHits(address, write)) {
+				DebugMemoryBreakpointHitInfo hit{pc, record.lr, record.stacktrace};
+				hit.Registers.reserve(record.registers.size());
+				for (const auto& [name, value] : record.registers)
+					hit.Registers.push_back({name, value, name.size() >= 2 && name[0] == 'r' ? 8u : 16u});
+				result.push_back(std::move(hit));
+			}
 			return result;
 		}
 		bool AddMemoryBreakpoint(uint32_t address, bool write, bool breakWhenHit) override {
@@ -610,6 +615,20 @@ class PluginApi_Impl : public PluginApi {
 			screen_residual_enabled = settings.ResidualEnabled;
 			screen_residual_alpha_scale = settings.ResidualAlphaScale;
 			audio_enable = settings.AudioEnabled;
+		}
+		DebugQrCodeInfo GetQrCode() override {
+			m_emu->qr_code.Poll(*m_emu);
+			const auto state = m_emu->qr_code.GetState();
+			DebugQrCodeInfo result{state.Active, state.Complete, state.Version, state.Revision, state.Data};
+			result.RealCurrentPage = state.RealCurrentPage;
+			result.RealTotalPages = state.RealTotalPages;
+			result.RealCurrentPageData = state.RealCurrentPageData;
+			result.RealPageLengths = state.RealPageLengths;
+			result.History.reserve(state.History.size());
+			for (const auto& entry : state.History) {
+				result.History.push_back({entry.Id, entry.Version, entry.Data});
+			}
+			return result;
 		}
 		void RequestScreenshot() override {
 			m_emu->screenshot_requested.store(true);

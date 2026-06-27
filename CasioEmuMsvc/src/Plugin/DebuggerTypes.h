@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 struct DebugRegisterInfo {
 	std::string Name;
@@ -47,6 +48,7 @@ struct DebugMemoryBreakpointHitInfo {
 	uint32_t ProgramCounter = 0;
 	uint32_t LinkRegister = 0;
 	std::string Stack;
+	std::vector<DebugRegisterInfo> Registers;
 };
 
 struct DebugDisassemblyLine {
@@ -87,4 +89,23 @@ struct DebugDisplaySettings {
 	bool ResidualEnabled = true;
 	float ResidualAlphaScale = 1.0f;
 	bool AudioEnabled = false;
+};
+
+struct DebugQrCodeHistoryEntry {
+	uint64_t Id = 0;
+	int Version = 0;
+	std::string Data;
+};
+
+struct DebugQrCodeInfo {
+	bool Active = false;
+	bool Complete = false;
+	int Version = 0;
+	uint64_t Revision = 0;
+	std::string Data;
+	std::vector<DebugQrCodeHistoryEntry> History;
+	uint8_t RealCurrentPage = 0;
+	uint8_t RealTotalPages = 0;
+	std::string RealCurrentPageData;
+	std::vector<size_t> RealPageLengths;
 };

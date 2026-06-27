@@ -518,6 +518,11 @@ json ToolDefinitions() {
             {"inputSchema", EmptyObjectSchema()},
         },
         {
+            {"name", "get_qr_code"},
+            {"description", "Get the currently displayed calculator QR payload, QR version, and capture revision."},
+            {"inputSchema", EmptyObjectSchema()},
+        },
+        {
             {"name", "set_display_settings"},
             {"description", "Update any subset of display, residual, fading, buffer, and audio settings."},
             {"inputSchema", ObjectSchema({
@@ -752,12 +757,17 @@ json CallTool(const std::string& name, const json& args) {
             || !GetBool(args, "write", write, error))
             return ToolError(error);
         json hits = json::array();
-        for (const auto& hit : g_debugger->GetMemoryBreakpointHits(address, write))
+        for (const auto& hit : g_debugger->GetMemoryBreakpointHits(address, write)) {
+            json registers = json::object();
+            for (const auto& reg : hit.Registers)
+                registers[reg.Name] = reg.Value;
             hits.push_back({
                 {"program_counter", hit.ProgramCounter},
                 {"link_register", hit.LinkRegister},
                 {"stack", hit.Stack},
+                {"registers", std::move(registers)},
             });
+        }
         return ToolResult({{"hits", std::move(hits)}});
     }
     if (name == "add_memory_breakpoint") {
@@ -964,6 +974,36 @@ json CallTool(const std::string& name, const json& args) {
             {"residual_enabled", settings.ResidualEnabled},
             {"residual_alpha_scale", settings.ResidualAlphaScale},
             {"audio_enabled", settings.AudioEnabled},
+        });
+    }
+    if (name == "get_qr_code") {
+        const auto qr = g_debugger->GetQrCode();
+        json history = json::array();
+        for (const auto& entry : qr.History) {
+            history.push_back({
+                {"id", entry.Id},
+                {"version", entry.Version},
+                {"data", entry.Data},
+                {"length", entry.Data.size()},
+            });
+        }
+        json realPageLengths = json::array();
+        for (const auto length : qr.RealPageLengths)
+            realPageLengths.push_back(length);
+        return ToolResult({
+            {"active", qr.Active},
+            {"complete", qr.Complete},
+            {"version", qr.Version},
+            {"revision", qr.Revision},
+            {"data", qr.Data},
+            {"length", qr.Data.size()},
+            {"real_current_page", qr.RealCurrentPage},
+            {"real_total_pages", qr.RealTotalPages},
+            {"real_current_page_data", qr.RealCurrentPageData},
+            {"real_current_page_length", qr.RealCurrentPageData.size()},
+            {"real_page_lengths", std::move(realPageLengths)},
+            {"history", history},
+            {"history_count", qr.History.size()},
         });
     }
     if (name == "set_display_settings") {

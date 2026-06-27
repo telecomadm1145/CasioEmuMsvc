@@ -12,6 +12,7 @@
 #include <thread>
 
 #include "ModelInfo.h"
+#include "QrCode.h"
 
 namespace casioemu {
 	class Chipset;
@@ -108,6 +109,7 @@ namespace casioemu {
 		Chipset& chipset;
 
 		float BatteryVoltage, SolarPanelVoltage;
+		QrCodeCapture qr_code;
 
 		bool Running();
 		void HandleMemoryError();

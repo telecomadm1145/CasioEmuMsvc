@@ -194,6 +194,7 @@ public:
 	virtual void SetPdValue(uint8_t value) = 0;
 	virtual DebugDisplaySettings GetDisplaySettings() = 0;
 	virtual void SetDisplaySettings(const DebugDisplaySettings& settings) = 0;
+	virtual DebugQrCodeInfo GetQrCode() = 0;
 	virtual void RequestScreenshot() = 0;
 	virtual void RequestRecording(bool start) = 0;
 	virtual bool HotReloadRom(std::string& error) = 0;

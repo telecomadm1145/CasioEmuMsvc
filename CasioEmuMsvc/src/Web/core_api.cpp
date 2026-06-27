@@ -62,6 +62,10 @@ namespace {
 	std::vector<uint8_t> g_source_frame_rgba;
 	std::vector<uint8_t> g_status_alpha;
 	std::vector<uint8_t> g_snapshot_buffer;
+	bool g_qr_active = false;
+	int g_qr_version = 0;
+	uint64_t g_qr_revision = 0;
+	std::string g_qr_data;
 	int g_frame_width = 0;
 	int g_frame_height = 0;
 	uint8_t g_display_r = 0;
@@ -865,6 +869,10 @@ void casioemu_core_shutdown() {
 	g_source_frame_rgba.clear();
 	g_status_alpha.clear();
 	g_snapshot_buffer.clear();
+	g_qr_active = false;
+	g_qr_version = 0;
+	g_qr_revision = 0;
+	g_qr_data.clear();
 	g_frame_width = 0;
 	g_frame_height = 0;
 }
@@ -897,6 +905,39 @@ int casioemu_core_is_running() {
 
 uint32_t casioemu_core_cpu_time() {
 	return g_cpu_time;
+}
+
+int casioemu_core_qr_update() {
+	if (!g_emulator) {
+		g_qr_active = false;
+		g_qr_version = 0;
+		g_qr_revision = 0;
+		g_qr_data.clear();
+		return 0;
+	}
+	g_emulator->qr_code.Poll(*g_emulator);
+	const auto state = g_emulator->qr_code.GetState();
+	g_qr_active = state.Active;
+	g_qr_version = state.Version;
+	g_qr_revision = state.Revision;
+	g_qr_data = state.Complete ? state.Data : std::string{};
+	return state.Complete ? 1 : 0;
+}
+
+int casioemu_core_qr_active() {
+	return g_qr_active ? 1 : 0;
+}
+
+int casioemu_core_qr_version() {
+	return g_qr_version;
+}
+
+uint32_t casioemu_core_qr_revision() {
+	return static_cast<uint32_t>(g_qr_revision);
+}
+
+const char* casioemu_core_qr_data() {
+	return g_qr_data.c_str();
 }
 
 int casioemu_core_button_event(int kiko, int pressed) {

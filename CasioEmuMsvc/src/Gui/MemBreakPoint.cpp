@@ -10,6 +10,32 @@
 #include <cstdlib>
 #include <stdlib.h>
 
+namespace {
+	std::map<std::string, uint32_t> CaptureRegisters(const casioemu::CPU& cpu) {
+		std::map<std::string, uint32_t> registers;
+		registers["pc"] = (static_cast<uint32_t>(cpu.reg_csr.raw) << 16) | cpu.reg_pc.raw;
+		registers["lr"] = (static_cast<uint32_t>(cpu.reg_lcsr.raw) << 16) | cpu.reg_lr.raw;
+		registers["sp"] = cpu.reg_sp.raw;
+		registers["dsr"] = cpu.reg_dsr.raw;
+		registers["psw"] = cpu.reg_psw.raw;
+		for (int i = 0; i < 16; ++i) {
+			registers["r" + std::to_string(i)] = cpu.reg_r[i].raw;
+		}
+		for (int i = 0; i < 16; i += 2) {
+			registers["er" + std::to_string(i)] =
+				static_cast<uint16_t>(cpu.reg_r[i].raw | (cpu.reg_r[i + 1].raw << 8));
+		}
+		for (int i = 0; i < 16; i += 4) {
+			registers["xr" + std::to_string(i)] =
+				static_cast<uint32_t>(cpu.reg_r[i].raw)
+				| (static_cast<uint32_t>(cpu.reg_r[i + 1].raw) << 8)
+				| (static_cast<uint32_t>(cpu.reg_r[i + 2].raw) << 16)
+				| (static_cast<uint32_t>(cpu.reg_r[i + 3].raw) << 24);
+		}
+		return registers;
+	}
+}
+
 Breakpoints* membp_cv = 0;
 
 void Breakpoints::DrawContent() {
@@ -152,7 +178,8 @@ void Breakpoints::TryTrigBp(uint32_t addr, bool write) {
 		else {
 			bp.records[(m_emu->chipset.cpu.reg_csr << 16) | m_emu->chipset.cpu.reg_pc] =
 				Record{m_emu->chipset.cpu.GetBacktrace(),
-					(unsigned int)(m_emu->chipset.cpu.reg_lcsr << 16) | m_emu->chipset.cpu.reg_lr};
+					(unsigned int)(m_emu->chipset.cpu.reg_lcsr << 16) | m_emu->chipset.cpu.reg_lr,
+					CaptureRegisters(m_emu->chipset.cpu)};
 		}
 	}
 }

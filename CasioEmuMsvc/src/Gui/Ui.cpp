@@ -17,6 +17,9 @@
 #include "Theme.h"
 #include "VariableWindow.h"
 #include "WatchWindow.hpp"
+#ifndef CASIOEMU_CORE_WEB
+#include "QrCodeWindow.h"
+#endif
 #ifndef TEST_BUILD
 #include "Rop/RopCompilerUI.h"
 #include "PluginLogWindow.hpp"
@@ -326,6 +329,9 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 #endif
 #if !defined(TEST_BUILD)
 			 snapshot_window = static_cast<SnapshotWindow*>(CreateSnapshotWindow()),
+#endif
+#ifndef CASIOEMU_CORE_WEB
+			 new QrCodeWindow(),
 #endif
 			 MakeThemeWindow(),
 			 CreateBitmapViewer(), })
