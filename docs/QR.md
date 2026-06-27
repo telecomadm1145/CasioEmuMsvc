@@ -41,7 +41,7 @@ MCP 插件通过 `get_qr_code` 暴露 QR 状态，主要字段包括：
 
 ### CASIOEMU_CORE_WEB
 
-`CASIOEMU_CORE_WEB` 导出 QR 数据读取能力，供 WebCalcEmu 侧 JavaScript 读取。Web 端不包含桌面 QR Code GUI，只需要通过 core API 获得当前 QR 状态和 payload。
+`CASIOEMU_CORE_WEB` 导出 QR 数据读取能力。Web 端不包含桌面 QR Code GUI，只需要通过 core API 获得当前 QR 状态和 payload。
 
 ## 模拟器 ROM 的实现
 
