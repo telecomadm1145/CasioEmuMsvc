@@ -299,10 +299,13 @@ namespace casioemu {
 		uint8_t totalPages = 0;
 		std::string data;
 		if (!FindRealQrContext(emulator, dataAddress, page, totalPages, data)) {
-			FindRealQrPages(emulator, dataAddress, pageAddress, page, totalPages);
+			if (!FindRealQrPages(emulator, dataAddress, pageAddress, page, totalPages))
+				return false;
 			if (!ReadRealQrData(emulator, dataAddress, data))
 				return false;
 		}
+		if (page == 0 || totalPages == 0)
+			return false;
 		if (data.empty())
 			return false;
 
