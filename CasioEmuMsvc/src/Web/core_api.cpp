@@ -50,6 +50,7 @@ extern bool audio_enable;
 namespace {
 	constexpr const char* kCoreDir = "/tmp/casioemu_core";
 	constexpr const char* kRomPath = "/tmp/casioemu_core/rom.bin";
+	constexpr const char* kFlashPath = "/tmp/casioemu_core/flash.bin";
 
 	std::unique_ptr<casioemu::Emulator> g_emulator;
 	bool g_sdl_ready = false;
@@ -281,6 +282,9 @@ namespace {
 		model.interface_path = "";
 		model.model_name = "CasioEmuCore";
 		model.rom_path = kRomPath;
+		if (hardware_id == casioemu::HW_FX_5800P) {
+			model.flash_path = kFlashPath;
+		}
 		model.enable_new_screen = false;
 		model.is_sample_rom = is_sample_rom;
 		model.legacy_ko = legacy_ko;
@@ -310,12 +314,20 @@ namespace {
 		return model;
 	}
 
-	bool WriteRomFile(const uint8_t* rom, int len) {
+	bool WriteCoreFile(const char* path, const uint8_t* data, int len) {
 		std::filesystem::create_directories(kCoreDir);
-		std::ofstream out(kRomPath, std::ios::binary);
+		std::ofstream out(path, std::ios::binary);
 		if (!out) return false;
-		out.write(reinterpret_cast<const char*>(rom), len);
+		out.write(reinterpret_cast<const char*>(data), len);
 		return out.good();
+	}
+
+	bool WriteRomFile(const uint8_t* rom, int len) {
+		return WriteCoreFile(kRomPath, rom, len);
+	}
+
+	bool WriteFlashFile(const uint8_t* flash, int len) {
+		return WriteCoreFile(kFlashPath, flash, len);
 	}
 
 	std::vector<uint8_t> NormalizeSimulatorRomForWeb(const uint8_t* rom, int len, casioemu::HardwareId hardware_id) {
@@ -787,14 +799,43 @@ void WebDebuggerQueueDownload(const char* path, const char* name) {
 	}
 
 	bool WebDebuggerConsumeFileResult(const char* path, int* result) {
-	if (!g_gui_file_result_pending) return false;
-	if (path && g_gui_file_result_path != path) return false;
-	if (result) *result = g_gui_file_result_code;
-	g_gui_file_result_path.clear();
-	g_gui_file_result_code = 0;
-	g_gui_file_result_pending = false;
-	return true;
-}
+		if (!g_gui_file_result_pending) return false;
+		if (path && g_gui_file_result_path != path) return false;
+		if (result) *result = g_gui_file_result_code;
+		g_gui_file_result_path.clear();
+		g_gui_file_result_code = 0;
+		g_gui_file_result_pending = false;
+		return true;
+	}
+
+	int InitRealRomCore(const uint8_t* rom, int len, const uint8_t* flash, int flash_len, int pd_value, int model_type, int legacy_ko, int classwiz_graph) {
+		if (!rom || len <= 0) return -1;
+		const auto hardware_id = HardwareIdFromCoreType(model_type);
+		if (hardware_id == casioemu::HW_FX_5800P && (!flash || flash_len <= 0)) return -4;
+		try {
+			EnsureSdl();
+			StopMainLoop();
+			GuiResetState();
+			g_emulator.reset();
+			if (!WriteRomFile(rom, len)) return -2;
+			if (flash && flash_len > 0 && !WriteFlashFile(flash, flash_len)) return -4;
+			auto model = MakeWebModel(true, false, pd_value, model_type, legacy_ko != 0, classwiz_graph != 0);
+			const auto model_dir = CurrentWebModelDir();
+			std::filesystem::create_directories(model_dir);
+			g_emulator = std::make_unique<casioemu::Emulator>(model, false, true, model_dir);
+			m_emu = g_emulator.get();
+			low_perf_ext = true;
+			RefreshScreenProvider();
+			ResetClock();
+			return 0;
+		}
+		catch (const std::exception& ex) {
+			printf("[CasioEmuCore][Error] %s\n", ex.what());
+			g_emulator.reset();
+			m_emu = nullptr;
+			return -3;
+		}
+	}
 
 extern "C" {
 
@@ -804,29 +845,11 @@ int casioemu_core_set_model_id(const char* model_id) {
 }
 
 int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int model_type, int legacy_ko, int classwiz_graph) {
-	if (!rom || len <= 0) return -1;
-	try {
-		EnsureSdl();
-		StopMainLoop();
-		GuiResetState();
-		g_emulator.reset();
-		if (!WriteRomFile(rom, len)) return -2;
-		auto model = MakeWebModel(true, false, pd_value, model_type, legacy_ko != 0, classwiz_graph != 0);
-		const auto model_dir = CurrentWebModelDir();
-		std::filesystem::create_directories(model_dir);
-		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true, model_dir);
-		m_emu = g_emulator.get();
-		low_perf_ext = true;
-		RefreshScreenProvider();
-		ResetClock();
-		return 0;
-	}
-	catch (const std::exception& ex) {
-		printf("[CasioEmuCore][Error] %s\n", ex.what());
-		g_emulator.reset();
-		m_emu = nullptr;
-		return -3;
-	}
+	return InitRealRomCore(rom, len, nullptr, 0, pd_value, model_type, legacy_ko, classwiz_graph);
+}
+
+int casioemu_core_init_real_rom_with_flash(const uint8_t* rom, int rom_len, const uint8_t* flash, int flash_len, int pd_value, int model_type, int legacy_ko, int classwiz_graph) {
+	return InitRealRomCore(rom, rom_len, flash, flash_len, pd_value, model_type, legacy_ko, classwiz_graph);
 }
 
 int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, int pd_value, int model_type, int legacy_ko, int classwiz_graph) {
