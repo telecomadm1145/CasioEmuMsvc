@@ -536,7 +536,7 @@ namespace casioemu {
 		}
 
 		bool StatusEnabled() const {
-			if (!(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) && hardware_id != HW_ES_PLUS && hardware_id != HW_EPS6800) {
+			if (!(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) && hardware_id != HW_FX_5800P && hardware_id != HW_ES_PLUS && hardware_id != HW_EPS6800) {
 				return true;
 			}
 			if (!enabled_2 || (screen_range & 0b100000)) {
@@ -642,7 +642,7 @@ namespace casioemu {
 #endif
 		}
 		int GetFrameWidth() const override { return 192; }
-		int GetFrameHeight() const override { return hardware_id == HW_ES_PLUS || hardware_id == HW_EPS6800 ? 32 : 64; }
+		int GetFrameHeight() const override { return hardware_id == HW_FX_5800P || hardware_id == HW_ES_PLUS || hardware_id == HW_EPS6800 ? 32 : 64; }
 		void WriteFrameRgba(uint8_t* out, int r, int g, int b) const override {
 			if (!out) return;
 			const int width = GetFrameWidth();
@@ -706,7 +706,7 @@ namespace casioemu {
 		}
 		void tick() {
 			float ratio = 0;
-			if constexpr (hardware_id == HW_ES_PLUS)
+			if constexpr (hardware_id == HW_FX_5800P || hardware_id == HW_ES_PLUS)
 				ratio = 1 - 1e-4;
 			else
 				ratio = 1 - 5e-4;
@@ -1137,6 +1137,17 @@ namespace casioemu {
 	template <>
 	const int Screen<HW_ES_PLUS>::SPR_MAX = 19;
 
+	template <>
+	const int Screen<HW_FX_5800P>::N_ROW = 31;
+	template <>
+	const int Screen<HW_FX_5800P>::ROW_SIZE = 16;
+	template <>
+	const int Screen<HW_FX_5800P>::OFFSET = 16;
+	template <>
+	const int Screen<HW_FX_5800P>::ROW_SIZE_DISP = 12;
+	template <>
+	const int Screen<HW_FX_5800P>::SPR_MAX = 20;
+
 	// that's meaningless, just make compiler happy xd
 	template <>
 	const int Screen<HW_EPS6800>::N_ROW = 31;
@@ -1207,6 +1218,29 @@ namespace casioemu {
 		{"rsd_cmplx", 0x80, 0x04},
 		{"rsd_mat", 0x40, 0x05},
 		{"rsd_vct", 0x02, 0x05},
+		{"rsd_d", 0x20, 0x07},
+		{"rsd_r", 0x02, 0x07},
+		{"rsd_g", 0x10, 0x08},
+		{"rsd_fix", 0x01, 0x08},
+		{"rsd_sci", 0x20, 0x09},
+		{"rsd_math", 0x40, 0x0A},
+		{"rsd_down", 0x08, 0x0A},
+		{"rsd_up", 0x80, 0x0B},
+		{"rsd_disp", 0x10, 0x0B} };
+
+	template <>
+	const SpriteBitmap Screen<HW_FX_5800P>::sprite_bitmap[] = {
+		{"rsd_pixel", 0, 0},
+		{"rsd_s", 0x10, 0x00},
+		{"rsd_a", 0x04, 0x00},
+		{"rsd_m", 0x10, 0x01},
+		{"rsd_sto", 0x02, 0x01},
+		{"rsd_rcl", 0x40, 0x02},
+		{"rsd_sd", 0x40, 0x03},
+		{"rsd_reg", 0x80, 0x04},
+		{"rsd_fmla", 0x40, 0x05},
+		{"rsd_prgm", 0x10, 0x05},
+		{"rsd_eng", 0x02, 0x05},
 		{"rsd_d", 0x20, 0x07},
 		{"rsd_r", 0x02, 0x07},
 		{"rsd_g", 0x10, 0x08},
@@ -1582,7 +1616,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 				screen_scan_report_en = 1;
 			}
 
-			if constexpr (hardware_id == HardwareId::HW_ES_PLUS) {
+			if constexpr (hardware_id == HardwareId::HW_FX_5800P || hardware_id == HardwareId::HW_ES_PLUS) {
 				region_refresh_rate.Setup(0xF034, 1, "Screen/Unknown_F034", &unk_f034, MMURegion::DefaultRead<uint8_t, 0b11>,
 					MMURegion::DefaultWrite<uint8_t, 0b11>, emulator);
 			}
@@ -1640,7 +1674,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		}
 		screen_refresh_rate = 0;
 		region_refresh_rate.Kill();
-		if constexpr (hardware_id != HardwareId::HW_ES_PLUS) {
+		if constexpr (hardware_id != HardwareId::HW_FX_5800P && hardware_id != HardwareId::HW_ES_PLUS) {
 			screen_offset = 0;
 			region_offset.Kill();
 		}
@@ -2585,6 +2619,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 	Peripheral* CreateScreen(Emulator& emulator) {
 		switch (emulator.hardware_id) {
 		case HW_FX_5800P:
+			return new Screen<HW_FX_5800P>(emulator);
 		case HW_ES_PLUS:
 			return new Screen<HW_ES_PLUS>(emulator);
 
