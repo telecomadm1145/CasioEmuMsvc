@@ -13,6 +13,22 @@
 #include <utility>
 
 namespace casioemu {
+	namespace {
+		unsigned int GetLimitedCyclesPerSecond(int hardware_id) {
+			switch (hardware_id) {
+			// case HW_FX_5800P:
+			case HW_ES_PLUS:
+				return 128 * 1024 * 2;
+			case HW_SOLARII:
+				return 64 * 1024 * 2;
+			case HW_CLASSWIZ:
+				return 1024 * 1024 * 2;
+			default:
+				return 2048 * 1024 * 2;
+			}
+		}
+	}
+
 	Emulator::Emulator(std::map<std::string, std::string>& _argv_map, bool _paused) : Paused(_paused), argv_map(_argv_map), chipset(*new Chipset(*this)), m_step_requested(false) {
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
@@ -30,8 +46,7 @@ namespace casioemu {
 			full_spd = false;
 		}
 		if (!full_spd) {
-			cycles_per_second = hardware_id == HW_ES_PLUS ? 128 * 1024 * 2 : hardware_id == HW_SOLARII ? 64 * 1024 * 2 : hardware_id == HW_CLASSWIZ ? 1024 * 1024 * 2
-				: 2048 * 1024 * 2;
+			cycles_per_second = GetLimitedCyclesPerSecond(hardware_id);
 		}
 		else {
 			cycles_per_second = 1024 * 1024 * 8;
@@ -177,8 +192,7 @@ namespace casioemu {
 			full_spd = false;
 		}
 		if (!full_spd) {
-			cycles_per_second = hardware_id == HW_ES_PLUS ? 128 * 1024 * 2 : hardware_id == HW_SOLARII ? 64 * 1024 * 2 : hardware_id == HW_CLASSWIZ ? 1024 * 1024 * 2
-				: 2048 * 1024 * 2;
+			cycles_per_second = GetLimitedCyclesPerSecond(hardware_id);
 		}
 		else {
 			cycles_per_second = 1024 * 1024 * 8;

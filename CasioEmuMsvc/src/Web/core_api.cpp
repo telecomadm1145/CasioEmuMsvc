@@ -6,6 +6,7 @@
 #include "Models.h"
 #include "Peripheral/Keyboard.hpp"
 #include "Peripheral/Screen.hpp"
+#include "Romu.h"
 #include "Snapshot.h"
 
 #include <SDL.h>
@@ -371,6 +372,10 @@ namespace {
 		case casioemu::HW_EPS6800:
 			addr = 0x8000;
 			len = 0x2000;
+			return true;
+		case casioemu::HW_FX_5800P:
+			addr = static_cast<uint32_t>(casioemu::GetRamBaseAddr(casioemu::HW_FX_5800P));
+			len = static_cast<int>(casioemu::GetRamSize(casioemu::HW_FX_5800P));
 			return true;
 		case casioemu::HW_SOLARII:
 			addr = 0xE000;
@@ -1379,6 +1384,20 @@ extern "C" const char* casioemu_core_rom_version() {
 	static char buffer[32] = {};
 	if (!g_emulator) return "";
 	const auto hw = g_emulator->ModelDefinition.hardware_id;
+
+	if (hw == casioemu::HW_FX_5800P) {
+		std::ifstream rom(kRomPath, std::ios::binary);
+		std::ifstream flash(kFlashPath, std::ios::binary);
+		if (!rom || !flash) return "";
+
+		std::vector<byte> rom_data{std::istreambuf_iterator<char>{rom.rdbuf()}, std::istreambuf_iterator<char>{}};
+		std::vector<byte> flash_data{std::istreambuf_iterator<char>{flash.rdbuf()}, std::istreambuf_iterator<char>{}};
+		auto ri = rom_info(rom_data, flash_data, false);
+		if (!ri.ok) return "";
+		snprintf(buffer, sizeof(buffer), "%.8s (%04X)", ri.ver, ri.desired_sum);
+		return buffer;
+	}
+
 	const uint32_t addr = rom_info_addr(hw);
 	if (!addr) return "";
 

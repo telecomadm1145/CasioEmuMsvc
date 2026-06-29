@@ -62,9 +62,20 @@ namespace casioemu {
 			cpu.SetMemoryModel(emulator.hardware_id == HW_SOLARII ? CPU::MM_SMALL : CPU::MM_LARGE);
 			cpu.SetCPUModel(emulator.hardware_id == HW_CLASSWIZ || emulator.hardware_id == HW_CLASSWIZ_II || emulator.hardware_id == HW_TI ? CPU::CM_NX_U16 : CPU::CM_NX_U8);
 
-			std::initializer_list<int> segments_solar{ 0 }, segments_es_plus{ 0, 1, 2, 8 }, segments_classwiz{ 0, 1, 2, 3, 4, 5 }, segments_classwiz_ii{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
-			for (auto segment_index : emulator.hardware_id == HW_SOLARII ? segments_solar : emulator.hardware_id == HW_ES_PLUS ? segments_es_plus : emulator.hardware_id == HW_CLASSWIZ ? segments_classwiz
-				: segments_classwiz_ii)
+            std::initializer_list<int> segments_solar{0}, segments_es_plus{0, 1, 2, 8}, segments_fx_5800p{
+                0, 1, 4, 8, 9, 10, 11, 12, 13, 14, 15
+            }, segments_classwiz{0, 1, 2, 3, 4, 5}, segments_classwiz_ii{
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+            };
+            for (auto segment_index: emulator.hardware_id == HW_SOLARII
+                                         ? segments_solar
+                                         : emulator.hardware_id == HW_ES_PLUS
+                                               ? segments_es_plus
+                                               : emulator.hardware_id == HW_FX_5800P
+                                                     ? segments_fx_5800p
+                                                     : emulator.hardware_id == HW_CLASSWIZ
+                                                           ? segments_classwiz
+                                                           : segments_classwiz_ii)
 				mmu.GenerateSegmentDispatch(segment_index);
 		}
 		else {
