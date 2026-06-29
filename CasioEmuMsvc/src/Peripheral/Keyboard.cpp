@@ -385,7 +385,7 @@ namespace casioemu {
 		if (emulator.hardware_id == HW_CLASSWIZ_II) {
 			region_pd_emu.Setup(0xF058, 1, "Keyboard/PdValue", &emulator.ModelDefinition.pd_value, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
 		}
-		else if (emulator.hardware_id == HW_ES_PLUS || emulator.hardware_id == HW_CLASSWIZ || emulator.hardware_id == HW_SOLARII) {
+		else if (emulator.hardware_id == HW_ES_PLUS || emulator.hardware_id == HW_CLASSWIZ || emulator.hardware_id == HW_FX_5800P || emulator.hardware_id == HW_SOLARII) {
 			region_pd_emu.Setup(0xF050, 1, "Keyboard/PdValue", &emulator.ModelDefinition.pd_value, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
 		}
 

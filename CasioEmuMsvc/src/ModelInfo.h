@@ -108,7 +108,7 @@ namespace casioemu {
 			Binary::Read(is, is_sample_rom);
 			Binary::Read(is, legacy_ko);
 			// set default value if loaded a old config
-			if (hardware_id == HW_ES_PLUS || hardware_id == HW_SOLARII) {
+			if (hardware_id == HW_ES_PLUS || hardware_id == HW_FX_5800P || hardware_id == HW_SOLARII) {
 				u16_mode = false;
 			}
 			else {

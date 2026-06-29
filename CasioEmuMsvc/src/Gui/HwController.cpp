@@ -51,8 +51,8 @@ void HwController::RenderCore() {
 	
 	ImGui::Spacing();
 	
-	static int pd = m_emu->ModelDefinition.pd_value;
 	static bool pdx[8];
+	int pd = m_emu->ModelDefinition.pd_value;
 
 	// Initialize pdx array based on the initial value of pd
 	for (int i = 0; i < 8; i++) {
