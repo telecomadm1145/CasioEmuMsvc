@@ -5,6 +5,7 @@
 #include "ModelInfo.h"
 #include "Models.h"
 #include "Peripheral/Keyboard.hpp"
+#include "Peripheral/BatteryBackedRAM.hpp"
 #include "Peripheral/Screen.hpp"
 #include "Romu.h"
 #include "Snapshot.h"
@@ -19,11 +20,13 @@
 #include <cfloat>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <memory>
 #include <string>
+#include <typeinfo>
 #include <vector>
 #include <unistd.h>
 
@@ -361,6 +364,30 @@ namespace {
 			region->description == "Segment4");
 	}
 
+	constexpr uint32_t kFx5800pStateMagic = 0x53503835; // "58PS"
+	constexpr uint32_t kFx5800pStateVersion = 1;
+	constexpr int kFx5800pPramLen = 0x8000;
+	constexpr int kFx5800pFlashLen = 0x80000;
+	constexpr int kFx5800pStateHeaderLen = 20;
+
+	void WriteLe32(uint8_t* out, uint32_t value) {
+		out[0] = static_cast<uint8_t>(value & 0xff);
+		out[1] = static_cast<uint8_t>((value >> 8) & 0xff);
+		out[2] = static_cast<uint8_t>((value >> 16) & 0xff);
+		out[3] = static_cast<uint8_t>((value >> 24) & 0xff);
+	}
+
+	uint32_t ReadLe32(const uint8_t* in) {
+		return static_cast<uint32_t>(in[0]) |
+			(static_cast<uint32_t>(in[1]) << 8) |
+			(static_cast<uint32_t>(in[2]) << 16) |
+			(static_cast<uint32_t>(in[3]) << 24);
+	}
+
+	IRam* GetRamPeripheral() {
+		return g_emulator ? static_cast<IRam*>(g_emulator->chipset.QueryInterface(typeid(IRam).name())) : nullptr;
+	}
+
 	bool UserRamRange(uint32_t& addr, int& len) {
 		if (!g_emulator) return false;
 		switch (g_emulator->hardware_id) {
@@ -418,6 +445,68 @@ namespace {
 			cur += chunk;
 			out_pos += static_cast<int>(chunk);
 		}
+		return 0;
+	}
+
+	int Fx5800pRamLen() {
+		uint32_t addr = 0;
+		int len = 0;
+		return UserRamRange(addr, len) ? len : 0;
+	}
+
+	int Fx5800pPersistentStateSize() {
+		const int ram_len = Fx5800pRamLen();
+		if (ram_len <= 0) return 0;
+		return kFx5800pStateHeaderLen + ram_len + kFx5800pPramLen + kFx5800pFlashLen;
+	}
+
+	int SaveFx5800pPersistentState(uint8_t* out, int max_len) {
+		const int ram_len = Fx5800pRamLen();
+		const int state_len = Fx5800pPersistentStateSize();
+		if (state_len <= 0) return -2;
+		if (max_len < state_len) return -state_len;
+
+		IRam* ram = GetRamPeripheral();
+		if (!ram || !ram->GetRam() || !ram->GetPRam()) return -3;
+		if (static_cast<int>(g_emulator->chipset.flash_data.size()) < kFx5800pFlashLen) return -4;
+
+		WriteLe32(out, kFx5800pStateMagic);
+		WriteLe32(out + 4, kFx5800pStateVersion);
+		WriteLe32(out + 8, static_cast<uint32_t>(ram_len));
+		WriteLe32(out + 12, kFx5800pPramLen);
+		WriteLe32(out + 16, kFx5800pFlashLen);
+
+		int pos = kFx5800pStateHeaderLen;
+		std::memcpy(out + pos, ram->GetRam(), ram_len);
+		pos += ram_len;
+		std::memcpy(out + pos, ram->GetPRam(), kFx5800pPramLen);
+		pos += kFx5800pPramLen;
+		std::memcpy(out + pos, g_emulator->chipset.flash_data.data(), kFx5800pFlashLen);
+		return 0;
+	}
+
+	int LoadFx5800pPersistentState(const uint8_t* in, int len) {
+		if (len < kFx5800pStateHeaderLen) return 2;
+		if (ReadLe32(in) != kFx5800pStateMagic) return 3;
+		if (ReadLe32(in + 4) != kFx5800pStateVersion) return 4;
+
+		const int ram_len = static_cast<int>(ReadLe32(in + 8));
+		const int pram_len = static_cast<int>(ReadLe32(in + 12));
+		const int flash_len = static_cast<int>(ReadLe32(in + 16));
+		const int expected_ram_len = Fx5800pRamLen();
+		if (ram_len != expected_ram_len || pram_len != kFx5800pPramLen || flash_len != kFx5800pFlashLen) return 5;
+		if (len < kFx5800pStateHeaderLen + ram_len + pram_len + flash_len) return 6;
+
+		IRam* ram = GetRamPeripheral();
+		if (!ram || !ram->GetRam() || !ram->GetPRam()) return 7;
+		if (static_cast<int>(g_emulator->chipset.flash_data.size()) < flash_len) return 8;
+
+		int pos = kFx5800pStateHeaderLen;
+		std::memcpy(ram->GetRam(), in + pos, ram_len);
+		pos += ram_len;
+		std::memcpy(ram->GetPRam(), in + pos, pram_len);
+		pos += pram_len;
+		std::memcpy(g_emulator->chipset.flash_data.data(), in + pos, flash_len);
 		return 0;
 	}
 
@@ -1095,6 +1184,30 @@ int casioemu_core_load_user_ram(const uint8_t* in, int len) {
 		g_emulator->chipset.mmu.WriteData(addr + i, in[i], false);
 	}
 	return 0;
+}
+
+int casioemu_core_persistent_ram_size() {
+	if (!g_emulator) return 0;
+	if (g_emulator->hardware_id == casioemu::HW_FX_5800P) {
+		return Fx5800pPersistentStateSize();
+	}
+	return casioemu_core_user_ram_size();
+}
+
+int casioemu_core_save_persistent_ram(uint8_t* out, int max_len) {
+	if (!g_emulator || !out || max_len < 0) return -1;
+	if (g_emulator->hardware_id == casioemu::HW_FX_5800P) {
+		return SaveFx5800pPersistentState(out, max_len);
+	}
+	return casioemu_core_save_user_ram(out, max_len);
+}
+
+int casioemu_core_load_persistent_ram(const uint8_t* in, int len) {
+	if (!g_emulator || !in || len < 0) return 1;
+	if (g_emulator->hardware_id == casioemu::HW_FX_5800P) {
+		return LoadFx5800pPersistentState(in, len);
+	}
+	return casioemu_core_load_user_ram(in, len);
 }
 
 uint32_t casioemu_core_snapshot_ptr() {
