@@ -40,7 +40,10 @@
 #ifdef ENABLE_SENTRY
 #include <sentry.h>
 #endif
-
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#include <unistd.h>
+#endif
 #include "StartupUi/StartupUi.h"
 #include <Gui.h>
 #include <Plugin/PluginMan.h>
@@ -154,6 +157,16 @@ int main(int argc, char* argv[]) {
 #endif
 #ifdef __ANDROID__
 	chdir(SDL_AndroidGetExternalStoragePath());
+#elif defined(__APPLE__)
+	char path[1024];
+	uint32_t size = sizeof(path);
+	if (_NSGetExecutablePath(path, &size) == 0) {
+		char* last_slash = strrchr(path, '/');
+		if (last_slash) {
+			*last_slash = '\0';
+			chdir(path);
+		}
+	}
 #endif
 	g_local.Load();
 	ThemeManager::Instance().LoadSettings();
