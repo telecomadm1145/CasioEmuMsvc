@@ -645,6 +645,11 @@ static bool CreateDesktopShortcut(const std::filesystem::path& model_path, const
 
 	return true;
 }
+#elif defined(__APPLE__)
+static bool CreateDesktopShortcut(const std::filesystem::path& model_path, const std::string& shortcut_name, const std::string& icon_path_str) {
+	std::cerr << "[Shortcut] macOS shortcut creation not implemented yet\n";
+	return false;
+}
 #endif
 
 namespace casioemu {

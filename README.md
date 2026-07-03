@@ -7,7 +7,7 @@
 **A high-performance emulator and developer toolkit for the nX-U8/100 & nX-U16/100 MCU series.**
 
 [![License](https://img.shields.io/github/license/telecomadm1145/CasioEmuMsvc?style=flat-square)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20Android-blue?style=flat-square)](docs/README.en.md#-platform-support)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue?style=flat-square)](docs/README.en.md#-platform-support)
 [![Stars](https://img.shields.io/github/stars/telecomadm1145/CasioEmuMsvc?style=flat-square)](https://github.com/telecomadm1145/CasioEmuMsvc/stargazers)
 [![Discord](https://img.shields.io/discord/NM39VPdJTf?label=Discord&logo=discord&style=flat-square)](https://discord.gg/NM39VPdJTf)
 
@@ -29,10 +29,22 @@
 - 🔬 **Rich developer tools** — debugger, disassembler, hex editor
 - 📸 **Snapshot system** with branching save-states and screen previews
 - 🔌 **Plugin API** — MCP (AI-driven), Python, Cw2tools, and custom plugins
-- 🚀 **Multi-platform** — Windows (MSVC), Linux (CMake/Ninja), Android (Gradle/NDK)
+- 🚀 **Multi-platform** — Windows (MSVC), macOS, Linux (CMake/Ninja), Android (Gradle/NDK)
 - 🎨 **Theme manager**, localization, Discord Rich Presence, and auto-update checker
 
 ---
+
+> [!IMPORTANT]
+> macOS Usage
+> 
+> Because the macOS app is built and uses an ad-hoc signature, macOS Gatekeeper will quarantine the app and may display a *"Launch failed"* or *"App is damaged"* error upon first launch.
+> 
+> To bypass this protection, after extracting the file, open your **Terminal** and run the following command to clear the quarantine flag:
+> ```bash
+> xattr -cr /path/to/CasioEmuMsvc.app
+> ```
+> (Replace /path/to/CasioEmuMsvc.app with the actual path to your extracted app. You can type xattr -cr and drag the App into the Terminal window).
+After running this command, you can simply double-click the app to open it normally.
 
 ## 💬 Community
 

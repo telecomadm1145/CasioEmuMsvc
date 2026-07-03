@@ -94,7 +94,7 @@ file(GLOB MAIN_SOURCES_ROOT "${SOURCE_DIR}/*.cpp")
 file(GLOB MAIN_SOURCES_MINIZ "${MINIZ_DIR}/*.c")
 file(GLOB MAIN_SOURCES_CHIPSET "${SOURCE_DIR}/Chipset/*.cpp")
 file(GLOB MAIN_SOURCES_CRASH "${SOURCE_DIR}/CrashHandler/*.cpp")
-file(GLOB MAIN_SOURCES_EXT "${SOURCE_DIR}/Ext/*.cpp")
+file(GLOB MAIN_SOURCES_EXT "${SOURCE_DIR}/Ext/*.cpp" "${SOURCE_DIR}/Ext/*.mm")
 file(GLOB MAIN_SOURCES_EXT_CAM "${SOURCE_DIR}/Ext/cam/*.cc")
 file(GLOB MAIN_SOURCES_ROP "${SOURCE_DIR}/Rop/*.cpp")
 file(GLOB MAIN_SOURCES_GUI "${SOURCE_DIR}/Gui/*.cpp")
@@ -182,7 +182,23 @@ if(BUILD_EXECUTABLE)
         set(WIN_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/Resource.rc)
     endif()
 
-    add_executable(${TARGET_NAME} ${MAIN_SOURCES} ${WIN_RESOURCES})
+    if(APPLE)
+        set(MAC_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/icon.icns)
+        set_source_files_properties(${MAC_RESOURCES} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+        add_executable(${TARGET_NAME} MACOSX_BUNDLE ${MAIN_SOURCES} ${WIN_RESOURCES} ${MAC_RESOURCES})
+        set_target_properties(${TARGET_NAME} PROPERTIES
+            MACOSX_BUNDLE_INFO_STRING "Casio nX-U8/100 & nX-U16/100 Emulator"
+            MACOSX_BUNDLE_BUNDLE_NAME "CasioEmuMsvc"
+            MACOSX_BUNDLE_IDENTIFIER "com.telecomadm1145.casioemumsvc"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "com.telecomadm1145.casioemumsvc"
+            MACOSX_BUNDLE_BUNDLE_VERSION "1.0.0"
+            MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0.0"
+            MACOSX_BUNDLE_COPYRIGHT "Copyright (C) 2024-2026 telecomadm1145"
+            MACOSX_BUNDLE_ICON_FILE "icon.icns"
+        )
+    else()
+        add_executable(${TARGET_NAME} ${MAIN_SOURCES} ${WIN_RESOURCES})
+    endif()
 else()
     message(STATUS "Building shared library")
     set(TARGET_NAME "main")
@@ -323,8 +339,15 @@ elseif(BUILD_EXECUTABLE)
             imm32
         )
         set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
+    elseif(APPLE)
+        find_library(APPKIT_FRAMEWORK AppKit)
+        target_link_libraries(${TARGET_NAME} PRIVATE
+            -lpthread
+            -ldl
+            -lm
+            ${APPKIT_FRAMEWORK}
+        )
     else()
-        
         target_link_libraries(${TARGET_NAME} PRIVATE
             -Wl,--start-group
             -lpthread
@@ -382,7 +405,7 @@ elseif(BUILD_EXECUTABLE AND NOT CASIOEMU_WEB)
 endif()
 
 
-if(NOT WIN32 AND NOT ANDROID AND NOT IOS AND NOT CASIOEMU_WEB)
+if(NOT WIN32 AND NOT ANDROID AND NOT IOS AND NOT CASIOEMU_WEB AND NOT APPLE)
     if(BUILD_EXECUTABLE)
         target_link_options(${TARGET_NAME} PRIVATE "-static-libgcc" "-static-libstdc++")
     endif()

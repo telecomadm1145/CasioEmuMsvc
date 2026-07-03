@@ -61,6 +61,12 @@ inline std::string GetMonospaceFontPath() {
 	candidates = {
 		"/system/fonts/DroidSansMono.ttf",
 		"/system/fonts/NotoSansMono-Regular.ttf"};
+#elif defined(__APPLE__)
+	candidates = {
+		"/System/Library/Fonts/Monaco.ttf",
+		"/System/Library/Fonts/Menlo.ttc",
+		"/System/Library/Fonts/SFNSMono.ttf",
+		"/Library/Fonts/Courier New.ttf"};
 #else // Linux / Unix
 	// Linux 等宽字体非常多，这里列出主流发行版的默认项
 	candidates = {
@@ -116,6 +122,26 @@ inline std::string GetCJKFontPath() {
 		"/data/data/com.casioemu/files/fonts/CasioEmuGuiCJKSubset.otf",
 		"/system/fonts/NotoSansCJK-Regular.ttc",
 		"/system/fonts/DroidSansFallback.ttf"});
+#elif defined(__APPLE__)
+	if (preference == "JP") {
+		candidates.insert(candidates.end(), {
+			"/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc",
+			"/System/Library/Fonts/Supplemental/Osaka.ttf"
+		});
+	}
+	else if (preference == "KR") {
+		candidates.insert(candidates.end(), {
+			"/System/Library/Fonts/AppleGothic.ttf",
+			"/System/Library/Fonts/Supplemental/AppleGothic.ttf"
+		});
+	}
+	else {
+		candidates.insert(candidates.end(), {
+			"/System/Library/Fonts/PingFang.ttc",
+			"/System/Library/Fonts/STHeiti Light.ttc",
+			"/System/Library/Fonts/Supplemental/Arial Unicode.ttf"
+		});
+	}
 #else // Linux
 	// 尝试寻找 CJK 的 Mono 版本 (如果有)，否则使用 Regular
 	candidates.insert(candidates.end(), {
