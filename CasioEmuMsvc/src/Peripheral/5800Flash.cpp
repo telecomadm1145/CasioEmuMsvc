@@ -96,14 +96,19 @@ namespace casioemu {
 				},
 				emulator);
 
-					SDL_AddTimer(SAVE_INTERVAL_MS, SaveRamCallback, this);
+#ifndef CASIOEMU_DISABLE_RAM_IMAGE
+			SDL_AddTimer(SAVE_INTERVAL_MS, SaveRamCallback, this);
+#endif
 		}
 
 		void Uninitialise() override {
+#ifndef CASIOEMU_DISABLE_RAM_IMAGE
 			SaveFlashData();
+#endif
 		}
 
 		void SaveFlashData() {
+#ifndef CASIOEMU_DISABLE_RAM_IMAGE
 			std::ofstream out_file(emulator.GetModelFilePath(FLASH_SAVE_PATH), std::ios::binary);
 			if (out_file) {
 				out_file.write((char*)emulator.chipset.flash_data.data(), 0x80000);
@@ -112,6 +117,7 @@ namespace casioemu {
 			else {
 				logger::Info("[Flash2] Failed to save flash data to flash.dmp\n");
 			}
+#endif
 		}
 
 		void LoadFlashData() {
