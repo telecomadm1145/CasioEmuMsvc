@@ -14,6 +14,7 @@
     <ClCompile Include="src\Chipset\MMURegion.cpp" />
     <ClCompile Include="src\CrashHandler\CrashHandler.cpp" />
     <ClCompile Include="src\Emulator.cpp" />
+    <ClCompile Include="src\ModelInfo.cpp" />
     <ClCompile Include="src\Ext\SysDialog.cpp" />
     <ClCompile Include="src\Gui\5800FileSystem.cpp" />
     <ClCompile Include="src\Gui\CallAnalysis.cpp" />
@@ -84,6 +85,7 @@
     <ClCompile Include="third_party\miniz\miniz.c" />
     <ClCompile Include="third_party\miniz\miniz_tdef.c" />
     <ClCompile Include="third_party\miniz\miniz_tinfl.c" />
+    <ClCompile Include="third_party\tinyxml2\tinyxml2.cpp" />
     <ClCompile Include="..\discord-rpc\src\connection_win.cpp" />
     <ClCompile Include="..\discord-rpc\src\discord_register_win.cpp" />
     <ClCompile Include="..\discord-rpc\src\discord_rpc.cpp" />
@@ -202,6 +204,7 @@
     <ClInclude Include="src\Gui\RopTool.h" />
     <ClInclude Include="src\Ext\DiscordRPC.h" />
     <ClInclude Include="third_party\miniz\miniz_export.h" />
+    <ClInclude Include="third_party\tinyxml2\tinyxml2.h" />
     <ClInclude Include="src\Snapshot.h" />
     <ClInclude Include="src\Compress.h" />
     <ClInclude Include="third_party\miniz\miniz.h" />

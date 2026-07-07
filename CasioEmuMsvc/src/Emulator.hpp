@@ -40,6 +40,11 @@ namespace casioemu {
 		SDL_Renderer* renderer = nullptr;
 		SDL_Surface* interface_surface = nullptr;
 		SDL_Texture* interface_texture = nullptr;
+		SDL_Texture* scaled_interface_texture = nullptr;
+		int scaled_interface_texture_w = 0;
+		int scaled_interface_texture_h = 0;
+		bool interface_is_svg = false;
+		std::string interface_svg_data;
 		unsigned int cycles_per_second;
 		unsigned int timer_interval;
 		bool running, Paused;

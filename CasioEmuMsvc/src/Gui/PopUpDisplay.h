@@ -1,4 +1,6 @@
 ﻿#pragma once
+#include <SDL.h>
+
 class ScreenMirror {
 private:
 	SDL_Window* mirrorWindow;
@@ -6,8 +8,25 @@ private:
 	SDL_Texture* mirrorTexture;
 	int captureWidth;
 	int captureHeight;
+	Uint32 windowId;
 	SDL_Rect displayRect;
 	bool isOpen;
+	bool watchingEvents;
+
+	static int SDLCALL eventWatch(void* userdata, SDL_Event* event) {
+		auto* self = static_cast<ScreenMirror*>(userdata);
+		if (!self || !event || !self->isOpen || event->type != SDL_WINDOWEVENT || event->window.windowID != self->windowId) {
+			return 0;
+		}
+
+		if (event->window.event == SDL_WINDOWEVENT_CLOSE) {
+			self->isOpen = false;
+		}
+		else if (event->window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+			self->updateDisplayRect(event->window.data1, event->window.data2);
+		}
+		return 0;
+	}
 
 	void updateDisplayRect(int windowWidth, int windowHeight) {
 		float aspectRatio = (float)captureWidth / captureHeight;
@@ -29,7 +48,7 @@ private:
 
 public:
 	ScreenMirror(int captureWidth, int captureHeight)
-		: captureWidth(captureWidth), captureHeight(captureHeight), isOpen(false), mirrorWindow(nullptr), mirrorRenderer(nullptr), mirrorTexture(nullptr) {
+		: mirrorWindow(nullptr), mirrorRenderer(nullptr), mirrorTexture(nullptr), captureWidth(captureWidth), captureHeight(captureHeight), windowId(0), isOpen(false), watchingEvents(false) {
 	}
 
 	~ScreenMirror() {
@@ -46,7 +65,9 @@ public:
 			SDL_Log("Error creating mirror window: %s", SDL_GetError());
 			return false;
 		}
+		windowId = SDL_GetWindowID(mirrorWindow);
 
+		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
 		mirrorRenderer = SDL_CreateRenderer(mirrorWindow, -1,
 			SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
@@ -76,10 +97,16 @@ public:
 		updateDisplayRect(windowWidth, windowHeight);
 
 		isOpen = true;
+		SDL_AddEventWatch(eventWatch, this);
+		watchingEvents = true;
 		return true;
 	}
 
 	void destroy() {
+		if (watchingEvents) {
+			SDL_DelEventWatch(eventWatch, this);
+			watchingEvents = false;
+		}
 		if (mirrorTexture) {
 			SDL_DestroyTexture(mirrorTexture);
 			mirrorTexture = nullptr;
@@ -92,29 +119,11 @@ public:
 			SDL_DestroyWindow(mirrorWindow);
 			mirrorWindow = nullptr;
 		}
+		windowId = 0;
 		isOpen = false;
 	}
 
 	bool handleEvents() {
-		if (!isOpen)
-			return false;
-
-		SDL_Event event;
-		while (SDL_PollEvent(&event)) {
-			switch (event.type) {
-			case SDL_QUIT:
-				isOpen = false;
-				break;
-			case SDL_WINDOWEVENT:
-				if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
-					isOpen = false;
-				}
-				else if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
-					updateDisplayRect(event.window.data1, event.window.data2);
-				}
-				break;
-			}
-		}
 		return isOpen;
 	}
 

@@ -458,6 +458,7 @@
     <ClCompile Include="src\Chipset\MMURegion.cpp" />
     <ClCompile Include="src\CrashHandler\CrashHandler.cpp" />
     <ClCompile Include="src\Emulator.cpp" />
+    <ClCompile Include="src\ModelInfo.cpp" />
     <ClCompile Include="src\Ext\SysDialog.cpp" />
     <ClCompile Include="src\Gui\5800FileSystem.cpp" />
     <ClCompile Include="src\Gui\CallAnalysis.cpp" />
@@ -521,6 +522,7 @@
     <ClCompile Include="third_party\miniz\miniz.c" />
     <ClCompile Include="third_party\miniz\miniz_tdef.c" />
     <ClCompile Include="third_party\miniz\miniz_tinfl.c" />
+    <ClCompile Include="third_party\tinyxml2\tinyxml2.cpp" />
     <ClCompile Include="src\Gui\TouchMouseTranslator.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -606,6 +608,7 @@
     <ClInclude Include="src\Gui\VariableWindow.h" />
     <ClInclude Include="src\Gui\PluginLogWindow.hpp" />
     <ClInclude Include="third_party\miniz\miniz_export.h" />
+    <ClInclude Include="third_party\tinyxml2\tinyxml2.h" />
     <ClInclude Include="src\Snapshot.h" />
     <ClInclude Include="src\Compress.h" />
     <ClInclude Include="third_party\miniz\miniz.h" />

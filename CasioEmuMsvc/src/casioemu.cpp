@@ -403,6 +403,12 @@ int main(int argc, char* argv[]) {
 		case SDL_WINDOWEVENT:
 			switch (event.window.event) {
 			case SDL_WINDOWEVENT_CLOSE:
+				if (SDL_Window* closedWindow = SDL_GetWindowFromID(event.window.windowID)) {
+					const char* title = SDL_GetWindowTitle(closedWindow);
+					if (title && std::strcmp(title, "Live Mirror") == 0) {
+						break;
+					}
+				}
 				emulator.Shutdown();
 				std::exit(0);
 				break;

@@ -1,6 +1,10 @@
 #pragma once
+#include <filesystem>
 #include <map>
+#include <iosfwd>
+#include <istream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "Binary.h"
@@ -28,6 +32,18 @@ namespace casioemu {
 	};
 	struct SpriteInfo {
 		Rect src, dest;
+		std::string svg_shape;
+		std::string svg_defs;
+		void Write(std::ostream& stm) const {
+			Binary::Write(stm, src);
+			Binary::Write(stm, dest);
+		}
+		void Read(std::istream& stm) {
+			Binary::Read(stm, src);
+			Binary::Read(stm, dest);
+			svg_shape.clear();
+			svg_defs.clear();
+		}
 	};
 	struct ColourInfo {
 		int r, g, b;
@@ -36,6 +52,8 @@ namespace casioemu {
 		Rect rect{};
 		int kiko{};
 		std::string keyname;
+		std::string svg_shape;
+		std::string svg_defs;
 		void Write(std::ostream& stm) const {
 			Binary::Write(stm, rect);
 			Binary::Write(stm, kiko);
@@ -66,6 +84,7 @@ namespace casioemu {
 		bool LARGE_model{};
 		// ML620 style mirroring(1->8) or ML610 style mirroring(1->4)
 		bool ml620_mirroring{};
+		std::map<std::string, int> status_sprites;
 		std::map<std::string, std::string> extra;
 		void Write(std::ostream& os) const {
 			Binary::Write(os, std::string("\n\nnx-U16/U8 Emulator Configuration file v52\n\n模拟器配置文件v52\n\ntệp cấu hình giả lập v52\n\n"));
@@ -87,8 +106,32 @@ namespace casioemu {
 			Binary::Write(os, LARGE_model);
 			Binary::Write(os, ml620_mirroring);
 			Binary::Write(os, extra);
+			Binary::Write(os, status_sprites);
+
+			std::vector<std::string> button_svg_shapes;
+			std::vector<std::string> button_svg_defs;
+			button_svg_shapes.reserve(buttons.size());
+			button_svg_defs.reserve(buttons.size());
+			for (const auto& button : buttons) {
+				button_svg_shapes.push_back(button.svg_shape);
+				button_svg_defs.push_back(button.svg_defs);
+			}
+			Binary::Write(os, button_svg_shapes);
+			Binary::Write(os, button_svg_defs);
+
+			std::map<std::string, std::string> sprite_svg_shapes;
+			std::map<std::string, std::string> sprite_svg_defs;
+			for (const auto& [name, sprite] : sprites) {
+				if (!sprite.svg_shape.empty())
+					sprite_svg_shapes[name] = sprite.svg_shape;
+				if (!sprite.svg_defs.empty())
+					sprite_svg_defs[name] = sprite.svg_defs;
+			}
+			Binary::Write(os, sprite_svg_shapes);
+			Binary::Write(os, sprite_svg_defs);
 		}
 		void Read(std::istream& is) {
+			status_sprites.clear();
 			{
 				std::string unused;
 				Binary::Read(is, unused);
@@ -108,7 +151,7 @@ namespace casioemu {
 			Binary::Read(is, is_sample_rom);
 			Binary::Read(is, legacy_ko);
 			// set default value if loaded a old config
-			if (hardware_id == HW_ES_PLUS || hardware_id == HW_FX_5800P || hardware_id == HW_SOLARII) {
+			if (hardware_id == HW_ES_PLUS || hardware_id == HW_SOLARII) {
 				u16_mode = false;
 			}
 			else {
@@ -130,6 +173,41 @@ namespace casioemu {
 			Binary::Read(is, LARGE_model);
 			Binary::Read(is, ml620_mirroring);
 			Binary::Read(is, extra);
+			if (is.peek() != std::char_traits<char>::eof()) {
+				Binary::Read(is, status_sprites);
+
+				std::vector<std::string> button_svg_shapes;
+				std::vector<std::string> button_svg_defs;
+				Binary::Read(is, button_svg_shapes);
+				Binary::Read(is, button_svg_defs);
+				for (size_t ix = 0; ix < buttons.size(); ++ix) {
+					if (ix < button_svg_shapes.size())
+						buttons[ix].svg_shape = std::move(button_svg_shapes[ix]);
+					if (ix < button_svg_defs.size())
+						buttons[ix].svg_defs = std::move(button_svg_defs[ix]);
+				}
+
+				std::map<std::string, std::string> sprite_svg_shapes;
+				std::map<std::string, std::string> sprite_svg_defs;
+				Binary::Read(is, sprite_svg_shapes);
+				Binary::Read(is, sprite_svg_defs);
+				for (auto& [name, shape] : sprite_svg_shapes)
+					sprites[name].svg_shape = std::move(shape);
+				for (auto& [name, defs] : sprite_svg_defs)
+					sprites[name].svg_defs = std::move(defs);
+			}
 		}
 	};
+	constexpr const char* MODEL_CONFIG_JSON = "config.json";
+	constexpr const char* MODEL_CONFIG_BIN = "config.bin";
+
+	void WriteModelInfoJson(std::ostream& os, const ModelInfo& model);
+	void ReadModelInfoJson(std::istream& is, ModelInfo& model);
+	bool CanInferWebCalcModelInfo(const std::filesystem::path& model_path);
+	bool LoadModelInfoFromFolder(
+		const std::filesystem::path& model_path,
+		ModelInfo& model,
+		std::string* loaded_from = nullptr,
+		std::string* error = nullptr);
+	void SaveModelInfoJson(const std::filesystem::path& model_path, const ModelInfo& model);
 } // namespace casioemu

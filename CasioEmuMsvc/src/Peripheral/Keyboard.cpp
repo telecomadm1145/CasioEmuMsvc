@@ -1,5 +1,6 @@
 #include "Keyboard.hpp"
 #include <SDL.h>
+#include <SDL_image.h>
 
 #include "Chipset/Chipset.hpp"
 #include "Chipset/MMU.hpp"
@@ -9,13 +10,41 @@
 #include "ePSCpu.h"
 #include "vibration.h"
 #include <ML620Ports.h>
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 namespace casioemu {
+	namespace {
+		constexpr int SHAPE_PADDING = 2;
+
+		SDL_Rect ExpandRect(const SDL_Rect& rect, int padding) {
+			return {
+				rect.x - padding,
+				rect.y - padding,
+				std::max(1, rect.w + padding * 2),
+				std::max(1, rect.h + padding * 2)};
+		}
+
+		std::string BuildButtonShapeSvg(const ButtonInfo& button, const SDL_Rect& shape_rect) {
+			std::ostringstream stream;
+			stream << "<svg xmlns=\"http://www.w3.org/2000/svg\" "
+				   << "xmlns:xlink=\"http://www.w3.org/1999/xlink\" "
+				   << "width=\"" << shape_rect.w << "\" height=\"" << shape_rect.h << "\" "
+				   << "viewBox=\"" << shape_rect.x << ' ' << shape_rect.y << ' ' << shape_rect.w << ' ' << shape_rect.h << "\">"
+				   << "<style>*{fill:#fff!important;stroke:none!important;opacity:1!important;fill-opacity:1!important;}</style>"
+				   << button.svg_defs
+				   << button.svg_shape
+				   << "</svg>";
+			return stream.str();
+		}
+	}
+
 	class Keyboard : public Peripheral, public IKeyboardAutomation {
 		MMURegion region_ko_mask, region_ko, region_ki, region_input_mode, region_input_filter;
 		uint16_t keyboard_out, keyboard_out_mask;
@@ -39,15 +68,18 @@ namespace casioemu {
 				BT_NONE,
 				BT_BUTTON,
 				BT_POWER
-			} type;
-			SDL_Rect rect;
-			uint8_t ko_bit, ki_bit;
-			uint8_t code;
-			bool pressed, stuck;
-			uint32_t pressTime;
-			SDL_TimerID releaseTimer;
+			} type{};
+			SDL_Rect rect{};
+			SDL_Rect shape_rect{};
+			SDL_Texture* shape_texture{};
+			std::vector<uint8_t> shape_alpha;
+			uint8_t ko_bit{}, ki_bit{};
+			uint8_t code{};
+			bool pressed{}, stuck{};
+			uint32_t pressTime{};
+			SDL_TimerID releaseTimer{};
 			struct DelayedReleaseParam* releaseParam = nullptr;
-			SDL_FingerID pressingFingerId; // ID of the finger currently pressing this button
+			SDL_FingerID pressingFingerId{-1}; // ID of the finger currently pressing this button
 		} buttons[64];
 
 		// Maps from keycode to an index to (buttons).
@@ -72,6 +104,9 @@ namespace casioemu {
 		void PressButtonByCode(uint8_t code);
 		bool TryReleaseButton(Button& button);
 		void ExecuteDelayedRelease(size_t button_index);
+		void BuildButtonShape(Button& button, const ButtonInfo& info);
+		void DestroyButtonShapes();
+		bool ButtonContainsPoint(const Button& button, int x, int y) const;
 		void StartInject();
 		void StoreKeyLog();
 		void ReleaseAll();
@@ -217,6 +252,7 @@ namespace casioemu {
 	void Keyboard::Initialise() {
 		renderer = emulator.GetRenderer();
 
+		DestroyButtonShapes();
 		for (auto& button : buttons) {
 			button.pressingFingerId = -1; // Initialize finger ID
 		}
@@ -476,6 +512,7 @@ namespace casioemu {
 				button.ko_bit = 1 << ((code >> 4) & 0xF);
 				button.ki_bit = 1 << (code & 0xF);
 			}
+			BuildButtonShape(button, btn);
 		}
 	}
 	}
@@ -549,7 +586,18 @@ namespace casioemu {
 	void Keyboard::Frame() {
 		SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 		for (auto& button : buttons) {
-			if (button.type != Button::BT_NONE && button.pressed) {
+			if (button.type == Button::BT_NONE)
+				continue;
+			if (button.shape_texture) {
+				if (!button.pressed)
+					continue;
+				SDL_SetTextureColorMod(button.shape_texture, button.stuck ? 180 : 0, 0, 0);
+				SDL_SetTextureAlphaMod(button.shape_texture, button.stuck ? 150 : 127);
+				SDL_RenderCopy(renderer, button.shape_texture, nullptr, &button.shape_rect);
+				SDL_SetTextureColorMod(button.shape_texture, 255, 255, 255);
+				SDL_SetTextureAlphaMod(button.shape_texture, 255);
+			}
+			else if (button.pressed) {
 				if (button.stuck)
 					SDL_SetRenderDrawColor(renderer, 127, 0, 0, 127);
 				else
@@ -603,8 +651,7 @@ namespace casioemu {
 				// This is a point of potential conflict to revisit if mixed input is common.
 				bool button_released_by_mouse = false;
 				for (auto& button : buttons) {
-					if (button.rect.x <= event.button.x && button.rect.y <= event.button.y &&
-						button.rect.x + button.rect.w > event.button.x && button.rect.y + button.rect.h > event.button.y) {
+					if (ButtonContainsPoint(button, event.button.x, event.button.y)) {
 						if (button.pressed && button.pressingFingerId == -1 && !button.stuck) { // Only if pressed by mouse (no fingerId)
 							if (TryReleaseButton(button)) {
 								button_released_by_mouse = true;
@@ -666,6 +713,7 @@ namespace casioemu {
 	}
 
 	void Keyboard::Uninitialise() {
+		DestroyButtonShapes();
 		for (auto& button : buttons) {
 			if (button.releaseTimer != 0) {
 				SDL_RemoveTimer(button.releaseTimer);
@@ -676,6 +724,80 @@ namespace casioemu {
 				}
 			}
 		}
+	}
+
+	void Keyboard::BuildButtonShape(Button& button, const ButtonInfo& info) {
+		if (info.svg_shape.empty())
+			return;
+
+		button.shape_rect = ExpandRect(button.rect, SHAPE_PADDING);
+		const std::string svg = BuildButtonShapeSvg(info, button.shape_rect);
+		SDL_RWops* rw = SDL_RWFromConstMem(svg.data(), static_cast<int>(svg.size()));
+		if (!rw) {
+			SDL_Log("[Keyboard][Warn] SDL_RWFromConstMem failed for SVG button shape: %s", SDL_GetError());
+			return;
+		}
+
+		SDL_Surface* loaded = IMG_Load_RW(rw, 1);
+		if (!loaded) {
+			SDL_Log("[Keyboard][Warn] IMG_Load_RW failed for SVG button shape: %s", IMG_GetError());
+			return;
+		}
+
+		SDL_Surface* surface = SDL_ConvertSurfaceFormat(loaded, SDL_PIXELFORMAT_RGBA32, 0);
+		SDL_FreeSurface(loaded);
+		if (!surface) {
+			SDL_Log("[Keyboard][Warn] SDL_ConvertSurfaceFormat failed for SVG button shape: %s", SDL_GetError());
+			return;
+		}
+
+		button.shape_rect.w = surface->w;
+		button.shape_rect.h = surface->h;
+		button.shape_alpha.assign(static_cast<size_t>(surface->w) * static_cast<size_t>(surface->h), 0);
+		for (int y = 0; y < surface->h; ++y) {
+			auto* row = reinterpret_cast<uint8_t*>(surface->pixels) + y * surface->pitch;
+			for (int x = 0; x < surface->w; ++x) {
+				Uint8 r = 0, g = 0, b = 0, a = 0;
+				auto* pixel_ptr = reinterpret_cast<Uint32*>(row + x * surface->format->BytesPerPixel);
+				const Uint32 pixel = *pixel_ptr;
+				SDL_GetRGBA(pixel, surface->format, &r, &g, &b, &a);
+				button.shape_alpha[static_cast<size_t>(y) * static_cast<size_t>(surface->w) + static_cast<size_t>(x)] = a;
+				*pixel_ptr = SDL_MapRGBA(surface->format, 255, 255, 255, a);
+			}
+		}
+
+		button.shape_texture = SDL_CreateTextureFromSurface(renderer, surface);
+		SDL_FreeSurface(surface);
+		if (!button.shape_texture) {
+			SDL_Log("[Keyboard][Warn] SDL_CreateTextureFromSurface failed for SVG button shape: %s", SDL_GetError());
+			button.shape_alpha.clear();
+			return;
+		}
+		SDL_SetTextureBlendMode(button.shape_texture, SDL_BLENDMODE_BLEND);
+	}
+
+	void Keyboard::DestroyButtonShapes() {
+		for (auto& button : buttons) {
+			if (button.shape_texture) {
+				SDL_DestroyTexture(button.shape_texture);
+				button.shape_texture = nullptr;
+			}
+			button.shape_alpha.clear();
+		}
+	}
+
+	bool Keyboard::ButtonContainsPoint(const Button& button, int x, int y) const {
+		if (button.shape_texture && !button.shape_alpha.empty()) {
+			if (x < button.shape_rect.x || y < button.shape_rect.y ||
+				x >= button.shape_rect.x + button.shape_rect.w || y >= button.shape_rect.y + button.shape_rect.h) {
+				return false;
+			}
+			const int local_x = x - button.shape_rect.x;
+			const int local_y = y - button.shape_rect.y;
+			const size_t index = static_cast<size_t>(local_y) * static_cast<size_t>(button.shape_rect.w) + static_cast<size_t>(local_x);
+			return index < button.shape_alpha.size() && button.shape_alpha[index] > 24;
+		}
+		return button.rect.x <= x && button.rect.y <= y && button.rect.x + button.rect.w > x && button.rect.y + button.rect.h > y;
 	}
 
 	bool Keyboard::AnyFingerPressing() {
@@ -822,7 +944,7 @@ namespace casioemu {
 	void Keyboard::PressAt(int x, int y, bool stick, SDL_FingerID fingerId) {
 		// SDL_Log("PressAt: x %d, y %d, stick %d, fingerId %lld", x, y, stick, fingerId);
 		for (auto& button : buttons) {
-			if (button.rect.x <= x && button.rect.y <= y && button.rect.x + button.rect.w > x && button.rect.y + button.rect.h > y) {
+			if (ButtonContainsPoint(button, x, y)) {
 				PressButton(button, stick, fingerId);
 				return; // Process only the first button found at coordinates
 			}
@@ -833,7 +955,7 @@ namespace casioemu {
 		// SDL_Log("ReleaseAt: x %d, y %d, fingerId %lld", x, y, fingerId);
 		bool button_effectively_released = false;
 		for (auto& button : buttons) {
-			if (button.rect.x <= x && button.rect.y <= y && button.rect.x + button.rect.w > x && button.rect.y + button.rect.h > y) {
+			if (ButtonContainsPoint(button, x, y)) {
 				// To release, the button must be currently pressed by THIS finger and NOT be stuck.
 				// If it's stuck, a finger_up event for the finger that stuck it does NOT release it.
 				// It would require a subsequent "stick" press on it to toggle the stuck state.

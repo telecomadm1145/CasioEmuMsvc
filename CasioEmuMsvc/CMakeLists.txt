@@ -23,6 +23,7 @@ set(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 set(THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
 set(ASMJIT_DIR "${THIRD_PARTY_DIR}/asmjit")
 set(MINIZ_DIR "${THIRD_PARTY_DIR}/miniz")
+set(TINYXML2_DIR "${THIRD_PARTY_DIR}/tinyxml2")
 set(TEMP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/temp")
 set(GUI_FONT_SUBSET "${TEMP_DIR}/generated/fonts/CasioEmuGuiCJKSubset.otf")
 file(GLOB GUI_FONT_LOCALE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/locales/*.lc")
@@ -92,6 +93,7 @@ set(PROJECT_INCLUDE_DIRS
 # Use individual directories instead of all to avoid asmjit's file testing
 file(GLOB MAIN_SOURCES_ROOT "${SOURCE_DIR}/*.cpp")
 file(GLOB MAIN_SOURCES_MINIZ "${MINIZ_DIR}/*.c")
+file(GLOB MAIN_SOURCES_TINYXML2 "${TINYXML2_DIR}/*.cpp")
 file(GLOB MAIN_SOURCES_CHIPSET "${SOURCE_DIR}/Chipset/*.cpp")
 file(GLOB MAIN_SOURCES_CRASH "${SOURCE_DIR}/CrashHandler/*.cpp")
 file(GLOB MAIN_SOURCES_EXT "${SOURCE_DIR}/Ext/*.cpp" "${SOURCE_DIR}/Ext/*.mm")
@@ -117,6 +119,7 @@ if(CASIOEMU_WEB)
     set(MAIN_SOURCES
         ${MAIN_SOURCES_ROOT}
         ${MAIN_SOURCES_MINIZ}
+        ${MAIN_SOURCES_TINYXML2}
         ${MAIN_SOURCES_CHIPSET}
         ${MAIN_SOURCES_EXT}
         ${MAIN_SOURCES_EXT_CAM}
@@ -152,6 +155,7 @@ else()
     set(MAIN_SOURCES
         ${MAIN_SOURCES_ROOT}
         ${MAIN_SOURCES_MINIZ}
+        ${MAIN_SOURCES_TINYXML2}
         ${MAIN_SOURCES_CHIPSET}
         ${MAIN_SOURCES_CRASH}
         ${MAIN_SOURCES_EXT}
@@ -308,7 +312,7 @@ if(CASIOEMU_WEB)
             -sDISABLE_EXCEPTION_CATCHING=0
             -sUSE_SDL=2
             -sUSE_SDL_IMAGE=2
-            "SHELL:-sSDL2_IMAGE_FORMATS=[\"png\"]"
+            "SHELL:-sSDL2_IMAGE_FORMATS=[\"png\",\"svg\"]"
             -sALLOW_MEMORY_GROWTH=1
             -sINITIAL_MEMORY=134217728
             -sEXIT_RUNTIME=0

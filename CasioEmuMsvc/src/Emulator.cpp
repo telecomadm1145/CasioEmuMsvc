@@ -5,9 +5,11 @@
 #include <SDL.h>
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -26,6 +28,42 @@ namespace casioemu {
 			default:
 				return 2048 * 1024 * 2;
 			}
+		}
+
+		bool HasSvgExtension(const std::string& path) {
+			const auto ext = std::filesystem::path(path).extension().string();
+			if (ext.size() != 4)
+				return false;
+			return (ext[0] == '.') &&
+				(ext[1] == 's' || ext[1] == 'S') &&
+				(ext[2] == 'v' || ext[2] == 'V') &&
+				(ext[3] == 'g' || ext[3] == 'G');
+		}
+
+		std::string ReadBinaryFile(const std::string& path) {
+			std::ifstream stream(path, std::ios::binary);
+			if (!stream)
+				return {};
+			return {std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{}};
+		}
+
+		SDL_Texture* CreateSizedSvgTexture(SDL_Renderer* renderer, const std::string& svg, int width, int height) {
+			if (!renderer || svg.empty() || width <= 0 || height <= 0)
+				return nullptr;
+			SDL_RWops* rw = SDL_RWFromConstMem(svg.data(), static_cast<int>(svg.size()));
+			if (!rw)
+				return nullptr;
+			SDL_Surface* surface = IMG_LoadSizedSVG_RW(rw, width, height);
+			SDL_RWclose(rw);
+			if (!surface) {
+				SDL_Log("[Emulator][Warn] IMG_LoadSizedSVG_RW failed for interface SVG: %s", IMG_GetError());
+				return nullptr;
+			}
+			SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+			SDL_FreeSurface(surface);
+			if (texture)
+				SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+			return texture;
 		}
 	}
 
@@ -100,11 +138,16 @@ namespace casioemu {
 			SDL_WINDOW_SHOWN | (SDL_WINDOW_RESIZABLE));
 		if (!window)
 			PANIC("SDL_CreateWindow failed: %s\n", SDL_GetError());
-		renderer = SDL_CreateRenderer(window, -1, 0);
+		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+		renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
 		if (!renderer)
 			PANIC("SDL_CreateRenderer failed: %s\n", SDL_GetError());
 
-		interface_surface = IMG_Load(GetModelFilePath(ModelDefinition.interface_path).c_str());
+		const auto interface_path = GetModelFilePath(ModelDefinition.interface_path);
+		interface_is_svg = HasSvgExtension(interface_path);
+		if (interface_is_svg)
+			interface_svg_data = ReadBinaryFile(interface_path);
+		interface_surface = IMG_Load(interface_path.c_str());
 		if (!interface_surface)
 			PANIC("IMG_Load failed: %s\n", IMG_GetError());
 		interface_texture = SDL_CreateTextureFromSurface(renderer, interface_surface);
@@ -246,11 +289,16 @@ namespace casioemu {
 				SDL_WINDOW_SHOWN | (SDL_WINDOW_RESIZABLE));
 			if (!window)
 				PANIC("SDL_CreateWindow failed: %s\n", SDL_GetError());
-			renderer = SDL_CreateRenderer(window, -1, 0);
+			SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+			renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
 			if (!renderer)
 				PANIC("SDL_CreateRenderer failed: %s\n", SDL_GetError());
 
-			interface_surface = IMG_Load(GetModelFilePath(ModelDefinition.interface_path).c_str());
+			const auto interface_path = GetModelFilePath(ModelDefinition.interface_path);
+			interface_is_svg = HasSvgExtension(interface_path);
+			if (interface_is_svg)
+				interface_svg_data = ReadBinaryFile(interface_path);
+			interface_surface = IMG_Load(interface_path.c_str());
 			if (!interface_surface)
 				PANIC("IMG_Load failed: %s\n", IMG_GetError());
 			interface_texture = SDL_CreateTextureFromSurface(renderer, interface_surface);
@@ -328,7 +376,11 @@ namespace casioemu {
 
 			// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
+			if (scaled_interface_texture)
+				SDL_DestroyTexture(scaled_interface_texture);
 			SDL_DestroyTexture(interface_texture);
+			if (interface_surface)
+				SDL_FreeSurface(interface_surface);
 			SDL_DestroyRenderer(renderer);
 			SDL_DestroyWindow(window);
 		}
@@ -401,10 +453,9 @@ namespace casioemu {
 	}
 
 	void Emulator::LoadModelDefition() {
-		std::ifstream ifs(GetModelFilePath("config.bin"), std::ios::in | std::ios::binary);
-		if (!ifs.good())
-			PANIC("Failed to open config.bin");
-		ModelDefinition.Read(ifs);
+		std::string error;
+		if (!LoadModelInfoFromFolder(std::filesystem::path(model_path), ModelDefinition, nullptr, &error))
+			PANIC("Failed to load model configuration: %s", error.c_str());
 	}
 
 	std::string Emulator::GetModelFilePath(std::string relative_path) {
@@ -434,6 +485,49 @@ namespace casioemu {
 			return;
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
+		const bool webcalc_svg_interface = interface_is_svg && ModelDefinition.extra.find("webcalc_board") != ModelDefinition.extra.end();
+		if (webcalc_svg_interface) {
+			int w, h;
+			SDL_GetWindowSize(window, &w, &h);
+			auto wf = (double)w / interface_background.dest.w;
+			auto hf = (double)h / interface_background.dest.h;
+			auto uf = std::min(wf, hf);
+			SDL_Rect dest{};
+			dest.w = std::max(1, static_cast<int>(interface_background.dest.w * uf));
+			dest.h = std::max(1, static_cast<int>(interface_background.dest.h * uf));
+			dest.x = (w - dest.w) / 2;
+			dest.y = (h - dest.h) / 2;
+
+			if (!scaled_interface_texture || scaled_interface_texture_w != dest.w || scaled_interface_texture_h != dest.h) {
+				if (scaled_interface_texture)
+					SDL_DestroyTexture(scaled_interface_texture);
+				scaled_interface_texture = CreateSizedSvgTexture(renderer, interface_svg_data, dest.w, dest.h);
+				scaled_interface_texture_w = dest.w;
+				scaled_interface_texture_h = dest.h;
+			}
+			if (scaled_interface_texture) {
+				SDL_SetRenderTarget(renderer, nullptr);
+				SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+				SDL_RenderClear(renderer);
+				SDL_SetTextureColorMod(scaled_interface_texture, 255, 255, 255);
+				SDL_SetTextureAlphaMod(scaled_interface_texture, 255);
+				SDL_RenderCopy(renderer, scaled_interface_texture, nullptr, &dest);
+
+				SDL_Rect old_viewport{};
+				float old_scale_x = 1.0f, old_scale_y = 1.0f;
+				SDL_RenderGetViewport(renderer, &old_viewport);
+				SDL_RenderGetScale(renderer, &old_scale_x, &old_scale_y);
+				SDL_RenderSetViewport(renderer, &dest);
+				SDL_RenderSetScale(renderer, static_cast<float>(uf), static_cast<float>(uf));
+				chipset.Frame();
+				SDL_RenderSetScale(renderer, old_scale_x, old_scale_y);
+				SDL_RenderSetViewport(renderer, &old_viewport);
+				emu_rect = dest;
+				Repaint();
+				return;
+			}
+		}
+
 		// create texture `tx` with the same format as `interface_texture`
 		Uint32 format;
 		SDL_QueryTexture(interface_texture, &format, nullptr, nullptr, nullptr);
@@ -453,14 +547,16 @@ namespace casioemu {
 		SDL_SetRenderTarget(renderer, nullptr);
 		int w, h;
 		SDL_GetWindowSize(window, &w, &h);
-		auto wf = (double)w / interface_background.src.w;
-		auto hf = (double)h / interface_background.src.h;
+		auto wf = (double)w / interface_background.dest.w;
+		auto hf = (double)h / interface_background.dest.h;
 		auto uf = std::min(wf, hf);
 		SDL_Rect dest{};
-		dest.w = interface_background.src.w * uf;
-		dest.h = interface_background.src.h * uf;
+		dest.w = interface_background.dest.w * uf;
+		dest.h = interface_background.dest.h * uf;
 		dest.x = (w - dest.w) / 2;
 		dest.y = (h - dest.h) / 2; // Centre it
+		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+		SDL_RenderClear(renderer);
 		SDL_RenderCopy(renderer, tx, nullptr, &dest);
 		emu_rect = dest;
 		SDL_DestroyTexture(tx);

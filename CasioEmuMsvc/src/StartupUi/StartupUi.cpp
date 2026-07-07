@@ -133,15 +133,10 @@ class ModelEditor : public UIWindow {
 public:
 	ModelEditor(std::filesystem::path path) : UIWindow("Model Editor##114514"), pth(path) {
 		try {
-			std::filesystem::path configPath = path / "config.bin";
-			std::error_code ec;
-			if (!std::filesystem::exists(configPath) || !std::filesystem::is_regular_file(configPath, ec)) {
-				throw std::runtime_error("Cannot open config.bin (not found or is a directory).");
+			std::string error;
+			if (!casioemu::LoadModelInfoFromFolder(path, mi, nullptr, &error)) {
+				throw std::runtime_error(error);
 			}
-			std::ifstream ifs(configPath, std::ios::binary);
-			if (!ifs)
-				throw std::runtime_error("Cannot open config.bin.");
-			Binary::Read(ifs, mi);
 			v = mi.csr_mask;
 			k = mi.pd_value;
 			strncpy(path1, mi.interface_path.c_str(), sizeof(path1) - 1);
@@ -391,10 +386,7 @@ public:
 
 			ImGui::Separator();
 			if (ImGui::Button("Button.Save"_lc)) {
-				std::ofstream ifs(pth / "config.bin", std::ios::binary);
-				if (!ifs)
-					PANIC("Cannot open.");
-				Binary::Write(ifs, mi);
+				casioemu::SaveModelInfoJson(pth, mi);
 				this->open = false;
 			}
 		}
@@ -695,21 +687,13 @@ namespace casioemu {
 					if (dir.is_directory()) {
 						try {
 							printf("[StartupUI][Info] Checking %s\n", dir.path().string().c_str());
-							auto config = dir.path() / "config.bin";
 							std::error_code ec;
-							if (!std::filesystem::exists(config) || !std::filesystem::is_regular_file(config, ec)) {
-								printf("[StartupUI][Info] Unable to open %s\n", config.string().c_str());
-								continue;
-							}
-
-							std::ifstream ifs(config, std::ios::in | std::ios::binary);
-							if (!ifs) {
-								printf("[StartupUI][Info] Unable to open %s\n", config.string().c_str());
-								continue;
-							}
+							std::string load_error;
 							ModelInfo mi{};
-							Binary::Read(ifs, mi);
-							ifs.close();
+							if (!LoadModelInfoFromFolder(dir.path(), mi, nullptr, &load_error)) {
+								printf("[StartupUI][Info] Unable to load model configuration for %s: %s\n", dir.path().string().c_str(), load_error.c_str());
+								continue;
+							}
 							Model mod{};
 							mod.path = dir;
 							mod.name = mi.model_name;
@@ -755,6 +739,10 @@ namespace casioemu {
 										if (ifs3)
 											flash = {std::istreambuf_iterator<char>{ifs3.rdbuf()}, std::istreambuf_iterator<char>{}};
 									}
+								}
+								else if (mi.hardware_id == HW_FX_5800P && rom.size() > 0x20000) {
+									flash.assign(rom.begin() + 0x20000, rom.end());
+									rom.resize(0x20000);
 								}
 								auto ri = rom_info(rom, flash, mi.real_hardware);
 								if (ri.type != 0) {

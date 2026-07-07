@@ -533,11 +533,13 @@ public:
 		if (!ModelInfo.flash_path.empty())
 			WriteFile(pth / ModelInfo.flash_path, FlashData);
 		WriteFile(pth / ModelInfo.interface_path, InterfaceData);
-		WriteFile(pth / "config.bin", ModelInfo);
+		SaveModelInfoJson(pth, ModelInfo);
 	}
 
 	void Load(std::filesystem::path pth) {
-		ReadFile(pth / "config.bin", ModelInfo);
+		std::string error;
+		if (!LoadModelInfoFromFolder(pth, ModelInfo, nullptr, &error))
+			throw std::runtime_error(error);
 		ReadFile(pth / ModelInfo.rom_path, RomData);
 		if (!ModelInfo.flash_path.empty())
 			ReadFile(pth / ModelInfo.flash_path, FlashData);

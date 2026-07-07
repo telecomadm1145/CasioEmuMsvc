@@ -31,6 +31,7 @@
 #include "Models.h"
 #include "PopUpDisplay.h"
 #include "Ui.hpp"
+#include <SDL_image.h>
 #include <algorithm> // for std::min, std::max
 #include <array>
 #include <climits>
@@ -129,6 +130,63 @@ inline void fillRandomData(unsigned char* buf, size_t size) {
 #pragma warning(disable : 4244)
 
 namespace casioemu {
+	SDL_Texture* CreateSvgSpriteTexture(SDL_Renderer* renderer, const SpriteInfo& sprite) {
+		if (!renderer || sprite.svg_shape.empty())
+			return nullptr;
+		SDL_RWops* rw = SDL_RWFromConstMem(sprite.svg_shape.data(), static_cast<int>(sprite.svg_shape.size()));
+		if (!rw) {
+			SDL_Log("[Screen][Warn] SDL_RWFromConstMem failed for SVG sprite: %s", SDL_GetError());
+			return nullptr;
+		}
+		SDL_Surface* surface = IMG_Load_RW(rw, 1);
+		if (!surface) {
+			SDL_Log("[Screen][Warn] IMG_Load_RW failed for SVG sprite: %s", IMG_GetError());
+			return nullptr;
+		}
+		SDL_Surface* converted = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_RGBA32, 0);
+		SDL_FreeSurface(surface);
+		if (!converted) {
+			SDL_Log("[Screen][Warn] SDL_ConvertSurfaceFormat failed for SVG sprite: %s", SDL_GetError());
+			return nullptr;
+		}
+		SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, converted);
+		SDL_FreeSurface(converted);
+		if (!texture) {
+			SDL_Log("[Screen][Warn] SDL_CreateTextureFromSurface failed for SVG sprite: %s", SDL_GetError());
+			return nullptr;
+		}
+		SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+		return texture;
+	}
+
+	void RenderModelSprite(SDL_Renderer* renderer, SDL_Texture* interface_texture, SDL_Texture* svg_texture, const SpriteInfo& sprite, const ColourInfo& ink_colour, uint8_t alpha) {
+		SDL_Rect dest = sprite.dest;
+		if (svg_texture) {
+			SDL_SetTextureColorMod(svg_texture, ink_colour.r, ink_colour.g, ink_colour.b);
+			SDL_SetTextureAlphaMod(svg_texture, alpha);
+			SDL_RenderCopy(renderer, svg_texture, nullptr, &dest);
+			SDL_SetTextureAlphaMod(svg_texture, 255);
+			SDL_SetTextureColorMod(svg_texture, 255, 255, 255);
+			return;
+		}
+		SDL_SetTextureAlphaMod(interface_texture, alpha);
+		SDL_Rect src = sprite.src;
+		SDL_RenderCopy(renderer, interface_texture, &src, &dest);
+	}
+
+	void AddSolidQuad(std::vector<SDL_Vertex>& vertices, float x0, float y0, float x1, float y1, SDL_Color colour) {
+		const SDL_Vertex v0{{x0, y0}, colour, {0.0f, 0.0f}};
+		const SDL_Vertex v1{{x1, y0}, colour, {0.0f, 0.0f}};
+		const SDL_Vertex v2{{x1, y1}, colour, {0.0f, 0.0f}};
+		const SDL_Vertex v3{{x0, y1}, colour, {0.0f, 0.0f}};
+		vertices.push_back(v0);
+		vertices.push_back(v1);
+		vertices.push_back(v2);
+		vertices.push_back(v0);
+		vertices.push_back(v2);
+		vertices.push_back(v3);
+	}
+
     class SolarIIScreen : public Peripheral, public IScreenFrameProvider {
         struct StatusBit {
             uint8_t offset;
@@ -277,6 +335,7 @@ namespace casioemu {
         std::array<uint8_t, STATUS_BITS.size()> status_alpha{};
         std::array<SpriteInfo, STATUS_BITS.size()> status_sprite_info{};
         std::array<bool, STATUS_BITS.size()> status_sprite_present{};
+        std::array<SDL_Texture*, STATUS_BITS.size()> status_svg_textures{};
         std::array<uint8_t, DISPLAY_STORAGE_LEN> display_data{};
         MMURegion region_display_control{}, region_display{};
         MMURegion region_range{}, region_mode{}, region_contrast{}, region_brightness{}, region_refresh_rate{};
@@ -309,18 +368,34 @@ namespace casioemu {
 
     public:
         using Peripheral::Peripheral;
+		~SolarIIScreen() override {
+			for (auto*& texture : status_svg_textures) {
+				if (texture) {
+					SDL_DestroyTexture(texture);
+					texture = nullptr;
+				}
+			}
+		}
 
         void Initialise() override {
             renderer = emulator.GetRenderer();
             interface_texture = emulator.GetInterfaceTexture();
             ink_colour = emulator.ModelDefinition.ink_color;
             status_sprite_present.fill(false);
+			for (auto*& texture : status_svg_textures) {
+				if (texture) {
+					SDL_DestroyTexture(texture);
+					texture = nullptr;
+				}
+			}
+            status_svg_textures.fill(nullptr);
             for (size_t i = 0; i < STATUS_SPRITE_NAMES.size(); ++i) {
                 auto iter = emulator.ModelDefinition.sprites.find(STATUS_SPRITE_NAMES[i]);
                 if (iter == emulator.ModelDefinition.sprites.end())
                     continue;
                 status_sprite_info[i] = iter->second;
                 status_sprite_present[i] = true;
+                status_svg_textures[i] = CreateSvgSpriteTexture(renderer, status_sprite_info[i]);
             }
 
             region_display_control.Setup(0xF800, 1, "SolarIIScreen/Control", &display_control, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
@@ -428,10 +503,7 @@ namespace casioemu {
             for (size_t i = 0; i < status_alpha.size(); ++i) {
                 if (!status_sprite_present[i])
                     continue;
-                SDL_SetTextureAlphaMod(interface_texture, status_alpha[i]);
-                SDL_Rect src = status_sprite_info[i].src;
-                SDL_Rect dest = status_sprite_info[i].dest;
-                SDL_RenderCopy(renderer, interface_texture, &src, &dest);
+                RenderModelSprite(renderer, interface_texture, status_svg_textures[i], status_sprite_info[i], ink_colour, status_alpha[i]);
             }
             SDL_SetTextureAlphaMod(interface_texture, 255);
             SDL_SetTextureColorMod(interface_texture, 255, 255, 255);
@@ -505,6 +577,7 @@ namespace casioemu {
 		float screen_ink_alpha[66 * 192]{};
 		static const SpriteBitmap sprite_bitmap[];
 		std::vector<SpriteInfo> sprite_info;
+		std::vector<SDL_Texture*> sprite_svg_textures;
 		ColourInfo ink_colour{};
 
 		bool inited = 0;
@@ -512,6 +585,7 @@ namespace casioemu {
 		int status_ink_alpha_on = 255;
 		int status_ink_alpha_off = 0;
 		std::array<SpriteInfo, 2> classwiz_graph_sprite_info{};
+		std::array<SDL_Texture*, 2> classwiz_graph_svg_textures{};
 
 		bool HasSprite(const char* name) const {
 			return emulator.ModelDefinition.sprites.find(name) != emulator.ModelDefinition.sprites.end();
@@ -621,6 +695,18 @@ namespace casioemu {
 #endif
 		}
 		~Screen() {
+			for (auto*& texture : sprite_svg_textures) {
+				if (texture) {
+					SDL_DestroyTexture(texture);
+					texture = nullptr;
+				}
+			}
+			for (auto*& texture : classwiz_graph_svg_textures) {
+				if (texture) {
+					SDL_DestroyTexture(texture);
+					texture = nullptr;
+				}
+			}
 			if (screen_buffer)
 				delete[] screen_buffer;
 			if (screen_buffer1)
@@ -1279,11 +1365,28 @@ namespace casioemu {
 			renderer = emulator.GetRenderer();
 			interface_texture = emulator.GetInterfaceTexture();
 			sprite_info.resize(SPR_MAX);
-			for (int ix = 0; ix != SPR_MAX; ++ix)
+			for (auto*& texture : sprite_svg_textures) {
+				if (texture) {
+					SDL_DestroyTexture(texture);
+					texture = nullptr;
+				}
+			}
+			for (auto*& texture : classwiz_graph_svg_textures) {
+				if (texture) {
+					SDL_DestroyTexture(texture);
+					texture = nullptr;
+				}
+			}
+			sprite_svg_textures.assign(SPR_MAX, nullptr);
+			for (int ix = 0; ix != SPR_MAX; ++ix) {
 				sprite_info[ix] = emulator.ModelDefinition.sprites[sprite_bitmap[ix].name];
+				sprite_svg_textures[ix] = CreateSvgSpriteTexture(renderer, sprite_info[ix]);
+			}
 			if (HasClassWizGraphStatusSprites()) {
 				classwiz_graph_sprite_info[0] = emulator.ModelDefinition.sprites["rsd_fx"];
 				classwiz_graph_sprite_info[1] = emulator.ModelDefinition.sprites["rsd_gx"];
+				classwiz_graph_svg_textures[0] = CreateSvgSpriteTexture(renderer, classwiz_graph_sprite_info[0]);
+				classwiz_graph_svg_textures[1] = CreateSvgSpriteTexture(renderer, classwiz_graph_sprite_info[1]);
 			}
 
 			ink_colour = emulator.ModelDefinition.ink_color;
@@ -2514,11 +2617,9 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		// Set texture transparency and copy sprites as before
 		for (int ix = 1; ix != SPR_MAX; ++ix) {
 			const int alpha_index = HasClassWizGraphStatusLogic() ? ClassWizGraphStatusIndexFromCommonIndex(x) : x;
-			SDL_SetTextureAlphaMod(interface_texture, Uint8(std::clamp((int)screen_ink_alpha[alpha_index], 0, 255)));
+			const uint8_t alpha = Uint8(std::clamp((int)screen_ink_alpha[alpha_index], 0, 255));
 			x++;
-			SDL_Rect tmp1 = sprite_info[ix].src;
-			SDL_Rect tmp2 = sprite_info[ix].dest;
-			SDL_RenderCopy(renderer, interface_texture, &tmp1, &tmp2);
+			RenderModelSprite(renderer, interface_texture, ix < static_cast<int>(sprite_svg_textures.size()) ? sprite_svg_textures[ix] : nullptr, sprite_info[ix], ink_colour, alpha);
 			// Store the sprite rectangle for later
 			spriteRects.push_back(sprite_info[ix].dest);
 		}
@@ -2527,42 +2628,54 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			static constexpr int GX_STATUS_INDEX = 13;
 			static constexpr int GRAPH_STATUS_INDEXES[] = {FX_STATUS_INDEX, GX_STATUS_INDEX};
 			for (int ix = 0; ix != 2; ++ix) {
-				SDL_SetTextureAlphaMod(interface_texture, Uint8(std::clamp((int)screen_ink_alpha[GRAPH_STATUS_INDEXES[ix]], 0, 255)));
-				SDL_Rect tmp1 = classwiz_graph_sprite_info[ix].src;
-				SDL_Rect tmp2 = classwiz_graph_sprite_info[ix].dest;
-				SDL_RenderCopy(renderer, interface_texture, &tmp1, &tmp2);
+				const uint8_t alpha = Uint8(std::clamp((int)screen_ink_alpha[GRAPH_STATUS_INDEXES[ix]], 0, 255));
+				RenderModelSprite(renderer, interface_texture, classwiz_graph_svg_textures[ix], classwiz_graph_sprite_info[ix], ink_colour, alpha);
 				spriteRects.push_back(classwiz_graph_sprite_info[ix].dest);
 			}
 		}
 
 		static constexpr auto SPR_PIXEL = 0;
 		SDL_Rect dest = Screen<hardware_id>::sprite_info[SPR_PIXEL].dest;
-		for (int iy2 = 1; iy2 != (N_ROW + 1); ++iy2) {
-			int x = 0;
-			dest.x = sprite_info[SPR_PIXEL].dest.x;
-			dest.y = sprite_info[SPR_PIXEL].dest.y + (iy2 - 1) * sprite_info[SPR_PIXEL].src.h;
-			for (int ix = 0; ix != ROW_SIZE_DISP; ++ix) {
-				for (uint8_t mask = 0x80; mask; mask >>= 1, dest.x += sprite_info[SPR_PIXEL].src.w) {
-					// Calculate pixel-specific colors and modify texture
-					if (screen_ink_alpha[x + iy2 * 192] > 255) {
-						SDL_SetTextureColorMod(interface_texture,
-							std::max(0, ink_colour.r - (int)(screen_ink_alpha[x + iy2 * 192] - 255)),
-							std::max(0, ink_colour.g - (int)((screen_ink_alpha[x + iy2 * 192] - 255) * 0.8)),
-							std::max(0, ink_colour.b - (int)((screen_ink_alpha[x + iy2 * 192] - 255) * 0.1)));
-						SDL_SetTextureAlphaMod(interface_texture, 255);
-					}
-					else {
-						SDL_SetTextureColorMod(interface_texture, ink_colour.r, ink_colour.g, ink_colour.b);
-						SDL_SetTextureAlphaMod(interface_texture, Uint8(std::clamp((int)screen_ink_alpha[x + iy2 * 192], 0, 255)));
-					}
-					x++;
-					SDL_Rect tmp1 = sprite_info[SPR_PIXEL].src;
-					SDL_RenderCopy(renderer, interface_texture, &tmp1, &dest);
-					// Store the pixel rectangle for later
-					pixelRects.push_back(dest);
+		const bool webcalc_screen_slot = emulator.ModelDefinition.extra.find("webcalc_screen_slot") != emulator.ModelDefinition.extra.end();
+		const int logical_width = ROW_SIZE_DISP * 8;
+		const int logical_height = N_ROW;
+		SDL_Rect lcd_dest = dest;
+		if (!webcalc_screen_slot) {
+			lcd_dest.w = std::max(1, (logical_width - 1) * sprite_info[SPR_PIXEL].src.w + sprite_info[SPR_PIXEL].dest.w);
+			lcd_dest.h = std::max(1, (logical_height - 1) * sprite_info[SPR_PIXEL].src.h + sprite_info[SPR_PIXEL].dest.h);
+		}
+
+		std::vector<SDL_Vertex> pixel_vertices;
+		pixel_vertices.reserve(static_cast<size_t>(logical_width) * static_cast<size_t>(logical_height) * 6);
+		const float cell_w = static_cast<float>(lcd_dest.w) / static_cast<float>(logical_width);
+		const float cell_h = static_cast<float>(lcd_dest.h) / static_cast<float>(logical_height);
+		const float origin_x = static_cast<float>(lcd_dest.x);
+		const float origin_y = static_cast<float>(lcd_dest.y);
+		for (int y = 0; y != logical_height; ++y) {
+			const int source_y = y + 1;
+			for (int x = 0; x != logical_width; ++x) {
+				const float alpha_value = screen_ink_alpha[x + source_y * 192];
+				if (alpha_value <= 0.0f)
+					continue;
+				SDL_Color colour{
+					static_cast<Uint8>(ink_colour.r),
+					static_cast<Uint8>(ink_colour.g),
+					static_cast<Uint8>(ink_colour.b),
+					Uint8(std::clamp((int)alpha_value, 0, 255))};
+				if (alpha_value > 255) {
+					colour.r = static_cast<uint8_t>(std::max(0, ink_colour.r - (int)(alpha_value - 255)));
+					colour.g = static_cast<uint8_t>(std::max(0, ink_colour.g - (int)((alpha_value - 255) * 0.8)));
+					colour.b = static_cast<uint8_t>(std::max(0, ink_colour.b - (int)((alpha_value - 255) * 0.1)));
+					colour.a = 255;
 				}
+				const float x0 = origin_x + static_cast<float>(x) * cell_w;
+				const float y0 = origin_y + static_cast<float>(y) * cell_h;
+				AddSolidQuad(pixel_vertices, x0, y0, x0 + cell_w, y0 + cell_h, colour);
 			}
 		}
+		if (!pixel_vertices.empty())
+			SDL_RenderGeometry(renderer, nullptr, pixel_vertices.data(), static_cast<int>(pixel_vertices.size()), nullptr, 0);
+		pixelRects.push_back(lcd_dest);
 
 #ifndef __EMSCRIPTEN__
 		// If screenshot is requested, capture only the rendered screen region
@@ -2601,13 +2714,29 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		static ScreenMirror* mirror = nullptr;
 		if (emulator.mirroring_requested.load()) {
 			auto p = GetSize(spriteRects, pixelRects);
-			auto sm = new ScreenMirror(p.first, p.second);
-			sm->create();
-			mirror = sm;
+			if (mirror) {
+				delete mirror;
+				mirror = nullptr;
+			}
+			if (p.first > 0 && p.second > 0) {
+				auto sm = new ScreenMirror(p.first, p.second);
+				if (sm->create()) {
+					mirror = sm;
+				}
+				else {
+					delete sm;
+				}
+			}
 			emulator.mirroring_requested.store(false);
 		}
 		if (mirror) {
-			UpdatePreview(renderer, mirror, spriteRects, pixelRects);
+			if (mirror->handleEvents()) {
+				UpdatePreview(renderer, mirror, spriteRects, pixelRects);
+			}
+			else {
+				delete mirror;
+				mirror = nullptr;
+			}
 		}
 #endif
 	}
