@@ -39,10 +39,12 @@
 #include <cstdio>
 #include <ctime> // for std::time
 #include <filesystem>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 #if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
@@ -130,17 +132,18 @@ inline void fillRandomData(unsigned char* buf, size_t size) {
 #pragma warning(disable : 4244)
 
 namespace casioemu {
-	SDL_Texture* CreateSvgSpriteTexture(SDL_Renderer* renderer, const SpriteInfo& sprite) {
-		if (!renderer || sprite.svg_shape.empty())
+	SDL_Texture* CreateSvgSpriteTexture(SDL_Renderer* renderer, const SpriteInfo& sprite, int width, int height) {
+		if (!renderer || sprite.svg_shape.empty() || width <= 0 || height <= 0)
 			return nullptr;
 		SDL_RWops* rw = SDL_RWFromConstMem(sprite.svg_shape.data(), static_cast<int>(sprite.svg_shape.size()));
 		if (!rw) {
 			SDL_Log("[Screen][Warn] SDL_RWFromConstMem failed for SVG sprite: %s", SDL_GetError());
 			return nullptr;
 		}
-		SDL_Surface* surface = IMG_Load_RW(rw, 1);
+		SDL_Surface* surface = IMG_LoadSizedSVG_RW(rw, width, height);
+		SDL_RWclose(rw);
 		if (!surface) {
-			SDL_Log("[Screen][Warn] IMG_Load_RW failed for SVG sprite: %s", IMG_GetError());
+			SDL_Log("[Screen][Warn] IMG_LoadSizedSVG_RW failed for SVG sprite: %s", IMG_GetError());
 			return nullptr;
 		}
 		SDL_Surface* converted = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_RGBA32, 0);
@@ -159,14 +162,94 @@ namespace casioemu {
 		return texture;
 	}
 
-	void RenderModelSprite(SDL_Renderer* renderer, SDL_Texture* interface_texture, SDL_Texture* svg_texture, const SpriteInfo& sprite, const ColourInfo& ink_colour, uint8_t alpha) {
+	class SvgSpriteTextureCache {
+	public:
+		SvgSpriteTextureCache() = default;
+		SvgSpriteTextureCache(const SvgSpriteTextureCache&) = delete;
+		SvgSpriteTextureCache& operator=(const SvgSpriteTextureCache&) = delete;
+		SvgSpriteTextureCache(SvgSpriteTextureCache&& other) noexcept {
+			MoveFrom(other);
+		}
+		SvgSpriteTextureCache& operator=(SvgSpriteTextureCache&& other) noexcept {
+			if (this != &other) {
+				Reset();
+				MoveFrom(other);
+			}
+			return *this;
+		}
+		~SvgSpriteTextureCache() {
+			Reset();
+		}
+
+		void Reset() {
+			if (texture) {
+				SDL_DestroyTexture(texture);
+				texture = nullptr;
+			}
+			width = 0;
+			height = 0;
+			shape_size = 0;
+			shape_hash = 0;
+		}
+
+		SDL_Texture* Get(SDL_Renderer* renderer, const SpriteInfo& sprite, int requested_width, int requested_height) {
+			if (sprite.svg_shape.empty())
+				return nullptr;
+			const int target_width = std::max(1, requested_width);
+			const int target_height = std::max(1, requested_height);
+			const auto target_shape_size = sprite.svg_shape.size();
+			const auto target_shape_hash = std::hash<std::string>{}(sprite.svg_shape);
+			if (!texture || width != target_width || height != target_height ||
+				shape_size != target_shape_size || shape_hash != target_shape_hash) {
+				Reset();
+				texture = CreateSvgSpriteTexture(renderer, sprite, target_width, target_height);
+				width = texture ? target_width : 0;
+				height = texture ? target_height : 0;
+				shape_size = texture ? target_shape_size : 0;
+				shape_hash = texture ? target_shape_hash : 0;
+			}
+			return texture;
+		}
+
+	private:
+		void MoveFrom(SvgSpriteTextureCache& other) noexcept {
+			texture = std::exchange(other.texture, nullptr);
+			width = std::exchange(other.width, 0);
+			height = std::exchange(other.height, 0);
+			shape_size = std::exchange(other.shape_size, 0);
+			shape_hash = std::exchange(other.shape_hash, 0);
+		}
+
+		SDL_Texture* texture = nullptr;
+		int width = 0;
+		int height = 0;
+		size_t shape_size = 0;
+		size_t shape_hash = 0;
+	};
+
+	std::pair<int, int> CurrentRenderTargetSpriteSize(SDL_Renderer* renderer, const SDL_Rect& dest) {
+		float scale_x = 1.0f;
+		float scale_y = 1.0f;
+		if (renderer)
+			SDL_RenderGetScale(renderer, &scale_x, &scale_y);
+		return {
+			std::max(1, static_cast<int>(std::lround(std::abs(static_cast<double>(dest.w) * scale_x)))),
+			std::max(1, static_cast<int>(std::lround(std::abs(static_cast<double>(dest.h) * scale_y))))};
+	}
+
+	void RenderModelSprite(SDL_Renderer* renderer, SDL_Texture* interface_texture, SvgSpriteTextureCache* svg_texture, const SpriteInfo& sprite, const ColourInfo& ink_colour, uint8_t alpha) {
 		SDL_Rect dest = sprite.dest;
+		SDL_Texture* texture = nullptr;
 		if (svg_texture) {
-			SDL_SetTextureColorMod(svg_texture, ink_colour.r, ink_colour.g, ink_colour.b);
-			SDL_SetTextureAlphaMod(svg_texture, alpha);
-			SDL_RenderCopy(renderer, svg_texture, nullptr, &dest);
-			SDL_SetTextureAlphaMod(svg_texture, 255);
-			SDL_SetTextureColorMod(svg_texture, 255, 255, 255);
+			auto [target_width, target_height] = CurrentRenderTargetSpriteSize(renderer, dest);
+			texture = svg_texture->Get(renderer, sprite, target_width, target_height);
+		}
+		if (texture) {
+			SDL_SetTextureColorMod(texture, ink_colour.r, ink_colour.g, ink_colour.b);
+			SDL_SetTextureAlphaMod(texture, alpha);
+			SDL_RenderCopy(renderer, texture, nullptr, &dest);
+			SDL_SetTextureAlphaMod(texture, 255);
+			SDL_SetTextureColorMod(texture, 255, 255, 255);
 			return;
 		}
 		SDL_SetTextureAlphaMod(interface_texture, alpha);
@@ -335,7 +418,7 @@ namespace casioemu {
         std::array<uint8_t, STATUS_BITS.size()> status_alpha{};
         std::array<SpriteInfo, STATUS_BITS.size()> status_sprite_info{};
         std::array<bool, STATUS_BITS.size()> status_sprite_present{};
-        std::array<SDL_Texture*, STATUS_BITS.size()> status_svg_textures{};
+        std::array<SvgSpriteTextureCache, STATUS_BITS.size()> status_svg_textures{};
         std::array<uint8_t, DISPLAY_STORAGE_LEN> display_data{};
         MMURegion region_display_control{}, region_display{};
         MMURegion region_range{}, region_mode{}, region_contrast{}, region_brightness{}, region_refresh_rate{};
@@ -369,12 +452,8 @@ namespace casioemu {
     public:
         using Peripheral::Peripheral;
 		~SolarIIScreen() override {
-			for (auto*& texture : status_svg_textures) {
-				if (texture) {
-					SDL_DestroyTexture(texture);
-					texture = nullptr;
-				}
-			}
+			for (auto& texture : status_svg_textures)
+				texture.Reset();
 		}
 
         void Initialise() override {
@@ -382,20 +461,14 @@ namespace casioemu {
             interface_texture = emulator.GetInterfaceTexture();
             ink_colour = emulator.ModelDefinition.ink_color;
             status_sprite_present.fill(false);
-			for (auto*& texture : status_svg_textures) {
-				if (texture) {
-					SDL_DestroyTexture(texture);
-					texture = nullptr;
-				}
-			}
-            status_svg_textures.fill(nullptr);
+			for (auto& texture : status_svg_textures)
+				texture.Reset();
             for (size_t i = 0; i < STATUS_SPRITE_NAMES.size(); ++i) {
                 auto iter = emulator.ModelDefinition.sprites.find(STATUS_SPRITE_NAMES[i]);
                 if (iter == emulator.ModelDefinition.sprites.end())
                     continue;
                 status_sprite_info[i] = iter->second;
                 status_sprite_present[i] = true;
-                status_svg_textures[i] = CreateSvgSpriteTexture(renderer, status_sprite_info[i]);
             }
 
             region_display_control.Setup(0xF800, 1, "SolarIIScreen/Control", &display_control, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
@@ -503,7 +576,7 @@ namespace casioemu {
             for (size_t i = 0; i < status_alpha.size(); ++i) {
                 if (!status_sprite_present[i])
                     continue;
-                RenderModelSprite(renderer, interface_texture, status_svg_textures[i], status_sprite_info[i], ink_colour, status_alpha[i]);
+                RenderModelSprite(renderer, interface_texture, &status_svg_textures[i], status_sprite_info[i], ink_colour, status_alpha[i]);
             }
             SDL_SetTextureAlphaMod(interface_texture, 255);
             SDL_SetTextureColorMod(interface_texture, 255, 255, 255);
@@ -577,7 +650,7 @@ namespace casioemu {
 		float screen_ink_alpha[66 * 192]{};
 		static const SpriteBitmap sprite_bitmap[];
 		std::vector<SpriteInfo> sprite_info;
-		std::vector<SDL_Texture*> sprite_svg_textures;
+		std::vector<SvgSpriteTextureCache> sprite_svg_textures;
 		std::vector<uint8_t> sprite_available;
 		ColourInfo ink_colour{};
 
@@ -641,12 +714,8 @@ namespace casioemu {
 #endif
 		}
 		~Screen() {
-			for (auto*& texture : sprite_svg_textures) {
-				if (texture) {
-					SDL_DestroyTexture(texture);
-					texture = nullptr;
-				}
-			}
+			for (auto& texture : sprite_svg_textures)
+				texture.Reset();
 			if (screen_buffer)
 				delete[] screen_buffer;
 			if (screen_buffer1)
@@ -1298,13 +1367,10 @@ namespace casioemu {
 			renderer = emulator.GetRenderer();
 			interface_texture = emulator.GetInterfaceTexture();
 			sprite_info.resize(SPR_MAX);
-			for (auto*& texture : sprite_svg_textures) {
-				if (texture) {
-					SDL_DestroyTexture(texture);
-					texture = nullptr;
-				}
-			}
-			sprite_svg_textures.assign(SPR_MAX, nullptr);
+			for (auto& texture : sprite_svg_textures)
+				texture.Reset();
+			sprite_svg_textures.clear();
+			sprite_svg_textures.resize(SPR_MAX);
 			sprite_available.assign(SPR_MAX, 0);
 			for (int ix = 0; ix != SPR_MAX; ++ix) {
 				auto sprite = emulator.ModelDefinition.sprites.find(sprite_bitmap[ix].name);
@@ -1312,7 +1378,6 @@ namespace casioemu {
 					continue;
 				sprite_info[ix] = sprite->second;
 				sprite_available[ix] = 1;
-				sprite_svg_textures[ix] = CreateSvgSpriteTexture(renderer, sprite_info[ix]);
 			}
 
 			ink_colour = emulator.ModelDefinition.ink_color;
@@ -2319,7 +2384,6 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 	struct ScreenCaptureSource {
 		SDL_Texture* interface_texture = nullptr;
 		const std::vector<SpriteInfo>* sprite_info = nullptr;
-		const std::vector<SDL_Texture*>* sprite_svg_textures = nullptr;
 		const std::vector<uint8_t>* sprite_available = nullptr;
 		const ColourInfo* ink_colour = nullptr;
 		const float* screen_ink_alpha = nullptr;
@@ -2341,7 +2405,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 	};
 
 	bool BuildScreenCaptureLayout(const ScreenCaptureSource& source, int requested_scale, bool even_output, ScreenCaptureLayout& layout, const char* purpose) {
-		if (!source.interface_texture || !source.sprite_info || !source.sprite_svg_textures || !source.sprite_available ||
+		if (!source.interface_texture || !source.sprite_info || !source.sprite_available ||
 			!source.ink_colour || !source.screen_ink_alpha ||
 			source.logical_width <= 0 || source.logical_height <= 0 || source.lcd_dest.w <= 0 || source.lcd_dest.h <= 0) {
 			SDL_Log("%s failed: invalid capture source.", purpose);
@@ -2431,6 +2495,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 			SDL_RenderClear(renderer);
 
+			if (svg_texture_cache.size() < source.sprite_info->size())
+				svg_texture_cache.resize(source.sprite_info->size());
 			for (size_t ix = 1; ix < source.sprite_info->size() && ix < source.sprite_available->size(); ++ix) {
 				if (!(*source.sprite_available)[ix])
 					continue;
@@ -2438,7 +2504,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 				SpriteInfo sprite = (*source.sprite_info)[ix];
 				sprite.dest = ToModelRect(ScaleScreenshotRect(sprite.dest, layout.capture_rect, layout.sx, layout.sy));
 				const uint8_t alpha = Uint8(std::clamp(static_cast<int>(source.screen_ink_alpha[alpha_index]), 0, 255));
-				RenderModelSprite(renderer, source.interface_texture, ix < source.sprite_svg_textures->size() ? (*source.sprite_svg_textures)[ix] : nullptr, sprite, *source.ink_colour, alpha);
+				RenderModelSprite(renderer, source.interface_texture, &svg_texture_cache[ix], sprite, *source.ink_colour, alpha);
 			}
 
 			if (SDL_MUSTLOCK(surface) && SDL_LockSurface(surface) != 0) {
@@ -2489,6 +2555,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		SDL_Texture* target = nullptr;
 		int target_width = 0;
 		int target_height = 0;
+		std::vector<SvgSpriteTextureCache> svg_texture_cache;
 	};
 
 	class ScreenRecorder {
@@ -2692,7 +2759,6 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		SDL_Renderer* renderer,
 		SDL_Texture* interface_texture,
 		const std::vector<SpriteInfo>& sprite_info,
-		const std::vector<SDL_Texture*>& sprite_svg_textures,
 		const std::vector<uint8_t>& sprite_available,
 		const ColourInfo& ink_colour,
 		const float* screen_ink_alpha,
@@ -2703,7 +2769,6 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		ScreenCaptureSource source{
 			interface_texture,
 			&sprite_info,
-			&sprite_svg_textures,
 			&sprite_available,
 			&ink_colour,
 			screen_ink_alpha,
@@ -2791,7 +2856,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 				continue;
 			const int alpha_index = ix - 1;
 			const uint8_t alpha = Uint8(std::clamp((int)screen_ink_alpha[alpha_index], 0, 255));
-			RenderModelSprite(renderer, interface_texture, ix < static_cast<int>(sprite_svg_textures.size()) ? sprite_svg_textures[ix] : nullptr, sprite_info[ix], ink_colour, alpha);
+			RenderModelSprite(renderer, interface_texture, ix < static_cast<int>(sprite_svg_textures.size()) ? &sprite_svg_textures[ix] : nullptr, sprite_info[ix], ink_colour, alpha);
 			// Store the sprite rectangle for later
 			spriteRects.push_back(sprite_info[ix].dest);
 		}
@@ -2843,7 +2908,6 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		ScreenCaptureSource captureSource{
 			interface_texture,
 			&sprite_info,
-			&sprite_svg_textures,
 			&sprite_available,
 			&ink_colour,
 			screen_ink_alpha,
@@ -2857,7 +2921,6 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 				renderer,
 				interface_texture,
 				sprite_info,
-				sprite_svg_textures,
 				sprite_available,
 				ink_colour,
 				screen_ink_alpha,
