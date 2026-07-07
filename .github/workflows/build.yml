@@ -27,38 +27,14 @@ permissions:
 
 jobs:
   build:
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.target != 'web'
     strategy:
-      matrix:
-        include:
-          - platform: windows
-            platform_arch: x64
-            os: windows-latest
-            name: "Windows-x64"
-            target: windows-x64
-          - platform: windows
-            platform_arch: x86
-            os: windows-latest
-            name: "Windows-x86"
-            target: windows-x86
-          - platform: android
-            os: ubuntu-latest
-            name: "Android"
-            target: android
-          - platform: linux
-            os: ubuntu-latest
-            name: "Linux-x64"
-            target: linux
-          - platform: macos
-            os: macos-latest
-            name: "macOS-universal"
-            target: macos
+      matrix: ${{ fromJSON(github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'windows-x64' && '{"include":[{"platform":"windows","platform_arch":"x64","os":"windows-latest","name":"Windows-x64"}]}' || github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'windows-x86' && '{"include":[{"platform":"windows","platform_arch":"x86","os":"windows-latest","name":"Windows-x86"}]}' || github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'android' && '{"include":[{"platform":"android","os":"ubuntu-latest","name":"Android"}]}' || github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'linux' && '{"include":[{"platform":"linux","os":"ubuntu-latest","name":"Linux-x64"}]}' || github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'macos' && '{"include":[{"platform":"macos","os":"macos-latest","name":"macOS-universal"}]}' || '{"include":[{"platform":"windows","platform_arch":"x64","os":"windows-latest","name":"Windows-x64"},{"platform":"windows","platform_arch":"x86","os":"windows-latest","name":"Windows-x86"},{"platform":"android","os":"ubuntu-latest","name":"Android"},{"platform":"linux","os":"ubuntu-latest","name":"Linux-x64"},{"platform":"macos","os":"macos-latest","name":"macOS-universal"}]}') }}
     
     runs-on: ${{ matrix.os }}
     name: Build ${{ matrix.name }}
-    if: >-
-      github.event_name != 'workflow_dispatch' ||
-      github.event.inputs.target == 'all' ||
-      github.event.inputs.target == matrix.target
 
     steps:
     - name: Checkout
