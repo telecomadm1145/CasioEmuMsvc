@@ -378,28 +378,6 @@ namespace casioemu {
 			return false;
 		}
 
-		bool ReadRasterSize(const std::filesystem::path& path, SvgRect& rect) {
-			SDL_Surface* surface = IMG_Load(path.string().c_str());
-			if (!surface)
-				return false;
-			rect = {0, 0, static_cast<double>(surface->w), static_cast<double>(surface->h)};
-			SDL_FreeSurface(surface);
-			return rect.w > 0 && rect.h > 0;
-		}
-
-		bool ReadInterfaceSize(const std::filesystem::path& path, SvgRect& rect) {
-			const std::string ext = ToUpperAscii(path.extension().string());
-			if (ext == ".SVG") {
-				try {
-					return ParseViewBox(ReadTextFile(path), rect);
-				}
-				catch (...) {
-					return false;
-				}
-			}
-			return ReadRasterSize(path, rect);
-		}
-
 		bool ParseScreenSlot(const tinyxml2::XMLDocument& document, SvgRect& rect) {
 			return ParseRectFromAttrs(FindElementById(&document, "screenSlot"), rect);
 		}
@@ -635,6 +613,7 @@ namespace casioemu {
 			const std::string& requested_interface = {},
 			const std::string& requested_rom = {},
 			const std::string& requested_flash = {},
+			const Rect& interface_src_rect = {},
 			int display_w = 0,
 			int display_h = 0,
 			double screen_scale_y = 0.0,
@@ -678,10 +657,13 @@ namespace casioemu {
 			if (!model.flash_path.empty() && !FileExists(ResolveModelPath(model_path, model.flash_path)))
 				throw std::runtime_error("The flash image referenced by config.json was not found: " + model.flash_path);
 
-			SvgRect interface_src = board_rect;
-			if (!ReadInterfaceSize(ResolveModelPath(model_path, model.interface_path), interface_src))
-				throw std::runtime_error("The interface image referenced by config.json does not expose a usable size: " + model.interface_path);
-
+			if (interface_src_rect.w <= 0 || interface_src_rect.h <= 0)
+				throw std::runtime_error("config.json must specify sprites.rsd_interface.src with positive width and height.");
+			SvgRect interface_src{
+				static_cast<double>(interface_src_rect.x),
+				static_cast<double>(interface_src_rect.y),
+				static_cast<double>(interface_src_rect.w),
+				static_cast<double>(interface_src_rect.h)};
 			const Rect interface_dest = ToRect(board_rect);
 			model.sprites["rsd_interface"] = {ToRect(interface_src), interface_dest};
 
@@ -815,6 +797,19 @@ namespace casioemu {
 			return result;
 		}
 
+		Rect RequireInterfaceSourceRect(const json& value) {
+			const json& sprites = RequireJsonMember(value, {"sprites"}, "sprites");
+			if (!sprites.is_object() || !sprites.contains("rsd_interface"))
+				throw std::runtime_error("config.json must specify sprites.rsd_interface.");
+			const auto& interface_sprite = sprites.at("rsd_interface");
+			if (!interface_sprite.is_object() || !interface_sprite.contains("src"))
+				throw std::runtime_error("config.json must specify sprites.rsd_interface.src.");
+			Rect rect = RectFromJson(interface_sprite.at("src"));
+			if (rect.w <= 0 || rect.h <= 0)
+				throw std::runtime_error("config.json sprites.rsd_interface.src must have positive width and height.");
+			return rect;
+		}
+
 		void RequireBaseModelFields(const json& value) {
 			static constexpr const char* required_fields[] = {
 				"model_name", "hardware_id", "csr_mask", "real_hardware", "pd_value", "interface_path",
@@ -837,6 +832,7 @@ namespace casioemu {
 			RequireJsonInt(value, {"screen_height"}, "screen_height");
 			RequireJsonNumber(value, {"screen_scale_y"}, "screen_scale_y");
 			RequireStatusSpriteMap(value);
+			RequireInterfaceSourceRect(value);
 		}
 
 		void RequireSpriteModelFields(const json& value) {
@@ -929,7 +925,7 @@ namespace casioemu {
 					}
 				}
 			}
-			if (value.contains("sprites")) {
+			if (value.contains("sprites") && model.board_path.empty()) {
 				model.sprites.clear();
 				for (auto it = value.at("sprites").begin(); it != value.at("sprites").end(); ++it)
 					model.sprites[it.key()] = SpriteFromJson(it.value());
@@ -988,6 +984,10 @@ namespace casioemu {
 				value["sprites"][name] = SpriteToJson(sprite);
 		}
 		else {
+			if (auto it = model.sprites.find("rsd_interface"); it != model.sprites.end()) {
+				value["sprites"] = json::object();
+				value["sprites"]["rsd_interface"] = SpriteToJson(it->second);
+			}
 			value["buttons"] = json::array();
 			for (size_t ix = 0; ix < model.buttons.size(); ++ix) {
 				const auto& button = model.buttons[ix];
@@ -1058,7 +1058,8 @@ namespace casioemu {
 					const int display_w = RequireJsonInt(value, {"screen_width"}, "screen_width");
 					const int display_h = RequireJsonInt(value, {"screen_height"}, "screen_height");
 					const double screen_scale_y = RequireJsonNumber(value, {"screen_scale_y"}, "screen_scale_y");
-					model = InferBoardModelInfo(model_path, hardware_id, requested_board, requested_interface, requested_rom, requested_flash, display_w, display_h, screen_scale_y, requested_status_sprites);
+					const Rect interface_src = RequireInterfaceSourceRect(value);
+					model = InferBoardModelInfo(model_path, hardware_id, requested_board, requested_interface, requested_rom, requested_flash, interface_src, display_w, display_h, screen_scale_y, requested_status_sprites);
 					ApplyModelInfoJsonValue(value, model, false);
 				}
 				else {
