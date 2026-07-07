@@ -183,7 +183,7 @@ namespace casioemu {
 
 		auto width = interface_background.dest.w;
 		auto height = interface_background.dest.h;
-		if (ModelDefinition.extra.find("webcalc_board") != ModelDefinition.extra.end() &&
+		if (!ModelDefinition.board_path.empty() &&
 			!HasSvgExtension(ModelDefinition.interface_path) &&
 			interface_background.src.w > 0 && interface_background.src.h > 0) {
 			width = interface_background.src.w;
@@ -340,7 +340,7 @@ namespace casioemu {
 
 			auto width = interface_background.dest.w;
 			auto height = interface_background.dest.h;
-			if (ModelDefinition.extra.find("webcalc_board") != ModelDefinition.extra.end() &&
+			if (!ModelDefinition.board_path.empty() &&
 				!HasSvgExtension(ModelDefinition.interface_path) &&
 				interface_background.src.w > 0 && interface_background.src.h > 0) {
 				width = interface_background.src.w;
@@ -576,8 +576,8 @@ namespace casioemu {
 			return;
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
-		const bool webcalc_svg_interface = interface_is_svg && ModelDefinition.extra.find("webcalc_board") != ModelDefinition.extra.end();
-		if (webcalc_svg_interface) {
+		const bool board_svg_interface = interface_is_svg && !ModelDefinition.board_path.empty();
+		if (board_svg_interface) {
 			int w, h;
 			SDL_GetWindowSize(window, &w, &h);
 			auto wf = (double)w / interface_background.dest.w;
@@ -624,13 +624,13 @@ namespace casioemu {
 			}
 		}
 
-		const bool webcalc_png_interface = !interface_is_svg && ModelDefinition.extra.find("webcalc_board") != ModelDefinition.extra.end() &&
+		const bool board_png_interface = !interface_is_svg && !ModelDefinition.board_path.empty() &&
 			interface_background.src.w > 0 && interface_background.src.h > 0 &&
 			interface_background.dest.w > 0 && interface_background.dest.h > 0;
-		const int render_target_w = webcalc_png_interface ? interface_background.src.w : interface_background.dest.w;
-		const int render_target_h = webcalc_png_interface ? interface_background.src.h : interface_background.dest.h;
-		const float board_to_target_x = webcalc_png_interface ? static_cast<float>(render_target_w) / static_cast<float>(interface_background.dest.w) : 1.0f;
-		const float board_to_target_y = webcalc_png_interface ? static_cast<float>(render_target_h) / static_cast<float>(interface_background.dest.h) : 1.0f;
+		const int render_target_w = board_png_interface ? interface_background.src.w : interface_background.dest.w;
+		const int render_target_h = board_png_interface ? interface_background.src.h : interface_background.dest.h;
+		const float board_to_target_x = board_png_interface ? static_cast<float>(render_target_w) / static_cast<float>(interface_background.dest.w) : 1.0f;
+		const float board_to_target_y = board_png_interface ? static_cast<float>(render_target_h) / static_cast<float>(interface_background.dest.h) : 1.0f;
 
 		// create texture `tx` with the same format as `interface_texture`
 		Uint32 format;
@@ -647,7 +647,7 @@ namespace casioemu {
 		SDL_RenderCopy(renderer, interface_texture, &tmp, nullptr);
 		SDL_Rect old_viewport{};
 		float old_scale_x = 1.0f, old_scale_y = 1.0f;
-		if (webcalc_png_interface) {
+		if (board_png_interface) {
 			SDL_RenderGetViewport(renderer, &old_viewport);
 			SDL_RenderGetScale(renderer, &old_scale_x, &old_scale_y);
 			SDL_Rect target_viewport{0, 0, render_target_w, render_target_h};
@@ -655,7 +655,7 @@ namespace casioemu {
 			SDL_RenderSetScale(renderer, board_to_target_x, board_to_target_y);
 		}
 		chipset.Frame();
-		if (webcalc_png_interface) {
+		if (board_png_interface) {
 			SDL_RenderSetScale(renderer, old_scale_x, old_scale_y);
 			SDL_RenderSetViewport(renderer, &old_viewport);
 		}

@@ -1224,7 +1224,7 @@ int casioemu_core_save_snapshot() {
 		const std::filesystem::path snapshot_path = std::filesystem::path(kCoreDir) / "state.snapshot";
 		std::filesystem::create_directories(kCoreDir);
 		SnapshotManager manager;
-		const uint32_t id = manager.SaveSnapshot(*g_emulator, 0, "WebCalcEmu");
+		const uint32_t id = manager.SaveSnapshot(*g_emulator, 0, "webemu");
 		manager.ExportNode(snapshot_path, id);
 		std::ifstream in(snapshot_path, std::ios::binary);
 		if (!in) return 2;

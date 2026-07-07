@@ -2798,11 +2798,11 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 
 		static constexpr auto SPR_PIXEL = 0;
 		SDL_Rect dest = Screen<hardware_id>::sprite_info[SPR_PIXEL].dest;
-		const bool webcalc_screen_slot = emulator.ModelDefinition.extra.find("webcalc_screen_slot") != emulator.ModelDefinition.extra.end();
+		const bool board_screen_slot = !emulator.ModelDefinition.board_path.empty();
 		const int logical_width = ROW_SIZE_DISP * 8;
 		const int logical_height = N_ROW;
 		SDL_Rect lcd_dest = dest;
-		if (!webcalc_screen_slot) {
+		if (!board_screen_slot) {
 			lcd_dest.w = std::max(1, (logical_width - 1) * sprite_info[SPR_PIXEL].src.w + sprite_info[SPR_PIXEL].dest.w);
 			lcd_dest.h = std::max(1, (logical_height - 1) * sprite_info[SPR_PIXEL].src.h + sprite_info[SPR_PIXEL].dest.h);
 		}

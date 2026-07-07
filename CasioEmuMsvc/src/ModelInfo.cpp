@@ -510,7 +510,7 @@ namespace casioemu {
 
 		void AddStatusSprites(ModelInfo& model, const tinyxml2::XMLDocument& document, const std::map<std::string, int>& configured_status_sprites) {
 			if (configured_status_sprites.empty())
-				throw std::runtime_error("config.json must specify status_sprites for WebCalcEmu SVG/PNG model inference.");
+				throw std::runtime_error("config.json must specify status_sprites for board SVG/PNG model inference.");
 			const auto* status_frame = FindStatusFrame(document);
 			if (!status_frame)
 				throw std::runtime_error("The board SVG does not contain a status frame for configured status_sprites.");
@@ -561,7 +561,7 @@ namespace casioemu {
 
 		std::filesystem::path ResolveBoardSvg(const std::filesystem::path& model_path, std::string* board_key, const std::string& requested_board) {
 			if (requested_board.empty())
-				throw std::runtime_error("config.json must specify board_path for WebCalcEmu SVG/PNG model inference.");
+				throw std::runtime_error("config.json must specify board_path for board SVG/PNG model inference.");
 			auto requested_path = ResolveModelPath(model_path, requested_board);
 			if (FileExists(requested_path)) {
 				if (board_key)
@@ -628,7 +628,7 @@ namespace casioemu {
 			return buttons;
 		}
 
-		ModelInfo InferWebCalcModelInfo(
+		ModelInfo InferBoardModelInfo(
 			const std::filesystem::path& model_path,
 			unsigned short hardware_id,
 			const std::string& requested_board = {},
@@ -642,7 +642,7 @@ namespace casioemu {
 			std::string board_key;
 			const auto board_path = ResolveBoardSvg(model_path, &board_key, requested_board);
 			if (board_path.empty())
-				throw std::runtime_error("No supported WebCalcEmu board SVG was found.");
+				throw std::runtime_error("No supported board SVG was found.");
 
 			const std::string svg = ReadTextFile(board_path);
 			tinyxml2::XMLDocument board_document;
@@ -668,11 +668,11 @@ namespace casioemu {
 			model.buttons = ParseButtons(board_document, board_rect);
 
 			if (model.interface_path.empty())
-				throw std::runtime_error("config.json must specify interface_path for WebCalcEmu SVG/PNG model inference.");
+				throw std::runtime_error("config.json must specify interface_path for board SVG/PNG model inference.");
 			if (!FileExists(ResolveModelPath(model_path, model.interface_path)))
 				throw std::runtime_error("The interface image referenced by config.json was not found: " + model.interface_path);
 			if (model.rom_path.empty())
-				throw std::runtime_error("config.json must specify rom_path for WebCalcEmu SVG/PNG model inference.");
+				throw std::runtime_error("config.json must specify rom_path for board SVG/PNG model inference.");
 			if (!FileExists(ResolveModelPath(model_path, model.rom_path)))
 				throw std::runtime_error("The ROM image referenced by config.json was not found: " + model.rom_path);
 			if (!model.flash_path.empty() && !FileExists(ResolveModelPath(model_path, model.flash_path)))
@@ -698,13 +698,6 @@ namespace casioemu {
 				if (value.contains(name) && value.at(name).is_string())
 					return value.at(name).get<std::string>();
 			}
-			if (value.contains("webcalc") && value.at("webcalc").is_object()) {
-				const auto& webcalc = value.at("webcalc");
-				for (const char* name : names) {
-					if (webcalc.contains(name) && webcalc.at(name).is_string())
-						return webcalc.at(name).get<std::string>();
-				}
-			}
 			return {};
 		}
 
@@ -712,13 +705,6 @@ namespace casioemu {
 			for (const char* name : names) {
 				if (value.contains(name))
 					return &value.at(name);
-			}
-			if (value.contains("webcalc") && value.at("webcalc").is_object()) {
-				const auto& webcalc = value.at("webcalc");
-				for (const char* name : names) {
-					if (webcalc.contains(name))
-						return &webcalc.at(name);
-				}
 			}
 			return nullptr;
 		}
@@ -751,7 +737,7 @@ namespace casioemu {
 		}
 
 		bool ReadHardwareId(const json& value, unsigned short& hardware_id) {
-			const json* item = FindJsonMember(value, {"hardware_id", "hardware"});
+			const json* item = FindJsonMember(value, {"hardware_id"});
 			if (!item)
 				return false;
 			if (!item->is_number_integer())
@@ -797,22 +783,22 @@ namespace casioemu {
 		}
 
 		std::map<std::string, int> ReadStatusSpriteMap(const json& value) {
-			const json* item = FindJsonMember(value, {"status_sprites", "status_sprite_map", "status_map"});
+			const json* item = FindJsonMember(value, {"status_sprites"});
 			if (!item)
 				return {};
 			return ParseStatusSpriteMap(*item);
 		}
 
-		void ApplyWebCalcButtonOverrides(const json& buttons, ModelInfo& model) {
+		void ApplyBoardButtonOverrides(const json& buttons, ModelInfo& model) {
 			if (!buttons.is_array())
 				throw std::runtime_error("config.json field buttons must be an array.");
 			for (size_t ix = 0; ix < buttons.size(); ++ix) {
 				const auto& entry = buttons.at(ix);
 				if (!entry.is_object())
-					throw std::runtime_error("config.json WebCalc SVG button entries must be objects.");
+					throw std::runtime_error("config.json board button entries must be objects.");
 				const size_t button_index = entry.contains("index") ? entry.at("index").get<size_t>() : ix;
 				if (button_index >= model.buttons.size())
-					throw std::runtime_error("config.json WebCalc SVG button index is out of range.");
+					throw std::runtime_error("config.json board button index is out of range.");
 				auto& button = model.buttons[button_index];
 				if (entry.contains("keyname"))
 					button.keyname = entry.at("keyname").get<std::string>();
@@ -822,7 +808,7 @@ namespace casioemu {
 		}
 
 		std::map<std::string, int> RequireStatusSpriteMap(const json& value) {
-			const json& item = RequireJsonMember(value, {"status_sprites", "status_sprite_map", "status_map"}, "status_sprites");
+			const json& item = RequireJsonMember(value, {"status_sprites"}, "status_sprites");
 			auto result = ParseStatusSpriteMap(item);
 			if (result.empty())
 				throw std::runtime_error("config.json status_sprites must not be empty.");
@@ -845,15 +831,19 @@ namespace casioemu {
 				throw std::runtime_error("config.json must specify ink_color.r, ink_color.g, and ink_color.b.");
 		}
 
-		void RequireWebCalcFields(const json& value) {
-			RequireJsonString(value, {"board_path", "board_svg", "webcalc_board", "board"}, "board_path");
+		void RequireBoardModelFields(const json& value) {
+			RequireJsonString(value, {"board_path"}, "board_path");
 			RequireJsonInt(value, {"screen_width"}, "screen_width");
 			RequireJsonInt(value, {"screen_height"}, "screen_height");
 			RequireJsonNumber(value, {"screen_scale_y"}, "screen_scale_y");
 			RequireStatusSpriteMap(value);
-			const json& extra = RequireJsonMember(value, {"extra"}, "extra");
-			if (!extra.is_object() || !extra.contains("webcalc_board") || !extra.contains("webcalc_screen_slot"))
-				throw std::runtime_error("config.json extra must specify webcalc_board and webcalc_screen_slot.");
+		}
+
+		void RequireSpriteModelFields(const json& value) {
+			if (!value.contains("buttons") || !value.at("buttons").is_array())
+				throw std::runtime_error("config.json must specify a buttons array for non-board models.");
+			if (!value.contains("sprites") || !value.at("sprites").is_object())
+				throw std::runtime_error("config.json must specify a sprites object for non-board models.");
 		}
 
 		void ApplyModelInfoJsonValue(const json& value, ModelInfo& model, bool reset) {
@@ -874,7 +864,7 @@ namespace casioemu {
 				model.pd_value = value.at("pd_value").get<unsigned char>();
 			if (value.contains("interface_path"))
 				model.interface_path = value.at("interface_path").get<std::string>();
-			if (const auto board_path = ReadJsonString(value, {"board_path", "board_svg", "webcalc_board", "board"}); !board_path.empty())
+			if (const auto board_path = ReadJsonString(value, {"board_path"}); !board_path.empty())
 				model.board_path = board_path;
 			if (value.contains("rom_path"))
 				model.rom_path = value.at("rom_path").get<std::string>();
@@ -920,7 +910,7 @@ namespace casioemu {
 			if (value.contains("buttons")) {
 				if (!model.board_path.empty()) {
 					if (!model.buttons.empty())
-						ApplyWebCalcButtonOverrides(value.at("buttons"), model);
+						ApplyBoardButtonOverrides(value.at("buttons"), model);
 				}
 				else {
 					model.buttons.clear();
@@ -975,7 +965,8 @@ namespace casioemu {
 		}
 		if (!model.status_sprites.empty())
 			value["status_sprites"] = model.status_sprites;
-		value["extra"] = model.extra;
+		if (!model.extra.empty())
+			value["extra"] = model.extra;
 
 		if (model.board_path.empty()) {
 			value["buttons"] = json::array();
@@ -1017,37 +1008,37 @@ namespace casioemu {
 		ApplyModelInfoJsonValue(value, model, true);
 	}
 
-		bool IsBinaryCacheUsable(const std::filesystem::path& bin_path, const std::filesystem::path& json_path) {
-			if (!FileExists(bin_path))
-				return false;
-			if (!FileExists(json_path))
-				return true;
-			std::error_code ec;
-			const auto bin_time = std::filesystem::last_write_time(bin_path, ec);
-			if (ec)
-				return false;
-			const auto json_time = std::filesystem::last_write_time(json_path, ec);
-			if (ec)
-				return false;
-			return bin_time >= json_time;
-		}
+	bool IsBinaryCacheUsable(const std::filesystem::path& bin_path, const std::filesystem::path& json_path) {
+		if (!FileExists(bin_path))
+			return false;
+		if (!FileExists(json_path))
+			return true;
+		std::error_code ec;
+		const auto bin_time = std::filesystem::last_write_time(bin_path, ec);
+		if (ec)
+			return false;
+		const auto json_time = std::filesystem::last_write_time(json_path, ec);
+		if (ec)
+			return false;
+		return bin_time >= json_time;
+	}
 
-		void SaveModelInfoBinCache(const std::filesystem::path& model_path, const ModelInfo& model) {
-			try {
-				std::ofstream stream(model_path / MODEL_CONFIG_BIN, std::ios::binary);
-				if (!stream) {
-					SDL_Log("[ModelInfo][Warn] Cannot open config.bin for writing: %s", model_path.string().c_str());
-					return;
-				}
-				model.Write(stream);
+	void SaveModelInfoBinCache(const std::filesystem::path& model_path, const ModelInfo& model) {
+		try {
+			std::ofstream stream(model_path / MODEL_CONFIG_BIN, std::ios::binary);
+			if (!stream) {
+				SDL_Log("[ModelInfo][Warn] Cannot open config.bin for writing: %s", model_path.string().c_str());
+				return;
 			}
-			catch (const std::exception& ex) {
-				SDL_Log("[ModelInfo][Warn] Failed to write config.bin cache for %s: %s", model_path.string().c_str(), ex.what());
-			}
+			model.Write(stream);
 		}
+		catch (const std::exception& ex) {
+			SDL_Log("[ModelInfo][Warn] Failed to write config.bin cache for %s: %s", model_path.string().c_str(), ex.what());
+		}
+	}
 
-		bool LoadModelInfoFromFolder(
-			const std::filesystem::path& model_path,
+	bool LoadModelInfoFromFolder(
+		const std::filesystem::path& model_path,
 		ModelInfo& model,
 		std::string* loaded_from,
 		std::string* error) {
@@ -1059,18 +1050,18 @@ namespace casioemu {
 				if (!stream)
 					throw std::runtime_error("Cannot open config.bin.");
 				model.Read(stream);
-				bool cache_missing_webcalc_fields = false;
+				bool cache_missing_board_fields = false;
 				if (FileExists(json_path) && (model.board_path.empty() || model.screen_width <= 0 || model.screen_height <= 0 || model.screen_scale_y <= 0)) {
 					try {
 						std::ifstream json_stream(json_path);
 						const json value = json::parse(json_stream);
-						cache_missing_webcalc_fields = !ReadJsonString(value, {"board_path", "board_svg", "webcalc_board", "board"}).empty();
+						cache_missing_board_fields = value.contains("board_path") && value.at("board_path").is_string();
 					}
 					catch (...) {
-						cache_missing_webcalc_fields = false;
+						cache_missing_board_fields = false;
 					}
 				}
-				if (!cache_missing_webcalc_fields) {
+				if (!cache_missing_board_fields) {
 					if (loaded_from)
 						*loaded_from = MODEL_CONFIG_BIN;
 					return true;
@@ -1083,22 +1074,23 @@ namespace casioemu {
 					throw std::runtime_error("Cannot open config.json.");
 				json value = json::parse(stream);
 				RequireBaseModelFields(value);
-				const std::string requested_board = ReadJsonString(value, {"board_path", "board_svg", "webcalc_board", "board"});
-				const std::string requested_interface = ReadJsonString(value, {"interface_path", "face_path", "face"});
-				const std::string requested_rom = ReadJsonString(value, {"rom_path", "core_path", "rom"});
-				const std::string requested_flash = ReadJsonString(value, {"flash_path", "flash"});
-				if (!requested_board.empty() || !value.contains("buttons") || !value.contains("sprites")) {
-					RequireWebCalcFields(value);
+				const std::string requested_board = ReadJsonString(value, {"board_path"});
+				const std::string requested_interface = ReadJsonString(value, {"interface_path"});
+				const std::string requested_rom = ReadJsonString(value, {"rom_path"});
+				const std::string requested_flash = ReadJsonString(value, {"flash_path"});
+				if (!requested_board.empty()) {
+					RequireBoardModelFields(value);
 					unsigned short hardware_id{};
 					ReadHardwareId(value, hardware_id);
 					const auto requested_status_sprites = RequireStatusSpriteMap(value);
 					const int display_w = RequireJsonInt(value, {"screen_width"}, "screen_width");
 					const int display_h = RequireJsonInt(value, {"screen_height"}, "screen_height");
 					const double screen_scale_y = RequireJsonNumber(value, {"screen_scale_y"}, "screen_scale_y");
-					model = InferWebCalcModelInfo(model_path, hardware_id, requested_board, requested_interface, requested_rom, requested_flash, display_w, display_h, screen_scale_y, requested_status_sprites);
+					model = InferBoardModelInfo(model_path, hardware_id, requested_board, requested_interface, requested_rom, requested_flash, display_w, display_h, screen_scale_y, requested_status_sprites);
 					ApplyModelInfoJsonValue(value, model, false);
 				}
 				else {
+					RequireSpriteModelFields(value);
 					ApplyModelInfoJsonValue(value, model, true);
 				}
 				if (loaded_from)

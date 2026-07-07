@@ -168,8 +168,8 @@ public:
 		if (sdl_t)
 			SDL_DestroyTexture(sdl_t);
 	}
-	bool IsWebCalcModel() const {
-		return !mi.board_path.empty() || mi.extra.find("webcalc_board") != mi.extra.end();
+	bool IsBoardModel() const {
+		return !mi.board_path.empty();
 	}
 	static bool HasSvgExtension(const std::filesystem::path& path) {
 		auto ext = path.extension().string();
@@ -283,11 +283,11 @@ public:
 
 		auto y = ImGui::GetCursorPosY();
 		auto scaleFactor = imgSp.src.w > 0 ? (400.f / imgSp.src.w) : 1.0f;
-		const bool is_webcalc_model = IsWebCalcModel();
+		const bool is_board_model = IsBoardModel();
 		if (sdl_t != 0) {
 			ImGui::SetCursorPosX(0);
 			RenderSprite2(imgSp, (ImTextureID)sdl_t, imgSz, {400, 400.0f * imgSp.dest.h / imgSp.dest.w});
-			if (!is_webcalc_model) {
+			if (!is_board_model) {
 				for (auto& sp : mi.sprites) {
 					if (sp.first != "rsd_pixel" && sp.first != "rsd_interface") {
 						ImGui::SetCursorPos({(float)sp.second.dest.x * scaleFactor, (float)sp.second.dest.y * scaleFactor + y});
@@ -329,7 +329,7 @@ public:
 			ImGui::SetCursorPos({scaleFactor * btn.rect.x, scaleFactor * btn.rect.y + y});
 			ImGui::PushID(btn.kiko + 20);
 			const ImVec2 button_size{scaleFactor * btn.rect.w, scaleFactor * btn.rect.h};
-			const bool clicked = is_webcalc_model
+			const bool clicked = is_board_model
 				? ImGui::InvisibleButton(btn.keyname.c_str(), button_size)
 				: ImGui::Button(btn.keyname.c_str(), button_size);
 			if (clicked) {
@@ -338,7 +338,7 @@ public:
 				buffer[sizeof(buffer) - 1] = '\0';
 				SDL_itoa(btn.kiko, buffer2, 16);
 			}
-			if (is_webcalc_model && btninfo == &btn) {
+			if (is_board_model && btninfo == &btn) {
 				auto min_p = ImGui::GetItemRectMin();
 				auto max_p = ImGui::GetItemRectMax();
 				ImGui::GetWindowDrawList()->AddRect(min_p, max_p, IM_COL32(255, 0, 0, 255), 0.0f, 0, 2.0f);
@@ -398,7 +398,7 @@ public:
 					ImGui::EndTabItem();
 				}
 				if (ImGui::BeginTabItem("Buttons")) {
-					if (is_webcalc_model) {
+					if (is_board_model) {
 						if (btninfo) {
 							ImGui::TextUnformatted("Button geometry is read from board.svg.");
 							if (ImGui::InputText("ModelEditor.KeyName"_lc, buffer, 260)) {
@@ -429,7 +429,7 @@ public:
 					}
 					ImGui::EndTabItem();
 				}
-				if (!is_webcalc_model && ImGui::BeginTabItem("Sprites")) {
+				if (!is_board_model && ImGui::BeginTabItem("Sprites")) {
 					ImGui::Text("Sprite List");
 					ImGui::BeginChild("SpriteList", {0, 150}, true);
 
@@ -458,7 +458,7 @@ public:
 					}
 					ImGui::EndTabItem();
 				}
-				if (is_webcalc_model && ImGui::BeginTabItem("Status")) {
+				if (is_board_model && ImGui::BeginTabItem("Status")) {
 					if (mi.status_sprites.empty()) {
 						ImGui::TextUnformatted("No status sprites configured.");
 					}
