@@ -1834,6 +1834,125 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		return std::filesystem::path(name);
 	}
 
+	void SaveScreenshotSurface(SDL_Surface* screenSurface, const std::string& filename) {
+		if (!screenSurface)
+			return;
+#ifdef __ANDROID__
+		bool success = saveImageToMediaStore(screenSurface->pixels, screenSurface->w, screenSurface->h, screenSurface->pitch, filename.c_str());
+		if (!success) {
+			SDL_Log("Error saving screenshot using MediaStore API");
+		}
+		else {
+			SDL_Log("Screenshot saved successfully with MediaStore API");
+		}
+
+		JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+		jobject activity = (jobject)SDL_AndroidGetActivity();
+
+		if (env && activity) {
+			jobject byteBuffer = env->NewDirectByteBuffer(screenSurface->pixels,
+				screenSurface->h * screenSurface->pitch);
+
+			jclass activityClass = env->GetObjectClass(activity);
+			jmethodID copyToClipboardMethod = env->GetMethodID(activityClass, "copyImageToClipboard",
+				"(Ljava/nio/ByteBuffer;III)Z");
+
+			if (copyToClipboardMethod != NULL) {
+				jboolean result = env->CallBooleanMethod(activity, copyToClipboardMethod,
+					byteBuffer, screenSurface->w,
+					screenSurface->h, screenSurface->pitch);
+				if (result) {
+					SDL_Log("Screenshot copied to clipboard");
+				}
+				else {
+					SDL_Log("Failed to copy screenshot to clipboard");
+				}
+			}
+			else {
+				SDL_Log("copyImageToClipboard method not found. Add it to your Java activity.");
+			}
+
+			env->DeleteLocalRef(byteBuffer);
+			env->DeleteLocalRef(activityClass);
+			env->DeleteLocalRef(activity);
+		}
+#else
+		if (IMG_SavePNG(screenSurface, filename.c_str()) != 0) {
+			SDL_Log("Error saving screenshot: %s", IMG_GetError());
+		}
+		else {
+			SDL_Log("Screenshot saved to %s", filename.c_str());
+		}
+
+#ifdef _WIN32
+		HDC hdcScreen = GetDC(NULL);
+		HDC hdcMem = CreateCompatibleDC(hdcScreen);
+
+		BITMAPINFOHEADER bi;
+		ZeroMemory(&bi, sizeof(BITMAPINFOHEADER));
+		bi.biSize = sizeof(BITMAPINFOHEADER);
+		bi.biWidth = screenSurface->w;
+		bi.biHeight = -screenSurface->h;
+		bi.biPlanes = 1;
+		bi.biBitCount = 32;
+		bi.biCompression = BI_RGB;
+
+		void* bits = NULL;
+		HBITMAP hBitmap = CreateDIBSection(hdcMem, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &bits, NULL, 0);
+
+		if (hBitmap) {
+			HGDIOBJ oldBitmap = SelectObject(hdcMem, hBitmap);
+
+			uint8_t* dst = (uint8_t*)bits;
+
+			for (int y = 0; y < screenSurface->h; y++) {
+				uint8_t* src = (uint8_t*)screenSurface->pixels + y * screenSurface->pitch;
+				for (int x = 0; x < screenSurface->w; x++) {
+					dst[0] = src[2];
+					dst[1] = src[1];
+					dst[2] = src[0];
+					dst[3] = src[3];
+
+					src += 4;
+					dst += 4;
+				}
+			}
+			if (oldBitmap)
+				SelectObject(hdcMem, oldBitmap);
+
+			bool clipboardOwnsBitmap = false;
+			if (OpenClipboard(NULL)) {
+				EmptyClipboard();
+				if (SetClipboardData(CF_BITMAP, hBitmap)) {
+					clipboardOwnsBitmap = true;
+				}
+				else {
+					SDL_Log("Failed to set clipboard bitmap");
+				}
+				CloseClipboard();
+				if (clipboardOwnsBitmap)
+					SDL_Log("Screenshot copied to clipboard");
+			}
+			else {
+				SDL_Log("Failed to open clipboard");
+			}
+			if (!clipboardOwnsBitmap) {
+				DeleteObject(hBitmap);
+			}
+
+			DeleteDC(hdcMem);
+		}
+		else {
+			SDL_Log("Failed to create DIB section for clipboard");
+		}
+
+		ReleaseDC(NULL, hdcScreen);
+#else
+		SDL_Log("Clipboard copy not implemented for this platform");
+#endif
+#endif
+	}
+
 	bool EnsureParentDirectory(const std::filesystem::path& path) {
 		const auto parent = path.parent_path();
 		if (parent.empty()) {
@@ -2409,154 +2528,197 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		std::filesystem::path frameDirectory;
 	};
 
-	// Function to capture the current screen, save as PNG file and copy to clipboard
-	void CaptureScreenshot(SDL_Renderer* renderer, const std::vector<SDL_Rect>& spriteRects, const std::vector<SDL_Rect>& pixelRects) {
-		std::string filename = MakeTimestampedName("screenshot-", ".png");
+	Uint32 MapScreenshotPixel(SDL_PixelFormat* format, const ColourInfo& ink_colour, float alpha_value) {
+		if (alpha_value > 255.0f) {
+			const int extra = static_cast<int>(alpha_value - 255.0f);
+			const uint8_t r = static_cast<uint8_t>(std::max(0, ink_colour.r - extra));
+			const uint8_t g = static_cast<uint8_t>(std::max(0, ink_colour.g - static_cast<int>(extra * 0.8f)));
+			const uint8_t b = static_cast<uint8_t>(std::max(0, ink_colour.b - static_cast<int>(extra * 0.1f)));
+			return SDL_MapRGBA(format, r, g, b, 255);
+		}
+
+		const int alpha = std::clamp(static_cast<int>(std::lround(alpha_value)), 0, 255);
+		const auto blend = [alpha](int channel) {
+			return static_cast<uint8_t>((channel * alpha + 255 * (255 - alpha) + 127) / 255);
+		};
+		return SDL_MapRGBA(format, blend(ink_colour.r), blend(ink_colour.g), blend(ink_colour.b), 255);
+	}
+
+	void FillScaledPixel(SDL_Surface* surface, int x, int y, int scale, Uint32 colour) {
+		for (int dy = 0; dy < scale; ++dy) {
+			const int py = y + dy;
+			if (py < 0 || py >= surface->h)
+				continue;
+			auto* row = reinterpret_cast<Uint32*>(static_cast<uint8_t*>(surface->pixels) + py * surface->pitch);
+			for (int dx = 0; dx < scale; ++dx) {
+				const int px = x + dx;
+				if (px >= 0 && px < surface->w)
+					row[px] = colour;
+			}
+		}
+	}
+
+	SDL_Rect ScaleScreenshotRect(const SDL_Rect& rect, const SDL_Rect& capture_rect, double sx, double sy) {
+		const int x0 = static_cast<int>(std::floor((rect.x - capture_rect.x) * sx));
+		const int y0 = static_cast<int>(std::floor((rect.y - capture_rect.y) * sy));
+		const int x1 = static_cast<int>(std::ceil((rect.x + rect.w - capture_rect.x) * sx));
+		const int y1 = static_cast<int>(std::ceil((rect.y + rect.h - capture_rect.y) * sy));
+		return {x0, y0, std::max(1, x1 - x0), std::max(1, y1 - y0)};
+	}
+
+	Rect ToModelRect(const SDL_Rect& rect) {
+		return {rect.x, rect.y, rect.w, rect.h};
+	}
+
+	int ClassWizGraphStatusIndexFromCommonIndexForCapture(int common_index) {
+		if (common_index < 7) return common_index;
+		if (common_index < 12) return common_index + 1;
+		return common_index + 2;
+	}
+
+	bool CapturePixelPerfectScreenshot(
+		SDL_Renderer* renderer,
+		SDL_Texture* interface_texture,
+		const std::vector<SpriteInfo>& sprite_info,
+		const std::vector<SDL_Texture*>& sprite_svg_textures,
+		const std::array<SpriteInfo, 2>& classwiz_graph_sprite_info,
+		const std::array<SDL_Texture*, 2>& classwiz_graph_svg_textures,
+		bool has_classwiz_graph_status_sprites,
+		bool has_classwiz_graph_status_logic,
+		const ColourInfo& ink_colour,
+		const float* screen_ink_alpha,
+		int logical_width,
+		int logical_height,
+		const SDL_Rect& lcd_dest) {
+		static constexpr int SCREENSHOT_PIXEL_SCALE = 3;
+		if (!renderer || !interface_texture || !screen_ink_alpha || logical_width <= 0 || logical_height <= 0 || lcd_dest.w <= 0 || lcd_dest.h <= 0)
+			return false;
+
+		std::vector<SDL_Rect> spriteRects;
+		for (size_t ix = 1; ix < sprite_info.size(); ++ix)
+			spriteRects.push_back(sprite_info[ix].dest);
+		if (has_classwiz_graph_status_sprites) {
+			spriteRects.push_back(classwiz_graph_sprite_info[0].dest);
+			spriteRects.push_back(classwiz_graph_sprite_info[1].dest);
+		}
+
 		SDL_Rect captureRect{};
-		if (!GetCaptureRect(spriteRects, pixelRects, captureRect)) {
+		if (!GetCaptureRect(spriteRects, std::vector<SDL_Rect>{lcd_dest}, captureRect)) {
 			SDL_Log("Screenshot failed: invalid capture region.");
-			return;
+			return false;
 		}
 
-		int captureWidth = captureRect.w;
-		int captureHeight = captureRect.h;
+		const double sx = static_cast<double>(logical_width * SCREENSHOT_PIXEL_SCALE) / static_cast<double>(lcd_dest.w);
+		const double sy = static_cast<double>(logical_height * SCREENSHOT_PIXEL_SCALE) / static_cast<double>(lcd_dest.h);
+		const int output_w = std::max(1, static_cast<int>(std::ceil(captureRect.w * sx)));
+		const int output_h = std::max(1, static_cast<int>(std::ceil(captureRect.h * sy)));
 
-		// Create a surface to capture the screen content
-		SDL_Surface* screenSurface = SDL_CreateRGBSurface(0, captureWidth, captureHeight, 32,
-			0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
-
-		if (screenSurface != nullptr) {
-			// Copy the renderer to the surface
-			if (SDL_RenderReadPixels(renderer, &captureRect, SDL_PIXELFORMAT_RGBA32,
-				screenSurface->pixels, screenSurface->pitch) == 0) {
-
-#ifdef __ANDROID__
-				// Save to MediaStore
-				auto str = filename;
-				bool success = saveImageToMediaStore(screenSurface->pixels, screenSurface->w, screenSurface->h, screenSurface->pitch, str.c_str());
-				if (!success) {
-					SDL_Log("Error saving screenshot using MediaStore API");
-				}
-				else {
-					SDL_Log("Screenshot saved successfully with MediaStore API");
-				}
-
-				// Copy to clipboard on Android using JNI
-				JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
-				jobject activity = (jobject)SDL_AndroidGetActivity();
-
-				if (env && activity) {
-					// Create a Java direct ByteBuffer from the pixel data
-					jobject byteBuffer = env->NewDirectByteBuffer(screenSurface->pixels,
-						screenSurface->h * screenSurface->pitch);
-
-					// Call the Java method to copy to clipboard
-					jclass activityClass = env->GetObjectClass(activity);
-					jmethodID copyToClipboardMethod = env->GetMethodID(activityClass, "copyImageToClipboard",
-						"(Ljava/nio/ByteBuffer;III)Z");
-
-					if (copyToClipboardMethod != NULL) {
-						jboolean result = env->CallBooleanMethod(activity, copyToClipboardMethod,
-							byteBuffer, screenSurface->w,
-							screenSurface->h, screenSurface->pitch);
-						if (result) {
-							SDL_Log("Screenshot copied to clipboard");
-						}
-						else {
-							SDL_Log("Failed to copy screenshot to clipboard");
-						}
-					}
-					else {
-						SDL_Log("copyImageToClipboard method not found. Add it to your Java activity.");
-					}
-
-					env->DeleteLocalRef(byteBuffer);
-					env->DeleteLocalRef(activityClass);
-					env->DeleteLocalRef(activity);
-				}
-#else
-				// Save to file on Windows/Desktop
-				auto str = filename;
-				if (IMG_SavePNG(screenSurface, str.c_str()) != 0) {
-					SDL_Log("Error saving screenshot: %s", IMG_GetError());
-				}
-				else {
-					SDL_Log("Screenshot saved to %s", str.c_str());
-				}
-
-				// Copy to clipboard on Windows/Desktop
-#ifdef _WIN32
-				// Convert SDL_Surface to Windows DIB format for clipboard
-				HDC hdcScreen = GetDC(NULL);
-				HDC hdcMem = CreateCompatibleDC(hdcScreen);
-
-				BITMAPINFOHEADER bi;
-				ZeroMemory(&bi, sizeof(BITMAPINFOHEADER));
-				bi.biSize = sizeof(BITMAPINFOHEADER);
-				bi.biWidth = screenSurface->w;
-				bi.biHeight = -screenSurface->h; // Negative for top-down
-				bi.biPlanes = 1;
-				bi.biBitCount = 32;
-				bi.biCompression = BI_RGB;
-
-				void* bits = NULL;
-				HBITMAP hBitmap = CreateDIBSection(hdcMem, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &bits, NULL, 0);
-
-				if (hBitmap) {
-					// Copy pixels from SDL surface to DIB
-					SelectObject(hdcMem, hBitmap);
-
-					// Convert RGBA to BGRA and copy to DIB
-					uint8_t* src = (uint8_t*)screenSurface->pixels;
-					uint8_t* dst = (uint8_t*)bits;
-
-					for (int y = 0; y < screenSurface->h; y++) {
-						for (int x = 0; x < screenSurface->w; x++) {
-							// RGBA to BGRA
-							dst[0] = src[2]; // B
-							dst[1] = src[1]; // G
-							dst[2] = src[0]; // R
-							dst[3] = src[3]; // A
-
-							src += 4;
-							dst += 4;
-						}
-					}
-
-					// Copy to clipboard
-					if (OpenClipboard(NULL)) {
-						EmptyClipboard();
-						SetClipboardData(CF_BITMAP, hBitmap);
-						CloseClipboard();
-						SDL_Log("Screenshot copied to clipboard");
-					}
-					else {
-						SDL_Log("Failed to open clipboard");
-						DeleteObject(hBitmap);
-					}
-
-					DeleteDC(hdcMem);
-				}
-				else {
-					SDL_Log("Failed to create DIB section for clipboard");
-				}
-
-				ReleaseDC(NULL, hdcScreen);
-#else
-				// For other desktop platforms like Linux/macOS
-				// Use platform-specific clipboard APIs if needed
-				SDL_Log("Clipboard copy not implemented for this platform");
-#endif
-#endif
+		SDL_Texture* old_target = SDL_GetRenderTarget(renderer);
+		SDL_Rect old_viewport{};
+		SDL_Rect old_clip{};
+		float old_scale_x = 1.0f;
+		float old_scale_y = 1.0f;
+		SDL_BlendMode old_blend_mode{};
+		SDL_RenderGetViewport(renderer, &old_viewport);
+		SDL_RenderGetClipRect(renderer, &old_clip);
+		const SDL_bool old_clip_enabled = SDL_RenderIsClipEnabled(renderer);
+		SDL_RenderGetScale(renderer, &old_scale_x, &old_scale_y);
+		SDL_GetRenderDrawBlendMode(renderer, &old_blend_mode);
+		SDL_Texture* target = nullptr;
+		bool render_target_active = false;
+		auto cleanup = [&]() {
+			if (render_target_active) {
+				SDL_SetRenderTarget(renderer, old_target);
+				SDL_RenderSetViewport(renderer, &old_viewport);
+				SDL_RenderSetClipRect(renderer, old_clip_enabled ? &old_clip : nullptr);
+				SDL_RenderSetScale(renderer, old_scale_x, old_scale_y);
+				SDL_SetRenderDrawBlendMode(renderer, old_blend_mode);
+				render_target_active = false;
 			}
-			else {
-				SDL_Log("Error capturing screen pixels: %s", SDL_GetError());
+			if (target) {
+				SDL_DestroyTexture(target);
+				target = nullptr;
 			}
-			SDL_FreeSurface(screenSurface); // Free the surface after use
+		};
+
+		target = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, output_w, output_h);
+		if (!target) {
+			SDL_Log("Screenshot failed: cannot create render target: %s", SDL_GetError());
+			return false;
 		}
-		else {
-			SDL_Log("Error creating surface: %s", SDL_GetError());
+		SDL_SetTextureBlendMode(target, SDL_BLENDMODE_NONE);
+		if (SDL_SetRenderTarget(renderer, target) != 0) {
+			SDL_Log("Screenshot failed: cannot bind render target: %s", SDL_GetError());
+			cleanup();
+			return false;
 		}
+		render_target_active = true;
+		SDL_RenderSetViewport(renderer, nullptr);
+		SDL_RenderSetClipRect(renderer, nullptr);
+		SDL_RenderSetScale(renderer, 1.0f, 1.0f);
+		SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+		SDL_RenderClear(renderer);
+
+		for (size_t ix = 1; ix < sprite_info.size(); ++ix) {
+			const int common_index = static_cast<int>(ix - 1);
+			const int alpha_index = has_classwiz_graph_status_logic ? ClassWizGraphStatusIndexFromCommonIndexForCapture(common_index) : common_index;
+			SpriteInfo sprite = sprite_info[ix];
+			sprite.dest = ToModelRect(ScaleScreenshotRect(sprite.dest, captureRect, sx, sy));
+			const uint8_t alpha = Uint8(std::clamp(static_cast<int>(screen_ink_alpha[alpha_index]), 0, 255));
+			RenderModelSprite(renderer, interface_texture, ix < sprite_svg_textures.size() ? sprite_svg_textures[ix] : nullptr, sprite, ink_colour, alpha);
+		}
+		if (has_classwiz_graph_status_sprites) {
+			static constexpr int FX_STATUS_INDEX = 7;
+			static constexpr int GX_STATUS_INDEX = 13;
+			const int status_indexes[] = {FX_STATUS_INDEX, GX_STATUS_INDEX};
+			for (int ix = 0; ix < 2; ++ix) {
+				SpriteInfo sprite = classwiz_graph_sprite_info[ix];
+				sprite.dest = ToModelRect(ScaleScreenshotRect(sprite.dest, captureRect, sx, sy));
+				const uint8_t alpha = Uint8(std::clamp(static_cast<int>(screen_ink_alpha[status_indexes[ix]]), 0, 255));
+				RenderModelSprite(renderer, interface_texture, classwiz_graph_svg_textures[ix], sprite, ink_colour, alpha);
+			}
+		}
+
+		SDL_Surface* screenSurface = SDL_CreateRGBSurfaceWithFormat(0, output_w, output_h, 32, SDL_PIXELFORMAT_RGBA32);
+		if (!screenSurface) {
+			SDL_Log("Error creating screenshot surface: %s", SDL_GetError());
+			cleanup();
+			return false;
+		}
+		if (SDL_MUSTLOCK(screenSurface) && SDL_LockSurface(screenSurface) != 0) {
+			SDL_Log("Error locking screenshot surface: %s", SDL_GetError());
+			SDL_FreeSurface(screenSurface);
+			cleanup();
+			return false;
+		}
+
+		if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, screenSurface->pixels, screenSurface->pitch) != 0) {
+			SDL_Log("Error capturing screenshot target pixels: %s", SDL_GetError());
+			if (SDL_MUSTLOCK(screenSurface))
+				SDL_UnlockSurface(screenSurface);
+			SDL_FreeSurface(screenSurface);
+			cleanup();
+			return false;
+		}
+
+		const SDL_Rect scaled_lcd = ScaleScreenshotRect(lcd_dest, captureRect, sx, sy);
+		for (int y = 0; y < logical_height; ++y) {
+			const int source_y = y + 1;
+			for (int x = 0; x < logical_width; ++x) {
+				const float alpha_value = screen_ink_alpha[x + source_y * 192];
+				if (alpha_value <= 0.0f)
+					continue;
+				FillScaledPixel(screenSurface, scaled_lcd.x + x * SCREENSHOT_PIXEL_SCALE, scaled_lcd.y + y * SCREENSHOT_PIXEL_SCALE, SCREENSHOT_PIXEL_SCALE, MapScreenshotPixel(screenSurface->format, ink_colour, alpha_value));
+			}
+		}
+		if (SDL_MUSTLOCK(screenSurface))
+			SDL_UnlockSurface(screenSurface);
+
+		cleanup();
+		SaveScreenshotSurface(screenSurface, MakeTimestampedName("screenshot-", ".png"));
+		SDL_FreeSurface(screenSurface);
+		return true;
 	}
 
 	void UpdatePreview(SDL_Renderer* renderer, ScreenMirror* sm, const std::vector<SDL_Rect>& spriteRects, const std::vector<SDL_Rect>& pixelRects) {
@@ -2680,8 +2842,20 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 #ifndef __EMSCRIPTEN__
 		// If screenshot is requested, capture only the rendered screen region
 		if (emulator.screenshot_requested.load()) {
-			// Capture the region using both sprite and pixel rectangles
-			CaptureScreenshot(renderer, spriteRects, pixelRects);
+			CapturePixelPerfectScreenshot(
+				renderer,
+				interface_texture,
+				sprite_info,
+				sprite_svg_textures,
+				classwiz_graph_sprite_info,
+				classwiz_graph_svg_textures,
+				HasClassWizGraphStatusSprites(),
+				HasClassWizGraphStatusLogic(),
+				ink_colour,
+				screen_ink_alpha,
+				logical_width,
+				logical_height,
+				lcd_dest);
 			emulator.screenshot_requested.store(false);
 		}
 		static ScreenRecorder recorder;

@@ -459,6 +459,19 @@ namespace casioemu {
 			return children;
 		}
 
+		std::vector<std::string> CollectAncestorTransforms(const tinyxml2::XMLElement* ancestor, const tinyxml2::XMLElement* element) {
+			std::vector<std::string> transforms;
+			for (auto* node = element ? element->Parent() : nullptr; node && node != ancestor; node = node->Parent()) {
+				const auto* parent_element = node->ToElement();
+				if (!parent_element)
+					continue;
+				if (const char* transform = parent_element->Attribute("transform"))
+					transforms.push_back(transform);
+			}
+			std::reverse(transforms.begin(), transforms.end());
+			return transforms;
+		}
+
 		std::string BuildStatusSvgShape(const tinyxml2::XMLDocument& document, const tinyxml2::XMLElement* status_frame, const tinyxml2::XMLElement* child, const std::string& defs) {
 			SvgRect frame_rect{};
 			ParseViewBox(status_frame, frame_rect);
@@ -488,6 +501,7 @@ namespace casioemu {
 				shape = SerializeRenderableElement(document, child);
 			}
 
+			shape = WrapTransformed(shape, CollectAncestorTransforms(status_frame, child));
 			return "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"" +
 				std::to_string(frame_rect.x) + " " + std::to_string(frame_rect.y) + " " +
 				std::to_string(frame_rect.w) + " " + std::to_string(frame_rect.h) +

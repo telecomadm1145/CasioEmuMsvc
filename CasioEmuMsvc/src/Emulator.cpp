@@ -66,6 +66,82 @@ namespace casioemu {
 				SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
 			return texture;
 		}
+
+		SDL_Renderer* TryCreateRendererWithTargetTexture(SDL_Window* window, const std::string& driver_label, std::string& errors) {
+			struct RendererAttempt {
+				Uint32 flags;
+				const char* label;
+			};
+			const RendererAttempt attempts[] = {
+				{SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE, "accelerated target texture"},
+				{SDL_RENDERER_TARGETTEXTURE, "target texture"},
+				{0, "default"}
+			};
+
+			for (const auto& attempt : attempts) {
+				SDL_ClearError();
+				SDL_Renderer* result = SDL_CreateRenderer(window, -1, attempt.flags);
+				if (!result) {
+					errors += driver_label;
+					errors += ", ";
+					errors += attempt.label;
+					errors += ": ";
+					errors += SDL_GetError();
+					errors += "\n";
+					continue;
+				}
+
+				SDL_RendererInfo info{};
+				if (SDL_GetRendererInfo(result, &info) == 0 && (info.flags & SDL_RENDERER_TARGETTEXTURE)) {
+					SDL_Log("[Emulator][Info] Using SDL renderer '%s' (%s, %s, flags=0x%x)",
+						info.name ? info.name : "unknown",
+						driver_label.c_str(),
+						attempt.label,
+						info.flags);
+					return result;
+				}
+
+				errors += driver_label;
+				errors += ", ";
+				errors += attempt.label;
+				errors += ": renderer does not support target textures\n";
+				SDL_DestroyRenderer(result);
+			}
+
+			return nullptr;
+		}
+
+		SDL_Renderer* CreateRendererWithTargetTexture(SDL_Window* window) {
+			const char* initial_hint_value = SDL_GetHint(SDL_HINT_RENDER_DRIVER);
+			const std::string initial_hint = initial_hint_value ? initial_hint_value : "";
+			const std::string initial_label = initial_hint.empty() ? "current renderer hint" : "renderer hint '" + initial_hint + "'";
+			std::string errors;
+
+			SDL_Renderer* result = TryCreateRendererWithTargetTexture(window, initial_label, errors);
+			if (result)
+				return result;
+
+			if (!initial_hint.empty()) {
+				SDL_SetHint(SDL_HINT_RENDER_DRIVER, nullptr);
+				result = TryCreateRendererWithTargetTexture(window, "SDL default renderer selection", errors);
+				if (result)
+					return result;
+			}
+
+			if (initial_hint != "software") {
+				SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
+				result = TryCreateRendererWithTargetTexture(window, "software renderer hint", errors);
+				if (result)
+					return result;
+			}
+
+			if (initial_hint.empty())
+				SDL_SetHint(SDL_HINT_RENDER_DRIVER, nullptr);
+			else
+				SDL_SetHint(SDL_HINT_RENDER_DRIVER, initial_hint.c_str());
+			SDL_SetError("No SDL renderer with target texture support is available.\n%s", errors.c_str());
+			return nullptr;
+		}
 	}
 
 	Emulator::Emulator(std::map<std::string, std::string>& _argv_map, bool _paused) : Paused(_paused), argv_map(_argv_map), chipset(*new Chipset(*this)), m_step_requested(false) {
@@ -146,7 +222,7 @@ namespace casioemu {
 		if (!window)
 			PANIC("SDL_CreateWindow failed: %s\n", SDL_GetError());
 		SetPreferredRendererDriverHint();
-		renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
+		renderer = CreateRendererWithTargetTexture(window);
 		if (!renderer)
 			PANIC("SDL_CreateRenderer failed: %s\n", SDL_GetError());
 
@@ -303,7 +379,7 @@ namespace casioemu {
 			if (!window)
 				PANIC("SDL_CreateWindow failed: %s\n", SDL_GetError());
 			SetPreferredRendererDriverHint();
-			renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
+			renderer = CreateRendererWithTargetTexture(window);
 			if (!renderer)
 				PANIC("SDL_CreateRenderer failed: %s\n", SDL_GetError());
 
@@ -520,8 +596,13 @@ namespace casioemu {
 			}
 			if (scaled_interface_texture) {
 				SDL_SetRenderTarget(renderer, nullptr);
-				SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+				SDL_RenderSetViewport(renderer, nullptr);
+				SDL_RenderSetClipRect(renderer, nullptr);
+				SDL_RenderSetScale(renderer, 1.0f, 1.0f);
+#ifndef SINGLE_WINDOW
+				SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 				SDL_RenderClear(renderer);
+#endif
 				SDL_SetTextureColorMod(scaled_interface_texture, 255, 255, 255);
 				SDL_SetTextureAlphaMod(scaled_interface_texture, 255);
 				SDL_RenderCopy(renderer, scaled_interface_texture, nullptr, &dest);
@@ -579,6 +660,13 @@ namespace casioemu {
 
 		// resize and copy `tx` to screen
 		SDL_SetRenderTarget(renderer, nullptr);
+		SDL_RenderSetViewport(renderer, nullptr);
+		SDL_RenderSetClipRect(renderer, nullptr);
+		SDL_RenderSetScale(renderer, 1.0f, 1.0f);
+#ifndef SINGLE_WINDOW
+		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+		SDL_RenderClear(renderer);
+#endif
 		int w, h;
 		SDL_GetWindowSize(window, &w, &h);
 		auto wf = (double)w / render_target_w;
@@ -589,8 +677,6 @@ namespace casioemu {
 		dest.h = render_target_h * uf;
 		dest.x = (w - dest.w) / 2;
 		dest.y = (h - dest.h) / 2; // Centre it
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-		SDL_RenderClear(renderer);
 		SDL_RenderCopy(renderer, tx, nullptr, &dest);
 		emu_rect = dest;
 		SDL_DestroyTexture(tx);
