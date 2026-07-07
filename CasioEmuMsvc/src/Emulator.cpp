@@ -2,6 +2,7 @@
 #include "Chipset/Chipset.hpp"
 #include "Logger.hpp"
 #include "ModelInfo.h"
+#include "RendererBackend.h"
 #include <SDL.h>
 #include <cassert>
 #include <chrono>
@@ -106,6 +107,12 @@ namespace casioemu {
 
 		auto width = interface_background.dest.w;
 		auto height = interface_background.dest.h;
+		if (ModelDefinition.extra.find("webcalc_board") != ModelDefinition.extra.end() &&
+			!HasSvgExtension(ModelDefinition.interface_path) &&
+			interface_background.src.w > 0 && interface_background.src.h > 0) {
+			width = interface_background.src.w;
+			height = interface_background.src.h;
+		}
 		try {
 			std::size_t pos;
 
@@ -138,7 +145,7 @@ namespace casioemu {
 			SDL_WINDOW_SHOWN | (SDL_WINDOW_RESIZABLE));
 		if (!window)
 			PANIC("SDL_CreateWindow failed: %s\n", SDL_GetError());
-		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+		SetPreferredRendererDriverHint();
 		renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
 		if (!renderer)
 			PANIC("SDL_CreateRenderer failed: %s\n", SDL_GetError());
@@ -257,6 +264,12 @@ namespace casioemu {
 
 			auto width = interface_background.dest.w;
 			auto height = interface_background.dest.h;
+			if (ModelDefinition.extra.find("webcalc_board") != ModelDefinition.extra.end() &&
+				!HasSvgExtension(ModelDefinition.interface_path) &&
+				interface_background.src.w > 0 && interface_background.src.h > 0) {
+				width = interface_background.src.w;
+				height = interface_background.src.h;
+			}
 			try {
 				std::size_t pos;
 
@@ -289,7 +302,7 @@ namespace casioemu {
 				SDL_WINDOW_SHOWN | (SDL_WINDOW_RESIZABLE));
 			if (!window)
 				PANIC("SDL_CreateWindow failed: %s\n", SDL_GetError());
-			SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+			SetPreferredRendererDriverHint();
 			renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
 			if (!renderer)
 				PANIC("SDL_CreateRenderer failed: %s\n", SDL_GetError());
@@ -528,10 +541,18 @@ namespace casioemu {
 			}
 		}
 
+		const bool webcalc_png_interface = !interface_is_svg && ModelDefinition.extra.find("webcalc_board") != ModelDefinition.extra.end() &&
+			interface_background.src.w > 0 && interface_background.src.h > 0 &&
+			interface_background.dest.w > 0 && interface_background.dest.h > 0;
+		const int render_target_w = webcalc_png_interface ? interface_background.src.w : interface_background.dest.w;
+		const int render_target_h = webcalc_png_interface ? interface_background.src.h : interface_background.dest.h;
+		const float board_to_target_x = webcalc_png_interface ? static_cast<float>(render_target_w) / static_cast<float>(interface_background.dest.w) : 1.0f;
+		const float board_to_target_y = webcalc_png_interface ? static_cast<float>(render_target_h) / static_cast<float>(interface_background.dest.h) : 1.0f;
+
 		// create texture `tx` with the same format as `interface_texture`
 		Uint32 format;
 		SDL_QueryTexture(interface_texture, &format, nullptr, nullptr, nullptr);
-		SDL_Texture* tx = SDL_CreateTexture(renderer, format, SDL_TEXTUREACCESS_TARGET, interface_background.dest.w, interface_background.dest.h);
+		SDL_Texture* tx = SDL_CreateTexture(renderer, format, SDL_TEXTUREACCESS_TARGET, render_target_w, render_target_h);
 
 		// render on `tx`
 		SDL_SetRenderTarget(renderer, tx);
@@ -541,18 +562,31 @@ namespace casioemu {
 		SDL_SetTextureAlphaMod(interface_texture, 255);
 		SDL_Rect tmp = interface_background.src;
 		SDL_RenderCopy(renderer, interface_texture, &tmp, nullptr);
+		SDL_Rect old_viewport{};
+		float old_scale_x = 1.0f, old_scale_y = 1.0f;
+		if (webcalc_png_interface) {
+			SDL_RenderGetViewport(renderer, &old_viewport);
+			SDL_RenderGetScale(renderer, &old_scale_x, &old_scale_y);
+			SDL_Rect target_viewport{0, 0, render_target_w, render_target_h};
+			SDL_RenderSetViewport(renderer, &target_viewport);
+			SDL_RenderSetScale(renderer, board_to_target_x, board_to_target_y);
+		}
 		chipset.Frame();
+		if (webcalc_png_interface) {
+			SDL_RenderSetScale(renderer, old_scale_x, old_scale_y);
+			SDL_RenderSetViewport(renderer, &old_viewport);
+		}
 
 		// resize and copy `tx` to screen
 		SDL_SetRenderTarget(renderer, nullptr);
 		int w, h;
 		SDL_GetWindowSize(window, &w, &h);
-		auto wf = (double)w / interface_background.dest.w;
-		auto hf = (double)h / interface_background.dest.h;
+		auto wf = (double)w / render_target_w;
+		auto hf = (double)h / render_target_h;
 		auto uf = std::min(wf, hf);
 		SDL_Rect dest{};
-		dest.w = interface_background.dest.w * uf;
-		dest.h = interface_background.dest.h * uf;
+		dest.w = render_target_w * uf;
+		dest.h = render_target_h * uf;
 		dest.x = (w - dest.w) / 2;
 		dest.y = (h - dest.h) / 2; // Centre it
 		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);

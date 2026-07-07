@@ -11,6 +11,7 @@
 #include "Gui/imgui/imgui_impl_sdl2.h"
 #include "Gui/imgui/imgui_impl_sdlrenderer2.h"
 #include "Localization.h"
+#include "RendererBackend.h"
 #include "RomPackage.h"
 #include "Romu.h"
 #include "SysDialog.h"
@@ -1417,6 +1418,7 @@ std::string sui_loop() {
 		SDL_WINDOWPOS_UNDEFINED,
 		1200, 800,
 		SDL_WINDOW_SHOWN | (SDL_WINDOW_RESIZABLE));
+	casioemu::SetPreferredRendererDriverHint();
 	renderer2 = SDL_CreateRenderer(window2, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
 #ifdef _WIN32
 	EnableDarkTitleBar(GetSDLWindowHandle(window2));

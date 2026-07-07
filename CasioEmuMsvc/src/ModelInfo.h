@@ -203,7 +203,6 @@ namespace casioemu {
 
 	void WriteModelInfoJson(std::ostream& os, const ModelInfo& model);
 	void ReadModelInfoJson(std::istream& is, ModelInfo& model);
-	bool CanInferWebCalcModelInfo(const std::filesystem::path& model_path);
 	bool LoadModelInfoFromFolder(
 		const std::filesystem::path& model_path,
 		ModelInfo& model,

@@ -14,6 +14,7 @@
 #include "LabelViewer.h"
 #include "MemBreakPoint.hpp"
 #include "Random.hpp"
+#include "RendererBackend.h"
 #include "Theme.h"
 #include "VariableWindow.h"
 #include "WatchWindow.hpp"
@@ -393,6 +394,7 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 #ifdef _WIN32
 	EnableDarkTitleBar(GetSDLWindowHandle(window));
 #endif
+	casioemu::SetPreferredRendererDriverHint();
 	renderer = SDL_CreateRenderer(window, -1,
 		SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
 #endif

@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <SDL.h>
+#include "RendererBackend.h"
 
 class ScreenMirror {
 private:
@@ -67,7 +68,7 @@ public:
 		}
 		windowId = SDL_GetWindowID(mirrorWindow);
 
-		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+		casioemu::SetPreferredRendererDriverHint();
 		mirrorRenderer = SDL_CreateRenderer(mirrorWindow, -1,
 			SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 

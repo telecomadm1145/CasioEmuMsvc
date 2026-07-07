@@ -205,6 +205,7 @@
     <ClInclude Include="src\Ext\DiscordRPC.h" />
     <ClInclude Include="third_party\miniz\miniz_export.h" />
     <ClInclude Include="third_party\tinyxml2\tinyxml2.h" />
+    <ClInclude Include="src\RendererBackend.h" />
     <ClInclude Include="src\Snapshot.h" />
     <ClInclude Include="src\Compress.h" />
     <ClInclude Include="third_party\miniz\miniz.h" />
