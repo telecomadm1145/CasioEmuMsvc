@@ -23,7 +23,10 @@
 #include <array>
 #include <filesystem>
 #include <imgui.h>
+#include <fstream>
 #include <iostream>
+#include <iterator>
+#include <set>
 
 #ifdef _WIN32
 #include <objbase.h>
@@ -37,6 +40,9 @@
 #endif
 #include "Ext/Random.hpp"
 #include "DiscordRPC.h"
+
+#include <algorithm>
+#include <cctype>
 
 #ifdef __ANDROID__
 #include "../Gui/ThemeManager.h"
@@ -158,6 +164,41 @@ public:
 			init_failed = true;
 		}
 	}
+	~ModelEditor() override {
+		if (sdl_t)
+			SDL_DestroyTexture(sdl_t);
+	}
+	bool IsWebCalcModel() const {
+		return !mi.board_path.empty() || mi.extra.find("webcalc_board") != mi.extra.end();
+	}
+	static bool HasSvgExtension(const std::filesystem::path& path) {
+		auto ext = path.extension().string();
+		for (auto& ch : ext)
+			ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+		return ext == ".svg";
+	}
+	SDL_Surface* LoadInterfaceSurface(const std::filesystem::path& path, const casioemu::SpriteInfo& interface_sprite) {
+		if (!HasSvgExtension(path))
+			return IMG_Load(path.string().c_str());
+
+		std::ifstream stream(path, std::ios::binary);
+		if (!stream)
+			return nullptr;
+		const std::string svg{std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{}};
+		if (svg.empty())
+			return nullptr;
+
+		const int width = interface_sprite.src.w > 0 ? interface_sprite.src.w : 1;
+		const int height = interface_sprite.src.h > 0 ? interface_sprite.src.h : 1;
+		SDL_RWops* rw = SDL_RWFromConstMem(svg.data(), static_cast<int>(svg.size()));
+		if (!rw)
+			return nullptr;
+		SDL_Surface* surface = IMG_LoadSizedSVG_RW(rw, width, height);
+		SDL_RWclose(rw);
+		if (!surface)
+			SDL_Log("[StartupUI][Warn] IMG_LoadSizedSVG_RW failed for editor interface SVG: %s", IMG_GetError());
+		return surface;
+	}
 	void RenderSprite(const casioemu::SpriteInfo& sprite, ImTextureID texture_id, const ImVec2& texture_size, const ImVec2& render_size) {
 
 		// 计算 UV 坐标
@@ -217,10 +258,12 @@ public:
 			uv1, tint_clr);
 	}
 	void LoadInterface() {
-		if (sdl_t)
-			SDL_free(sdl_t);
+		if (sdl_t) {
+			SDL_DestroyTexture(sdl_t);
+			sdl_t = nullptr;
+		}
 		if (mi.sprites.find("rsd_interface") != mi.sprites.end()) {
-			SDL_Surface* surface = IMG_Load((pth / mi.interface_path).string().c_str());
+			SDL_Surface* surface = LoadInterfaceSurface(pth / mi.interface_path, mi.sprites["rsd_interface"]);
 			if (surface) {
 				sdl_t = SDL_CreateTextureFromSurface(renderer2, surface);
 				imgSz = {(float)surface->w, (float)surface->h};
@@ -239,47 +282,66 @@ public:
 		}
 
 		auto y = ImGui::GetCursorPosY();
-		auto scaleFactor = (400.f / imgSp.src.w);
+		auto scaleFactor = imgSp.src.w > 0 ? (400.f / imgSp.src.w) : 1.0f;
+		const bool is_webcalc_model = IsWebCalcModel();
 		if (sdl_t != 0) {
 			ImGui::SetCursorPosX(0);
 			RenderSprite2(imgSp, (ImTextureID)sdl_t, imgSz, {400, 400.0f * imgSp.dest.h / imgSp.dest.w});
-			for (auto& sp : mi.sprites) {
-				if (sp.first != "rsd_pixel" && sp.first != "rsd_interface") {
-					ImGui::SetCursorPos({(float)sp.second.dest.x * scaleFactor, (float)sp.second.dest.y * scaleFactor + y});
-					RenderSprite(sp.second, (ImTextureID)sdl_t, imgSz, {scaleFactor * (float)sp.second.dest.w, scaleFactor * (float)sp.second.dest.h});
-					if (sp.first == selected_sprite_key) {
-						auto min_p = ImGui::GetItemRectMin();
-						auto max_p = ImGui::GetItemRectMax();
-						ImGui::GetWindowDrawList()->AddRect(min_p, max_p, IM_COL32(255, 0, 0, 255), 0.0f, 0, 2.0f);
+			if (!is_webcalc_model) {
+				for (auto& sp : mi.sprites) {
+					if (sp.first != "rsd_pixel" && sp.first != "rsd_interface") {
+						ImGui::SetCursorPos({(float)sp.second.dest.x * scaleFactor, (float)sp.second.dest.y * scaleFactor + y});
+						RenderSprite(sp.second, (ImTextureID)sdl_t, imgSz, {scaleFactor * (float)sp.second.dest.w, scaleFactor * (float)sp.second.dest.h});
+						if (sp.first == selected_sprite_key) {
+							auto min_p = ImGui::GetItemRectMin();
+							auto max_p = ImGui::GetItemRectMax();
+							ImGui::GetWindowDrawList()->AddRect(min_p, max_p, IM_COL32(255, 0, 0, 255), 0.0f, 0, 2.0f);
+						}
 					}
 				}
-			}
-			auto sp2 = mi.sprites["rsd_pixel"];
-			if (mi.hardware_id == casioemu::HW_ES_PLUS || mi.hardware_id == casioemu::HW_FX_5800P || mi.hardware_id == casioemu::HW_EPS6800) {
-				for (size_t j = 0; j < 31; j++) {
-					for (size_t i = 0; i < 96; i++) {
-						ImGui::SetCursorPos({(float)(sp2.dest.x + i * sp2.dest.w) * scaleFactor, (float)(sp2.dest.y + j * sp2.dest.h) * scaleFactor + y});
-						RenderSprite3(sp2, (ImTextureID)sdl_t, imgSz, {scaleFactor * (float)sp2.dest.w, scaleFactor * (float)sp2.dest.h});
+				auto sp2 = mi.sprites["rsd_pixel"];
+				if (mi.hardware_id == casioemu::HW_ES_PLUS || mi.hardware_id == casioemu::HW_FX_5800P || mi.hardware_id == casioemu::HW_EPS6800) {
+					for (size_t j = 0; j < 31; j++) {
+						for (size_t i = 0; i < 96; i++) {
+							ImGui::SetCursorPos({(float)(sp2.dest.x + i * sp2.dest.w) * scaleFactor, (float)(sp2.dest.y + j * sp2.dest.h) * scaleFactor + y});
+							RenderSprite3(sp2, (ImTextureID)sdl_t, imgSz, {scaleFactor * (float)sp2.dest.w, scaleFactor * (float)sp2.dest.h});
+						}
 					}
 				}
-			}
-			else {
-				for (size_t j = 0; j < 63; j++) {
-					for (size_t i = 0; i < 192; i++) {
-						ImGui::SetCursorPos({(float)(sp2.dest.x + i * sp2.dest.w) * scaleFactor, (float)(sp2.dest.y + j * sp2.dest.h) * scaleFactor + y});
-						RenderSprite3(sp2, (ImTextureID)sdl_t, imgSz, {scaleFactor * (float)sp2.dest.w, scaleFactor * (float)sp2.dest.h});
+				else {
+					for (size_t j = 0; j < 63; j++) {
+						for (size_t i = 0; i < 192; i++) {
+							ImGui::SetCursorPos({(float)(sp2.dest.x + i * sp2.dest.w) * scaleFactor, (float)(sp2.dest.y + j * sp2.dest.h) * scaleFactor + y});
+							RenderSprite3(sp2, (ImTextureID)sdl_t, imgSz, {scaleFactor * (float)sp2.dest.w, scaleFactor * (float)sp2.dest.h});
+						}
 					}
 				}
 			}
 		}
-		for (auto& btn : mi.buttons) {
+		else {
+			ImGui::SetCursorPosX(0);
+			ImGui::Dummy({400, 600});
+			ImGui::SetCursorPos({0, y});
+			ImGui::TextUnformatted("Failed to load interface preview.");
+		}
+		for (size_t button_index = 0; button_index < mi.buttons.size(); ++button_index) {
+			auto& btn = mi.buttons[button_index];
 			ImGui::SetCursorPos({scaleFactor * btn.rect.x, scaleFactor * btn.rect.y + y});
 			ImGui::PushID(btn.kiko + 20);
-			if (ImGui::Button(btn.keyname.c_str(), {scaleFactor * btn.rect.w, scaleFactor * btn.rect.h})) {
+			const ImVec2 button_size{scaleFactor * btn.rect.w, scaleFactor * btn.rect.h};
+			const bool clicked = is_webcalc_model
+				? ImGui::InvisibleButton(btn.keyname.c_str(), button_size)
+				: ImGui::Button(btn.keyname.c_str(), button_size);
+			if (clicked) {
 				btninfo = &btn;
 				strncpy(buffer, btn.keyname.c_str(), sizeof(buffer) - 1);
 				buffer[sizeof(buffer) - 1] = '\0';
 				SDL_itoa(btn.kiko, buffer2, 16);
+			}
+			if (is_webcalc_model && btninfo == &btn) {
+				auto min_p = ImGui::GetItemRectMin();
+				auto max_p = ImGui::GetItemRectMax();
+				ImGui::GetWindowDrawList()->AddRect(min_p, max_p, IM_COL32(255, 0, 0, 255), 0.0f, 0, 2.0f);
 			}
 			ImGui::PopID();
 		}
@@ -336,7 +398,21 @@ public:
 					ImGui::EndTabItem();
 				}
 				if (ImGui::BeginTabItem("Buttons")) {
-					if (btninfo) {
+					if (is_webcalc_model) {
+						if (btninfo) {
+							ImGui::TextUnformatted("Button geometry is read from board.svg.");
+							if (ImGui::InputText("ModelEditor.KeyName"_lc, buffer, 260)) {
+								btninfo->keyname = buffer;
+							}
+							if (ImGui::InputText("ModelEditor.KIKO"_lc, buffer2, 12)) {
+								btninfo->kiko = SDL_strtol(buffer2, 0, 16);
+							}
+						}
+						else {
+							ImGui::Text("Select a button from the preview to edit.");
+						}
+					}
+					else if (btninfo) {
 						if (ImGui::InputText("ModelEditor.KeyName"_lc, buffer, 260)) {
 							btninfo->keyname = buffer;
 						}
@@ -353,7 +429,7 @@ public:
 					}
 					ImGui::EndTabItem();
 				}
-				if (ImGui::BeginTabItem("Sprites")) {
+				if (!is_webcalc_model && ImGui::BeginTabItem("Sprites")) {
 					ImGui::Text("Sprite List");
 					ImGui::BeginChild("SpriteList", {0, 150}, true);
 
@@ -382,11 +458,39 @@ public:
 					}
 					ImGui::EndTabItem();
 				}
+				if (is_webcalc_model && ImGui::BeginTabItem("Status")) {
+					if (mi.status_sprites.empty()) {
+						ImGui::TextUnformatted("No status sprites configured.");
+					}
+					else {
+						for (auto& [key, index] : mi.status_sprites) {
+							ImGui::PushID(key.c_str());
+							ImGui::TextUnformatted(key.c_str());
+							ImGui::SameLine(160.0f);
+							ImGui::SetNextItemWidth(80.0f);
+							ImGui::InputInt("Index", &index);
+							ImGui::PopID();
+						}
+					}
+					ImGui::EndTabItem();
+				}
 				ImGui::EndTabBar();
 			}
 
 			ImGui::Separator();
 			if (ImGui::Button("Button.Save"_lc)) {
+				std::set<int> used_kiko;
+				bool duplicate_kiko = false;
+				for (const auto& button : mi.buttons) {
+					if (!used_kiko.insert(button.kiko).second) {
+						duplicate_kiko = true;
+						break;
+					}
+				}
+				if (duplicate_kiko) {
+					SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Duplicate KIKO values are not allowed.", nullptr);
+					return;
+				}
 				casioemu::SaveModelInfoJson(pth, mi);
 				this->open = false;
 			}

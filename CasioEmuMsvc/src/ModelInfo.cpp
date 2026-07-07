@@ -658,9 +658,13 @@ namespace casioemu {
 
 			ModelInfo model{};
 			model.hardware_id = hardware_id;
+			model.board_path = requested_board;
 			model.interface_path = requested_interface;
 			model.rom_path = requested_rom;
 			model.flash_path = requested_flash;
+			model.screen_width = display_w;
+			model.screen_height = display_h;
+			model.screen_scale_y = screen_scale_y;
 			model.buttons = ParseButtons(board_document, board_rect);
 
 			if (model.interface_path.empty())
@@ -799,6 +803,24 @@ namespace casioemu {
 			return ParseStatusSpriteMap(*item);
 		}
 
+		void ApplyWebCalcButtonOverrides(const json& buttons, ModelInfo& model) {
+			if (!buttons.is_array())
+				throw std::runtime_error("config.json field buttons must be an array.");
+			for (size_t ix = 0; ix < buttons.size(); ++ix) {
+				const auto& entry = buttons.at(ix);
+				if (!entry.is_object())
+					throw std::runtime_error("config.json WebCalc SVG button entries must be objects.");
+				const size_t button_index = entry.contains("index") ? entry.at("index").get<size_t>() : ix;
+				if (button_index >= model.buttons.size())
+					throw std::runtime_error("config.json WebCalc SVG button index is out of range.");
+				auto& button = model.buttons[button_index];
+				if (entry.contains("keyname"))
+					button.keyname = entry.at("keyname").get<std::string>();
+				if (entry.contains("kiko"))
+					button.kiko = entry.at("kiko").get<int>();
+			}
+		}
+
 		std::map<std::string, int> RequireStatusSpriteMap(const json& value) {
 			const json& item = RequireJsonMember(value, {"status_sprites", "status_sprite_map", "status_map"}, "status_sprites");
 			auto result = ParseStatusSpriteMap(item);
@@ -852,6 +874,8 @@ namespace casioemu {
 				model.pd_value = value.at("pd_value").get<unsigned char>();
 			if (value.contains("interface_path"))
 				model.interface_path = value.at("interface_path").get<std::string>();
+			if (const auto board_path = ReadJsonString(value, {"board_path", "board_svg", "webcalc_board", "board"}); !board_path.empty())
+				model.board_path = board_path;
 			if (value.contains("rom_path"))
 				model.rom_path = value.at("rom_path").get<std::string>();
 			if (value.contains("flash_path"))
@@ -874,6 +898,12 @@ namespace casioemu {
 				model.LARGE_model = value.at("LARGE_model").get<bool>();
 			if (value.contains("ml620_mirroring"))
 				model.ml620_mirroring = value.at("ml620_mirroring").get<bool>();
+			if (const json* item = FindJsonMember(value, {"screen_width"}))
+				model.screen_width = item->get<int>();
+			if (const json* item = FindJsonMember(value, {"screen_height"}))
+				model.screen_height = item->get<int>();
+			if (const json* item = FindJsonMember(value, {"screen_scale_y"}))
+				model.screen_scale_y = item->get<double>();
 			if (value.contains("extra")) {
 				auto extra = value.at("extra").get<std::map<std::string, std::string>>();
 				if (reset) {
@@ -888,19 +918,25 @@ namespace casioemu {
 				model.status_sprites = std::move(status_sprites);
 
 			if (value.contains("buttons")) {
-				model.buttons.clear();
-				for (const auto& item : value.at("buttons")) {
-					ButtonInfo button{};
-					if (!item.contains("rect") || !item.contains("kiko") || !item.contains("keyname"))
-						throw std::runtime_error("config.json button entries must specify rect, kiko, and keyname.");
-					button.rect = RectFromJson(item.at("rect"));
-					button.kiko = item.at("kiko").get<int>();
-					button.keyname = item.at("keyname").get<std::string>();
-					if (item.contains("svg_shape"))
-						button.svg_shape = item.at("svg_shape").get<std::string>();
-					if (item.contains("svg_defs"))
-						button.svg_defs = item.at("svg_defs").get<std::string>();
-					model.buttons.push_back(button);
+				if (!model.board_path.empty()) {
+					if (!model.buttons.empty())
+						ApplyWebCalcButtonOverrides(value.at("buttons"), model);
+				}
+				else {
+					model.buttons.clear();
+					for (const auto& item : value.at("buttons")) {
+						ButtonInfo button{};
+						if (!item.contains("rect") || !item.contains("kiko") || !item.contains("keyname"))
+							throw std::runtime_error("config.json button entries must specify rect, kiko, and keyname.");
+						button.rect = RectFromJson(item.at("rect"));
+						button.kiko = item.at("kiko").get<int>();
+						button.keyname = item.at("keyname").get<std::string>();
+						if (item.contains("svg_shape"))
+							button.svg_shape = item.at("svg_shape").get<std::string>();
+						if (item.contains("svg_defs"))
+							button.svg_defs = item.at("svg_defs").get<std::string>();
+						model.buttons.push_back(button);
+					}
 				}
 			}
 			if (value.contains("sprites")) {
@@ -921,6 +957,8 @@ namespace casioemu {
 		value["real_hardware"] = model.real_hardware;
 		value["pd_value"] = model.pd_value;
 		value["interface_path"] = model.interface_path;
+		if (!model.board_path.empty())
+			value["board_path"] = model.board_path;
 		value["rom_path"] = model.rom_path;
 		value["flash_path"] = model.flash_path;
 		value["ink_color"] = {{"r", model.ink_color.r}, {"g", model.ink_color.g}, {"b", model.ink_color.b}};
@@ -930,27 +968,45 @@ namespace casioemu {
 		value["u16_mode"] = model.u16_mode;
 		value["large_model"] = model.LARGE_model;
 		value["ml620_mirroring"] = model.ml620_mirroring;
+		if (!model.board_path.empty()) {
+			value["screen_width"] = model.screen_width;
+			value["screen_height"] = model.screen_height;
+			value["screen_scale_y"] = model.screen_scale_y;
+		}
 		if (!model.status_sprites.empty())
 			value["status_sprites"] = model.status_sprites;
 		value["extra"] = model.extra;
 
-		value["buttons"] = json::array();
-		for (const auto& button : model.buttons) {
-			json item{
-				{"rect", RectToJson(button.rect)},
-				{"kiko", button.kiko},
-				{"keyname", button.keyname},
-			};
-			if (!button.svg_shape.empty())
-				item["svg_shape"] = button.svg_shape;
-			if (!button.svg_defs.empty())
-				item["svg_defs"] = button.svg_defs;
-			value["buttons"].push_back(item);
-		}
+		if (model.board_path.empty()) {
+			value["buttons"] = json::array();
+			for (const auto& button : model.buttons) {
+				json item{
+					{"rect", RectToJson(button.rect)},
+					{"kiko", button.kiko},
+					{"keyname", button.keyname},
+				};
+				if (!button.svg_shape.empty())
+					item["svg_shape"] = button.svg_shape;
+				if (!button.svg_defs.empty())
+					item["svg_defs"] = button.svg_defs;
+				value["buttons"].push_back(item);
+			}
 
-		value["sprites"] = json::object();
-		for (const auto& [name, sprite] : model.sprites)
-			value["sprites"][name] = SpriteToJson(sprite);
+			value["sprites"] = json::object();
+			for (const auto& [name, sprite] : model.sprites)
+				value["sprites"][name] = SpriteToJson(sprite);
+		}
+		else {
+			value["buttons"] = json::array();
+			for (size_t ix = 0; ix < model.buttons.size(); ++ix) {
+				const auto& button = model.buttons[ix];
+				value["buttons"].push_back({
+					{"index", ix},
+					{"keyname", button.keyname},
+					{"kiko", button.kiko},
+				});
+			}
+		}
 
 		os << value.dump(2) << '\n';
 	}
@@ -1003,9 +1059,22 @@ namespace casioemu {
 				if (!stream)
 					throw std::runtime_error("Cannot open config.bin.");
 				model.Read(stream);
-				if (loaded_from)
-					*loaded_from = MODEL_CONFIG_BIN;
-				return true;
+				bool cache_missing_webcalc_fields = false;
+				if (FileExists(json_path) && (model.board_path.empty() || model.screen_width <= 0 || model.screen_height <= 0 || model.screen_scale_y <= 0)) {
+					try {
+						std::ifstream json_stream(json_path);
+						const json value = json::parse(json_stream);
+						cache_missing_webcalc_fields = !ReadJsonString(value, {"board_path", "board_svg", "webcalc_board", "board"}).empty();
+					}
+					catch (...) {
+						cache_missing_webcalc_fields = false;
+					}
+				}
+				if (!cache_missing_webcalc_fields) {
+					if (loaded_from)
+						*loaded_from = MODEL_CONFIG_BIN;
+					return true;
+				}
 			}
 
 			if (FileExists(json_path)) {

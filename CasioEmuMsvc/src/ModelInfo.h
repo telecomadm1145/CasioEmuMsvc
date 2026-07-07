@@ -84,6 +84,10 @@ namespace casioemu {
 		bool LARGE_model{};
 		// ML620 style mirroring(1->8) or ML610 style mirroring(1->4)
 		bool ml620_mirroring{};
+		std::string board_path;
+		int screen_width{};
+		int screen_height{};
+		double screen_scale_y{};
 		std::map<std::string, int> status_sprites;
 		std::map<std::string, std::string> extra;
 		void Write(std::ostream& os) const {
@@ -129,9 +133,17 @@ namespace casioemu {
 			}
 			Binary::Write(os, sprite_svg_shapes);
 			Binary::Write(os, sprite_svg_defs);
+			Binary::Write(os, board_path);
+			Binary::Write(os, screen_width);
+			Binary::Write(os, screen_height);
+			Binary::Write(os, screen_scale_y);
 		}
 		void Read(std::istream& is) {
 			status_sprites.clear();
+			board_path.clear();
+			screen_width = 0;
+			screen_height = 0;
+			screen_scale_y = 0;
 			{
 				std::string unused;
 				Binary::Read(is, unused);
@@ -195,6 +207,13 @@ namespace casioemu {
 					sprites[name].svg_shape = std::move(shape);
 				for (auto& [name, defs] : sprite_svg_defs)
 					sprites[name].svg_defs = std::move(defs);
+
+				if (is.peek() != std::char_traits<char>::eof()) {
+					Binary::Read(is, board_path);
+					Binary::Read(is, screen_width);
+					Binary::Read(is, screen_height);
+					Binary::Read(is, screen_scale_y);
+				}
 			}
 		}
 	};
