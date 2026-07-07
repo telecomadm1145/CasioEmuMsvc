@@ -4,6 +4,7 @@
 #include "imgui/imgui.h"
 #include "Chipset.hpp"
 #include "Localization.h"
+#include <algorithm>
 int screen_flashing_threshold = 20;
 float screen_fading_blending_coefficient = 0;
 bool enable_screen_fading = false;
@@ -36,6 +37,14 @@ void HwController::RenderCore() {
 	if (recording) {
 		ImGui::SameLine();
 		ImGui::Text("RecordStatus"_lc, m_emu->recording_frame_count.load());
+	}
+	int capture_scale = std::max(2, m_emu->capture_scale.load());
+	ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
+	if (ImGui::InputInt("Capture scale", &capture_scale, 1, 1)) {
+		m_emu->capture_scale.store(std::max(2, capture_scale));
+	}
+	else if (capture_scale != m_emu->capture_scale.load()) {
+		m_emu->capture_scale.store(capture_scale);
 	}
 #endif
 

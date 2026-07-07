@@ -61,6 +61,7 @@ namespace casioemu {
 		std::atomic<bool> recording_stop_requested{};
 		std::atomic<bool> recording_active{};
 		std::atomic<unsigned int> recording_frame_count{};
+		std::atomic<int> capture_scale{3};
 #endif
 
 		std::thread* tick_thread;

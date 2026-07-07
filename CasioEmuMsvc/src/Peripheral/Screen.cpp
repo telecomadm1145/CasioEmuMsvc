@@ -578,36 +578,13 @@ namespace casioemu {
 		static const SpriteBitmap sprite_bitmap[];
 		std::vector<SpriteInfo> sprite_info;
 		std::vector<SDL_Texture*> sprite_svg_textures;
+		std::vector<uint8_t> sprite_available;
 		ColourInfo ink_colour{};
 
 		bool inited = 0;
 		bool enabled_2 = 0;
 		int status_ink_alpha_on = 255;
 		int status_ink_alpha_off = 0;
-		std::array<SpriteInfo, 2> classwiz_graph_sprite_info{};
-		std::array<SDL_Texture*, 2> classwiz_graph_svg_textures{};
-
-		bool HasSprite(const char* name) const {
-			return emulator.ModelDefinition.sprites.find(name) != emulator.ModelDefinition.sprites.end();
-		}
-
-		bool HasClassWizGraphStatusSprites() const {
-			if constexpr (hardware_id != HW_CLASSWIZ_II) {
-				return false;
-			}
-			else {
-				return HasSprite("rsd_fx") && HasSprite("rsd_gx");
-			}
-		}
-
-		bool HasClassWizGraphStatusLogic() const {
-			if constexpr (hardware_id != HW_CLASSWIZ_II) {
-				return false;
-			}
-			else {
-				return emulator.ModelDefinition.extra.find("classwiz_graph") != emulator.ModelDefinition.extra.end() || HasClassWizGraphStatusSprites();
-			}
-		}
 
 		bool StatusEnabled() const {
 			if (!(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) && hardware_id != HW_FX_5800P && hardware_id != HW_ES_PLUS && hardware_id != HW_EPS6800) {
@@ -644,37 +621,6 @@ namespace casioemu {
 			return static_cast<uint8_t>(std::clamp(static_cast<int>(alpha), 0, 255));
 		}
 
-		uint8_t ClassWizIISingleStatusAlpha(uint8_t offset, uint8_t mask) const {
-			if (!StatusEnabled() || !screen_buffer) return 0;
-			const auto status_offset = (offset + screen_offset * ROW_SIZE) % ((N_ROW + 1) * ROW_SIZE);
-			const bool on = (screen_buffer[status_offset] & mask) != 0;
-			if (!screen_residual_enabled) {
-				return on ? 255 : 0;
-			}
-			float alpha = static_cast<float>(on ? status_ink_alpha_on : status_ink_alpha_off);
-			if (screen_refresh_rate >= screen_flashing_threshold) {
-				alpha *= screen_scan_alpha[0];
-			}
-			return static_cast<uint8_t>(std::clamp(static_cast<int>(alpha), 0, 255));
-		}
-
-		int ClassWizGraphStatusIndexFromCommonIndex(int common_index) const {
-			if (common_index < 7) return common_index;
-			if (common_index < 12) return common_index + 1;
-			return common_index + 2;
-		}
-
-		void UpdateClassWizGraphStatusAlpha(float ratio) {
-			if constexpr (hardware_id == HW_CLASSWIZ_II) {
-				static constexpr int FX_STATUS_INDEX = 7;
-				static constexpr int GX_STATUS_INDEX = 13;
-				const int fx_alpha = ClassWizIISingleStatusAlpha(0x09, 0x01);
-				const int gx_alpha = ClassWizIISingleStatusAlpha(0x0f, 0x01);
-				screen_ink_alpha[FX_STATUS_INDEX] = screen_ink_alpha[FX_STATUS_INDEX] * ratio + fx_alpha * (1 - ratio);
-				screen_ink_alpha[GX_STATUS_INDEX] = screen_ink_alpha[GX_STATUS_INDEX] * ratio + gx_alpha * (1 - ratio);
-			}
-		}
-
 	public:
 		Screen(Emulator& emu)
 			: Peripheral(emu) {
@@ -696,12 +642,6 @@ namespace casioemu {
 		}
 		~Screen() {
 			for (auto*& texture : sprite_svg_textures) {
-				if (texture) {
-					SDL_DestroyTexture(texture);
-					texture = nullptr;
-				}
-			}
-			for (auto*& texture : classwiz_graph_svg_textures) {
 				if (texture) {
 					SDL_DestroyTexture(texture);
 					texture = nullptr;
@@ -745,9 +685,6 @@ namespace casioemu {
 			}
 		}
 		int GetStatusAlphaCount() const override {
-			if constexpr (hardware_id == HW_CLASSWIZ_II) {
-				return HasClassWizGraphStatusLogic() ? 20 : 18;
-			}
 			return SPR_MAX > 0 ? SPR_MAX - 1 : 0;
 		}
 		void WriteStatusAlpha(uint8_t* out, int max_len) const override {
@@ -1008,7 +945,6 @@ namespace casioemu {
 					status_ink_alpha_on = ink_alpha_on;
 					status_ink_alpha_off = ink_alpha_off;
 					if constexpr (hardware_id == HW_CLASSWIZ_II) {
-						int x = 0;
 						for (int ix = 1; ix != SPR_MAX; ++ix) {
 							ink_alpha = ink_alpha_off;
 							auto off = (sprite_bitmap[ix].offset + screen_offset * row_size) % ((N_ROW + 1) * row_size);
@@ -1018,12 +954,7 @@ namespace casioemu {
 								ink_alpha += (ink_alpha_on - ink_alpha_off) * kClassWizIIUpperPlaneWeight;
 							if (screen_refresh_rate >= screen_flashing_threshold)
 								ink_alpha *= screen_scan_alpha[0];
-							const int status_index = HasClassWizGraphStatusLogic() ? ClassWizGraphStatusIndexFromCommonIndex(x) : x;
-							screen_ink_alpha[status_index] = screen_ink_alpha[status_index] * ratio + ink_alpha * (1 - ratio);
-							x++;
-						}
-						if (HasClassWizGraphStatusLogic()) {
-							UpdateClassWizGraphStatusAlpha(ratio);
+							screen_ink_alpha[ix - 1] = screen_ink_alpha[ix - 1] * ratio + ink_alpha * (1 - ratio);
 						}
 					}
 					else {
@@ -1199,7 +1130,7 @@ namespace casioemu {
 	template <>
 	const int Screen<HW_CLASSWIZ_II>::ROW_SIZE_DISP = 24;
 	template <>
-	const int Screen<HW_CLASSWIZ_II>::SPR_MAX = 19;
+	const int Screen<HW_CLASSWIZ_II>::SPR_MAX = 21;
 
 	template <>
 	const int Screen<HW_CLASSWIZ>::N_ROW = 63;
@@ -1256,11 +1187,13 @@ namespace casioemu {
 		{"rsd_g", 0x01, 0x06},
 		{"rsd_fix", 0x01, 0x07},
 		{"rsd_sci", 0x01, 0x08},
+		{"rsd_fx", 0x01, 0x09},
 		{"rsd_e", 0x01, 0x0A},
 		{"rsd_cmplx", 0x01, 0x0B},
 		{"rsd_angle", 0x01, 0x0C},
 		{"rsd_wdown", 0x01, 0x0D},
 		{"rsd_verify", 0x01, 0x0E},
+		{"rsd_gx", 0x01, 0x0F},
 		{"rsd_left", 0x01, 0x10},
 		{"rsd_down", 0x01, 0x11},
 		{"rsd_up", 0x01, 0x12},
@@ -1371,22 +1304,15 @@ namespace casioemu {
 					texture = nullptr;
 				}
 			}
-			for (auto*& texture : classwiz_graph_svg_textures) {
-				if (texture) {
-					SDL_DestroyTexture(texture);
-					texture = nullptr;
-				}
-			}
 			sprite_svg_textures.assign(SPR_MAX, nullptr);
+			sprite_available.assign(SPR_MAX, 0);
 			for (int ix = 0; ix != SPR_MAX; ++ix) {
-				sprite_info[ix] = emulator.ModelDefinition.sprites[sprite_bitmap[ix].name];
+				auto sprite = emulator.ModelDefinition.sprites.find(sprite_bitmap[ix].name);
+				if (sprite == emulator.ModelDefinition.sprites.end())
+					continue;
+				sprite_info[ix] = sprite->second;
+				sprite_available[ix] = 1;
 				sprite_svg_textures[ix] = CreateSvgSpriteTexture(renderer, sprite_info[ix]);
-			}
-			if (HasClassWizGraphStatusSprites()) {
-				classwiz_graph_sprite_info[0] = emulator.ModelDefinition.sprites["rsd_fx"];
-				classwiz_graph_sprite_info[1] = emulator.ModelDefinition.sprites["rsd_gx"];
-				classwiz_graph_svg_textures[0] = CreateSvgSpriteTexture(renderer, classwiz_graph_sprite_info[0]);
-				classwiz_graph_svg_textures[1] = CreateSvgSpriteTexture(renderer, classwiz_graph_sprite_info[1]);
 			}
 
 			ink_colour = emulator.ModelDefinition.ink_color;
@@ -2348,186 +2274,6 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 	};
 #endif
 
-	class ScreenRecorder {
-	public:
-		~ScreenRecorder() {
-			Stop();
-		}
-
-		bool Start(const SDL_Rect& rect, int requestedFps = 30) {
-			Stop();
-			if (rect.w <= 0 || rect.h <= 0) {
-				SDL_Log("Recording failed: invalid capture region.");
-				return false;
-			}
-
-			captureRect = rect;
-			fps = std::max(1, requestedFps);
-			outputWidth = (captureRect.w + 1) & ~1;
-			outputHeight = (captureRect.h + 1) & ~1;
-			frameCount = 0;
-			nextCaptureTick = 0;
-
-			const std::string stem = MakeTimestampedName("recording-", "");
-			outputPath = GetRecordingOutputPath(stem + ".mp4");
-#ifdef __ANDROID__
-			if (encoder.Start(outputPath, outputWidth, outputHeight, fps)) {
-				frameSequence = false;
-				recording = true;
-				SDL_Log("Recording started: %s", outputPath.string().c_str());
-				return true;
-			}
-#else
-			const std::string command = BuildFfmpegCommand(outputPath);
-			if (encoder.Start(command)) {
-				frameSequence = false;
-				recording = true;
-				SDL_Log("Recording started: %s", outputPath.string().c_str());
-				return true;
-			}
-#endif
-
-			frameSequence = true;
-			frameDirectory = GetRecordingOutputPath(stem + "-frames");
-			std::error_code ec;
-			std::filesystem::create_directories(frameDirectory, ec);
-			if (ec) {
-				SDL_Log("Recording failed: cannot create frame directory %s (%s)",
-					frameDirectory.string().c_str(), ec.message().c_str());
-				return false;
-			}
-
-			recording = true;
-#ifdef __ANDROID__
-			SDL_Log("Android video encoder was not available; recording PNG frames to %s", frameDirectory.string().c_str());
-#else
-			SDL_Log("ffmpeg was not available; recording PNG frames to %s", frameDirectory.string().c_str());
-#endif
-			return true;
-		}
-
-		void Stop() {
-			if (!recording && !encoder.IsOpen()) {
-				return;
-			}
-			encoder.Stop();
-			if (recording) {
-				if (frameSequence) {
-					SDL_Log("Recording stopped: %u frames saved to %s",
-						frameCount, frameDirectory.string().c_str());
-				}
-				else {
-					SDL_Log("Recording stopped: %u frames saved to %s",
-						frameCount, outputPath.string().c_str());
-				}
-			}
-			recording = false;
-		}
-
-		bool CaptureFrame(SDL_Renderer* renderer) {
-			if (!recording) {
-				return false;
-			}
-
-			Uint64 now = SDL_GetTicks64();
-			if (nextCaptureTick != 0 && now < nextCaptureTick) {
-				return true;
-			}
-			nextCaptureTick = now + static_cast<Uint64>(1000 / fps);
-
-			const int frameWidth = frameSequence ? captureRect.w : outputWidth;
-			const int frameHeight = frameSequence ? captureRect.h : outputHeight;
-			const int pitch = frameWidth * 4;
-			std::vector<uint8_t> pixels(static_cast<size_t>(pitch) * frameHeight, 255);
-
-			if (SDL_RenderReadPixels(renderer, &captureRect, SDL_PIXELFORMAT_RGBA32, pixels.data(), pitch) != 0) {
-				SDL_Log("Error capturing recording frame: %s", SDL_GetError());
-				Stop();
-				return false;
-			}
-
-			bool success = frameSequence
-				? SaveFrameAsPng(pixels, pitch)
-#ifdef __ANDROID__
-				: encoder.WriteRgbaFrame(pixels.data(), pitch);
-#else
-				: encoder.Write(pixels.data(), pixels.size());
-#endif
-			if (!success) {
-				SDL_Log("Recording stopped because frame writing failed.");
-				Stop();
-				return false;
-			}
-
-			++frameCount;
-			return true;
-		}
-
-		bool IsRecording() const {
-			return recording;
-		}
-
-		unsigned int FrameCount() const {
-			return frameCount;
-		}
-
-	private:
-		std::string BuildFfmpegCommand(const std::filesystem::path& path) const {
-			std::ostringstream command;
-			command << "ffmpeg -y -hide_banner -loglevel error"
-				<< " -f rawvideo -vcodec rawvideo"
-				<< " -pixel_format rgba"
-				<< " -video_size " << outputWidth << "x" << outputHeight
-				<< " -framerate " << fps
-				<< " -i - -an -c:v mpeg4 -q:v 3 -pix_fmt yuv420p "
-				<< "\"" << path.string() << "\"";
-			return command.str();
-		}
-
-		bool SaveFrameAsPng(const std::vector<uint8_t>& pixels, int pitch) const {
-			std::ostringstream filename;
-			filename << "frame-" << std::setw(6) << std::setfill('0') << frameCount << ".png";
-			std::filesystem::path framePath = frameDirectory / filename.str();
-
-			SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormatFrom(
-				const_cast<uint8_t*>(pixels.data()),
-				captureRect.w,
-				captureRect.h,
-				32,
-				pitch,
-				SDL_PIXELFORMAT_RGBA32);
-			if (!surface) {
-				SDL_Log("Error creating recording frame surface: %s", SDL_GetError());
-				return false;
-			}
-
-			const std::string pathString = framePath.string();
-			int result = IMG_SavePNG(surface, pathString.c_str());
-			SDL_FreeSurface(surface);
-			if (result != 0) {
-				SDL_Log("Error saving recording frame: %s", IMG_GetError());
-				return false;
-			}
-			return true;
-		}
-
-#ifdef __ANDROID__
-		AndroidVideoEncoder encoder;
-#else
-		RawVideoPipe encoder;
-#endif
-		SDL_Rect captureRect{};
-		int fps = 30;
-		int outputWidth = 0;
-		int outputHeight = 0;
-		Uint64 nextCaptureTick = 0;
-		unsigned int frameCount = 0;
-		bool recording = false;
-		bool frameSequence = false;
-		std::filesystem::path outputPath;
-		std::filesystem::path frameDirectory;
-	};
-
 	Uint32 MapScreenshotPixel(SDL_PixelFormat* format, const ColourInfo& ink_colour, float alpha_value) {
 		if (alpha_value > 255.0f) {
 			const int extra = static_cast<int>(alpha_value - 255.0f);
@@ -2570,152 +2316,416 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		return {rect.x, rect.y, rect.w, rect.h};
 	}
 
-	int ClassWizGraphStatusIndexFromCommonIndexForCapture(int common_index) {
-		if (common_index < 7) return common_index;
-		if (common_index < 12) return common_index + 1;
-		return common_index + 2;
-	}
+	struct ScreenCaptureSource {
+		SDL_Texture* interface_texture = nullptr;
+		const std::vector<SpriteInfo>* sprite_info = nullptr;
+		const std::vector<SDL_Texture*>* sprite_svg_textures = nullptr;
+		const std::vector<uint8_t>* sprite_available = nullptr;
+		const ColourInfo* ink_colour = nullptr;
+		const float* screen_ink_alpha = nullptr;
+		int logical_width = 0;
+		int logical_height = 0;
+		SDL_Rect lcd_dest{};
+	};
 
-	bool CapturePixelPerfectScreenshot(
-		SDL_Renderer* renderer,
-		SDL_Texture* interface_texture,
-		const std::vector<SpriteInfo>& sprite_info,
-		const std::vector<SDL_Texture*>& sprite_svg_textures,
-		const std::array<SpriteInfo, 2>& classwiz_graph_sprite_info,
-		const std::array<SDL_Texture*, 2>& classwiz_graph_svg_textures,
-		bool has_classwiz_graph_status_sprites,
-		bool has_classwiz_graph_status_logic,
-		const ColourInfo& ink_colour,
-		const float* screen_ink_alpha,
-		int logical_width,
-		int logical_height,
-		const SDL_Rect& lcd_dest) {
-		static constexpr int SCREENSHOT_PIXEL_SCALE = 3;
-		if (!renderer || !interface_texture || !screen_ink_alpha || logical_width <= 0 || logical_height <= 0 || lcd_dest.w <= 0 || lcd_dest.h <= 0)
+	struct ScreenCaptureLayout {
+		SDL_Rect capture_rect{};
+		SDL_Rect scaled_lcd{};
+		int scale = 3;
+		int content_width = 0;
+		int content_height = 0;
+		int output_width = 0;
+		int output_height = 0;
+		double sx = 1.0;
+		double sy = 1.0;
+	};
+
+	bool BuildScreenCaptureLayout(const ScreenCaptureSource& source, int requested_scale, bool even_output, ScreenCaptureLayout& layout, const char* purpose) {
+		if (!source.interface_texture || !source.sprite_info || !source.sprite_svg_textures || !source.sprite_available ||
+			!source.ink_colour || !source.screen_ink_alpha ||
+			source.logical_width <= 0 || source.logical_height <= 0 || source.lcd_dest.w <= 0 || source.lcd_dest.h <= 0) {
+			SDL_Log("%s failed: invalid capture source.", purpose);
 			return false;
+		}
 
 		std::vector<SDL_Rect> spriteRects;
-		for (size_t ix = 1; ix < sprite_info.size(); ++ix)
-			spriteRects.push_back(sprite_info[ix].dest);
-		if (has_classwiz_graph_status_sprites) {
-			spriteRects.push_back(classwiz_graph_sprite_info[0].dest);
-			spriteRects.push_back(classwiz_graph_sprite_info[1].dest);
+		for (size_t ix = 1; ix < source.sprite_info->size() && ix < source.sprite_available->size(); ++ix) {
+			if (!(*source.sprite_available)[ix])
+				continue;
+			spriteRects.push_back((*source.sprite_info)[ix].dest);
 		}
 
-		SDL_Rect captureRect{};
-		if (!GetCaptureRect(spriteRects, std::vector<SDL_Rect>{lcd_dest}, captureRect)) {
-			SDL_Log("Screenshot failed: invalid capture region.");
+		layout = {};
+		if (!GetCaptureRect(spriteRects, std::vector<SDL_Rect>{source.lcd_dest}, layout.capture_rect)) {
+			SDL_Log("%s failed: invalid capture region.", purpose);
 			return false;
 		}
 
-		const double sx = static_cast<double>(logical_width * SCREENSHOT_PIXEL_SCALE) / static_cast<double>(lcd_dest.w);
-		const double sy = static_cast<double>(logical_height * SCREENSHOT_PIXEL_SCALE) / static_cast<double>(lcd_dest.h);
-		const int output_w = std::max(1, static_cast<int>(std::ceil(captureRect.w * sx)));
-		const int output_h = std::max(1, static_cast<int>(std::ceil(captureRect.h * sy)));
+		layout.scale = std::max(2, requested_scale);
+		layout.sx = static_cast<double>(source.logical_width * layout.scale) / static_cast<double>(source.lcd_dest.w);
+		layout.sy = static_cast<double>(source.logical_height * layout.scale) / static_cast<double>(source.lcd_dest.h);
+		layout.content_width = std::max(1, static_cast<int>(std::ceil(layout.capture_rect.w * layout.sx)));
+		layout.content_height = std::max(1, static_cast<int>(std::ceil(layout.capture_rect.h * layout.sy)));
+		layout.output_width = even_output ? ((layout.content_width + 1) & ~1) : layout.content_width;
+		layout.output_height = even_output ? ((layout.content_height + 1) & ~1) : layout.content_height;
+		layout.scaled_lcd = ScaleScreenshotRect(source.lcd_dest, layout.capture_rect, layout.sx, layout.sy);
+		return true;
+	}
 
-		SDL_Texture* old_target = SDL_GetRenderTarget(renderer);
-		SDL_Rect old_viewport{};
-		SDL_Rect old_clip{};
-		float old_scale_x = 1.0f;
-		float old_scale_y = 1.0f;
-		SDL_BlendMode old_blend_mode{};
-		SDL_RenderGetViewport(renderer, &old_viewport);
-		SDL_RenderGetClipRect(renderer, &old_clip);
-		const SDL_bool old_clip_enabled = SDL_RenderIsClipEnabled(renderer);
-		SDL_RenderGetScale(renderer, &old_scale_x, &old_scale_y);
-		SDL_GetRenderDrawBlendMode(renderer, &old_blend_mode);
-		SDL_Texture* target = nullptr;
-		bool render_target_active = false;
-		auto cleanup = [&]() {
-			if (render_target_active) {
+	class ScreenCaptureComposer {
+	public:
+		~ScreenCaptureComposer() {
+			Reset();
+		}
+
+		void Reset() {
+			if (target) {
+				SDL_DestroyTexture(target);
+				target = nullptr;
+			}
+			target_width = 0;
+			target_height = 0;
+		}
+
+		bool Render(SDL_Renderer* renderer, const ScreenCaptureSource& source, const ScreenCaptureLayout& layout, SDL_Surface* surface, const char* purpose) {
+			if (!renderer || !surface || surface->w != layout.output_width || surface->h != layout.output_height) {
+				SDL_Log("%s failed: invalid capture surface.", purpose);
+				return false;
+			}
+			if (!EnsureTarget(renderer, layout.output_width, layout.output_height, purpose)) {
+				return false;
+			}
+
+			SDL_Texture* old_target = SDL_GetRenderTarget(renderer);
+			SDL_Rect old_viewport{};
+			SDL_Rect old_clip{};
+			float old_scale_x = 1.0f;
+			float old_scale_y = 1.0f;
+			SDL_BlendMode old_blend_mode{};
+			SDL_RenderGetViewport(renderer, &old_viewport);
+			SDL_RenderGetClipRect(renderer, &old_clip);
+			const SDL_bool old_clip_enabled = SDL_RenderIsClipEnabled(renderer);
+			SDL_RenderGetScale(renderer, &old_scale_x, &old_scale_y);
+			SDL_GetRenderDrawBlendMode(renderer, &old_blend_mode);
+			bool render_target_active = false;
+			auto restore = [&]() {
+				if (!render_target_active)
+					return;
 				SDL_SetRenderTarget(renderer, old_target);
 				SDL_RenderSetViewport(renderer, &old_viewport);
 				SDL_RenderSetClipRect(renderer, old_clip_enabled ? &old_clip : nullptr);
 				SDL_RenderSetScale(renderer, old_scale_x, old_scale_y);
 				SDL_SetRenderDrawBlendMode(renderer, old_blend_mode);
 				render_target_active = false;
-			}
-			if (target) {
-				SDL_DestroyTexture(target);
-				target = nullptr;
-			}
-		};
+			};
 
-		target = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, output_w, output_h);
-		if (!target) {
-			SDL_Log("Screenshot failed: cannot create render target: %s", SDL_GetError());
+			if (SDL_SetRenderTarget(renderer, target) != 0) {
+				SDL_Log("%s failed: cannot bind render target: %s", purpose, SDL_GetError());
+				return false;
+			}
+			render_target_active = true;
+			SDL_RenderSetViewport(renderer, nullptr);
+			SDL_RenderSetClipRect(renderer, nullptr);
+			SDL_RenderSetScale(renderer, 1.0f, 1.0f);
+			SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+			SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+			SDL_RenderClear(renderer);
+
+			for (size_t ix = 1; ix < source.sprite_info->size() && ix < source.sprite_available->size(); ++ix) {
+				if (!(*source.sprite_available)[ix])
+					continue;
+				const int alpha_index = static_cast<int>(ix - 1);
+				SpriteInfo sprite = (*source.sprite_info)[ix];
+				sprite.dest = ToModelRect(ScaleScreenshotRect(sprite.dest, layout.capture_rect, layout.sx, layout.sy));
+				const uint8_t alpha = Uint8(std::clamp(static_cast<int>(source.screen_ink_alpha[alpha_index]), 0, 255));
+				RenderModelSprite(renderer, source.interface_texture, ix < source.sprite_svg_textures->size() ? (*source.sprite_svg_textures)[ix] : nullptr, sprite, *source.ink_colour, alpha);
+			}
+
+			if (SDL_MUSTLOCK(surface) && SDL_LockSurface(surface) != 0) {
+				SDL_Log("%s failed: cannot lock capture surface: %s", purpose, SDL_GetError());
+				restore();
+				return false;
+			}
+
+			if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, surface->pixels, surface->pitch) != 0) {
+				SDL_Log("%s failed: cannot read capture target pixels: %s", purpose, SDL_GetError());
+				if (SDL_MUSTLOCK(surface))
+					SDL_UnlockSurface(surface);
+				restore();
+				return false;
+			}
+			restore();
+
+			for (int y = 0; y < source.logical_height; ++y) {
+				const int source_y = y + 1;
+				for (int x = 0; x < source.logical_width; ++x) {
+					const float alpha_value = source.screen_ink_alpha[x + source_y * 192];
+					if (alpha_value <= 0.0f)
+						continue;
+					FillScaledPixel(surface, layout.scaled_lcd.x + x * layout.scale, layout.scaled_lcd.y + y * layout.scale, layout.scale, MapScreenshotPixel(surface->format, *source.ink_colour, alpha_value));
+				}
+			}
+			if (SDL_MUSTLOCK(surface))
+				SDL_UnlockSurface(surface);
+			return true;
+		}
+
+	private:
+		bool EnsureTarget(SDL_Renderer* renderer, int width, int height, const char* purpose) {
+			if (target && target_width == width && target_height == height)
+				return true;
+			Reset();
+			target = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, width, height);
+			if (!target) {
+				SDL_Log("%s failed: cannot create render target: %s", purpose, SDL_GetError());
+				return false;
+			}
+			SDL_SetTextureBlendMode(target, SDL_BLENDMODE_NONE);
+			target_width = width;
+			target_height = height;
+			return true;
+		}
+
+		SDL_Texture* target = nullptr;
+		int target_width = 0;
+		int target_height = 0;
+	};
+
+	class ScreenRecorder {
+	public:
+		~ScreenRecorder() {
+			Stop();
+		}
+
+		bool Start(const ScreenCaptureSource& source, int capture_scale, int requestedFps = 30) {
+			Stop();
+			if (!BuildScreenCaptureLayout(source, capture_scale, true, layout, "Recording")) {
+				return false;
+			}
+
+			fps = std::max(1, requestedFps);
+			outputWidth = layout.output_width;
+			outputHeight = layout.output_height;
+			frameCount = 0;
+			nextCaptureTick = 0;
+			if (!EnsureFrameSurface()) {
+				return false;
+			}
+
+			const std::string stem = MakeTimestampedName("recording-", "");
+			outputPath = GetRecordingOutputPath(stem + ".mp4");
+#ifdef __ANDROID__
+			if (encoder.Start(outputPath, outputWidth, outputHeight, fps)) {
+				frameSequence = false;
+				recording = true;
+				SDL_Log("Recording started: %s", outputPath.string().c_str());
+				return true;
+			}
+#else
+			const std::string command = BuildFfmpegCommand(outputPath);
+			if (encoder.Start(command)) {
+				frameSequence = false;
+				recording = true;
+				SDL_Log("Recording started: %s", outputPath.string().c_str());
+				return true;
+			}
+#endif
+
+			frameSequence = true;
+			frameDirectory = GetRecordingOutputPath(stem + "-frames");
+			std::error_code ec;
+			std::filesystem::create_directories(frameDirectory, ec);
+			if (ec) {
+				SDL_Log("Recording failed: cannot create frame directory %s (%s)",
+					frameDirectory.string().c_str(), ec.message().c_str());
+				ResetFrameSurface();
+				return false;
+			}
+
+			recording = true;
+#ifdef __ANDROID__
+			SDL_Log("Android video encoder was not available; recording PNG frames to %s", frameDirectory.string().c_str());
+#else
+			SDL_Log("ffmpeg was not available; recording PNG frames to %s", frameDirectory.string().c_str());
+#endif
+			return true;
+		}
+
+		void Stop() {
+			if (!recording && !encoder.IsOpen()) {
+				ResetFrameSurface();
+				composer.Reset();
+				return;
+			}
+			encoder.Stop();
+			if (recording) {
+				if (frameSequence) {
+					SDL_Log("Recording stopped: %u frames saved to %s",
+						frameCount, frameDirectory.string().c_str());
+				}
+				else {
+					SDL_Log("Recording stopped: %u frames saved to %s",
+						frameCount, outputPath.string().c_str());
+				}
+			}
+			recording = false;
+			ResetFrameSurface();
+			composer.Reset();
+		}
+
+		bool CaptureFrame(SDL_Renderer* renderer, const ScreenCaptureSource& source) {
+			if (!recording) {
+				return false;
+			}
+
+			Uint64 now = SDL_GetTicks64();
+			if (nextCaptureTick != 0 && now < nextCaptureTick) {
+				return true;
+			}
+			nextCaptureTick = now + static_cast<Uint64>(1000 / fps);
+
+			if (!frameSurface || !composer.Render(renderer, source, layout, frameSurface, "Recording")) {
+				Stop();
+				return false;
+			}
+
+			bool success = frameSequence
+				? SaveFrameAsPng()
+#ifdef __ANDROID__
+				: encoder.WriteRgbaFrame(framePixels.data(), frameSurface->pitch);
+#else
+				: encoder.Write(framePixels.data(), framePixels.size());
+#endif
+			if (!success) {
+				SDL_Log("Recording stopped because frame writing failed.");
+				Stop();
+				return false;
+			}
+
+			++frameCount;
+			return true;
+		}
+
+		bool IsRecording() const {
+			return recording;
+		}
+
+		unsigned int FrameCount() const {
+			return frameCount;
+		}
+
+	private:
+		std::string BuildFfmpegCommand(const std::filesystem::path& path) const {
+			std::ostringstream command;
+			command << "ffmpeg -y -hide_banner -loglevel error"
+				<< " -f rawvideo -vcodec rawvideo"
+				<< " -pixel_format rgba"
+				<< " -video_size " << outputWidth << "x" << outputHeight
+				<< " -framerate " << fps
+				<< " -i - -an -c:v mpeg4 -q:v 3 -pix_fmt yuv420p "
+				<< "\"" << path.string() << "\"";
+			return command.str();
+		}
+
+		bool EnsureFrameSurface() {
+			ResetFrameSurface();
+			const int pitch = outputWidth * 4;
+			framePixels.assign(static_cast<size_t>(pitch) * outputHeight, 255);
+			frameSurface = SDL_CreateRGBSurfaceWithFormatFrom(
+				framePixels.data(),
+				outputWidth,
+				outputHeight,
+				32,
+				pitch,
+				SDL_PIXELFORMAT_RGBA32);
+			if (!frameSurface) {
+				SDL_Log("Recording failed: cannot create frame surface: %s", SDL_GetError());
+				framePixels.clear();
+				return false;
+			}
+			return true;
+		}
+
+		void ResetFrameSurface() {
+			if (frameSurface) {
+				SDL_FreeSurface(frameSurface);
+				frameSurface = nullptr;
+			}
+			framePixels.clear();
+		}
+
+		bool SaveFrameAsPng() const {
+			std::ostringstream filename;
+			filename << "frame-" << std::setw(6) << std::setfill('0') << frameCount << ".png";
+			std::filesystem::path framePath = frameDirectory / filename.str();
+
+			const std::string pathString = framePath.string();
+			int result = IMG_SavePNG(frameSurface, pathString.c_str());
+			if (result != 0) {
+				SDL_Log("Error saving recording frame: %s", IMG_GetError());
+				return false;
+			}
+			return true;
+		}
+
+#ifdef __ANDROID__
+		AndroidVideoEncoder encoder;
+#else
+		RawVideoPipe encoder;
+#endif
+		ScreenCaptureLayout layout{};
+		ScreenCaptureComposer composer;
+		std::vector<uint8_t> framePixels;
+		SDL_Surface* frameSurface = nullptr;
+		int fps = 30;
+		int outputWidth = 0;
+		int outputHeight = 0;
+		Uint64 nextCaptureTick = 0;
+		unsigned int frameCount = 0;
+		bool recording = false;
+		bool frameSequence = false;
+		std::filesystem::path outputPath;
+		std::filesystem::path frameDirectory;
+	};
+
+	bool CapturePixelPerfectScreenshot(
+		SDL_Renderer* renderer,
+		SDL_Texture* interface_texture,
+		const std::vector<SpriteInfo>& sprite_info,
+		const std::vector<SDL_Texture*>& sprite_svg_textures,
+		const std::vector<uint8_t>& sprite_available,
+		const ColourInfo& ink_colour,
+		const float* screen_ink_alpha,
+		int logical_width,
+		int logical_height,
+		const SDL_Rect& lcd_dest,
+		int capture_scale) {
+		ScreenCaptureSource source{
+			interface_texture,
+			&sprite_info,
+			&sprite_svg_textures,
+			&sprite_available,
+			&ink_colour,
+			screen_ink_alpha,
+			logical_width,
+			logical_height,
+			lcd_dest};
+
+		ScreenCaptureLayout layout{};
+		if (!BuildScreenCaptureLayout(source, capture_scale, false, layout, "Screenshot"))
 			return false;
-		}
-		SDL_SetTextureBlendMode(target, SDL_BLENDMODE_NONE);
-		if (SDL_SetRenderTarget(renderer, target) != 0) {
-			SDL_Log("Screenshot failed: cannot bind render target: %s", SDL_GetError());
-			cleanup();
-			return false;
-		}
-		render_target_active = true;
-		SDL_RenderSetViewport(renderer, nullptr);
-		SDL_RenderSetClipRect(renderer, nullptr);
-		SDL_RenderSetScale(renderer, 1.0f, 1.0f);
-		SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-		SDL_RenderClear(renderer);
 
-		for (size_t ix = 1; ix < sprite_info.size(); ++ix) {
-			const int common_index = static_cast<int>(ix - 1);
-			const int alpha_index = has_classwiz_graph_status_logic ? ClassWizGraphStatusIndexFromCommonIndexForCapture(common_index) : common_index;
-			SpriteInfo sprite = sprite_info[ix];
-			sprite.dest = ToModelRect(ScaleScreenshotRect(sprite.dest, captureRect, sx, sy));
-			const uint8_t alpha = Uint8(std::clamp(static_cast<int>(screen_ink_alpha[alpha_index]), 0, 255));
-			RenderModelSprite(renderer, interface_texture, ix < sprite_svg_textures.size() ? sprite_svg_textures[ix] : nullptr, sprite, ink_colour, alpha);
-		}
-		if (has_classwiz_graph_status_sprites) {
-			static constexpr int FX_STATUS_INDEX = 7;
-			static constexpr int GX_STATUS_INDEX = 13;
-			const int status_indexes[] = {FX_STATUS_INDEX, GX_STATUS_INDEX};
-			for (int ix = 0; ix < 2; ++ix) {
-				SpriteInfo sprite = classwiz_graph_sprite_info[ix];
-				sprite.dest = ToModelRect(ScaleScreenshotRect(sprite.dest, captureRect, sx, sy));
-				const uint8_t alpha = Uint8(std::clamp(static_cast<int>(screen_ink_alpha[status_indexes[ix]]), 0, 255));
-				RenderModelSprite(renderer, interface_texture, classwiz_graph_svg_textures[ix], sprite, ink_colour, alpha);
-			}
-		}
-
-		SDL_Surface* screenSurface = SDL_CreateRGBSurfaceWithFormat(0, output_w, output_h, 32, SDL_PIXELFORMAT_RGBA32);
+		SDL_Surface* screenSurface = SDL_CreateRGBSurfaceWithFormat(0, layout.output_width, layout.output_height, 32, SDL_PIXELFORMAT_RGBA32);
 		if (!screenSurface) {
 			SDL_Log("Error creating screenshot surface: %s", SDL_GetError());
-			cleanup();
 			return false;
 		}
-		if (SDL_MUSTLOCK(screenSurface) && SDL_LockSurface(screenSurface) != 0) {
-			SDL_Log("Error locking screenshot surface: %s", SDL_GetError());
+
+		ScreenCaptureComposer composer;
+		if (!composer.Render(renderer, source, layout, screenSurface, "Screenshot")) {
 			SDL_FreeSurface(screenSurface);
-			cleanup();
 			return false;
 		}
-
-		if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32, screenSurface->pixels, screenSurface->pitch) != 0) {
-			SDL_Log("Error capturing screenshot target pixels: %s", SDL_GetError());
-			if (SDL_MUSTLOCK(screenSurface))
-				SDL_UnlockSurface(screenSurface);
-			SDL_FreeSurface(screenSurface);
-			cleanup();
-			return false;
-		}
-
-		const SDL_Rect scaled_lcd = ScaleScreenshotRect(lcd_dest, captureRect, sx, sy);
-		for (int y = 0; y < logical_height; ++y) {
-			const int source_y = y + 1;
-			for (int x = 0; x < logical_width; ++x) {
-				const float alpha_value = screen_ink_alpha[x + source_y * 192];
-				if (alpha_value <= 0.0f)
-					continue;
-				FillScaledPixel(screenSurface, scaled_lcd.x + x * SCREENSHOT_PIXEL_SCALE, scaled_lcd.y + y * SCREENSHOT_PIXEL_SCALE, SCREENSHOT_PIXEL_SCALE, MapScreenshotPixel(screenSurface->format, ink_colour, alpha_value));
-			}
-		}
-		if (SDL_MUSTLOCK(screenSurface))
-			SDL_UnlockSurface(screenSurface);
-
-		cleanup();
 		SaveScreenshotSurface(screenSurface, MakeTimestampedName("screenshot-", ".png"));
 		SDL_FreeSurface(screenSurface);
 		return true;
@@ -2762,7 +2772,6 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 #ifdef __EMSCRIPTEN__
 		tick();
 #endif
-		int x = 0;
 		int screenWidth = 0, screenHeight = 0;
 
 		// Get the renderer output size if not already available
@@ -2778,22 +2787,13 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 
 		// Set texture transparency and copy sprites as before
 		for (int ix = 1; ix != SPR_MAX; ++ix) {
-			const int alpha_index = HasClassWizGraphStatusLogic() ? ClassWizGraphStatusIndexFromCommonIndex(x) : x;
+			if (ix >= static_cast<int>(sprite_available.size()) || !sprite_available[ix])
+				continue;
+			const int alpha_index = ix - 1;
 			const uint8_t alpha = Uint8(std::clamp((int)screen_ink_alpha[alpha_index], 0, 255));
-			x++;
 			RenderModelSprite(renderer, interface_texture, ix < static_cast<int>(sprite_svg_textures.size()) ? sprite_svg_textures[ix] : nullptr, sprite_info[ix], ink_colour, alpha);
 			// Store the sprite rectangle for later
 			spriteRects.push_back(sprite_info[ix].dest);
-		}
-		if (HasClassWizGraphStatusSprites()) {
-			static constexpr int FX_STATUS_INDEX = 7;
-			static constexpr int GX_STATUS_INDEX = 13;
-			static constexpr int GRAPH_STATUS_INDEXES[] = {FX_STATUS_INDEX, GX_STATUS_INDEX};
-			for (int ix = 0; ix != 2; ++ix) {
-				const uint8_t alpha = Uint8(std::clamp((int)screen_ink_alpha[GRAPH_STATUS_INDEXES[ix]], 0, 255));
-				RenderModelSprite(renderer, interface_texture, classwiz_graph_svg_textures[ix], classwiz_graph_sprite_info[ix], ink_colour, alpha);
-				spriteRects.push_back(classwiz_graph_sprite_info[ix].dest);
-			}
 		}
 
 		static constexpr auto SPR_PIXEL = 0;
@@ -2840,6 +2840,17 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		pixelRects.push_back(lcd_dest);
 
 #ifndef __EMSCRIPTEN__
+		ScreenCaptureSource captureSource{
+			interface_texture,
+			&sprite_info,
+			&sprite_svg_textures,
+			&sprite_available,
+			&ink_colour,
+			screen_ink_alpha,
+			logical_width,
+			logical_height,
+			lcd_dest};
+
 		// If screenshot is requested, capture only the rendered screen region
 		if (emulator.screenshot_requested.load()) {
 			CapturePixelPerfectScreenshot(
@@ -2847,21 +2858,18 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 				interface_texture,
 				sprite_info,
 				sprite_svg_textures,
-				classwiz_graph_sprite_info,
-				classwiz_graph_svg_textures,
-				HasClassWizGraphStatusSprites(),
-				HasClassWizGraphStatusLogic(),
+				sprite_available,
 				ink_colour,
 				screen_ink_alpha,
 				logical_width,
 				logical_height,
-				lcd_dest);
+				lcd_dest,
+				emulator.capture_scale.load());
 			emulator.screenshot_requested.store(false);
 		}
 		static ScreenRecorder recorder;
 		if (emulator.recording_requested.exchange(false) && !recorder.IsRecording()) {
-			SDL_Rect captureRect{};
-			if (GetCaptureRect(spriteRects, pixelRects, captureRect) && recorder.Start(captureRect, 30)) {
+			if (recorder.Start(captureSource, emulator.capture_scale.load(), 30)) {
 				emulator.recording_frame_count.store(0);
 				emulator.recording_active.store(true);
 			}
@@ -2874,7 +2882,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			emulator.recording_active.store(false);
 		}
 		if (recorder.IsRecording()) {
-			if (recorder.CaptureFrame(renderer)) {
+			if (recorder.CaptureFrame(renderer, captureSource)) {
 				emulator.recording_active.store(true);
 				emulator.recording_frame_count.store(recorder.FrameCount());
 			}
