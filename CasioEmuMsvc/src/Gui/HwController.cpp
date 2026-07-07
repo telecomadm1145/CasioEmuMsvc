@@ -14,7 +14,8 @@ int screen_buffer_select = 0;
 bool audio_enable = false;
 void HwController::RenderCore() {
 	UIHelpers::SectionHeader("Display");
-	
+
+#ifndef CASIOEMU_CORE_WEB
 	if (ImGui::Button("ScreenshotBtn"_lc)) {
 		m_emu->screenshot_requested.store(true);
 	}
@@ -36,7 +37,8 @@ void HwController::RenderCore() {
 		ImGui::SameLine();
 		ImGui::Text("RecordStatus"_lc, m_emu->recording_frame_count.load());
 	}
-	
+#endif
+
 	ImGui::SliderInt("HwController.Value1"_lc, &screen_flashing_threshold, 0, 0x3F);
 	ImGui::SliderFloat("HwController.Value2"_lc, &screen_flashing_brightness_coeff, 1.0f, 8.0f);
 	ImGui::SliderInt("HwController.ScreenBufferSelect"_lc, &screen_buffer_select, 0, 2);

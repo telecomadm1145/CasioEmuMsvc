@@ -682,6 +682,7 @@ namespace casioemu {
 			SDL_Keycode keycode = event.key.keysym.sym;
 			auto iterator = keyboard_map.find(keycode);
 			// printf("[Keyboard][Info] SDL_Keycode: %x(%s)\n", keycode, SDL_GetKeyName(keycode));
+#ifndef CASIOEMU_CORE_WEB
 			if (event.key.keysym.sym == SDLK_F12 && event.key.state == SDL_PRESSED) {
 				if (event.key.keysym.mod & KMOD_CTRL) {
 					return;
@@ -691,6 +692,7 @@ namespace casioemu {
 				printf("[Keyboard][Info] Screenshot requested via F12\n");
 				return;
 			}
+#endif
 			if (event.key.keysym.sym == SDLK_F11 && event.key.state) {
 				if (event.key.keysym.mod & KMOD_LCTRL) {
 					emulator.chipset.Reset();

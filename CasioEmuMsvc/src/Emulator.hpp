@@ -54,12 +54,14 @@ namespace casioemu {
 		std::string model_path;
 		bool pause_on_mem_error;
 
+#ifndef CASIOEMU_CORE_WEB
 		std::atomic<bool> screenshot_requested{};
 		std::atomic<bool> mirroring_requested{};
 		std::atomic<bool> recording_requested{};
 		std::atomic<bool> recording_stop_requested{};
 		std::atomic<bool> recording_active{};
 		std::atomic<unsigned int> recording_frame_count{};
+#endif
 
 		std::thread* tick_thread;
 

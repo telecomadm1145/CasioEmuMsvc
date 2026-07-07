@@ -488,6 +488,7 @@ namespace casioemu {
 		if (headless)
 			return;
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
+#ifndef CASIOEMU_CORE_WEB
 		if (event.type == SDL_KEYDOWN) {
 			if (event.key.keysym.sym == SDL_KeyCode::SDLK_F12) {
 				if (event.key.keysym.mod & KMOD_CTRL) {
@@ -503,6 +504,7 @@ namespace casioemu {
 				}
 			}
 		}
+#endif
 		switch (event.type) {
 		case SDL_MOUSEBUTTONDOWN:
 		case SDL_MOUSEBUTTONUP:
