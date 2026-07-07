@@ -1,6 +1,7 @@
 #include "Emulator.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Logger.hpp"
+#include "ModelConfig.h"
 #include "ModelInfo.h"
 #include "RendererBackend.h"
 #include <SDL.h>

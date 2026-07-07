@@ -1,6 +1,7 @@
 #include "Chipset/Chipset.hpp"
 #include "Chipset/MMU.hpp"
 #include "Emulator.hpp"
+#include "ModelConfig.h"
 #include "ModelInfo.h"
 
 #include <SDL.h>

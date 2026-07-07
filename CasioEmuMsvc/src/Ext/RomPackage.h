@@ -17,6 +17,7 @@
 	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 #include "Binary.h"
+#include "ModelConfig.h"
 #include "ModelInfo.h"
 #include "Random.hpp"
 #include <vector>

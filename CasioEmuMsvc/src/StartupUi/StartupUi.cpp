@@ -1,5 +1,6 @@
 // ???
 #include <SDL_rect.h>
+#include "ModelConfig.h"
 #include "ModelInfo.h"
 // 
 
