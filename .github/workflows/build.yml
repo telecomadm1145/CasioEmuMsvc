@@ -2,6 +2,20 @@ name: Auto build and pre-release
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Build target"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - windows-x64
+          - windows-x86
+          - android
+          - linux
+          - macos
+          - web
   push:
     branches: [ "stable" ]
 
@@ -20,22 +34,31 @@ jobs:
             platform_arch: x64
             os: windows-latest
             name: "Windows-x64"
+            target: windows-x64
           - platform: windows
             platform_arch: x86
             os: windows-latest
             name: "Windows-x86"
+            target: windows-x86
           - platform: android
             os: ubuntu-latest
             name: "Android"
+            target: android
           - platform: linux
             os: ubuntu-latest
             name: "Linux-x64"
+            target: linux
           - platform: macos
             os: macos-latest
             name: "macOS-universal"
+            target: macos
     
     runs-on: ${{ matrix.os }}
     name: Build ${{ matrix.name }}
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.target == 'all' ||
+      github.event.inputs.target == matrix.target
 
     steps:
     - name: Checkout
@@ -183,6 +206,10 @@ jobs:
   web-build:
     runs-on: ubuntu-latest
     name: Build Web
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.target == 'all' ||
+      github.event.inputs.target == 'web'
 
     steps:
     - name: Checkout
