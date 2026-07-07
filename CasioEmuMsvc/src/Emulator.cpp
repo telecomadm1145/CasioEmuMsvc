@@ -218,7 +218,7 @@ namespace casioemu {
 			SDL_WINDOWPOS_UNDEFINED,
 			SDL_WINDOWPOS_UNDEFINED,
 			width, height,
-			SDL_WINDOW_SHOWN | (SDL_WINDOW_RESIZABLE));
+			SDL_WINDOW_HIDDEN | SDL_WINDOW_RESIZABLE);
 		if (!window)
 			PANIC("SDL_CreateWindow failed: %s\n", SDL_GetError());
 		SetPreferredRendererDriverHint();
@@ -375,7 +375,7 @@ namespace casioemu {
 				SDL_WINDOWPOS_UNDEFINED,
 				SDL_WINDOWPOS_UNDEFINED,
 				width, height,
-				SDL_WINDOW_SHOWN | (SDL_WINDOW_RESIZABLE));
+				SDL_WINDOW_HIDDEN | SDL_WINDOW_RESIZABLE);
 			if (!window)
 				PANIC("SDL_CreateWindow failed: %s\n", SDL_GetError());
 			SetPreferredRendererDriverHint();
