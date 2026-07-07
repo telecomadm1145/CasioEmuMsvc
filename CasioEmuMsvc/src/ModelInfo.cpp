@@ -1008,21 +1008,6 @@ namespace casioemu {
 		ApplyModelInfoJsonValue(value, model, true);
 	}
 
-	bool IsBinaryCacheUsable(const std::filesystem::path& bin_path, const std::filesystem::path& json_path) {
-		if (!FileExists(bin_path))
-			return false;
-		if (!FileExists(json_path))
-			return true;
-		std::error_code ec;
-		const auto bin_time = std::filesystem::last_write_time(bin_path, ec);
-		if (ec)
-			return false;
-		const auto json_time = std::filesystem::last_write_time(json_path, ec);
-		if (ec)
-			return false;
-		return bin_time >= json_time;
-	}
-
 	void SaveModelInfoBinCache(const std::filesystem::path& model_path, const ModelInfo& model) {
 		try {
 			std::ofstream stream(model_path / MODEL_CONFIG_BIN, std::ios::binary);
@@ -1045,27 +1030,14 @@ namespace casioemu {
 		try {
 			const auto json_path = model_path / MODEL_CONFIG_JSON;
 			const auto bin_path = model_path / MODEL_CONFIG_BIN;
-			if (IsBinaryCacheUsable(bin_path, json_path)) {
+			if (FileExists(bin_path)) {
 				std::ifstream stream(bin_path, std::ios::binary);
 				if (!stream)
 					throw std::runtime_error("Cannot open config.bin.");
 				model.Read(stream);
-				bool cache_missing_board_fields = false;
-				if (FileExists(json_path) && (model.board_path.empty() || model.screen_width <= 0 || model.screen_height <= 0 || model.screen_scale_y <= 0)) {
-					try {
-						std::ifstream json_stream(json_path);
-						const json value = json::parse(json_stream);
-						cache_missing_board_fields = value.contains("board_path") && value.at("board_path").is_string();
-					}
-					catch (...) {
-						cache_missing_board_fields = false;
-					}
-				}
-				if (!cache_missing_board_fields) {
-					if (loaded_from)
-						*loaded_from = MODEL_CONFIG_BIN;
-					return true;
-				}
+				if (loaded_from)
+					*loaded_from = MODEL_CONFIG_BIN;
+				return true;
 			}
 
 			if (FileExists(json_path)) {
@@ -1096,16 +1068,6 @@ namespace casioemu {
 				if (loaded_from)
 					*loaded_from = MODEL_CONFIG_JSON;
 				SaveModelInfoBinCache(model_path, model);
-				return true;
-			}
-
-			if (FileExists(bin_path)) {
-				std::ifstream stream(bin_path, std::ios::binary);
-				if (!stream)
-					throw std::runtime_error("Cannot open config.bin.");
-				model.Read(stream);
-				if (loaded_from)
-					*loaded_from = MODEL_CONFIG_BIN;
 				return true;
 			}
 
