@@ -283,8 +283,9 @@ public:
 		}
 
 		auto y = ImGui::GetCursorPosY();
-		auto scaleFactor = imgSp.src.w > 0 ? (400.f / imgSp.src.w) : 1.0f;
 		const bool is_board_model = IsBoardModel();
+		const int model_width = is_board_model ? imgSp.dest.w : imgSp.src.w;
+		auto scaleFactor = model_width > 0 ? (400.f / model_width) : 1.0f;
 		if (sdl_t != 0) {
 			ImGui::SetCursorPosX(0);
 			RenderSprite2(imgSp, (ImTextureID)sdl_t, imgSz, {400, 400.0f * imgSp.dest.h / imgSp.dest.w});

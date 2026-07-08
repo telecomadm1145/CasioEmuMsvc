@@ -565,8 +565,9 @@ namespace casioemu {
 			return;
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
-		const bool board_svg_interface = interface_is_svg && !ModelDefinition.board_path.empty();
-		if (board_svg_interface) {
+		const bool board_interface = !ModelDefinition.board_path.empty() &&
+			interface_background.dest.w > 0 && interface_background.dest.h > 0;
+		if (board_interface) {
 			int w, h;
 			SDL_GetWindowSize(window, &w, &h);
 			auto wf = (double)w / interface_background.dest.w;
@@ -578,14 +579,19 @@ namespace casioemu {
 			dest.x = (w - dest.w) / 2;
 			dest.y = (h - dest.h) / 2;
 
-			if (!scaled_interface_texture || scaled_interface_texture_w != dest.w || scaled_interface_texture_h != dest.h) {
-				if (scaled_interface_texture)
-					SDL_DestroyTexture(scaled_interface_texture);
-				scaled_interface_texture = CreateSizedSvgTexture(renderer, interface_svg_data, dest.w, dest.h);
-				scaled_interface_texture_w = dest.w;
-				scaled_interface_texture_h = dest.h;
+			bool face_available = true;
+			if (interface_is_svg) {
+				if (!scaled_interface_texture || scaled_interface_texture_w != dest.w || scaled_interface_texture_h != dest.h) {
+					if (scaled_interface_texture)
+						SDL_DestroyTexture(scaled_interface_texture);
+					scaled_interface_texture = CreateSizedSvgTexture(renderer, interface_svg_data, dest.w, dest.h);
+					scaled_interface_texture_w = dest.w;
+					scaled_interface_texture_h = dest.h;
+				}
+				face_available = scaled_interface_texture != nullptr;
 			}
-			if (scaled_interface_texture) {
+
+			if (face_available) {
 				SDL_SetRenderTarget(renderer, nullptr);
 				SDL_RenderSetViewport(renderer, nullptr);
 				SDL_RenderSetClipRect(renderer, nullptr);
@@ -594,9 +600,19 @@ namespace casioemu {
 				SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 				SDL_RenderClear(renderer);
 #endif
-				SDL_SetTextureColorMod(scaled_interface_texture, 255, 255, 255);
-				SDL_SetTextureAlphaMod(scaled_interface_texture, 255);
-				SDL_RenderCopy(renderer, scaled_interface_texture, nullptr, &dest);
+				if (interface_is_svg) {
+					SDL_SetTextureColorMod(scaled_interface_texture, 255, 255, 255);
+					SDL_SetTextureAlphaMod(scaled_interface_texture, 255);
+					SDL_RenderCopy(renderer, scaled_interface_texture, nullptr, &dest);
+				}
+				else {
+					SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+					SDL_RenderFillRect(renderer, &dest);
+					SDL_SetTextureColorMod(interface_texture, 255, 255, 255);
+					SDL_SetTextureAlphaMod(interface_texture, 255);
+					SDL_Rect tmp = interface_background.src;
+					SDL_RenderCopy(renderer, interface_texture, &tmp, &dest);
+				}
 
 				SDL_Rect old_viewport{};
 				float old_scale_x = 1.0f, old_scale_y = 1.0f;
@@ -613,13 +629,8 @@ namespace casioemu {
 			}
 		}
 
-		const bool board_png_interface = !interface_is_svg && !ModelDefinition.board_path.empty() &&
-			interface_background.src.w > 0 && interface_background.src.h > 0 &&
-			interface_background.dest.w > 0 && interface_background.dest.h > 0;
-		const int render_target_w = board_png_interface ? interface_background.src.w : interface_background.dest.w;
-		const int render_target_h = board_png_interface ? interface_background.src.h : interface_background.dest.h;
-		const float board_to_target_x = board_png_interface ? static_cast<float>(render_target_w) / static_cast<float>(interface_background.dest.w) : 1.0f;
-		const float board_to_target_y = board_png_interface ? static_cast<float>(render_target_h) / static_cast<float>(interface_background.dest.h) : 1.0f;
+		const int render_target_w = interface_background.dest.w;
+		const int render_target_h = interface_background.dest.h;
 
 		// create texture `tx` with the same format as `interface_texture`
 		Uint32 format;
@@ -634,20 +645,7 @@ namespace casioemu {
 		SDL_SetTextureAlphaMod(interface_texture, 255);
 		SDL_Rect tmp = interface_background.src;
 		SDL_RenderCopy(renderer, interface_texture, &tmp, nullptr);
-		SDL_Rect old_viewport{};
-		float old_scale_x = 1.0f, old_scale_y = 1.0f;
-		if (board_png_interface) {
-			SDL_RenderGetViewport(renderer, &old_viewport);
-			SDL_RenderGetScale(renderer, &old_scale_x, &old_scale_y);
-			SDL_Rect target_viewport{0, 0, render_target_w, render_target_h};
-			SDL_RenderSetViewport(renderer, &target_viewport);
-			SDL_RenderSetScale(renderer, board_to_target_x, board_to_target_y);
-		}
 		chipset.Frame();
-		if (board_png_interface) {
-			SDL_RenderSetScale(renderer, old_scale_x, old_scale_y);
-			SDL_RenderSetViewport(renderer, &old_viewport);
-		}
 
 		// resize and copy `tx` to screen
 		SDL_SetRenderTarget(renderer, nullptr);
