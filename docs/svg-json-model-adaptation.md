@@ -556,7 +556,7 @@ png
 ### Windows
 
 - CMake 构建包含 JSON/SVG 解析代码。
-- MSVC 工程文件包含 `ModelInfo.cpp` 和 `tinyxml2.cpp`。
+- MSVC 工程文件包含 `ModelConfig.cpp`、`SvgBoardModelLoader.cpp` 和 `tinyxml2.cpp`。
 - 默认 renderer hint 为 `opengl`。
 
 ### Linux
@@ -637,8 +637,11 @@ SVG board 模型目录应满足：
 
 ## 相关文件
 
+- `CasioEmuMsvc/src/ModelConfig.h`
+- `CasioEmuMsvc/src/ModelConfig.cpp`
 - `CasioEmuMsvc/src/ModelInfo.h`
-- `CasioEmuMsvc/src/ModelInfo.cpp`
+- `CasioEmuMsvc/src/SvgBoardModelLoader.h`
+- `CasioEmuMsvc/src/SvgBoardModelLoader.cpp`
 - `CasioEmuMsvc/src/Emulator.cpp`
 - `CasioEmuMsvc/src/Peripheral/Screen.cpp`
 - `CasioEmuMsvc/src/Peripheral/Keyboard.cpp`
