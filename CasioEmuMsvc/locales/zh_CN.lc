@@ -115,6 +115,8 @@ RecordStartBtn=开始录像
 RecordStopBtn=停止录像
 RecordStatus=正在录像：%u 帧
 
+HwController.CaptureScale=缩放倍数
+HwController.CaptureBackground=背景颜色
 HwController.Value1=屏幕闪烁阈值
 HwController.Value2=屏幕闪烁亮度系数
 HwController.ScreenBufferSelect=屏幕缓冲区选择

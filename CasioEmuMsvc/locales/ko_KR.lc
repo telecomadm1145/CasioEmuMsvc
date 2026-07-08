@@ -116,6 +116,8 @@ RecordStartBtn=녹화 시작
 RecordStopBtn=녹화 중지
 RecordStatus=녹화 중: %u 프레임
 
+HwController.CaptureScale=캡처 배율
+HwController.CaptureBackground=캡처 배경
 HwController.Value1=플리커 임계값
 HwController.Value2=밝기 계수
 HwController.ScreenBufferSelect=버퍼 선택

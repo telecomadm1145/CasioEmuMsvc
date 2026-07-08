@@ -116,6 +116,8 @@ RecordStartBtn=Start Recording
 RecordStopBtn=Stop Recording
 RecordStatus=Recording: %u frames
 
+HwController.CaptureScale=Capture scale
+HwController.CaptureBackground=Capture background
 HwController.Value1=Flicker Threshold
 HwController.Value2=Brightness Coeff.
 HwController.ScreenBufferSelect=Buffer Selection

@@ -116,6 +116,8 @@ RecordStartBtn=Iniciar grabación
 RecordStopBtn=Detener grabación
 RecordStatus=Grabando: %u fotogramas
 
+HwController.CaptureScale=Escala de captura
+HwController.CaptureBackground=Fondo de captura
 HwController.Value1=Umbral de parpadeo
 HwController.Value2=Coef. de brillo
 HwController.ScreenBufferSelect=Selección de búfer

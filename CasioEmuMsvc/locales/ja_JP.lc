@@ -115,6 +115,8 @@ RecordStartBtn=録画開始
 RecordStopBtn=録画停止
 RecordStatus=録画中: %u フレーム
 
+HwController.CaptureScale=キャプチャ倍率
+HwController.CaptureBackground=キャプチャ背景
 HwController.Value1=画面のちらつきしきい値
 HwController.Value2=画面のちらつき輝度係数
 HwController.ScreenBufferSelect=画面バッファ選択

@@ -117,6 +117,8 @@ RecordStartBtn=Bắt đầu quay
 RecordStopBtn=Dừng quay
 RecordStatus=Đang quay: %u khung
 
+HwController.CaptureScale=Tỷ lệ chụp
+HwController.CaptureBackground=Nền ảnh chụp
 HwController.Value1=Ngưỡng nháy màn hình
 HwController.Value2=Hệ số độ sáng nháy màn hình
 HwController.ScreenBufferSelect=Chọn buffer màn hình

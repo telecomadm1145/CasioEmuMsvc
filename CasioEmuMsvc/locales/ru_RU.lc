@@ -116,6 +116,8 @@ RecordStartBtn=Начать запись
 RecordStopBtn=Остановить запись
 RecordStatus=Запись: %u кадров
 
+HwController.CaptureScale=Масштаб захвата
+HwController.CaptureBackground=Фон захвата
 HwController.Value1=Порог мерцания
 HwController.Value2=Коэф. яркости
 HwController.ScreenBufferSelect=Выбор буфера экрана

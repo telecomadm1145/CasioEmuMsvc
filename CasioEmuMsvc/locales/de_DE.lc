@@ -116,6 +116,8 @@ RecordStartBtn=Aufnahme starten
 RecordStopBtn=Aufnahme stoppen
 RecordStatus=Aufnahme: %u Frames
 
+HwController.CaptureScale=Aufnahmeskalierung
+HwController.CaptureBackground=Aufnahmehintergrund
 HwController.Value1=Flimmerschwelle
 HwController.Value2=Helligkeitskoeff.
 HwController.ScreenBufferSelect=Puffer-Auswahl

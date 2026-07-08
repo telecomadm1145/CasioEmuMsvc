@@ -40,10 +40,28 @@ void HwController::RenderCore() {
 		ImGui::SameLine();
 		ImGui::Text("RecordStatus"_lc, m_emu->recording_frame_count.load());
 	}
-	int capture_scale = std::max(2, m_emu->capture_scale.load());
+	int capture_scale = std::max(1, m_emu->capture_scale.load());
+	bool capture_scale_changed = false;
+	ImGui::PushID("HwController.CaptureScale");
+	if (ImGui::Button("-", ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
+		capture_scale--;
+		capture_scale_changed = true;
+	}
+	ImGui::SameLine();
 	ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
-	if (ImGui::InputInt("Capture scale", &capture_scale, 1, 1)) {
-		m_emu->capture_scale.store(std::max(2, capture_scale));
+	if (ImGui::InputInt("##Value", &capture_scale, 0, 0)) {
+		capture_scale_changed = true;
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("+", ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
+		capture_scale++;
+		capture_scale_changed = true;
+	}
+	ImGui::PopID();
+	ImGui::SameLine();
+	ImGui::TextUnformatted("HwController.CaptureScale"_lc);
+	if (capture_scale_changed) {
+		m_emu->capture_scale.store(std::max(1, capture_scale));
 	}
 	else if (capture_scale != m_emu->capture_scale.load()) {
 		m_emu->capture_scale.store(capture_scale);
@@ -54,7 +72,7 @@ void HwController::RenderCore() {
 		static_cast<float>((capture_background >> 8) & 0xff) / 255.0f,
 		static_cast<float>(capture_background & 0xff) / 255.0f};
 	ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10.0f);
-	if (ImGui::ColorEdit3("Capture background", capture_background_color)) {
+	if (ImGui::ColorEdit3("HwController.CaptureBackground"_lc, capture_background_color)) {
 		const auto channel = [](float value) {
 			return static_cast<uint32_t>(std::clamp(static_cast<int>(std::lround(value * 255.0f)), 0, 255));
 		};

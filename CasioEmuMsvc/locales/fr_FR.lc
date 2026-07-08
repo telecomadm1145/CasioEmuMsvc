@@ -116,6 +116,8 @@ RecordStartBtn=Démarrer l'enregistrement
 RecordStopBtn=Arrêter l'enregistrement
 RecordStatus=Enregistrement : %u images
 
+HwController.CaptureScale=Échelle de capture
+HwController.CaptureBackground=Arrière-plan de capture
 HwController.Value1=Seuil de scintillement
 HwController.Value2=Coeff. de luminosité
 HwController.ScreenBufferSelect=Sélection du tampon
