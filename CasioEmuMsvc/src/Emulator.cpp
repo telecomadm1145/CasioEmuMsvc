@@ -184,12 +184,6 @@ namespace casioemu {
 
 		auto width = interface_background.dest.w;
 		auto height = interface_background.dest.h;
-		if (!ModelDefinition.board_path.empty() &&
-			!HasSvgExtension(ModelDefinition.interface_path) &&
-			interface_background.src.w > 0 && interface_background.src.h > 0) {
-			width = interface_background.src.w;
-			height = interface_background.src.h;
-		}
 		try {
 			std::size_t pos;
 
@@ -341,12 +335,6 @@ namespace casioemu {
 
 			auto width = interface_background.dest.w;
 			auto height = interface_background.dest.h;
-			if (!ModelDefinition.board_path.empty() &&
-				!HasSvgExtension(ModelDefinition.interface_path) &&
-				interface_background.src.w > 0 && interface_background.src.h > 0) {
-				width = interface_background.src.w;
-				height = interface_background.src.h;
-			}
 			try {
 				std::size_t pos;
 
