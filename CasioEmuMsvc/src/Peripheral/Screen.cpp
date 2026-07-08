@@ -257,19 +257,6 @@ namespace casioemu {
 		SDL_RenderCopy(renderer, interface_texture, &src, &dest);
 	}
 
-	void AddSolidQuad(std::vector<SDL_Vertex>& vertices, float x0, float y0, float x1, float y1, SDL_Color colour) {
-		const SDL_Vertex v0{{x0, y0}, colour, {0.0f, 0.0f}};
-		const SDL_Vertex v1{{x1, y0}, colour, {0.0f, 0.0f}};
-		const SDL_Vertex v2{{x1, y1}, colour, {0.0f, 0.0f}};
-		const SDL_Vertex v3{{x0, y1}, colour, {0.0f, 0.0f}};
-		vertices.push_back(v0);
-		vertices.push_back(v1);
-		vertices.push_back(v2);
-		vertices.push_back(v0);
-		vertices.push_back(v2);
-		vertices.push_back(v3);
-	}
-
     class SolarIIScreen : public Peripheral, public IScreenFrameProvider {
         struct StatusBit {
             uint8_t offset;
@@ -647,6 +634,10 @@ namespace casioemu {
 		float position = 0;
 		SDL_Renderer* renderer{};
 		SDL_Texture* interface_texture{};
+		SDL_Texture* pixel_screen_texture{};
+		int pixel_screen_texture_width = 0;
+		int pixel_screen_texture_height = 0;
+		std::vector<uint8_t> pixel_screen_pixels;
 		float screen_ink_alpha[66 * 192]{};
 		static const SpriteBitmap sprite_bitmap[];
 		std::vector<SpriteInfo> sprite_info;
@@ -694,6 +685,90 @@ namespace casioemu {
 			return static_cast<uint8_t>(std::clamp(static_cast<int>(alpha), 0, 255));
 		}
 
+		void ResetPixelScreenTexture() {
+			if (pixel_screen_texture) {
+				SDL_DestroyTexture(pixel_screen_texture);
+				pixel_screen_texture = nullptr;
+			}
+			pixel_screen_texture_width = 0;
+			pixel_screen_texture_height = 0;
+			pixel_screen_pixels.clear();
+		}
+
+		bool EnsurePixelScreenTexture(int width, int height) {
+			if (!renderer || width <= 0 || height <= 0)
+				return false;
+			if (pixel_screen_texture && pixel_screen_texture_width == width && pixel_screen_texture_height == height)
+				return true;
+
+			ResetPixelScreenTexture();
+			pixel_screen_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, width, height);
+			if (!pixel_screen_texture) {
+				SDL_Log("[Screen][Warn] SDL_CreateTexture failed for pixel screen: %s", SDL_GetError());
+				return false;
+			}
+			SDL_SetTextureBlendMode(pixel_screen_texture, SDL_BLENDMODE_BLEND);
+#if SDL_VERSION_ATLEAST(2, 0, 12)
+			SDL_SetTextureScaleMode(pixel_screen_texture, SDL_ScaleModeNearest);
+#endif
+			pixel_screen_texture_width = width;
+			pixel_screen_texture_height = height;
+			pixel_screen_pixels.resize(static_cast<size_t>(width) * static_cast<size_t>(height) * 4);
+			return true;
+		}
+
+		SDL_Color PixelScreenColour(float alpha_value) const {
+			SDL_Color colour{
+				static_cast<Uint8>(ink_colour.r),
+				static_cast<Uint8>(ink_colour.g),
+				static_cast<Uint8>(ink_colour.b),
+				Uint8(std::clamp(static_cast<int>(alpha_value), 0, 255))};
+			if (alpha_value <= 0.0f) {
+				colour.a = 0;
+			}
+			else if (alpha_value > 255.0f) {
+				const int extra = static_cast<int>(alpha_value - 255.0f);
+				colour.r = static_cast<uint8_t>(std::max(0, ink_colour.r - extra));
+				colour.g = static_cast<uint8_t>(std::max(0, ink_colour.g - static_cast<int>(extra * 0.8f)));
+				colour.b = static_cast<uint8_t>(std::max(0, ink_colour.b - static_cast<int>(extra * 0.1f)));
+				colour.a = 255;
+			}
+			return colour;
+		}
+
+		void WritePixelScreenTexture(int logical_width, int logical_height) {
+			if (pixel_screen_pixels.size() < static_cast<size_t>(logical_width) * static_cast<size_t>(logical_height) * 4)
+				return;
+			for (int y = 0; y != logical_height; ++y) {
+				const int source_y = y + 1;
+				for (int x = 0; x != logical_width; ++x) {
+					const float alpha_value = screen_ink_alpha[x + source_y * 192];
+					const SDL_Color colour = PixelScreenColour(alpha_value);
+
+					const size_t pixel_offset = (static_cast<size_t>(y) * static_cast<size_t>(logical_width) + static_cast<size_t>(x)) * 4;
+					pixel_screen_pixels[pixel_offset + 0] = colour.r;
+					pixel_screen_pixels[pixel_offset + 1] = colour.g;
+					pixel_screen_pixels[pixel_offset + 2] = colour.b;
+					pixel_screen_pixels[pixel_offset + 3] = colour.a;
+				}
+			}
+		}
+
+		bool RenderPixelScreenTexture(const SDL_Rect& lcd_dest, int logical_width, int logical_height) {
+			if (!EnsurePixelScreenTexture(logical_width, logical_height))
+				return false;
+			WritePixelScreenTexture(logical_width, logical_height);
+			if (SDL_UpdateTexture(pixel_screen_texture, nullptr, pixel_screen_pixels.data(), logical_width * 4) != 0) {
+				SDL_Log("[Screen][Warn] SDL_UpdateTexture failed for pixel screen: %s", SDL_GetError());
+				return false;
+			}
+			if (SDL_RenderCopy(renderer, pixel_screen_texture, nullptr, &lcd_dest) != 0) {
+				SDL_Log("[Screen][Warn] SDL_RenderCopy failed for pixel screen: %s", SDL_GetError());
+				return false;
+			}
+			return true;
+		}
+
 	public:
 		Screen(Emulator& emu)
 			: Peripheral(emu) {
@@ -716,6 +791,7 @@ namespace casioemu {
 		~Screen() {
 			for (auto& texture : sprite_svg_textures)
 				texture.Reset();
+			ResetPixelScreenTexture();
 			if (screen_buffer)
 				delete[] screen_buffer;
 			if (screen_buffer1)
@@ -2872,36 +2948,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			lcd_dest.h = std::max(1, (logical_height - 1) * sprite_info[SPR_PIXEL].src.h + sprite_info[SPR_PIXEL].dest.h);
 		}
 
-		std::vector<SDL_Vertex> pixel_vertices;
-		pixel_vertices.reserve(static_cast<size_t>(logical_width) * static_cast<size_t>(logical_height) * 6);
-		const float cell_w = static_cast<float>(lcd_dest.w) / static_cast<float>(logical_width);
-		const float cell_h = static_cast<float>(lcd_dest.h) / static_cast<float>(logical_height);
-		const float origin_x = static_cast<float>(lcd_dest.x);
-		const float origin_y = static_cast<float>(lcd_dest.y);
-		for (int y = 0; y != logical_height; ++y) {
-			const int source_y = y + 1;
-			for (int x = 0; x != logical_width; ++x) {
-				const float alpha_value = screen_ink_alpha[x + source_y * 192];
-				if (alpha_value <= 0.0f)
-					continue;
-				SDL_Color colour{
-					static_cast<Uint8>(ink_colour.r),
-					static_cast<Uint8>(ink_colour.g),
-					static_cast<Uint8>(ink_colour.b),
-					Uint8(std::clamp((int)alpha_value, 0, 255))};
-				if (alpha_value > 255) {
-					colour.r = static_cast<uint8_t>(std::max(0, ink_colour.r - (int)(alpha_value - 255)));
-					colour.g = static_cast<uint8_t>(std::max(0, ink_colour.g - (int)((alpha_value - 255) * 0.8)));
-					colour.b = static_cast<uint8_t>(std::max(0, ink_colour.b - (int)((alpha_value - 255) * 0.1)));
-					colour.a = 255;
-				}
-				const float x0 = origin_x + static_cast<float>(x) * cell_w;
-				const float y0 = origin_y + static_cast<float>(y) * cell_h;
-				AddSolidQuad(pixel_vertices, x0, y0, x0 + cell_w, y0 + cell_h, colour);
-			}
-		}
-		if (!pixel_vertices.empty())
-			SDL_RenderGeometry(renderer, nullptr, pixel_vertices.data(), static_cast<int>(pixel_vertices.size()), nullptr, 0);
+		RenderPixelScreenTexture(lcd_dest, logical_width, logical_height);
 		pixelRects.push_back(lcd_dest);
 
 #ifndef __EMSCRIPTEN__
