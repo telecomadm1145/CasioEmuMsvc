@@ -138,6 +138,37 @@ static bool IsPointInImGuiWindow(float x, float y) {
 	return false;
 }
 
+static Uint32 GetEventWindowId(const SDL_Event& event) {
+	switch (event.type) {
+	case SDL_WINDOWEVENT:
+		return event.window.windowID;
+	case SDL_KEYDOWN:
+	case SDL_KEYUP:
+		return event.key.windowID;
+	case SDL_TEXTEDITING:
+	case SDL_TEXTINPUT:
+		return event.text.windowID;
+	case SDL_MOUSEMOTION:
+		return event.motion.windowID;
+	case SDL_MOUSEBUTTONDOWN:
+	case SDL_MOUSEBUTTONUP:
+		return event.button.windowID;
+	case SDL_MOUSEWHEEL:
+		return event.wheel.windowID;
+	default:
+		return 0;
+	}
+}
+
+static bool IsScreenMirrorWindowEvent(const SDL_Event& event) {
+	const Uint32 windowId = GetEventWindowId(event);
+	if (windowId == 0) {
+		return false;
+	}
+	SDL_Window* eventWindow = SDL_GetWindowFromID(windowId);
+	return eventWindow && SDL_GetWindowData(eventWindow, SCREEN_MIRROR_WINDOW_DATA_KEY);
+}
+
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
 	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE);
@@ -400,11 +431,19 @@ int main(int argc, char* argv[]) {
 	hld:
 		int wid, hei;
 		SDL_GetWindowSize(window, &wid, &hei);
+		const Uint32 eventWindowId = GetEventWindowId(event);
+		if (IsScreenMirrorWindowEvent(event)) {
+			if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
+				event.key.windowID = SDL_GetWindowID(emulator.window);
+				emulator.UIEvent(event);
+			}
+			continue;
+		}
 		switch (event.type) {
 		case SDL_WINDOWEVENT:
 			switch (event.window.event) {
 			case SDL_WINDOWEVENT_CLOSE:
-				if (SDL_Window* closedWindow = SDL_GetWindowFromID(event.window.windowID)) {
+				if (SDL_Window* closedWindow = SDL_GetWindowFromID(eventWindowId)) {
 					if (SDL_GetWindowData(closedWindow, SCREEN_MIRROR_WINDOW_DATA_KEY)) {
 						break;
 					}
@@ -438,7 +477,7 @@ int main(int argc, char* argv[]) {
 			}
 #else
 			if (!no_dbg)
-				if ((SDL_GetKeyboardFocus() != emulator.window) && guiCreated) {
+				if (guiCreated && eventWindowId != 0 && window && eventWindowId == SDL_GetWindowID(window)) {
 					ImGui_ImplSDL2_ProcessEvent(&event);
 					break;
 				}
