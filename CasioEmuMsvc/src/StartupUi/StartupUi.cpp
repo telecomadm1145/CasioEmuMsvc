@@ -460,11 +460,11 @@ public:
 					ImGui::EndTabItem();
 				}
 				if (is_board_model && ImGui::BeginTabItem("Status")) {
-					if (mi.status_sprites.empty()) {
+					if (mi.status_sprite_indexes.empty()) {
 						ImGui::TextUnformatted("No status sprites configured.");
 					}
 					else {
-						for (auto& [key, index] : mi.status_sprites) {
+						for (auto& [key, index] : mi.status_sprite_indexes) {
 							ImGui::PushID(key.c_str());
 							ImGui::TextUnformatted(key.c_str());
 							ImGui::SameLine(160.0f);

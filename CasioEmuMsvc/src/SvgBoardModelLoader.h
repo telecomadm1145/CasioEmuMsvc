@@ -15,8 +15,9 @@ namespace casioemu {
 		const std::string& requested_rom,
 		const std::string& requested_flash,
 		const Rect& interface_src_rect,
+		const Rect& interface_dest_rect,
 		int display_w,
 		int display_h,
 		double screen_scale_y,
-		const std::map<std::string, int>& configured_status_sprites);
+		const std::map<std::string, int>& configured_status_indexes);
 }

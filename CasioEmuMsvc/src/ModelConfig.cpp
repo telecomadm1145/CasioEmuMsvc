@@ -113,47 +113,22 @@ namespace casioemu {
 			return true;
 		}
 
-		std::map<std::string, int> ParseStatusSpriteMap(const json& item) {
+		std::map<std::string, int> ReadBoardStatusSpriteMap(const json& value) {
+			const json& sprites = RequireJsonMember(value, {"sprites"}, "sprites");
+			if (!sprites.is_object())
+				throw std::runtime_error("config.json field sprites must be an object.");
 			std::map<std::string, int> result;
-			if (item.is_object()) {
-				for (auto it = item.begin(); it != item.end(); ++it) {
-					if (it.value().is_number_integer()) {
-						result[it.key()] = it.value().get<int>();
-					}
-					else if (it.value().is_object() && it.value().contains("index")) {
-						result[it.key()] = it.value().at("index").get<int>();
-					}
-					else {
-						throw std::runtime_error("config.json status_sprites values must be integer indexes.");
-					}
-				}
+			for (auto it = sprites.begin(); it != sprites.end(); ++it) {
+				if (it.key() == "rsd_interface")
+					continue;
+				const auto& sprite = it.value();
+				if (!sprite.is_object() || !sprite.contains("index") || !sprite.at("index").is_number_integer())
+					throw std::runtime_error("config.json board status sprite entries must be objects with integer index.");
+				result[it.key()] = sprite.at("index").get<int>();
 			}
-			else if (item.is_array()) {
-				for (size_t ix = 0; ix < item.size(); ++ix) {
-					const auto& entry = item.at(ix);
-					if (entry.is_string()) {
-						result[entry.get<std::string>()] = static_cast<int>(ix);
-					}
-					else if (entry.is_object() && entry.contains("name")) {
-						const int index = entry.contains("index") ? entry.at("index").get<int>() : static_cast<int>(ix);
-						result[entry.at("name").get<std::string>()] = index;
-					}
-					else {
-						throw std::runtime_error("config.json status_sprites array entries must be strings or objects with name/index.");
-					}
-				}
-			}
-			else {
-				throw std::runtime_error("config.json field status_sprites must be an object or array.");
-			}
+			if (result.empty())
+				throw std::runtime_error("config.json sprites must include at least one status sprite index.");
 			return result;
-		}
-
-		std::map<std::string, int> ReadStatusSpriteMap(const json& value) {
-			const json* item = FindJsonMember(value, {"status_sprites"});
-			if (!item)
-				return {};
-			return ParseStatusSpriteMap(*item);
 		}
 
 		void ApplyBoardButtonOverrides(const json& buttons, ModelInfo& model) {
@@ -174,25 +149,25 @@ namespace casioemu {
 			}
 		}
 
-		std::map<std::string, int> RequireStatusSpriteMap(const json& value) {
-			const json& item = RequireJsonMember(value, {"status_sprites"}, "status_sprites");
-			auto result = ParseStatusSpriteMap(item);
-			if (result.empty())
-				throw std::runtime_error("config.json status_sprites must not be empty.");
-			return result;
-		}
-
-		Rect RequireInterfaceSourceRect(const json& value) {
+		SpriteInfo RequireBoardInterfaceSprite(const json& value) {
 			const json& sprites = RequireJsonMember(value, {"sprites"}, "sprites");
 			if (!sprites.is_object() || !sprites.contains("rsd_interface"))
 				throw std::runtime_error("config.json must specify sprites.rsd_interface.");
 			const auto& interface_sprite = sprites.at("rsd_interface");
 			if (!interface_sprite.is_object() || !interface_sprite.contains("src"))
 				throw std::runtime_error("config.json must specify sprites.rsd_interface.src.");
-			Rect rect = RectFromJson(interface_sprite.at("src"));
-			if (rect.w <= 0 || rect.h <= 0)
+			if (!interface_sprite.contains("dest"))
+				throw std::runtime_error("config.json must specify sprites.rsd_interface.dest.");
+			SpriteInfo sprite{};
+			sprite.src = RectFromJson(interface_sprite.at("src"));
+			sprite.dest = RectFromJson(interface_sprite.at("dest"));
+			if (sprite.src.w <= 0 || sprite.src.h <= 0)
 				throw std::runtime_error("config.json sprites.rsd_interface.src must have positive width and height.");
-			return rect;
+			if (sprite.dest.w <= 0 || sprite.dest.h <= 0)
+				throw std::runtime_error("config.json sprites.rsd_interface.dest must have positive width and height.");
+			if (sprite.dest.x != 0 || sprite.dest.y != 0)
+				throw std::runtime_error("config.json sprites.rsd_interface.dest x and y must be zero.");
+			return sprite;
 		}
 
 		void RequireBaseModelFields(const json& value) {
@@ -216,8 +191,8 @@ namespace casioemu {
 			RequireJsonInt(value, {"screen_width"}, "screen_width");
 			RequireJsonInt(value, {"screen_height"}, "screen_height");
 			RequireJsonNumber(value, {"screen_scale_y"}, "screen_scale_y");
-			RequireStatusSpriteMap(value);
-			RequireInterfaceSourceRect(value);
+			RequireBoardInterfaceSprite(value);
+			ReadBoardStatusSpriteMap(value);
 		}
 
 		void RequireSpriteModelFields(const json& value) {
@@ -285,9 +260,6 @@ namespace casioemu {
 						model.extra[key] = std::move(item);
 				}
 			}
-			if (auto status_sprites = ReadStatusSpriteMap(value); !status_sprites.empty())
-				model.status_sprites = std::move(status_sprites);
-
 			if (value.contains("buttons")) {
 				if (!model.board_path.empty()) {
 					if (!model.buttons.empty())
@@ -344,8 +316,6 @@ namespace casioemu {
 			value["screen_height"] = model.screen_height;
 			value["screen_scale_y"] = model.screen_scale_y;
 		}
-		if (!model.status_sprites.empty())
-			value["status_sprites"] = model.status_sprites;
 		if (!model.extra.empty())
 			value["extra"] = model.extra;
 
@@ -372,6 +342,9 @@ namespace casioemu {
 			if (auto it = model.sprites.find("rsd_interface"); it != model.sprites.end()) {
 				value["sprites"] = json::object();
 				value["sprites"]["rsd_interface"] = SpriteToJson(it->second);
+			}
+			for (const auto& [name, index] : model.status_sprite_indexes) {
+				value["sprites"][name] = {{"index", index}};
 			}
 			value["buttons"] = json::array();
 			for (size_t ix = 0; ix < model.buttons.size(); ++ix) {
@@ -439,12 +412,12 @@ namespace casioemu {
 					RequireBoardModelFields(value);
 					unsigned short hardware_id{};
 					ReadHardwareId(value, hardware_id);
-					const auto requested_status_sprites = RequireStatusSpriteMap(value);
+					const auto requested_status_indexes = ReadBoardStatusSpriteMap(value);
 					const int display_w = RequireJsonInt(value, {"screen_width"}, "screen_width");
 					const int display_h = RequireJsonInt(value, {"screen_height"}, "screen_height");
 					const double screen_scale_y = RequireJsonNumber(value, {"screen_scale_y"}, "screen_scale_y");
-					const Rect interface_src = RequireInterfaceSourceRect(value);
-					model = LoadSvgBoardModelInfo(model_path, hardware_id, requested_board, requested_interface, requested_rom, requested_flash, interface_src, display_w, display_h, screen_scale_y, requested_status_sprites);
+					const SpriteInfo interface_sprite = RequireBoardInterfaceSprite(value);
+					model = LoadSvgBoardModelInfo(model_path, hardware_id, requested_board, requested_interface, requested_rom, requested_flash, interface_sprite.src, interface_sprite.dest, display_w, display_h, screen_scale_y, requested_status_indexes);
 					ApplyModelInfoJsonValue(value, model, false);
 				}
 				else {

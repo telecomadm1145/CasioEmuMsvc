@@ -125,29 +125,37 @@ SOLAR II 是段码/状态图形类显示，不涉及矩阵像素屏幕，不应�
 | `screen_width`              | integer        | 是  | 矩阵像素屏幕机型的 LCD 逻辑宽度。                 |
 | `screen_height`             | integer        | 是  | 矩阵像素屏幕机型的 LCD 逻辑高度。                 |
 | `screen_scale_y`            | number         | 是  | 矩阵像素屏幕机型的 LCD 高度修正系数，通常为 `1.0`。       |
-| `status_sprites`            | object 或 array | 是  | `rsd_*` 状态精灵与 SVG status 子节点的映射。      |
-| `sprites.rsd_interface.src` | rect           | 是  | interface 原图尺寸或 SVG 目标渲染尺寸。           |
+| `sprites.rsd_interface.src` | rect           | 是  | interface 原图尺寸或 SVG 源渲染尺寸。             |
+| `sprites.rsd_interface.dest` | rect           | 是  | 模型坐标尺寸，也是默认窗口尺寸；`x/y` 必须为 `0`。     |
+| `sprites.rsd_* .index`      | integer        | 是  | `rsd_*` 状态精灵与 SVG status 子节点的映射。      |
 | `buttons`                   | array          | 否  | 按键映射覆盖项，只包含 `index`、`keyname`、`kiko`。 |
 
-### `sprites.rsd_interface.src`
+### `sprites.rsd_interface.src` / `dest`
 
-SVG board 模型必须写明 interface 源区域：
+SVG board 模型必须写明 interface 源区域和目标模型尺寸：
 
 ```json
 "sprites": {
 "rsd_interface": {
-"src": {"x": 0, "y": 0, "w": 375, "h": 635}
+"src": {"x": 0, "y": 0, "w": 375, "h": 635},
+"dest": {"x": 0, "y": 0, "w": 750, "h": 1270}
 }
 }
 ```
 
-含义：
+`src` 含义：
 
 - `x`、`y`：源图裁剪起点，通常为 `0`。
-- `w`、`h`：interface 图片实际尺寸。SVG interface 使用期望的渲染尺寸。
+- `w`、`h`：interface 图片实际尺寸。SVG interface 使用源渲染尺寸。
 - PNG 后缀但内容为 JPEG 的文件也按这里的尺寸处理。
 
-SVG board 模型的其它 sprite 几何来自 board SVG。
+`dest` 含义：
+
+- `x`、`y` 必须为 `0`。
+- `w`、`h` 是 SVG board 模型坐标尺寸，也是模拟器初始窗口默认尺寸。
+- board SVG 推导出的按键、LCD、status 几何会按根坐标系到 `dest` 的比例映射。
+
+SVG board 模型的其它 sprite 几何来自 board SVG，并映射到 `dest` 坐标系。
 
 ### `screen_width`、`screen_height`、`screen_scale_y`
 
@@ -161,39 +169,25 @@ lcd_height = screenSlot.width * screen_height / screen_width * screen_scale_y
 
 这使 LCD 区域以逻辑像素宽高比铺满 board 中的屏幕区域。SOLAR II 这类段码/状态图形类显示不按这一节理解为矩阵像素屏幕。
 
-### `status_sprites`
+### `sprites` 状态项
 
-`status_sprites` 指定 CasioEmuMsvc 的 `rsd_*` 状态精灵名对应 status 容器的第几个直接子节点。
+除 `rsd_interface` 外，SVG board 模型在 `sprites` 下用 `rsd_*` key 指定状态精灵名对应 status 容器的第几个直接子节点。
 
-推荐 object 形式：
+格式：
 
 ```json
-"status_sprites": {
-"rsd_s": 0,
-"rsd_a": 1,
-"rsd_m": 2,
-"rsd_sto": 3,
-"rsd_math": 4,
-"rsd_d": 5
+"sprites": {
+  "rsd_interface": {
+    "src": {"x": 0, "y": 0, "w": 375, "h": 635},
+    "dest": {"x": 0, "y": 0, "w": 750, "h": 1270}
+  },
+  "rsd_s": {"index": 0},
+  "rsd_a": {"index": 1},
+  "rsd_m": {"index": 2},
+  "rsd_sto": {"index": 3},
+  "rsd_math": {"index": 4},
+  "rsd_d": {"index": 5}
 }
-```
-
-也支持 object value 带 `index`：
-
-```json
-"status_sprites": {
-"rsd_s": {"index": 0}
-}
-```
-
-也支持 array：
-
-```json
-"status_sprites": [
-"rsd_s",
-"rsd_a",
-{"name": "rsd_m", "index": 2}
-]
 ```
 
 规则：
@@ -375,28 +369,6 @@ status 容器查找规则：
   "screen_width": 192,
   "screen_height": 63,
   "screen_scale_y": 1.0,
-  "status_sprites": {
-    "rsd_s": 0,
-    "rsd_a": 1,
-    "rsd_m": 2,
-    "rsd_sto": 3,
-    "rsd_math": 4,
-    "rsd_d": 5,
-    "rsd_r": 6,
-    "rsd_g": 7,
-    "rsd_fix": 8,
-    "rsd_sci": 9,
-    "rsd_e": 10,
-    "rsd_cmplx": 11,
-    "rsd_angle": 12,
-    "rsd_wdown": 13,
-    "rsd_left": 14,
-    "rsd_down": 15,
-    "rsd_up": 16,
-    "rsd_right": 17,
-    "rsd_pause": 18,
-    "rsd_sun": 19
-  },
   "sprites": {
     "rsd_interface": {
       "src": {
@@ -404,8 +376,34 @@ status 容器查找规则：
         "y": 0,
         "w": 375,
         "h": 635
+      },
+      "dest": {
+        "x": 0,
+        "y": 0,
+        "w": 750,
+        "h": 1270
       }
-    }
+    },
+    "rsd_s": {"index": 0},
+    "rsd_a": {"index": 1},
+    "rsd_m": {"index": 2},
+    "rsd_sto": {"index": 3},
+    "rsd_math": {"index": 4},
+    "rsd_d": {"index": 5},
+    "rsd_r": {"index": 6},
+    "rsd_g": {"index": 7},
+    "rsd_fix": {"index": 8},
+    "rsd_sci": {"index": 9},
+    "rsd_e": {"index": 10},
+    "rsd_cmplx": {"index": 11},
+    "rsd_angle": {"index": 12},
+    "rsd_wdown": {"index": 13},
+    "rsd_left": {"index": 14},
+    "rsd_down": {"index": 15},
+    "rsd_up": {"index": 16},
+    "rsd_right": {"index": 17},
+    "rsd_pause": {"index": 18},
+    "rsd_sun": {"index": 19}
   },
   "buttons": [
     {
@@ -428,7 +426,7 @@ SVG board 模型：
 - 预览使用 `interface_path` 和 `sprites.rsd_interface.src`。
 - SVG interface 会按 `rsd_interface.src.w/h` rasterize。
 - 按键几何由 board SVG 管理，编辑器只修改 `keyname` 和 `kiko`。
-- Status 页可修改 `status_sprites` 的 index。
+- Status 页可修改 `sprites.rsd_* .index`。
 - 保存时写出 `config.json` 并更新 `config.bin`。
 - 保存前校验所有按键 `kiko` 唯一。
 
@@ -457,6 +455,7 @@ SVG board 模型使用 SVG interface 时：
 - 启动时读取 SVG 文本。
 - 窗口目标尺寸变化时按显示尺寸 rasterize SVG。
 - interface 和 status 在同一 board 坐标缩放下绘制；矩阵像素屏幕机型的 LCD 像素也使用同一缩放。
+- `sprites.rsd_interface.dest` 可大于 `src`，例如使用 `src` 的 2 倍作为默认窗口尺寸。
 
 ### PNG/JPEG interface
 
@@ -621,9 +620,10 @@ SVG board 模型目录应满足：
 - `rom_path` 指向存在的 ROM 文件。
 - `flash_path` 为空或指向存在的 flash 文件。
 - `sprites.rsd_interface.src.w/h` 是正数。
+- `sprites.rsd_interface.dest.x/y` 为 `0`，`dest.w/h` 是正数。
 - 矩阵像素屏幕机型的 `screen_width`、`screen_height`、`screen_scale_y` 是正数。
-- `status_sprites` 不为空。
-- `status_sprites` index 没有超出 status 子节点数量。
+- `sprites` 下至少包含一个带 `index` 的状态项。
+- `sprites.rsd_* .index` 没有超出 status 子节点数量。
 - board SVG 根节点有可用 viewBox 或尺寸。
 - board SVG 有 `id="screenSlot"`。
 - board SVG 的按键元素有 `data-ki` 和 `data-ko`。

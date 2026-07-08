@@ -87,7 +87,7 @@ namespace casioemu {
 		int screen_width{};
 		int screen_height{};
 		double screen_scale_y{};
-		std::map<std::string, int> status_sprites;
+		std::map<std::string, int> status_sprite_indexes;
 		std::map<std::string, std::string> extra;
 		void Write(std::ostream& os) const {
 			Binary::Write(os, std::string("\n\nnx-U16/U8 Emulator Configuration file v52\n\n模拟器配置文件v52\n\ntệp cấu hình giả lập v52\n\n"));
@@ -109,7 +109,7 @@ namespace casioemu {
 			Binary::Write(os, LARGE_model);
 			Binary::Write(os, ml620_mirroring);
 			Binary::Write(os, extra);
-			Binary::Write(os, status_sprites);
+			Binary::Write(os, status_sprite_indexes);
 
 			std::vector<std::string> button_svg_shapes;
 			std::vector<std::string> button_svg_defs;
@@ -138,7 +138,7 @@ namespace casioemu {
 			Binary::Write(os, screen_scale_y);
 		}
 		void Read(std::istream& is) {
-			status_sprites.clear();
+			status_sprite_indexes.clear();
 			board_path.clear();
 			screen_width = 0;
 			screen_height = 0;
@@ -185,7 +185,7 @@ namespace casioemu {
 			Binary::Read(is, ml620_mirroring);
 			Binary::Read(is, extra);
 			if (is.peek() != std::char_traits<char>::eof()) {
-				Binary::Read(is, status_sprites);
+				Binary::Read(is, status_sprite_indexes);
 
 				std::vector<std::string> button_svg_shapes;
 				std::vector<std::string> button_svg_defs;

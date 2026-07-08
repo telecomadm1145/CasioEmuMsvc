@@ -58,6 +58,48 @@ namespace casioemu {
 			return {RoundToInt(rect.x), RoundToInt(rect.y), std::max(1, RoundToInt(rect.w)), std::max(1, RoundToInt(rect.h))};
 		}
 
+		struct BoardGeometryMapper {
+			SvgRect source{};
+			Rect dest{};
+			double sx{1.0};
+			double sy{1.0};
+
+			BoardGeometryMapper(const SvgRect& source_rect, const Rect& dest_rect)
+				: source(source_rect), dest(dest_rect) {
+				if (source.w > 0 && source.h > 0) {
+					sx = static_cast<double>(dest.w) / source.w;
+					sy = static_cast<double>(dest.h) / source.h;
+				}
+			}
+
+			SvgRect Map(const SvgRect& rect) const {
+				return {
+					static_cast<double>(dest.x) + (rect.x - source.x) * sx,
+					static_cast<double>(dest.y) + (rect.y - source.y) * sy,
+					rect.w * sx,
+					rect.h * sy};
+			}
+
+			Rect Map(const Rect& rect) const {
+				return ToRect(Map(SvgRect{
+					static_cast<double>(rect.x),
+					static_cast<double>(rect.y),
+					static_cast<double>(rect.w),
+					static_cast<double>(rect.h)}));
+			}
+
+			std::string WrapShape(const std::string& shape) const {
+				if (shape.empty())
+					return {};
+				if (dest.x == 0 && dest.y == 0 && source.x == 0.0 && source.y == 0.0 && sx == 1.0 && sy == 1.0)
+					return shape;
+				return "<g transform=\"translate(" + std::to_string(dest.x) + " " + std::to_string(dest.y) +
+					") scale(" + std::to_string(sx) + " " + std::to_string(sy) +
+					") translate(" + std::to_string(-source.x) + " " + std::to_string(-source.y) + ")\">" +
+					shape + "</g>";
+			}
+		};
+
 		double ToDouble(const std::string& value, double fallback = 0.0) {
 			if (value.empty())
 				return fallback;
@@ -434,30 +476,30 @@ namespace casioemu {
 				"\"><g fill=\"#000000\">" + defs + shape + "</g></svg>";
 		}
 
-		void AddStatusSprites(ModelInfo& model, const tinyxml2::XMLDocument& document, const std::map<std::string, int>& configured_status_sprites) {
-			if (configured_status_sprites.empty())
-				throw std::runtime_error("config.json must specify status_sprites for board SVG/PNG model inference.");
+		void AddStatusSprites(ModelInfo& model, const tinyxml2::XMLDocument& document, const BoardGeometryMapper& mapper, const std::map<std::string, int>& configured_status_indexes) {
+			if (configured_status_indexes.empty())
+				throw std::runtime_error("config.json sprites must include status sprite indexes for board SVG/PNG model inference.");
 			const auto* status_frame = FindStatusFrame(document);
 			if (!status_frame)
-				throw std::runtime_error("The board SVG does not contain a status frame for configured status_sprites.");
+				throw std::runtime_error("The board SVG does not contain a status frame for configured status sprites.");
 			SvgRect status_rect{};
 			if (!ParseRectFromAttrs(status_frame, status_rect))
 				ParseViewBox(status_frame, status_rect);
 			if (status_rect.w <= 0 || status_rect.h <= 0)
 				throw std::runtime_error("The board SVG status frame does not expose a usable size.");
 			const auto display = ParseBoardDisplayInfo(document);
-			const Rect dest = ToRect({
+			const Rect dest = mapper.Map(ToRect({
 				display.x + status_rect.x * display.sx,
 				display.y + status_rect.y * display.sy,
 				status_rect.w * display.sx,
-				status_rect.h * display.sy});
+				status_rect.h * display.sy}));
 
 			const std::string defs = CollectDefsBlocks(status_frame);
 			auto children = ExtractDirectChildElements(FindStatusContainer(status_frame));
-			model.status_sprites = configured_status_sprites;
-			for (const auto& [name, index] : configured_status_sprites) {
+			model.status_sprite_indexes = configured_status_indexes;
+			for (const auto& [name, index] : configured_status_indexes) {
 				if (index < 0 || static_cast<size_t>(index) >= children.size())
-					throw std::runtime_error("status_sprites index is out of range for " + name + ".");
+					throw std::runtime_error("status sprite index is out of range for " + name + ".");
 				SpriteInfo sprite{};
 				sprite.src = {0, 0, std::max(1, RoundToInt(status_rect.w)), std::max(1, RoundToInt(status_rect.h))};
 				sprite.dest = dest;
@@ -507,7 +549,7 @@ namespace casioemu {
 			}
 		}
 
-		std::vector<ButtonInfo> ParseButtons(const tinyxml2::XMLDocument& document, const SvgRect& board_rect) {
+		std::vector<ButtonInfo> ParseButtons(const tinyxml2::XMLDocument& document, const SvgRect& board_rect, const BoardGeometryMapper& mapper) {
 			std::vector<ButtonInfo> buttons;
 			const auto defs = CollectDefsBlocks(&document);
 			std::vector<const tinyxml2::XMLElement*> elements;
@@ -535,8 +577,8 @@ namespace casioemu {
 				const int ki_mask = ToInt(ki_attr);
 				const int ko_mask = ToInt(ko_attr);
 				ButtonInfo button{};
-				button.rect = ToRect(svg_rect);
-				button.svg_shape = shape;
+				button.rect = mapper.Map(ToRect(svg_rect));
+				button.svg_shape = mapper.WrapShape(shape);
 				button.svg_defs = defs;
 				if (ki_mask == 0 && ko_mask == 0) {
 					button.kiko = 0xff;
@@ -563,10 +605,11 @@ namespace casioemu {
 		const std::string& requested_rom,
 		const std::string& requested_flash,
 		const Rect& interface_src_rect,
+		const Rect& interface_dest_rect,
 		int display_w,
 		int display_h,
 		double screen_scale_y,
-		const std::map<std::string, int>& configured_status_sprites) {
+		const std::map<std::string, int>& configured_status_indexes) {
 		std::string board_key;
 		const auto board_path = ResolveBoardSvg(model_path, &board_key, requested_board);
 		if (board_path.empty())
@@ -579,6 +622,11 @@ namespace casioemu {
 		SvgRect board_rect{};
 		if (!ParseViewBox(svg, board_rect))
 			throw std::runtime_error("The board SVG does not expose a usable viewBox or image size.");
+		if (interface_dest_rect.w <= 0 || interface_dest_rect.h <= 0)
+			throw std::runtime_error("config.json must specify sprites.rsd_interface.dest with positive width and height.");
+		if (interface_dest_rect.x != 0 || interface_dest_rect.y != 0)
+			throw std::runtime_error("config.json sprites.rsd_interface.dest x and y must be zero.");
+		const BoardGeometryMapper mapper(board_rect, interface_dest_rect);
 
 		SvgRect screen_slot{};
 		if (!ParseScreenSlot(board_document, screen_slot) || screen_slot.w <= 0 || screen_slot.h <= 0)
@@ -593,7 +641,7 @@ namespace casioemu {
 		model.screen_width = display_w;
 		model.screen_height = display_h;
 		model.screen_scale_y = screen_scale_y;
-		model.buttons = ParseButtons(board_document, board_rect);
+		model.buttons = ParseButtons(board_document, board_rect, mapper);
 
 		if (model.interface_path.empty())
 			throw std::runtime_error("config.json must specify interface_path for board SVG/PNG model inference.");
@@ -613,14 +661,13 @@ namespace casioemu {
 			static_cast<double>(interface_src_rect.y),
 			static_cast<double>(interface_src_rect.w),
 			static_cast<double>(interface_src_rect.h)};
-		const Rect interface_dest = ToRect(board_rect);
-		model.sprites["rsd_interface"] = {ToRect(interface_src), interface_dest};
+		model.sprites["rsd_interface"] = {ToRect(interface_src), interface_dest_rect};
 
 		if (display_w <= 0 || display_h <= 0 || screen_scale_y <= 0)
 			throw std::runtime_error("config.json must specify positive screen_width, screen_height, and screen_scale_y.");
 		screen_slot.h = screen_slot.w * static_cast<double>(display_h) / static_cast<double>(display_w) * screen_scale_y;
-		model.sprites["rsd_pixel"] = {{0, 0, display_w, display_h}, ToRect(screen_slot)};
-		AddStatusSprites(model, board_document, configured_status_sprites);
+		model.sprites["rsd_pixel"] = {{0, 0, display_w, display_h}, mapper.Map(ToRect(screen_slot))};
+		AddStatusSprites(model, board_document, mapper, configured_status_indexes);
 		return model;
 	}
 }
