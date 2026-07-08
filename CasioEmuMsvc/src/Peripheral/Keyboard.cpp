@@ -708,8 +708,14 @@ namespace casioemu {
 				break;
 			if (event.key.state == SDL_PRESSED)
 				PressButton(buttons[iterator->second], false, iterator->second);
-			else
-				ReleaseAll();
+			else {
+				if (TryReleaseButton(buttons[iterator->second])) {
+					if (real_hardware)
+						RecalculateGhost();
+					else
+						RecalculateEmuInput();
+				}
+			}
 			break;
 		}
 	}
