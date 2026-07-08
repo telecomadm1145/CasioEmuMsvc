@@ -2,11 +2,12 @@
 #include <SDL.h>
 #include "RendererBackend.h"
 
+inline constexpr const char* SCREEN_MIRROR_WINDOW_DATA_KEY = "CasioEmu.ScreenMirror";
+
 class ScreenMirror {
 private:
 	SDL_Window* mirrorWindow;
 	SDL_Renderer* mirrorRenderer;
-	SDL_Texture* mirrorTexture;
 	int captureWidth;
 	int captureHeight;
 	Uint32 windowId;
@@ -49,7 +50,7 @@ private:
 
 public:
 	ScreenMirror(int captureWidth, int captureHeight)
-		: mirrorWindow(nullptr), mirrorRenderer(nullptr), mirrorTexture(nullptr), captureWidth(captureWidth), captureHeight(captureHeight), windowId(0), isOpen(false), watchingEvents(false) {
+		: mirrorWindow(nullptr), mirrorRenderer(nullptr), captureWidth(captureWidth), captureHeight(captureHeight), windowId(0), isOpen(false), watchingEvents(false) {
 	}
 
 	~ScreenMirror() {
@@ -67,6 +68,7 @@ public:
 			return false;
 		}
 		windowId = SDL_GetWindowID(mirrorWindow);
+		SDL_SetWindowData(mirrorWindow, SCREEN_MIRROR_WINDOW_DATA_KEY, this);
 
 		casioemu::SetPreferredRendererDriverHint();
 		mirrorRenderer = SDL_CreateRenderer(mirrorWindow, -1,
@@ -74,21 +76,8 @@ public:
 
 		if (!mirrorRenderer) {
 			SDL_Log("Error creating mirror renderer: %s", SDL_GetError());
+			SDL_SetWindowData(mirrorWindow, SCREEN_MIRROR_WINDOW_DATA_KEY, nullptr);
 			SDL_DestroyWindow(mirrorWindow);
-			mirrorWindow = nullptr;
-			return false;
-		}
-
-		mirrorTexture = SDL_CreateTexture(mirrorRenderer,
-			SDL_PIXELFORMAT_RGBA32,
-			SDL_TEXTUREACCESS_STREAMING,
-			captureWidth, captureHeight);
-
-		if (!mirrorTexture) {
-			SDL_Log("Error creating mirror texture: %s", SDL_GetError());
-			SDL_DestroyRenderer(mirrorRenderer);
-			SDL_DestroyWindow(mirrorWindow);
-			mirrorRenderer = nullptr;
 			mirrorWindow = nullptr;
 			return false;
 		}
@@ -108,15 +97,12 @@ public:
 			SDL_DelEventWatch(eventWatch, this);
 			watchingEvents = false;
 		}
-		if (mirrorTexture) {
-			SDL_DestroyTexture(mirrorTexture);
-			mirrorTexture = nullptr;
-		}
 		if (mirrorRenderer) {
 			SDL_DestroyRenderer(mirrorRenderer);
 			mirrorRenderer = nullptr;
 		}
 		if (mirrorWindow) {
+			SDL_SetWindowData(mirrorWindow, SCREEN_MIRROR_WINDOW_DATA_KEY, nullptr);
 			SDL_DestroyWindow(mirrorWindow);
 			mirrorWindow = nullptr;
 		}
@@ -128,17 +114,28 @@ public:
 		return isOpen;
 	}
 
-	void update(void* pixels, int pitch) {
-		if (!isOpen)
-			return;
+	SDL_Renderer* renderer() const {
+		return mirrorRenderer;
+	}
 
-		SDL_UpdateTexture(mirrorTexture, nullptr, pixels, pitch);
-		SDL_SetRenderDrawColor(mirrorRenderer, 0, 0, 0, 255);
-		SDL_RenderClear(mirrorRenderer);
+	SDL_Rect contentRect() {
 		int windowWidth = 0, windowHeight = 0;
 		SDL_GetWindowSize(mirrorWindow, &windowWidth, &windowHeight);
 		updateDisplayRect(windowWidth, windowHeight);
-		SDL_RenderCopy(mirrorRenderer, mirrorTexture, nullptr, &displayRect);
+		return displayRect;
+	}
+
+	void clear(const SDL_Color& colour) {
+		if (!isOpen)
+			return;
+
+		SDL_SetRenderDrawColor(mirrorRenderer, colour.r, colour.g, colour.b, colour.a);
+		SDL_RenderClear(mirrorRenderer);
+	}
+
+	void present() {
+		if (!isOpen)
+			return;
 		SDL_RenderPresent(mirrorRenderer);
 	}
 

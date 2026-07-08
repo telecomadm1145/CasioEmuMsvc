@@ -252,10 +252,33 @@ namespace casioemu {
 			SDL_SetTextureColorMod(texture, 255, 255, 255);
 			return;
 		}
+		if (!interface_texture)
+			return;
 		SDL_SetTextureAlphaMod(interface_texture, alpha);
 		SDL_Rect src = sprite.src;
 		SDL_RenderCopy(renderer, interface_texture, &src, &dest);
 	}
+
+#ifndef CASIOEMU_CORE_WEB
+	SDL_Color ScreenPixelColour(const ColourInfo& ink_colour, float alpha_value) {
+		SDL_Color colour{
+			static_cast<Uint8>(ink_colour.r),
+			static_cast<Uint8>(ink_colour.g),
+			static_cast<Uint8>(ink_colour.b),
+			Uint8(std::clamp(static_cast<int>(alpha_value), 0, 255))};
+		if (alpha_value <= 0.0f) {
+			colour.a = 0;
+		}
+		else if (alpha_value > 255.0f) {
+			const int extra = static_cast<int>(alpha_value - 255.0f);
+			colour.r = static_cast<uint8_t>(std::max(0, ink_colour.r - extra));
+			colour.g = static_cast<uint8_t>(std::max(0, ink_colour.g - static_cast<int>(extra * 0.8f)));
+			colour.b = static_cast<uint8_t>(std::max(0, ink_colour.b - static_cast<int>(extra * 0.1f)));
+			colour.a = 255;
+		}
+		return colour;
+	}
+#endif
 
     class SolarIIScreen : public Peripheral, public IScreenFrameProvider {
         struct StatusBit {
@@ -634,10 +657,12 @@ namespace casioemu {
 		float position = 0;
 		SDL_Renderer* renderer{};
 		SDL_Texture* interface_texture{};
+#ifndef CASIOEMU_CORE_WEB
 		SDL_Texture* pixel_screen_texture{};
 		int pixel_screen_texture_width = 0;
 		int pixel_screen_texture_height = 0;
 		std::vector<uint8_t> pixel_screen_pixels;
+#endif
 		float screen_ink_alpha[66 * 192]{};
 		static const SpriteBitmap sprite_bitmap[];
 		std::vector<SpriteInfo> sprite_info;
@@ -685,6 +710,7 @@ namespace casioemu {
 			return static_cast<uint8_t>(std::clamp(static_cast<int>(alpha), 0, 255));
 		}
 
+#ifndef CASIOEMU_CORE_WEB
 		void ResetPixelScreenTexture() {
 			if (pixel_screen_texture) {
 				SDL_DestroyTexture(pixel_screen_texture);
@@ -717,25 +743,6 @@ namespace casioemu {
 			return true;
 		}
 
-		SDL_Color PixelScreenColour(float alpha_value) const {
-			SDL_Color colour{
-				static_cast<Uint8>(ink_colour.r),
-				static_cast<Uint8>(ink_colour.g),
-				static_cast<Uint8>(ink_colour.b),
-				Uint8(std::clamp(static_cast<int>(alpha_value), 0, 255))};
-			if (alpha_value <= 0.0f) {
-				colour.a = 0;
-			}
-			else if (alpha_value > 255.0f) {
-				const int extra = static_cast<int>(alpha_value - 255.0f);
-				colour.r = static_cast<uint8_t>(std::max(0, ink_colour.r - extra));
-				colour.g = static_cast<uint8_t>(std::max(0, ink_colour.g - static_cast<int>(extra * 0.8f)));
-				colour.b = static_cast<uint8_t>(std::max(0, ink_colour.b - static_cast<int>(extra * 0.1f)));
-				colour.a = 255;
-			}
-			return colour;
-		}
-
 		void WritePixelScreenTexture(int logical_width, int logical_height) {
 			if (pixel_screen_pixels.size() < static_cast<size_t>(logical_width) * static_cast<size_t>(logical_height) * 4)
 				return;
@@ -743,7 +750,7 @@ namespace casioemu {
 				const int source_y = y + 1;
 				for (int x = 0; x != logical_width; ++x) {
 					const float alpha_value = screen_ink_alpha[x + source_y * 192];
-					const SDL_Color colour = PixelScreenColour(alpha_value);
+					const SDL_Color colour = ScreenPixelColour(ink_colour, alpha_value);
 
 					const size_t pixel_offset = (static_cast<size_t>(y) * static_cast<size_t>(logical_width) + static_cast<size_t>(x)) * 4;
 					pixel_screen_pixels[pixel_offset + 0] = colour.r;
@@ -768,6 +775,7 @@ namespace casioemu {
 			}
 			return true;
 		}
+#endif
 
 	public:
 		Screen(Emulator& emu)
@@ -791,7 +799,9 @@ namespace casioemu {
 		~Screen() {
 			for (auto& texture : sprite_svg_textures)
 				texture.Reset();
+#ifndef CASIOEMU_CORE_WEB
 			ResetPixelScreenTexture();
+#endif
 			if (screen_buffer)
 				delete[] screen_buffer;
 			if (screen_buffer1)
@@ -1851,7 +1861,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		enabled_2 = false;
 	}
 
-#ifndef __EMSCRIPTEN__
+#if !defined(__EMSCRIPTEN__) && !defined(CASIOEMU_CORE_WEB)
 	bool GetCaptureRect(const std::vector<SDL_Rect>& spriteRects, const std::vector<SDL_Rect>& pixelRects, SDL_Rect& captureRect) {
 		if (spriteRects.empty() && pixelRects.empty()) {
 			return false;
@@ -2415,20 +2425,29 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 	};
 #endif
 
-	Uint32 MapScreenshotPixel(SDL_PixelFormat* format, const ColourInfo& ink_colour, float alpha_value) {
+	SDL_Color CaptureBackgroundColour(uint32_t rgb) {
+		return {
+			static_cast<Uint8>((rgb >> 16) & 0xff),
+			static_cast<Uint8>((rgb >> 8) & 0xff),
+			static_cast<Uint8>(rgb & 0xff),
+			255};
+	}
+
+	Uint32 MapScreenshotPixel(SDL_PixelFormat* format, const ColourInfo& ink_colour, const SDL_Color& background, float alpha_value) {
 		if (alpha_value > 255.0f) {
-			const int extra = static_cast<int>(alpha_value - 255.0f);
-			const uint8_t r = static_cast<uint8_t>(std::max(0, ink_colour.r - extra));
-			const uint8_t g = static_cast<uint8_t>(std::max(0, ink_colour.g - static_cast<int>(extra * 0.8f)));
-			const uint8_t b = static_cast<uint8_t>(std::max(0, ink_colour.b - static_cast<int>(extra * 0.1f)));
-			return SDL_MapRGBA(format, r, g, b, 255);
+			const SDL_Color colour = ScreenPixelColour(ink_colour, alpha_value);
+			return SDL_MapRGBA(format, colour.r, colour.g, colour.b, colour.a);
 		}
 
 		const int alpha = std::clamp(static_cast<int>(std::lround(alpha_value)), 0, 255);
-		const auto blend = [alpha](int channel) {
-			return static_cast<uint8_t>((channel * alpha + 255 * (255 - alpha) + 127) / 255);
+		const auto blend = [alpha](int foreground, int background_channel) {
+			return static_cast<uint8_t>((foreground * alpha + background_channel * (255 - alpha) + 127) / 255);
 		};
-		return SDL_MapRGBA(format, blend(ink_colour.r), blend(ink_colour.g), blend(ink_colour.b), 255);
+		return SDL_MapRGBA(format,
+			blend(ink_colour.r, background.r),
+			blend(ink_colour.g, background.g),
+			blend(ink_colour.b, background.b),
+			255);
 	}
 
 	void FillScaledPixel(SDL_Surface* surface, int x, int y, int scale, Uint32 colour) {
@@ -2459,6 +2478,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 
 	struct ScreenCaptureSource {
 		SDL_Texture* interface_texture = nullptr;
+		SDL_Surface* interface_surface = nullptr;
 		const std::vector<SpriteInfo>* sprite_info = nullptr;
 		const std::vector<uint8_t>* sprite_available = nullptr;
 		const ColourInfo* ink_colour = nullptr;
@@ -2527,7 +2547,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			target_height = 0;
 		}
 
-		bool Render(SDL_Renderer* renderer, const ScreenCaptureSource& source, const ScreenCaptureLayout& layout, SDL_Surface* surface, const char* purpose) {
+		bool Render(SDL_Renderer* renderer, const ScreenCaptureSource& source, const ScreenCaptureLayout& layout, SDL_Surface* surface, const SDL_Color& background, const char* purpose) {
 			if (!renderer || !surface || surface->w != layout.output_width || surface->h != layout.output_height) {
 				SDL_Log("%s failed: invalid capture surface.", purpose);
 				return false;
@@ -2568,7 +2588,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			SDL_RenderSetClipRect(renderer, nullptr);
 			SDL_RenderSetScale(renderer, 1.0f, 1.0f);
 			SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-			SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+			SDL_SetRenderDrawColor(renderer, background.r, background.g, background.b, background.a);
 			SDL_RenderClear(renderer);
 
 			if (svg_texture_cache.size() < source.sprite_info->size())
@@ -2604,7 +2624,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 					const float alpha_value = source.screen_ink_alpha[x + source_y * 192];
 					if (alpha_value <= 0.0f)
 						continue;
-					FillScaledPixel(surface, layout.scaled_lcd.x + x * layout.scale, layout.scaled_lcd.y + y * layout.scale, layout.scale, MapScreenshotPixel(surface->format, *source.ink_colour, alpha_value));
+					FillScaledPixel(surface, layout.scaled_lcd.x + x * layout.scale, layout.scaled_lcd.y + y * layout.scale, layout.scale, MapScreenshotPixel(surface->format, *source.ink_colour, background, alpha_value));
 				}
 			}
 			if (SDL_MUSTLOCK(surface))
@@ -2716,7 +2736,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			composer.Reset();
 		}
 
-		bool CaptureFrame(SDL_Renderer* renderer, const ScreenCaptureSource& source) {
+		bool CaptureFrame(SDL_Renderer* renderer, const ScreenCaptureSource& source, const SDL_Color& background) {
 			if (!recording) {
 				return false;
 			}
@@ -2727,7 +2747,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			}
 			nextCaptureTick = now + static_cast<Uint64>(1000 / fps);
 
-			if (!frameSurface || !composer.Render(renderer, source, layout, frameSurface, "Recording")) {
+			if (!frameSurface || !composer.Render(renderer, source, layout, frameSurface, background, "Recording")) {
 				Stop();
 				return false;
 			}
@@ -2831,9 +2851,171 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		std::filesystem::path frameDirectory;
 	};
 
+	class ScreenMirrorComposer {
+	public:
+		~ScreenMirrorComposer() {
+			Reset();
+		}
+
+		void Reset() {
+			if (pixel_texture) {
+				SDL_DestroyTexture(pixel_texture);
+				pixel_texture = nullptr;
+			}
+			if (interface_texture) {
+				SDL_DestroyTexture(interface_texture);
+				interface_texture = nullptr;
+			}
+			pixel_width = 0;
+			pixel_height = 0;
+			interface_surface = nullptr;
+			pixel_pixels.clear();
+			svg_texture_cache.clear();
+		}
+
+		bool Render(ScreenMirror& mirror, const ScreenCaptureSource& source, const SDL_Color& background) {
+			SDL_Renderer* mirror_renderer = mirror.renderer();
+			if (!mirror_renderer)
+				return false;
+
+			SDL_Rect capture_rect{};
+			if (!BuildCaptureRect(source, capture_rect)) {
+				SDL_Log("Mirror update failed: invalid capture region.");
+				return false;
+			}
+
+			mirror.clear(background);
+			const SDL_Rect content_rect = mirror.contentRect();
+			if (content_rect.w <= 0 || content_rect.h <= 0)
+				return false;
+
+			const double sx = static_cast<double>(content_rect.w) / static_cast<double>(capture_rect.w);
+			const double sy = static_cast<double>(content_rect.h) / static_cast<double>(capture_rect.h);
+			SDL_Texture* fallback_texture = EnsureInterfaceTexture(mirror_renderer, source);
+
+			if (svg_texture_cache.size() < source.sprite_info->size())
+				svg_texture_cache.resize(source.sprite_info->size());
+			for (size_t ix = 1; ix < source.sprite_info->size() && ix < source.sprite_available->size(); ++ix) {
+				if (!(*source.sprite_available)[ix])
+					continue;
+				const int alpha_index = static_cast<int>(ix - 1);
+				SpriteInfo sprite = (*source.sprite_info)[ix];
+				SDL_Rect dest = ScaleScreenshotRect(sprite.dest, capture_rect, sx, sy);
+				dest.x += content_rect.x;
+				dest.y += content_rect.y;
+				sprite.dest = ToModelRect(dest);
+				const uint8_t alpha = Uint8(std::clamp(static_cast<int>(source.screen_ink_alpha[alpha_index]), 0, 255));
+				RenderModelSprite(mirror_renderer, fallback_texture, &svg_texture_cache[ix], sprite, *source.ink_colour, alpha);
+			}
+
+			SDL_Rect lcd_dest = ScaleScreenshotRect(source.lcd_dest, capture_rect, sx, sy);
+			lcd_dest.x += content_rect.x;
+			lcd_dest.y += content_rect.y;
+			if (!RenderPixelTexture(mirror_renderer, source, lcd_dest))
+				return false;
+			mirror.present();
+			return true;
+		}
+
+	private:
+		bool BuildCaptureRect(const ScreenCaptureSource& source, SDL_Rect& capture_rect) const {
+			if (!source.sprite_info || !source.sprite_available || !source.ink_colour || !source.screen_ink_alpha ||
+				source.logical_width <= 0 || source.logical_height <= 0 || source.lcd_dest.w <= 0 || source.lcd_dest.h <= 0)
+				return false;
+
+			std::vector<SDL_Rect> sprite_rects;
+			for (size_t ix = 1; ix < source.sprite_info->size() && ix < source.sprite_available->size(); ++ix) {
+				if ((*source.sprite_available)[ix])
+					sprite_rects.push_back((*source.sprite_info)[ix].dest);
+			}
+			return GetCaptureRect(sprite_rects, std::vector<SDL_Rect>{source.lcd_dest}, capture_rect);
+		}
+
+		SDL_Texture* EnsureInterfaceTexture(SDL_Renderer* renderer, const ScreenCaptureSource& source) {
+			if (!renderer || !source.interface_surface)
+				return nullptr;
+			if (interface_texture && interface_surface == source.interface_surface)
+				return interface_texture;
+			if (interface_texture) {
+				SDL_DestroyTexture(interface_texture);
+				interface_texture = nullptr;
+			}
+			interface_surface = source.interface_surface;
+			interface_texture = SDL_CreateTextureFromSurface(renderer, source.interface_surface);
+			if (!interface_texture) {
+				SDL_Log("Mirror update failed: cannot create interface texture: %s", SDL_GetError());
+				interface_surface = nullptr;
+				return nullptr;
+			}
+			SDL_SetTextureBlendMode(interface_texture, SDL_BLENDMODE_BLEND);
+			return interface_texture;
+		}
+
+		bool EnsurePixelTexture(SDL_Renderer* renderer, int width, int height) {
+			if (!renderer || width <= 0 || height <= 0)
+				return false;
+			if (pixel_texture && pixel_width == width && pixel_height == height)
+				return true;
+			if (pixel_texture) {
+				SDL_DestroyTexture(pixel_texture);
+				pixel_texture = nullptr;
+			}
+			pixel_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, width, height);
+			if (!pixel_texture) {
+				SDL_Log("Mirror update failed: cannot create pixel texture: %s", SDL_GetError());
+				pixel_width = 0;
+				pixel_height = 0;
+				pixel_pixels.clear();
+				return false;
+			}
+			SDL_SetTextureBlendMode(pixel_texture, SDL_BLENDMODE_BLEND);
+#if SDL_VERSION_ATLEAST(2, 0, 12)
+			SDL_SetTextureScaleMode(pixel_texture, SDL_ScaleModeNearest);
+#endif
+			pixel_width = width;
+			pixel_height = height;
+			pixel_pixels.resize(static_cast<size_t>(width) * static_cast<size_t>(height) * 4);
+			return true;
+		}
+
+		bool RenderPixelTexture(SDL_Renderer* renderer, const ScreenCaptureSource& source, const SDL_Rect& dest) {
+			if (!EnsurePixelTexture(renderer, source.logical_width, source.logical_height))
+				return false;
+			for (int y = 0; y < source.logical_height; ++y) {
+				const int source_y = y + 1;
+				for (int x = 0; x < source.logical_width; ++x) {
+					const SDL_Color colour = ScreenPixelColour(*source.ink_colour, source.screen_ink_alpha[x + source_y * 192]);
+					const size_t pixel_offset = (static_cast<size_t>(y) * static_cast<size_t>(source.logical_width) + static_cast<size_t>(x)) * 4;
+					pixel_pixels[pixel_offset + 0] = colour.r;
+					pixel_pixels[pixel_offset + 1] = colour.g;
+					pixel_pixels[pixel_offset + 2] = colour.b;
+					pixel_pixels[pixel_offset + 3] = colour.a;
+				}
+			}
+			if (SDL_UpdateTexture(pixel_texture, nullptr, pixel_pixels.data(), source.logical_width * 4) != 0) {
+				SDL_Log("Mirror update failed: cannot update pixel texture: %s", SDL_GetError());
+				return false;
+			}
+			if (SDL_RenderCopy(renderer, pixel_texture, nullptr, &dest) != 0) {
+				SDL_Log("Mirror update failed: cannot render pixel texture: %s", SDL_GetError());
+				return false;
+			}
+			return true;
+		}
+
+		SDL_Texture* pixel_texture = nullptr;
+		int pixel_width = 0;
+		int pixel_height = 0;
+		std::vector<uint8_t> pixel_pixels;
+		SDL_Surface* interface_surface = nullptr;
+		SDL_Texture* interface_texture = nullptr;
+		std::vector<SvgSpriteTextureCache> svg_texture_cache;
+	};
+
 	bool CapturePixelPerfectScreenshot(
 		SDL_Renderer* renderer,
 		SDL_Texture* interface_texture,
+		SDL_Surface* interface_surface,
 		const std::vector<SpriteInfo>& sprite_info,
 		const std::vector<uint8_t>& sprite_available,
 		const ColourInfo& ink_colour,
@@ -2841,9 +3023,11 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		int logical_width,
 		int logical_height,
 		const SDL_Rect& lcd_dest,
-		int capture_scale) {
+		int capture_scale,
+		const SDL_Color& background) {
 		ScreenCaptureSource source{
 			interface_texture,
+			interface_surface,
 			&sprite_info,
 			&sprite_available,
 			&ink_colour,
@@ -2863,7 +3047,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		}
 
 		ScreenCaptureComposer composer;
-		if (!composer.Render(renderer, source, layout, screenSurface, "Screenshot")) {
+		if (!composer.Render(renderer, source, layout, screenSurface, background, "Screenshot")) {
 			SDL_FreeSurface(screenSurface);
 			return false;
 		}
@@ -2872,36 +3056,16 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		return true;
 	}
 
-	void UpdatePreview(SDL_Renderer* renderer, ScreenMirror* sm, const std::vector<SDL_Rect>& spriteRects, const std::vector<SDL_Rect>& pixelRects) {
+	std::pair<int, int> GetSize(const ScreenCaptureSource& source) {
 		SDL_Rect captureRect{};
-		if (!GetCaptureRect(spriteRects, pixelRects, captureRect)) {
-			SDL_Log("Preview update failed: invalid capture region.");
-			return;
+		if (!source.sprite_info || !source.sprite_available)
+			return {0, 0};
+		std::vector<SDL_Rect> spriteRects;
+		for (size_t ix = 1; ix < source.sprite_info->size() && ix < source.sprite_available->size(); ++ix) {
+			if ((*source.sprite_available)[ix])
+				spriteRects.push_back((*source.sprite_info)[ix].dest);
 		}
-
-		int captureWidth = captureRect.w;
-		int captureHeight = captureRect.h;
-
-		// Create a surface to capture the screen content
-		SDL_Surface* screenSurface = SDL_CreateRGBSurface(0, captureWidth, captureHeight, 32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
-		if (screenSurface != nullptr) {
-			// Copy the renderer to the surface
-			if (SDL_RenderReadPixels(renderer, &captureRect, SDL_PIXELFORMAT_RGBA32, screenSurface->pixels, screenSurface->pitch) == 0) {
-				sm->update(screenSurface->pixels, screenSurface->pitch);
-			}
-			else {
-				SDL_Log("Error capturing screen pixels: %s", SDL_GetError());
-			}
-			SDL_FreeSurface(screenSurface); // Free the surface after use
-		}
-		else {
-			SDL_Log("Error creating surface: %s", SDL_GetError());
-		}
-	}
-
-	std::pair<int, int> GetSize(const std::vector<SDL_Rect>& spriteRects, const std::vector<SDL_Rect>& pixelRects) {
-		SDL_Rect captureRect{};
-		if (!GetCaptureRect(spriteRects, pixelRects, captureRect)) {
+		if (!GetCaptureRect(spriteRects, std::vector<SDL_Rect>{source.lcd_dest}, captureRect)) {
 			return { 0, 0 };
 		}
 		return { captureRect.w, captureRect.h };
@@ -2922,10 +3086,6 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			SDL_SetTextureColorMod(interface_texture, ink_colour.r, ink_colour.g, ink_colour.b);
 		}
 
-		// Store all the rendering rectangles (sprites and pixel areas)
-		std::vector<SDL_Rect> spriteRects;
-		std::vector<SDL_Rect> pixelRects;
-
 		// Set texture transparency and copy sprites as before
 		for (int ix = 1; ix != SPR_MAX; ++ix) {
 			if (ix >= static_cast<int>(sprite_available.size()) || !sprite_available[ix])
@@ -2933,8 +3093,6 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			const int alpha_index = ix - 1;
 			const uint8_t alpha = Uint8(std::clamp((int)screen_ink_alpha[alpha_index], 0, 255));
 			RenderModelSprite(renderer, interface_texture, ix < static_cast<int>(sprite_svg_textures.size()) ? &sprite_svg_textures[ix] : nullptr, sprite_info[ix], ink_colour, alpha);
-			// Store the sprite rectangle for later
-			spriteRects.push_back(sprite_info[ix].dest);
 		}
 
 		static constexpr auto SPR_PIXEL = 0;
@@ -2948,12 +3106,15 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			lcd_dest.h = std::max(1, (logical_height - 1) * sprite_info[SPR_PIXEL].src.h + sprite_info[SPR_PIXEL].dest.h);
 		}
 
+#ifndef CASIOEMU_CORE_WEB
 		RenderPixelScreenTexture(lcd_dest, logical_width, logical_height);
-		pixelRects.push_back(lcd_dest);
+#endif
 
-#ifndef __EMSCRIPTEN__
+#if !defined(__EMSCRIPTEN__) && !defined(CASIOEMU_CORE_WEB)
+		const SDL_Color capture_background = CaptureBackgroundColour(emulator.capture_background_rgb.load());
 		ScreenCaptureSource captureSource{
 			interface_texture,
+			emulator.interface_surface,
 			&sprite_info,
 			&sprite_available,
 			&ink_colour,
@@ -2967,6 +3128,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			CapturePixelPerfectScreenshot(
 				renderer,
 				interface_texture,
+				emulator.interface_surface,
 				sprite_info,
 				sprite_available,
 				ink_colour,
@@ -2974,7 +3136,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 				logical_width,
 				logical_height,
 				lcd_dest,
-				emulator.capture_scale.load());
+				emulator.capture_scale.load(),
+				capture_background);
 			emulator.screenshot_requested.store(false);
 		}
 		static ScreenRecorder recorder;
@@ -2992,7 +3155,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			emulator.recording_active.store(false);
 		}
 		if (recorder.IsRecording()) {
-			if (recorder.CaptureFrame(renderer, captureSource)) {
+			if (recorder.CaptureFrame(renderer, captureSource, capture_background)) {
 				emulator.recording_active.store(true);
 				emulator.recording_frame_count.store(recorder.FrameCount());
 			}
@@ -3004,11 +3167,13 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			emulator.recording_active.store(false);
 		}
 		static ScreenMirror* mirror = nullptr;
+		static ScreenMirrorComposer mirrorComposer;
 		if (emulator.mirroring_requested.load()) {
-			auto p = GetSize(spriteRects, pixelRects);
+			auto p = GetSize(captureSource);
 			if (mirror) {
 				delete mirror;
 				mirror = nullptr;
+				mirrorComposer.Reset();
 			}
 			if (p.first > 0 && p.second > 0) {
 				auto sm = new ScreenMirror(p.first, p.second);
@@ -3023,11 +3188,12 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		}
 		if (mirror) {
 			if (mirror->handleEvents()) {
-				UpdatePreview(renderer, mirror, spriteRects, pixelRects);
+				mirrorComposer.Render(*mirror, captureSource, capture_background);
 			}
 			else {
 				delete mirror;
 				mirror = nullptr;
+				mirrorComposer.Reset();
 			}
 		}
 #endif

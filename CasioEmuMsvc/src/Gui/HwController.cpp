@@ -5,6 +5,8 @@
 #include "Chipset.hpp"
 #include "Localization.h"
 #include <algorithm>
+#include <cstdint>
+#include <cmath>
 int screen_flashing_threshold = 20;
 float screen_fading_blending_coefficient = 0;
 bool enable_screen_fading = false;
@@ -45,6 +47,20 @@ void HwController::RenderCore() {
 	}
 	else if (capture_scale != m_emu->capture_scale.load()) {
 		m_emu->capture_scale.store(capture_scale);
+	}
+	uint32_t capture_background = m_emu->capture_background_rgb.load();
+	float capture_background_color[3] = {
+		static_cast<float>((capture_background >> 16) & 0xff) / 255.0f,
+		static_cast<float>((capture_background >> 8) & 0xff) / 255.0f,
+		static_cast<float>(capture_background & 0xff) / 255.0f};
+	ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10.0f);
+	if (ImGui::ColorEdit3("Capture background", capture_background_color)) {
+		const auto channel = [](float value) {
+			return static_cast<uint32_t>(std::clamp(static_cast<int>(std::lround(value * 255.0f)), 0, 255));
+		};
+		m_emu->capture_background_rgb.store((channel(capture_background_color[0]) << 16) |
+			(channel(capture_background_color[1]) << 8) |
+			channel(capture_background_color[2]));
 	}
 #endif
 

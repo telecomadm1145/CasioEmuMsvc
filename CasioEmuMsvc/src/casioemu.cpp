@@ -1,4 +1,5 @@
 #include "Config.hpp"
+#include "Gui/PopUpDisplay.h"
 #include "Ui.hpp"
 #include "imgui_impl_sdl2.h"
 
@@ -404,8 +405,7 @@ int main(int argc, char* argv[]) {
 			switch (event.window.event) {
 			case SDL_WINDOWEVENT_CLOSE:
 				if (SDL_Window* closedWindow = SDL_GetWindowFromID(event.window.windowID)) {
-					const char* title = SDL_GetWindowTitle(closedWindow);
-					if (title && std::strcmp(title, "Live Mirror") == 0) {
+					if (SDL_GetWindowData(closedWindow, SCREEN_MIRROR_WINDOW_DATA_KEY)) {
 						break;
 					}
 				}

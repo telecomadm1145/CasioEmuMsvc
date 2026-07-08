@@ -3,6 +3,7 @@
 #include <SDL.h>
 #include <SDL_image.h>
 #include <atomic>
+#include <cstdint>
 #include <map>
 #include <string>
 
@@ -62,6 +63,7 @@ namespace casioemu {
 		std::atomic<bool> recording_active{};
 		std::atomic<unsigned int> recording_frame_count{};
 		std::atomic<int> capture_scale{3};
+		std::atomic<uint32_t> capture_background_rgb{0xd6e3d6};
 #endif
 
 		std::thread* tick_thread;
