@@ -58,6 +58,11 @@ SDL_Surface* background;
 SDL_Texture* bg_txt;
 bool low_perf_ext = false;
 
+namespace {
+	constexpr Uint32 kNormalFrameDelayMs = 8;
+	constexpr Uint32 kLowPerformanceFrameDelayMs = 24;
+}
+
 // Driver chain tried in order after a crash: default (auto) → opengl → software
 static const char* kRendererDrivers[] = {"default", "opengl", "software"};
 static const int kRendererDriverCount = 3;
@@ -327,10 +332,8 @@ int main(int argc, char* argv[]) {
 #ifdef __ANDROID__
 			SDL_Delay(40);
 #else
-			if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext)
-				SDL_Delay(24);
-			else
-				SDL_Delay(1);
+			const bool low_performance = ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext;
+			SDL_Delay(low_performance ? kLowPerformanceFrameDelayMs : kNormalFrameDelayMs);
 #endif
 		}
 	});
