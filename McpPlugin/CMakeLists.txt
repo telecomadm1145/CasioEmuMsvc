@@ -39,3 +39,12 @@ add_custom_command(TARGET CasioEmuMsvcMcpPlugin POST_BUILD
         "$<TARGET_FILE_DIR:CasioEmuMsvc>"
     COMMENT "Copying MCP plugin next to CasioEmuMsvc"
 )
+
+if(MSVC)
+    add_custom_command(TARGET CasioEmuMsvcMcpPlugin POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_PDB_FILE:CasioEmuMsvcMcpPlugin>"
+            "$<TARGET_FILE_DIR:CasioEmuMsvc>"
+        COMMENT "Copying MCP plugin PDB next to CasioEmuMsvc"
+    )
+endif()
