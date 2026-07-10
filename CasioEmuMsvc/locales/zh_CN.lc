@@ -416,7 +416,6 @@ StartupUI.OnlineLogin=登录
 StartupUI.OnlineLogout=登出
 StartupUI.OnlineLoggedOut=已登出。
 StartupUI.OnlineRelogin=重新登录
-StartupUI.OnlineCompleteLogin=完成登录
 StartupUI.OnlineBrowserOpened=请在浏览器中完成授权。
 StartupUI.OnlineLoginSuccess=授权成功。
 StartupUI.OnlineLoginSessionOnly=授权成功。当前系统没有可用的安全凭据存储，登录仅在本次运行中有效。

@@ -55,7 +55,7 @@ namespace casioemu {
 			return bytes;
 		}
 
-		HttpResponse HttpRequest(const std::string& url, const wchar_t* method, const std::string& token = {}) {
+		HttpResponse HttpRequest(const std::string& url, const wchar_t* method, const std::string& token = {}, const std::string& body = {}) {
 			CURL* curl = curl_easy_init();
 			if (!curl) throw std::runtime_error("Failed to initialize HTTP client.");
 			HttpResponse result;
@@ -70,8 +70,10 @@ namespace casioemu {
 			curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result.body);
 			if (std::wstring(method) == L"POST") {
 				curl_easy_setopt(curl, CURLOPT_POST, 1L);
-				curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "");
-				curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, 0L);
+				if (!body.empty()) headers = curl_slist_append(headers, "Content-Type: application/json");
+				curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+				curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.data());
+				curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
 			}
 			const CURLcode code = curl_easy_perform(curl);
 			if (code == CURLE_OK) curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.status);
@@ -98,12 +100,14 @@ namespace casioemu {
 		if (api_base_.empty()) throw std::runtime_error("API address is empty.");
 	}
 
-	OnlineAuthRequest OnlineModelClient::StartAuthorization() const {
-		const auto response = HttpRequest(api_base_ + "/emu/api?action=auth-start", L"POST");
+	OnlineAuthRequest OnlineModelClient::StartAuthorization(const std::string& redirect_uri) const {
+		json request = json::object();
+		if (!redirect_uri.empty()) request["redirect_uri"] = redirect_uri;
+		const auto response = HttpRequest(api_base_ + "/emu/api?action=auth-start", L"POST", {}, request.empty() ? std::string{} : request.dump());
 		RequireSuccess(response, "Authorization start");
 		const auto value = ParseJson(response);
-		return {value.at("device_code").get<std::string>(), value.at("user_code").get<std::string>(),
-			value.at("verification_uri").get<std::string>(), value.value("interval", 2)};
+		return {value.at("device_code").get<std::string>(), value.at("verification_uri").get<std::string>(),
+			value.value("interval", 2)};
 	}
 
 	bool OnlineModelClient::PollAuthorization(const std::string& device_code, std::string& access_token) const {

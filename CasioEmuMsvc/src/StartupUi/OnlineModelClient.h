@@ -13,7 +13,6 @@ namespace casioemu {
 
 	struct OnlineAuthRequest {
 		std::string device_code;
-		std::string user_code;
 		std::string verification_uri;
 		int interval = 2;
 	};
@@ -29,7 +28,7 @@ namespace casioemu {
 	class OnlineModelClient {
 	public:
 		explicit OnlineModelClient(std::string api_base);
-		OnlineAuthRequest StartAuthorization() const;
+		OnlineAuthRequest StartAuthorization(const std::string& redirect_uri = {}) const;
 		bool PollAuthorization(const std::string& device_code, std::string& access_token) const;
 		int CheckStatus(const std::string& access_token) const;
 		std::vector<OnlineModelEntry> ListModels(const std::string& access_token) const;

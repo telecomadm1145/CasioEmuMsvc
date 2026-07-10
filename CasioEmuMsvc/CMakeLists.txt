@@ -365,6 +365,7 @@ elseif(BUILD_EXECUTABLE)
             dbghelp
             imm32
             crypt32
+            ws2_32
         )
         set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
     elseif(APPLE)
