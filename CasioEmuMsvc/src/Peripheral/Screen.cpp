@@ -787,8 +787,9 @@ namespace casioemu {
 #ifdef __ANDROID__
 					SDL_Delay(10);
 #elif !defined(__EMSCRIPTEN__)
-					const bool low_performance = ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext;
-					SDL_Delay(low_performance ? 10 : 1);
+					if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext) {
+						SDL_Delay(10);
+					}
 #endif
 				}
 				});
@@ -884,9 +885,9 @@ namespace casioemu {
 		void tick() {
 			float ratio = 0;
 			if constexpr (hardware_id == HW_FX_5800P || hardware_id == HW_ES_PLUS)
-				ratio = 0.996f;
+				ratio = 1 - 1e-4;
 			else
-				ratio = 0.98f;
+				ratio = 1 - 5e-4;
 #ifdef __EMSCRIPTEN__
 			ratio = 0.0f;
 #elif defined(__ANDROID__)
@@ -897,7 +898,7 @@ namespace casioemu {
 			}
 #endif
 			if constexpr (hardware_id == HW_TI) {
-				ratio = 0.996f;
+				ratio = 1 - 1e-4;
 #ifdef __EMSCRIPTEN__
 				ratio = 0.0f;
 #elif defined(__ANDROID__)
@@ -952,7 +953,7 @@ namespace casioemu {
 				return;
 			}
 			else if (hardware_id == HW_EPS6800) {
-				ratio = 0.996f;
+				ratio = 1 - 1e-4;
 #ifdef __EMSCRIPTEN__
 				ratio = 0.0f;
 #elif defined(__ANDROID__)
