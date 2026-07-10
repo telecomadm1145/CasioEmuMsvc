@@ -22,6 +22,8 @@ namespace casioemu {
 		std::string id;
 		std::string name;
 		std::string model_type;
+		bool real_hardware = false;
+		bool sample_rom = false;
 	};
 
 	class OnlineModelClient {

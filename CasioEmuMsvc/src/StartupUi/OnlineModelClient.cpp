@@ -126,7 +126,13 @@ namespace casioemu {
 		const auto value = ParseJson(response);
 		std::vector<OnlineModelEntry> result;
 		for (const auto& item : value.at("models"))
-			result.push_back({item.at("id").get<std::string>(), item.at("name").get<std::string>(), item.at("modelType").get<std::string>()});
+			result.push_back({
+				item.at("id").get<std::string>(),
+				item.at("name").get<std::string>(),
+				item.at("modelType").get<std::string>(),
+				item.value("realHardware", false),
+				item.value("sampleRom", false),
+			});
 		return result;
 	}
 

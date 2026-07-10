@@ -46,6 +46,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 
 #ifdef __ANDROID__
 #include "../Gui/ThemeManager.h"
@@ -781,6 +782,9 @@ namespace casioemu {
 		std::string online_status;
 		std::vector<OnlineModelEntry> online_models;
 		int selected_online_model = -1;
+		char online_search_txt[200]{};
+		char online_filter[32] = "##";
+		bool online_hide_emu = false;
 		StartupUi() {
 			std::ifstream api_settings{"online_api.cfg"};
 			if (api_settings) {
@@ -977,14 +981,28 @@ namespace casioemu {
 			online_status = std::to_string(online_models.size()) + " " + std::string("StartupUI.OnlineModelsLoaded"_lc);
 		}
 
-		void InvalidateOnlineLogin() {
+		void ClearOnlineSessionState() {
 			online_access_token.clear();
 			online_authorization_pending = false;
 			online_auth = {};
 			online_models.clear();
 			selected_online_model = -1;
+		}
+
+		void InvalidateOnlineLogin() {
+			ClearOnlineSessionState();
 			ClearOnlineToken(OnlineModelClient{online_api}.ApiBase());
 			online_status = "StartupUI.OnlineLoginExpired"_lc;
+		}
+
+		void LogoutOnline() {
+			try {
+				ClearOnlineToken(OnlineModelClient{online_api}.ApiBase());
+			}
+			catch (...) {
+			}
+			ClearOnlineSessionState();
+			online_status = "StartupUI.OnlineLoggedOut"_lc;
 		}
 
 		void RefreshOnlineSession() {
@@ -1011,9 +1029,16 @@ namespace casioemu {
 			online_models.clear();
 			selected_online_model = -1;
 			online_authorization_pending = true;
-			online_status = std::string("StartupUI.OnlineBrowserOpened"_lc) + " " + online_auth.user_code;
+			online_status = "StartupUI.OnlineBrowserOpened"_lc;
 			if (SDL_OpenURL(online_auth.verification_uri.c_str()) != 0)
 				throw std::runtime_error(std::string("SDL_OpenURL failed: ") + SDL_GetError());
+		}
+
+		bool OnlineModelVisible(const OnlineModelEntry& item) const {
+			const bool matches_filter = std::strcmp(online_filter, "##") == 0 || item.model_type == online_filter;
+			const bool matches_search = stristr(item.name.c_str(), online_search_txt) != nullptr || stristr(item.id.c_str(), online_search_txt) != nullptr;
+			const bool matches_rom_kind = !online_hide_emu || item.real_hardware;
+			return matches_filter && matches_search && matches_rom_kind;
 		}
 
 		void RenderOnlineModels() {
@@ -1023,13 +1048,20 @@ namespace casioemu {
 				RefreshOnlineSession();
 			}
 			ImGui::SetNextWindowSize(ImVec2(680, 540), ImGuiCond_Appearing);
+			ImGui::PushStyleColor(ImGuiCol_PopupBg, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg));
 			if (!ImGui::BeginPopupModal("StartupUI.OnlineModels"_lc, nullptr,
-				ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) return;
+				ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+				ImGui::PopStyleColor();
+				return;
+			}
 
 			ImGui::TextUnformatted("StartupUI.OnlineApiAddress"_lc);
 			ImGui::SetNextItemWidth(-1);
 			if (!online_access_token.empty() || online_authorization_pending) ImGui::BeginDisabled();
-			ImGui::InputText("##OnlineApiAddress", online_api, sizeof(online_api));
+			if (ImGui::InputText("##OnlineApiAddress", online_api, sizeof(online_api))) {
+				ClearOnlineSessionState();
+				SaveOnlineApiAddress();
+			}
 			if (!online_access_token.empty() || online_authorization_pending) ImGui::EndDisabled();
 
 			if (online_access_token.empty() && !online_authorization_pending && ImGui::Button("StartupUI.OnlineLogin"_lc)) {
@@ -1069,13 +1101,42 @@ namespace casioemu {
 				catch (const OnlineAuthenticationError&) { InvalidateOnlineLogin(); }
 				catch (const std::exception& e) { online_status = e.what(); }
 			}
+			if (!online_access_token.empty()) {
+				ImGui::SameLine();
+				if (ImGui::Button("StartupUI.OnlineLogout"_lc)) LogoutOnline();
+			}
 
 			if (!online_status.empty()) ImGui::TextWrapped("%s", online_status.c_str());
 			ImGui::Separator();
+
+			ImGui::SetNextItemWidth(220.0f);
+			ImGui::InputText("StartupUI.SearchBoxHeader"_lc, online_search_txt, 200);
+			ImGui::SameLine();
+			std::vector<std::string> online_types{"##"};
+			for (const auto& item : online_models) {
+				if (std::find(online_types.begin(), online_types.end(), item.model_type) == online_types.end())
+					online_types.push_back(item.model_type);
+			}
+			std::sort(online_types.begin() + 1, online_types.end());
+			ImGui::SetNextItemWidth(110.0f);
+			if (ImGui::BeginCombo("##OnlineTypeFilter", online_filter)) {
+				for (const auto& type : online_types) {
+					const bool is_selected = std::strcmp(online_filter, type.c_str()) == 0;
+					if (ImGui::Selectable(type.c_str(), is_selected)) {
+						std::snprintf(online_filter, sizeof(online_filter), "%s", type.c_str());
+					}
+					if (is_selected) ImGui::SetItemDefaultFocus();
+				}
+				ImGui::EndCombo();
+			}
+			ImGui::SameLine();
+			ImGui::Checkbox("StartupUI.DontShowEmuRom"_lc, &online_hide_emu);
+
 			const float list_height = (std::max)(180.0f, ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing() * 2.0f);
 			if (ImGui::BeginChild("OnlineModelList", ImVec2(0, list_height), true)) {
 				for (int index = 0; index < static_cast<int>(online_models.size()); ++index) {
 					const auto& item = online_models[index];
+					if (!OnlineModelVisible(item)) continue;
 					ImGui::PushID(index);
 					const std::string label = item.name + "  [" + item.id + "]  " + item.model_type;
 					if (ImGui::Selectable(label.c_str(), selected_online_model == index)) selected_online_model = index;
@@ -1089,6 +1150,8 @@ namespace casioemu {
 					if (selected_online_model < 0 || selected_online_model >= static_cast<int>(online_models.size()))
 						throw std::runtime_error("Select an online model first.");
 					const auto& item = online_models[selected_online_model];
+					if (!OnlineModelVisible(item))
+						throw std::runtime_error("Select an online model first.");
 					OnlineModelClient client{online_api};
 					online_status = "StartupUI.OnlineDownloading"_lc;
 					const auto archive = client.DownloadModel(online_access_token, item.id);
@@ -1102,6 +1165,7 @@ namespace casioemu {
 			ImGui::SameLine();
 			if (ImGui::Button("Button.Negative"_lc)) ImGui::CloseCurrentPopup();
 			ImGui::EndPopup();
+			ImGui::PopStyleColor();
 		}
 
 		void Render() {
