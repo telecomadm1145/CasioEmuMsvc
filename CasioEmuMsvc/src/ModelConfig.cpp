@@ -4,10 +4,12 @@
 #include "../../McpPlugin/json.hpp"
 
 #include <SDL.h>
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <initializer_list>
 #include <map>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -134,18 +136,26 @@ namespace casioemu {
 		void ApplyBoardButtonOverrides(const json& buttons, ModelInfo& model) {
 			if (!buttons.is_array())
 				throw std::runtime_error("config.json field buttons must be an array.");
-			for (size_t ix = 0; ix < buttons.size(); ++ix) {
-				const auto& entry = buttons.at(ix);
+			std::set<int> board_kikos;
+			for (const auto& button : model.buttons) {
+				if (!board_kikos.insert(button.kiko).second)
+					throw std::runtime_error("board SVG contains duplicate button kiko values.");
+			}
+			std::set<int> configured_kikos;
+			for (const auto& entry : buttons) {
 				if (!entry.is_object())
 					throw std::runtime_error("config.json board button entries must be objects.");
-				const size_t button_index = entry.contains("index") ? entry.at("index").get<size_t>() : ix;
-				if (button_index >= model.buttons.size())
-					throw std::runtime_error("config.json board button index is out of range.");
-				auto& button = model.buttons[button_index];
-				if (entry.contains("keyname"))
-					button.keyname = entry.at("keyname").get<std::string>();
-				if (entry.contains("kiko"))
-					button.kiko = entry.at("kiko").get<int>();
+				if (!entry.contains("kiko") || !entry.at("kiko").is_number_integer() ||
+					!entry.contains("keyname") || !entry.at("keyname").is_string())
+					throw std::runtime_error("config.json board button entries must specify integer kiko and string keyname.");
+				const int kiko = entry.at("kiko").get<int>();
+				if (!configured_kikos.insert(kiko).second)
+					throw std::runtime_error("config.json board button kiko values must be unique.");
+				auto button = std::find_if(model.buttons.begin(), model.buttons.end(),
+					[kiko](const ButtonInfo& item) { return item.kiko == kiko; });
+				if (button == model.buttons.end())
+					throw std::runtime_error("config.json board button kiko was not found in board SVG.");
+				button->keyname = entry.at("keyname").get<std::string>();
 			}
 		}
 
@@ -347,10 +357,8 @@ namespace casioemu {
 				value["sprites"][name] = {{"index", index}};
 			}
 			value["buttons"] = json::array();
-			for (size_t ix = 0; ix < model.buttons.size(); ++ix) {
-				const auto& button = model.buttons[ix];
+			for (const auto& button : model.buttons) {
 				value["buttons"].push_back({
-					{"index", ix},
 					{"keyname", button.keyname},
 					{"kiko", button.kiko},
 				});
@@ -435,6 +443,46 @@ namespace casioemu {
 		catch (const std::exception& ex) {
 			if (error)
 				*error = ex.what();
+			return false;
+		}
+	}
+
+	bool LoadModelInfoFromResourceStore(
+		const ModelResourceStore& resources,
+		ModelInfo& model,
+		std::string* error) {
+		try {
+			if (!resources.Exists(MODEL_CONFIG_JSON))
+				throw std::runtime_error("config.json was not found.");
+			const auto data = resources.Read(MODEL_CONFIG_JSON);
+			json value = json::parse(data.begin(), data.end());
+			RequireBaseModelFields(value);
+			const std::string requested_board = ReadJsonString(value, {"board_path"});
+			const std::string requested_interface = ReadJsonString(value, {"interface_path"});
+			const std::string requested_rom = ReadJsonString(value, {"rom_path"});
+			const std::string requested_flash = ReadJsonString(value, {"flash_path"});
+			if (!requested_board.empty()) {
+				RequireBoardModelFields(value);
+				unsigned short hardware_id{};
+				ReadHardwareId(value, hardware_id);
+				const auto requested_status_indexes = ReadBoardStatusSpriteMap(value);
+				const int display_w = RequireJsonInt(value, {"screen_width"}, "screen_width");
+				const int display_h = RequireJsonInt(value, {"screen_height"}, "screen_height");
+				const double screen_scale_y = RequireJsonNumber(value, {"screen_scale_y"}, "screen_scale_y");
+				const SpriteInfo interface_sprite = RequireBoardInterfaceSprite(value);
+				model = LoadSvgBoardModelInfo(resources, hardware_id, requested_board, requested_interface, requested_rom,
+					requested_flash, interface_sprite.src, interface_sprite.dest, display_w, display_h, screen_scale_y,
+					requested_status_indexes);
+				ApplyModelInfoJsonValue(value, model, false);
+			}
+			else {
+				RequireSpriteModelFields(value);
+				ApplyModelInfoJsonValue(value, model, true);
+			}
+			return true;
+		}
+		catch (const std::exception& ex) {
+			if (error) *error = ex.what();
 			return false;
 		}
 	}

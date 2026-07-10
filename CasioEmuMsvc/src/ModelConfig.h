@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ModelInfo.h"
+#include "ModelResourceStore.h"
 
 #include <filesystem>
 #include <iosfwd>
@@ -16,6 +17,10 @@ namespace casioemu {
 		const std::filesystem::path& model_path,
 		ModelInfo& model,
 		std::string* loaded_from = nullptr,
+		std::string* error = nullptr);
+	bool LoadModelInfoFromResourceStore(
+		const ModelResourceStore& resources,
+		ModelInfo& model,
 		std::string* error = nullptr);
 	void SaveModelInfoJson(const std::filesystem::path& model_path, const ModelInfo& model);
 }

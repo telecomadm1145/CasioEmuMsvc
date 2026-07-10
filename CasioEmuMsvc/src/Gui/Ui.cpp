@@ -299,9 +299,9 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 	while (!me_mmu)
 		std::this_thread::sleep_for(std::chrono::microseconds(1));
 	std::filesystem::path label_file = m_emu->GetModelFilePath("labels.txt");
-	if (std::filesystem::exists(label_file))
+	if (!label_file.empty() && std::filesystem::exists(label_file))
 		g_labels = parseFile(label_file.string());
-	else
+	else if (!m_emu->IsMemoryModel())
 		std::cout << "[Warning] " << label_file.string() << " doesn't exist. You can consider create one for better debugging experiences. Format: address(0x1234),func name(can be quoted)\n";
 
 	if (m_emu->hardware_id == casioemu::HW_FX_5800P) {

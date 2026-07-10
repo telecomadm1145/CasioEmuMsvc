@@ -334,6 +334,29 @@ elseif(BUILD_EXECUTABLE)
         #CpuFeatures::cpu_features
         asmjit::asmjit
     )
+    find_package(CURL QUIET)
+    if(NOT CURL_FOUND)
+        include(FetchContent)
+        set(BUILD_CURL_EXE OFF CACHE BOOL "" FORCE)
+        set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+        set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+        if(WIN32)
+            set(CURL_USE_SCHANNEL ON CACHE BOOL "" FORCE)
+        endif()
+        set(CURL_USE_LIBPSL OFF CACHE BOOL "" FORCE)
+        set(CURL_USE_LIBSSH2 OFF CACHE BOOL "" FORCE)
+        set(CURL_ZLIB OFF CACHE STRING "" FORCE)
+        set(CURL_DISABLE_LDAP ON CACHE BOOL "" FORCE)
+        set(CURL_DISABLE_LDAPS ON CACHE BOOL "" FORCE)
+        FetchContent_Declare(curl
+            GIT_REPOSITORY https://github.com/curl/curl.git
+            GIT_TAG curl-8_11_1
+            GIT_SHALLOW TRUE
+        )
+        FetchContent_MakeAvailable(curl)
+    endif()
+    target_link_libraries(${TARGET_NAME} PRIVATE CURL::libcurl)
     if(WIN32)
         target_link_libraries(${TARGET_NAME} PRIVATE
             SDL2::SDL2main
@@ -341,17 +364,28 @@ elseif(BUILD_EXECUTABLE)
             dwmapi
             dbghelp
             imm32
+            crypt32
         )
         set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
     elseif(APPLE)
         find_library(APPKIT_FRAMEWORK AppKit)
+        find_library(SECURITY_FRAMEWORK Security REQUIRED)
         target_link_libraries(${TARGET_NAME} PRIVATE
             -lpthread
             -ldl
             -lm
             ${APPKIT_FRAMEWORK}
+            ${SECURITY_FRAMEWORK}
         )
     else()
+        find_package(PkgConfig QUIET)
+        if(PkgConfig_FOUND)
+            pkg_check_modules(LIBSECRET QUIET IMPORTED_TARGET libsecret-1)
+            if(LIBSECRET_FOUND)
+                target_link_libraries(${TARGET_NAME} PRIVATE PkgConfig::LIBSECRET)
+                target_compile_definitions(${TARGET_NAME} PRIVATE CASIOEMU_HAS_LIBSECRET=1)
+            endif()
+        endif()
         target_link_libraries(${TARGET_NAME} PRIVATE
             -Wl,--start-group
             -lpthread

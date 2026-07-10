@@ -1,4 +1,5 @@
 #include "SvgBoardModelLoader.h"
+#include "ModelResourceStore.h"
 
 #include "tinyxml2/tinyxml2.h"
 
@@ -9,6 +10,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <functional>
 #include <fstream>
 #include <iterator>
 #include <map>
@@ -595,6 +597,75 @@ namespace casioemu {
 			}
 			return buttons;
 		}
+
+		ModelInfo LoadSvgBoardModelInfoFromData(
+			const std::string& svg,
+			const std::function<bool(const std::string&)>& resource_exists,
+			unsigned short hardware_id,
+			const std::string& requested_board,
+			const std::string& requested_interface,
+			const std::string& requested_rom,
+			const std::string& requested_flash,
+			const Rect& interface_src_rect,
+			const Rect& interface_dest_rect,
+			int display_w,
+			int display_h,
+			double screen_scale_y,
+			const std::map<std::string, int>& configured_status_indexes) {
+			tinyxml2::XMLDocument board_document;
+			if (board_document.Parse(svg.data(), svg.size()) != tinyxml2::XML_SUCCESS)
+				throw std::runtime_error("The board SVG is not valid XML.");
+			SvgRect board_rect{};
+			if (!ParseViewBox(svg, board_rect))
+				throw std::runtime_error("The board SVG does not expose a usable viewBox or image size.");
+			if (interface_dest_rect.w <= 0 || interface_dest_rect.h <= 0)
+				throw std::runtime_error("config.json must specify sprites.rsd_interface.dest with positive width and height.");
+			if (interface_dest_rect.x != 0 || interface_dest_rect.y != 0)
+				throw std::runtime_error("config.json sprites.rsd_interface.dest x and y must be zero.");
+			const BoardGeometryMapper mapper(board_rect, interface_dest_rect);
+
+			SvgRect screen_slot{};
+			if (!ParseScreenSlot(board_document, screen_slot) || screen_slot.w <= 0 || screen_slot.h <= 0)
+				throw std::runtime_error("The board SVG does not contain a usable screen-slot.");
+
+			ModelInfo model{};
+			model.hardware_id = hardware_id;
+			model.board_path = requested_board;
+			model.interface_path = requested_interface;
+			model.rom_path = requested_rom;
+			model.flash_path = requested_flash;
+			model.screen_width = display_w;
+			model.screen_height = display_h;
+			model.screen_scale_y = screen_scale_y;
+			model.buttons = ParseButtons(board_document, board_rect, mapper);
+
+			if (model.interface_path.empty())
+				throw std::runtime_error("config.json must specify interface_path for board SVG/PNG model inference.");
+			if (!resource_exists(model.interface_path))
+				throw std::runtime_error("The interface image referenced by config.json was not found: " + model.interface_path);
+			if (model.rom_path.empty())
+				throw std::runtime_error("config.json must specify rom_path for board SVG/PNG model inference.");
+			if (!resource_exists(model.rom_path))
+				throw std::runtime_error("The ROM image referenced by config.json was not found: " + model.rom_path);
+			if (!model.flash_path.empty() && !resource_exists(model.flash_path))
+				throw std::runtime_error("The flash image referenced by config.json was not found: " + model.flash_path);
+
+			if (interface_src_rect.w <= 0 || interface_src_rect.h <= 0)
+				throw std::runtime_error("config.json must specify sprites.rsd_interface.src with positive width and height.");
+			SvgRect interface_src{
+				static_cast<double>(interface_src_rect.x),
+				static_cast<double>(interface_src_rect.y),
+				static_cast<double>(interface_src_rect.w),
+				static_cast<double>(interface_src_rect.h)};
+			model.sprites["rsd_interface"] = {ToRect(interface_src), interface_dest_rect};
+
+			if (display_w <= 0 || display_h <= 0 || screen_scale_y <= 0)
+				throw std::runtime_error("config.json must specify positive screen_width, screen_height, and screen_scale_y.");
+			screen_slot.h = screen_slot.w * static_cast<double>(display_h) / static_cast<double>(display_w) * screen_scale_y;
+			model.sprites["rsd_pixel"] = {{0, 0, display_w, display_h}, mapper.Map(ToRect(screen_slot))};
+			AddStatusSprites(model, board_document, mapper, configured_status_indexes);
+			return model;
+		}
 	}
 
 	ModelInfo LoadSvgBoardModelInfo(
@@ -610,64 +681,36 @@ namespace casioemu {
 		int display_h,
 		double screen_scale_y,
 		const std::map<std::string, int>& configured_status_indexes) {
-		std::string board_key;
-		const auto board_path = ResolveBoardSvg(model_path, &board_key, requested_board);
+		const auto board_path = ResolveBoardSvg(model_path, nullptr, requested_board);
 		if (board_path.empty())
 			throw std::runtime_error("No supported board SVG was found.");
-
 		const std::string svg = ReadTextFile(board_path);
-		tinyxml2::XMLDocument board_document;
-		if (board_document.Parse(svg.data(), svg.size()) != tinyxml2::XML_SUCCESS)
-			throw std::runtime_error("The board SVG is not valid XML.");
-		SvgRect board_rect{};
-		if (!ParseViewBox(svg, board_rect))
-			throw std::runtime_error("The board SVG does not expose a usable viewBox or image size.");
-		if (interface_dest_rect.w <= 0 || interface_dest_rect.h <= 0)
-			throw std::runtime_error("config.json must specify sprites.rsd_interface.dest with positive width and height.");
-		if (interface_dest_rect.x != 0 || interface_dest_rect.y != 0)
-			throw std::runtime_error("config.json sprites.rsd_interface.dest x and y must be zero.");
-		const BoardGeometryMapper mapper(board_rect, interface_dest_rect);
+		return LoadSvgBoardModelInfoFromData(svg,
+			[&](const std::string& name) { return FileExists(ResolveModelPath(model_path, name)); },
+			hardware_id, requested_board, requested_interface, requested_rom, requested_flash,
+			interface_src_rect, interface_dest_rect, display_w, display_h, screen_scale_y, configured_status_indexes);
+	}
 
-		SvgRect screen_slot{};
-		if (!ParseScreenSlot(board_document, screen_slot) || screen_slot.w <= 0 || screen_slot.h <= 0)
-			throw std::runtime_error("The board SVG does not contain a usable screen-slot.");
-
-		ModelInfo model{};
-		model.hardware_id = hardware_id;
-		model.board_path = requested_board;
-		model.interface_path = requested_interface;
-		model.rom_path = requested_rom;
-		model.flash_path = requested_flash;
-		model.screen_width = display_w;
-		model.screen_height = display_h;
-		model.screen_scale_y = screen_scale_y;
-		model.buttons = ParseButtons(board_document, board_rect, mapper);
-
-		if (model.interface_path.empty())
-			throw std::runtime_error("config.json must specify interface_path for board SVG/PNG model inference.");
-		if (!FileExists(ResolveModelPath(model_path, model.interface_path)))
-			throw std::runtime_error("The interface image referenced by config.json was not found: " + model.interface_path);
-		if (model.rom_path.empty())
-			throw std::runtime_error("config.json must specify rom_path for board SVG/PNG model inference.");
-		if (!FileExists(ResolveModelPath(model_path, model.rom_path)))
-			throw std::runtime_error("The ROM image referenced by config.json was not found: " + model.rom_path);
-		if (!model.flash_path.empty() && !FileExists(ResolveModelPath(model_path, model.flash_path)))
-			throw std::runtime_error("The flash image referenced by config.json was not found: " + model.flash_path);
-
-		if (interface_src_rect.w <= 0 || interface_src_rect.h <= 0)
-			throw std::runtime_error("config.json must specify sprites.rsd_interface.src with positive width and height.");
-		SvgRect interface_src{
-			static_cast<double>(interface_src_rect.x),
-			static_cast<double>(interface_src_rect.y),
-			static_cast<double>(interface_src_rect.w),
-			static_cast<double>(interface_src_rect.h)};
-		model.sprites["rsd_interface"] = {ToRect(interface_src), interface_dest_rect};
-
-		if (display_w <= 0 || display_h <= 0 || screen_scale_y <= 0)
-			throw std::runtime_error("config.json must specify positive screen_width, screen_height, and screen_scale_y.");
-		screen_slot.h = screen_slot.w * static_cast<double>(display_h) / static_cast<double>(display_w) * screen_scale_y;
-		model.sprites["rsd_pixel"] = {{0, 0, display_w, display_h}, mapper.Map(ToRect(screen_slot))};
-		AddStatusSprites(model, board_document, mapper, configured_status_indexes);
-		return model;
+	ModelInfo LoadSvgBoardModelInfo(
+		const ModelResourceStore& resources,
+		unsigned short hardware_id,
+		const std::string& requested_board,
+		const std::string& requested_interface,
+		const std::string& requested_rom,
+		const std::string& requested_flash,
+		const Rect& interface_src_rect,
+		const Rect& interface_dest_rect,
+		int display_w,
+		int display_h,
+		double screen_scale_y,
+		const std::map<std::string, int>& configured_status_indexes) {
+		if (requested_board.empty() || !resources.Exists(requested_board))
+			throw std::runtime_error("The board SVG referenced by config.json was not found: " + requested_board);
+		const auto board_data = resources.Read(requested_board);
+		const std::string svg(board_data.begin(), board_data.end());
+		return LoadSvgBoardModelInfoFromData(svg,
+			[&](const std::string& name) { return resources.Exists(name); },
+			hardware_id, requested_board, requested_interface, requested_rom, requested_flash,
+			interface_src_rect, interface_dest_rect, display_w, display_h, screen_scale_y, configured_status_indexes);
 	}
 }

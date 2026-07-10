@@ -409,3 +409,17 @@ QrCode.NoHistory=В этом сеансе QR-коды еще не захваче
 QrCode.HistoryEntryFmt=#%llu  Версия %d  Длина %zu
 
 placeholder2=a)"
+
+StartupUI.OnlineModels=Online models...
+StartupUI.OnlineApiAddress=API address
+StartupUI.OnlineLogin=Sign in
+StartupUI.OnlineRelogin=Sign in again
+StartupUI.OnlineCompleteLogin=Complete sign-in
+StartupUI.OnlineBrowserOpened=Complete authorization in the browser. Device code:
+StartupUI.OnlineLoginSuccess=Authorization succeeded.
+StartupUI.OnlineLoginExpired=Online login expired or permissions changed. Please sign in again.
+StartupUI.OnlineAuthorizationPending=Waiting for browser authorization.
+StartupUI.OnlineModelsLoaded=models loaded.
+StartupUI.OnlineLaunch=Launch
+StartupUI.OnlineDownloading=Downloading and validating model...
+StartupUI.OnlineLoginSessionOnly=Authorization succeeded. Secure token storage is unavailable; sign-in lasts for this run only.

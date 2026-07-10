@@ -409,3 +409,17 @@ QrCode.NoHistory=本次运行尚未捕获 QR 码。
 QrCode.HistoryEntryFmt=#%llu  版本 %d  长度 %zu
 
 placeholder2=a)"
+
+StartupUI.OnlineModels=在线获取...
+StartupUI.OnlineApiAddress=API 地址
+StartupUI.OnlineLogin=登录
+StartupUI.OnlineRelogin=重新登录
+StartupUI.OnlineCompleteLogin=完成登录
+StartupUI.OnlineBrowserOpened=请在浏览器中完成授权，设备代码：
+StartupUI.OnlineLoginSuccess=授权成功。
+StartupUI.OnlineLoginSessionOnly=授权成功。当前系统没有可用的安全凭据存储，登录仅在本次运行中有效。
+StartupUI.OnlineLoginExpired=登录已过期或权限已变更，请重新登录。
+StartupUI.OnlineAuthorizationPending=等待浏览器授权。
+StartupUI.OnlineModelsLoaded=个型号已加载。
+StartupUI.OnlineLaunch=启动
+StartupUI.OnlineDownloading=正在下载并验证型号...

@@ -529,10 +529,12 @@ namespace casioemu {
 	}
 
 	void Chipset::SetupInternals() {
-		std::ifstream rom_handle(emulator.GetModelFilePath(emulator.ModelDefinition.rom_path), std::ifstream::binary);
-		if (rom_handle.fail())
-			PANIC("std::ifstream failed: %s\n", std::strerror(errno));
-		rom_data = std::vector<unsigned char>((std::istreambuf_iterator<char>(rom_handle)), std::istreambuf_iterator<char>());
+		try {
+			rom_data = emulator.ReadModelResource(emulator.ModelDefinition.rom_path);
+		}
+		catch (const std::exception& error) {
+			PANIC("Failed to read ROM: %s\n", error.what());
+		}
 		if (epscpu) {
 			std::copy(rom_data.begin(), rom_data.begin() + 0x40000, epscpu->Rom);
 		}
@@ -547,10 +549,12 @@ namespace casioemu {
 				}
 			}
 			else {
-				std::ifstream flash_handle(emulator.GetModelFilePath(emulator.ModelDefinition.flash_path), std::ifstream::binary);
-				if (flash_handle.fail())
-					PANIC("std::ifstream failed: %s\n", std::strerror(errno));
-				flash_data = std::vector<unsigned char>((std::istreambuf_iterator<char>(flash_handle)), std::istreambuf_iterator<char>());
+				try {
+					flash_data = emulator.ReadModelResource(emulator.ModelDefinition.flash_path);
+				}
+				catch (const std::exception& error) {
+					PANIC("Failed to read flash: %s\n", error.what());
+				}
 			}
 			flash_data.resize(0x80000, 0xff);
 			//memset(&flash_data[0x20000], 0xff, 0x10000); // TODO: check clear ram flag

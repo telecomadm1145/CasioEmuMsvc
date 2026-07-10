@@ -145,7 +145,8 @@ namespace casioemu {
 		}
 	}
 
-	Emulator::Emulator(std::map<std::string, std::string>& _argv_map, bool _paused) : Paused(_paused), argv_map(_argv_map), chipset(*new Chipset(*this)), m_step_requested(false) {
+	Emulator::Emulator(std::map<std::string, std::string>& _argv_map, bool _paused, std::shared_ptr<ModelResourceStore> resources)
+		: Paused(_paused), model_resources(std::move(resources)), argv_map(_argv_map), chipset(*new Chipset(*this)), m_step_requested(false) {
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
 		running = true;
@@ -221,11 +222,18 @@ namespace casioemu {
 		if (!renderer)
 			PANIC("SDL_CreateRenderer failed: %s\n", SDL_GetError());
 
-		const auto interface_path = GetModelFilePath(ModelDefinition.interface_path);
-		interface_is_svg = HasSvgExtension(interface_path);
-		if (interface_is_svg)
-			interface_svg_data = ReadBinaryFile(interface_path);
-		interface_surface = IMG_Load(interface_path.c_str());
+		interface_is_svg = HasSvgExtension(ModelDefinition.interface_path);
+		if (model_resources) {
+			const auto interface_data = ReadModelResource(ModelDefinition.interface_path);
+			if (interface_is_svg) interface_svg_data.assign(interface_data.begin(), interface_data.end());
+			SDL_RWops* rw = SDL_RWFromConstMem(interface_data.data(), static_cast<int>(interface_data.size()));
+			interface_surface = rw ? IMG_Load_RW(rw, 1) : nullptr;
+		}
+		else {
+			const auto interface_path = GetModelFilePath(ModelDefinition.interface_path);
+			if (interface_is_svg) interface_svg_data = ReadBinaryFile(interface_path);
+			interface_surface = IMG_Load(interface_path.c_str());
+		}
 		if (!interface_surface)
 			PANIC("IMG_Load failed: %s\n", IMG_GetError());
 		interface_texture = SDL_CreateTextureFromSurface(renderer, interface_surface);
@@ -372,10 +380,9 @@ namespace casioemu {
 			if (!renderer)
 				PANIC("SDL_CreateRenderer failed: %s\n", SDL_GetError());
 
+			interface_is_svg = HasSvgExtension(ModelDefinition.interface_path);
 			const auto interface_path = GetModelFilePath(ModelDefinition.interface_path);
-			interface_is_svg = HasSvgExtension(interface_path);
-			if (interface_is_svg)
-				interface_svg_data = ReadBinaryFile(interface_path);
+			if (interface_is_svg) interface_svg_data = ReadBinaryFile(interface_path);
 			interface_surface = IMG_Load(interface_path.c_str());
 			if (!interface_surface)
 				PANIC("IMG_Load failed: %s\n", IMG_GetError());
@@ -534,17 +541,44 @@ namespace casioemu {
 
 	void Emulator::LoadModelDefition() {
 		std::string error;
-		if (!LoadModelInfoFromFolder(std::filesystem::path(model_path), ModelDefinition, nullptr, &error))
+		const bool loaded = model_resources
+			? LoadModelInfoFromResourceStore(*model_resources, ModelDefinition, &error)
+			: LoadModelInfoFromFolder(std::filesystem::path(model_path), ModelDefinition, nullptr, &error);
+		if (!loaded)
 			PANIC("Failed to load model configuration: %s", error.c_str());
 	}
 
-	std::string Emulator::GetModelFilePath(std::string relative_path) {
+	std::string Emulator::GetModelFilePath(std::string relative_path) const {
+		if (model_resources) return {};
 		return
 #ifdef __ANDROID__
 		(SDL_AndroidGetExternalStoragePath() / std::filesystem::path(model_path) / relative_path).string();
 #else
 			(std::filesystem::path(model_path) / relative_path).string();
 #endif
+	}
+
+	bool Emulator::HasModelResource(const std::string& name) const {
+		if (model_resources) return model_resources->Exists(name);
+		std::error_code ec;
+		return std::filesystem::is_regular_file(GetModelFilePath(name), ec);
+	}
+
+	std::vector<std::uint8_t> Emulator::ReadModelResource(const std::string& name) const {
+		if (model_resources) return model_resources->Read(name);
+		std::ifstream stream(GetModelFilePath(name), std::ios::binary);
+		if (!stream) throw std::runtime_error("Cannot open model resource: " + name);
+		return {std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{}};
+	}
+
+	void Emulator::WriteModelSessionResource(const std::string& name, const std::vector<std::uint8_t>& data) {
+		if (model_resources) {
+			model_resources->WriteSession(name, data);
+			return;
+		}
+		std::ofstream stream(GetModelFilePath(name), std::ios::binary);
+		if (!stream || !stream.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size())))
+			throw std::runtime_error("Cannot write model resource: " + name);
 	}
 
 	void Emulator::TimerCallback() {

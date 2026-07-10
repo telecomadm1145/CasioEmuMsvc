@@ -251,6 +251,7 @@ int main(int argc, char* argv[]) {
 			logger::Info("[argv][Info] #%i: key '%s' already set\n", ix, key.c_str());
 	}
 	bool headless = argv_map.find("headless") != argv_map.end();
+	std::shared_ptr<casioemu::ModelResourceStore> startup_resources;
 	int sdlFlags = SDL_INIT_VIDEO | SDL_INIT_TIMER;
 	if (SDL_Init(sdlFlags) != 0)
 		PANIC("SDL_Init failed: %s\n", SDL_GetError());
@@ -262,8 +263,9 @@ int main(int argc, char* argv[]) {
 		PANIC("No model path supplied.\n");
 	}
 	if (argv_map["model"].empty()) {
-		auto s = sui_loop();
-		argv_map["model"] = std::move(s);
+		auto selection = sui_loop();
+		argv_map["model"] = std::move(selection.model_path);
+		startup_resources = std::move(selection.resources);
 		if (argv_map["model"].empty()) {
       DiscordRPC::Shutdown();
 			return -1;
@@ -279,7 +281,7 @@ int main(int argc, char* argv[]) {
 
 	bool no_dbg = !argv_map["no_dbg"].empty();
 	low_perf_ext = !argv_map["low_perf_ext"].empty();
-	Emulator emulator(argv_map);
+	Emulator emulator(argv_map, false, std::move(startup_resources));
 	m_emu = &emulator;
 
 	// static std::atomic<bool> running(true);

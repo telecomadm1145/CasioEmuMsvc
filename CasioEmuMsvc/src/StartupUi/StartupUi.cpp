@@ -5,6 +5,8 @@
 // 
 
 #include "StartupUi.h"
+#include "OnlineModelClient.h"
+#include "OnlineModelPackage.h"
 #include "3rd_licenses.h"
 #include "Binary.h"
 #include "Config.hpp"
@@ -770,7 +772,30 @@ namespace casioemu {
 		};
 		std::vector<Model> models;
 		std::filesystem::path selected_path{};
+		std::shared_ptr<ModelResourceStore> selected_resources;
+		char online_api[512] = "http://127.0.0.1:8788";
+		bool show_online_popup = false;
+		OnlineAuthRequest online_auth{};
+		std::string online_access_token;
+		bool online_authorization_pending = false;
+		std::string online_status;
+		std::vector<OnlineModelEntry> online_models;
+		int selected_online_model = -1;
 		StartupUi() {
+			std::ifstream api_settings{"online_api.cfg"};
+			if (api_settings) {
+				std::string value;
+				std::getline(api_settings, value);
+				if (!value.empty())
+					std::snprintf(online_api, sizeof(online_api), "%s", value.c_str());
+			}
+			try {
+				OnlineModelClient client{online_api};
+				online_access_token = LoadOnlineToken(client.ApiBase());
+			}
+			catch (...) {
+				online_access_token.clear();
+			}
 			std::ifstream ifs2{"roms.db", std::ifstream::binary};
 			if (ifs2) {
 				try {
@@ -791,6 +816,7 @@ namespace casioemu {
 			std::thread thd([&]() {
 				models.clear();
 				for (auto& dir : std::filesystem::directory_iterator("models")) {
+					if (dir.path().filename() == ".online") continue;
 					if (dir.is_directory()) {
 						try {
 							printf("[StartupUI][Info] Checking %s\n", dir.path().string().c_str());
@@ -939,6 +965,145 @@ namespace casioemu {
 			return dir_name;
 		}
 
+		void SaveOnlineApiAddress() {
+			std::ofstream settings{"online_api.cfg", std::ios::trunc};
+			if (settings) settings << online_api;
+		}
+
+		void LoadOnlineModels() {
+			OnlineModelClient client{online_api};
+			online_models = client.ListModels(online_access_token);
+			selected_online_model = online_models.empty() ? -1 : 0;
+			online_status = std::to_string(online_models.size()) + " " + std::string("StartupUI.OnlineModelsLoaded"_lc);
+		}
+
+		void InvalidateOnlineLogin() {
+			online_access_token.clear();
+			online_authorization_pending = false;
+			online_auth = {};
+			online_models.clear();
+			selected_online_model = -1;
+			ClearOnlineToken(OnlineModelClient{online_api}.ApiBase());
+			online_status = "StartupUI.OnlineLoginExpired"_lc;
+		}
+
+		void RefreshOnlineSession() {
+			if (online_access_token.empty()) return;
+			try {
+				OnlineModelClient client{online_api};
+				client.CheckStatus(online_access_token);
+				LoadOnlineModels();
+			}
+			catch (const OnlineAuthenticationError&) {
+				InvalidateOnlineLogin();
+			}
+			catch (const std::exception& error) {
+				online_status = error.what();
+			}
+		}
+
+		void StartOnlineLogin() {
+			SaveOnlineApiAddress();
+			OnlineModelClient client{online_api};
+			ClearOnlineToken(client.ApiBase());
+			online_auth = client.StartAuthorization();
+			online_access_token.clear();
+			online_models.clear();
+			selected_online_model = -1;
+			online_authorization_pending = true;
+			online_status = std::string("StartupUI.OnlineBrowserOpened"_lc) + " " + online_auth.user_code;
+			if (SDL_OpenURL(online_auth.verification_uri.c_str()) != 0)
+				throw std::runtime_error(std::string("SDL_OpenURL failed: ") + SDL_GetError());
+		}
+
+		void RenderOnlineModels() {
+			if (show_online_popup) {
+				ImGui::OpenPopup("StartupUI.OnlineModels"_lc);
+				show_online_popup = false;
+				RefreshOnlineSession();
+			}
+			ImGui::SetNextWindowSize(ImVec2(680, 540), ImGuiCond_Appearing);
+			if (!ImGui::BeginPopupModal("StartupUI.OnlineModels"_lc, nullptr,
+				ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) return;
+
+			ImGui::TextUnformatted("StartupUI.OnlineApiAddress"_lc);
+			ImGui::SetNextItemWidth(-1);
+			if (!online_access_token.empty() || online_authorization_pending) ImGui::BeginDisabled();
+			ImGui::InputText("##OnlineApiAddress", online_api, sizeof(online_api));
+			if (!online_access_token.empty() || online_authorization_pending) ImGui::EndDisabled();
+
+			if (online_access_token.empty() && !online_authorization_pending && ImGui::Button("StartupUI.OnlineLogin"_lc)) {
+				try {
+					StartOnlineLogin();
+				}
+				catch (const std::exception& e) { online_status = e.what(); }
+			}
+			if (online_authorization_pending) {
+				if (ImGui::Button("StartupUI.OnlineRelogin"_lc)) {
+					try { StartOnlineLogin(); }
+					catch (const std::exception& e) { online_status = e.what(); }
+				}
+				ImGui::SameLine();
+			}
+			if (online_authorization_pending && ImGui::Button("StartupUI.OnlineCompleteLogin"_lc)) {
+				try {
+					OnlineModelClient client{online_api};
+					if (client.PollAuthorization(online_auth.device_code, online_access_token)) {
+						online_authorization_pending = false;
+						SaveOnlineToken(client.ApiBase(), online_access_token);
+						online_status = OnlineTokenPersistenceAvailable()
+							? std::string("StartupUI.OnlineLoginSuccess"_lc)
+							: std::string("StartupUI.OnlineLoginSessionOnly"_lc);
+						LoadOnlineModels();
+					}
+					else online_status = "StartupUI.OnlineAuthorizationPending"_lc;
+				}
+				catch (const std::exception& e) { online_status = e.what(); }
+			}
+			if (!online_access_token.empty() && ImGui::Button("Button.Refresh"_lc)) {
+				try {
+					OnlineModelClient client{online_api};
+					client.CheckStatus(online_access_token);
+					LoadOnlineModels();
+				}
+				catch (const OnlineAuthenticationError&) { InvalidateOnlineLogin(); }
+				catch (const std::exception& e) { online_status = e.what(); }
+			}
+
+			if (!online_status.empty()) ImGui::TextWrapped("%s", online_status.c_str());
+			ImGui::Separator();
+			const float list_height = (std::max)(180.0f, ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing() * 2.0f);
+			if (ImGui::BeginChild("OnlineModelList", ImVec2(0, list_height), true)) {
+				for (int index = 0; index < static_cast<int>(online_models.size()); ++index) {
+					const auto& item = online_models[index];
+					ImGui::PushID(index);
+					const std::string label = item.name + "  [" + item.id + "]  " + item.model_type;
+					if (ImGui::Selectable(label.c_str(), selected_online_model == index)) selected_online_model = index;
+					ImGui::PopID();
+				}
+			}
+			ImGui::EndChild();
+
+			if (ImGui::Button("StartupUI.OnlineLaunch"_lc)) {
+				try {
+					if (selected_online_model < 0 || selected_online_model >= static_cast<int>(online_models.size()))
+						throw std::runtime_error("Select an online model first.");
+					const auto& item = online_models[selected_online_model];
+					OnlineModelClient client{online_api};
+					online_status = "StartupUI.OnlineDownloading"_lc;
+					const auto archive = client.DownloadModel(online_access_token, item.id);
+					selected_resources = LoadOnlineModelPackage(archive, item.id);
+					selected_path = "memory-online-" + item.id;
+					ImGui::CloseCurrentPopup();
+				}
+				catch (const OnlineAuthenticationError&) { InvalidateOnlineLogin(); }
+				catch (const std::exception& e) { online_status = e.what(); }
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Button.Negative"_lc)) ImGui::CloseCurrentPopup();
+			ImGui::EndPopup();
+		}
+
 		void Render() {
 			auto& io = ImGui::GetIO();
 
@@ -1012,7 +1177,12 @@ namespace casioemu {
 					}
 				});
 			}
+			ImGui::SameLine();
+			if (ImGui::Button("Button.Refresh"_lc, ImVec2(buttonWidth, 0))) Reload();
+			ImGui::SameLine(0.0f, padding * 4.0f);
+			if (ImGui::Button("StartupUI.OnlineModels"_lc, ImVec2(buttonWidth, 0))) show_online_popup = true;
 			ImGui::PopStyleVar();
+			RenderOnlineModels();
 			if (show_password_input) {
 				ImGui::OpenPopup("StartupUI.EnterPassword"_lc);
 			}
@@ -1076,11 +1246,6 @@ namespace casioemu {
 #endif
 
 				ImGui::EndPopup();
-			}
-
-			ImGui::SameLine();
-			if (ImGui::Button("Button.Refresh"_lc)) {
-				Reload();
 			}
 
 			if (loading) {
@@ -1493,15 +1658,15 @@ void HandleStartupEvent(const SDL_Event& event) {
 	ImGui_ImplSDL2_ProcessEvent(&event);
 }
 
-std::string sui_loop() {
+StartupSelection sui_loop() {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
 		SDL_Log("SDL_Init failed in StartupUI: %s", SDL_GetError());
-		return "";
+		return {};
 	}
 	if (IMG_Init(IMG_INIT_PNG) != IMG_INIT_PNG) {
 		SDL_Log("IMG_Init failed in StartupUI: %s", IMG_GetError());
 		SDL_Quit();
-		return "";
+		return {};
 	}
 	SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
 	windows2 = new std::vector<UIWindow*>();
@@ -1536,7 +1701,7 @@ std::string sui_loop() {
 			SDL_DestroyWindow(window2);
 		IMG_Quit();
 		SDL_Quit();
-		return "";
+		return {};
 	}
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -1705,5 +1870,5 @@ std::string sui_loop() {
 	}
 	IMG_Quit();
 	SDL_Quit();
-	return ui.selected_path.string();
+	return {ui.selected_path.string(), std::move(ui.selected_resources)};
 }
