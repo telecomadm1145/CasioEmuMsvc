@@ -293,12 +293,6 @@ namespace casioemu {
 		return true;
 	}
 
-	int OnlineModelClient::CheckStatus(const std::string& access_token) const {
-		const auto response = HttpRequest(api_base_ + "/emu/api", json{{"action", "status"}}.dump(), access_token, &identity_, true);
-		RequireSuccess(response, "Authentication status");
-		return ParseJson(response).value("expires_in", 0);
-	}
-
 	void OnlineModelClient::RevokeDevice(const std::string& access_token) const {
 		const auto response = HttpRequest(api_base_ + "/emu/api", json{{"action", "device-revoke"}}.dump(), access_token, &identity_, true);
 		RequireSuccess(response, "Device revoke");

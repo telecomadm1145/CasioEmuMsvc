@@ -82,6 +82,7 @@ public class Game extends SDLActivity {
     private static final String ASSET_VERSION_FILE = "locales_asset_version.txt";
     private static final String ONLINE_KEY_ALIAS = "CasioEmuMsvcOnlineDeviceKey";
     private static final String ONLINE_PREFS = "casioemu_online_device";
+    private static boolean pendingOnlineAuthorizationCallback = false;
 
     private static String onlineIdentityPreferenceKey(String api) throws Exception {
         byte[] digest = MessageDigest.getInstance("SHA-256").digest(api.getBytes("UTF-8"));
@@ -349,6 +350,7 @@ public class Game extends SDLActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        handleOnlineAuthorizationIntent(getIntent());
         isStoppingEmulation = false;
         createNotificationChannel();
         setImmersiveMode();
@@ -410,6 +412,25 @@ public class Game extends SDLActivity {
                 out.write(buffer, 0, read);
             }
         }
+    }
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleOnlineAuthorizationIntent(intent);
+    }
+    private static synchronized void handleOnlineAuthorizationIntent(Intent intent) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) return;
+        Uri uri = intent.getData();
+        if (uri != null && "u8emu".equalsIgnoreCase(uri.getScheme())
+                && "online-auth".equalsIgnoreCase(uri.getHost())) {
+            pendingOnlineAuthorizationCallback = true;
+        }
+    }
+    public synchronized boolean consumeOnlineAuthorizationCallback() {
+        boolean pending = pendingOnlineAuthorizationCallback;
+        pendingOnlineAuthorizationCallback = false;
+        return pending;
     }
 
     private String getAssetVersionTag() {

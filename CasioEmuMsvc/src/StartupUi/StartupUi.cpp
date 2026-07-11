@@ -29,6 +29,7 @@
 #include <filesystem>
 #include <imgui.h>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <iterator>
 #include <set>
@@ -48,6 +49,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cstring>
 
 #ifdef __ANDROID__
@@ -788,6 +790,21 @@ namespace casioemu {
 		char online_search_txt[200]{};
 		char online_filter[32] = "##";
 		bool online_hide_emu = false;
+		bool close_online_popup_requested = false;
+		enum class OnlineOperation { Idle, StartLogin, LoadModels, PollAuthorization, Logout, DownloadModel };
+		struct OnlineTaskResult {
+			OnlineOperation operation = OnlineOperation::Idle;
+			OnlineAuthRequest auth{};
+			std::string access_token;
+			std::vector<OnlineModelEntry> models;
+			std::vector<uint8_t> archive;
+			std::string model_id;
+			std::string error;
+			bool authentication_error = false;
+			bool authorization_complete = false;
+		};
+		OnlineOperation online_operation = OnlineOperation::Idle;
+		std::future<OnlineTaskResult> online_task;
 		StartupUi() {
 			std::ifstream api_settings{"online_api.cfg"};
 			if (api_settings) {
@@ -976,11 +993,24 @@ namespace casioemu {
 			if (settings) settings << online_api;
 		}
 
-		void LoadOnlineModels() {
-			OnlineModelClient client{online_api};
-			online_models = client.ListModels(online_access_token);
-			selected_online_model = online_models.empty() ? -1 : 0;
-			online_status = std::to_string(online_models.size()) + " " + std::string("StartupUI.OnlineModelsLoaded"_lc);
+		bool OnlineBusy() const {
+			return online_operation != OnlineOperation::Idle;
+		}
+
+		void BeginLoadOnlineModels() {
+			if (OnlineBusy() || online_access_token.empty()) return;
+			const std::string api = online_api;
+			const std::string token = online_access_token;
+			online_operation = OnlineOperation::LoadModels;
+			online_status = "StartupUI.OnlineLoading"_lc;
+			online_task = std::async(std::launch::async, [api, token] {
+				OnlineTaskResult result;
+				result.operation = OnlineOperation::LoadModels;
+				try { result.models = OnlineModelClient{api}.ListModels(token); }
+				catch (const OnlineAuthenticationError& error) { result.authentication_error = true; result.error = error.what(); }
+				catch (const std::exception& error) { result.error = error.what(); }
+				return result;
+			});
 		}
 
 		void ClearOnlineSessionState() {
@@ -1001,73 +1031,161 @@ namespace casioemu {
 			online_status = "StartupUI.OnlineLoginExpired"_lc;
 		}
 
-		void LogoutOnline() {
-			try {
-				if (!online_access_token.empty()) OnlineModelClient{online_api}.RevokeDevice(online_access_token);
-				ClearOnlineToken(OnlineModelClient{online_api}.ApiBase());
-			}
-			catch (...) {
-			}
-			ClearOnlineSessionState();
-			online_status = "StartupUI.OnlineLoggedOut"_lc;
+		void BeginLogoutOnline() {
+			if (OnlineBusy()) return;
+			const std::string api = online_api;
+			const std::string token = online_access_token;
+			online_operation = OnlineOperation::Logout;
+			online_status = "StartupUI.OnlineLoggingOut"_lc;
+			online_task = std::async(std::launch::async, [api, token] {
+				OnlineTaskResult result;
+				result.operation = OnlineOperation::Logout;
+				try { if (!token.empty()) OnlineModelClient{api}.RevokeDevice(token); }
+				catch (...) {}
+				return result;
+			});
 		}
 
-		void RefreshOnlineSession() {
-			if (online_access_token.empty()) return;
-			try {
-				OnlineModelClient client{online_api};
-				client.CheckStatus(online_access_token);
-				LoadOnlineModels();
-			}
-			catch (const OnlineAuthenticationError&) {
-				InvalidateOnlineLogin();
-			}
-			catch (const std::exception& error) {
-				online_status = error.what();
-			}
-		}
-
-		void StartOnlineLogin() {
+		void BeginOnlineLogin() {
+			if (OnlineBusy()) return;
 			SaveOnlineApiAddress();
 			OnlineModelClient client{online_api};
 			ClearOnlineToken(client.ApiBase());
 			ClearOnlineSessionState();
+#ifdef __ANDROID__
+			const std::string redirect_uri = "u8emu://online-auth";
+#else
 			auto loopback = std::make_unique<OnlineLoopbackServer>();
-			auto auth = client.StartAuthorization(loopback->RedirectUri());
+			const std::string redirect_uri = loopback->RedirectUri();
 			online_loopback = std::move(loopback);
-			online_auth = std::move(auth);
-			online_access_token.clear();
-			online_models.clear();
-			selected_online_model = -1;
-			online_authorization_pending = true;
-			online_status = "StartupUI.OnlineBrowserOpened"_lc;
-			if (SDL_OpenURL(online_auth.verification_uri.c_str()) != 0)
-				throw std::runtime_error(std::string("SDL_OpenURL failed: ") + SDL_GetError());
+#endif
+			const std::string api = online_api;
+			online_operation = OnlineOperation::StartLogin;
+			online_status = "StartupUI.OnlineStartingLogin"_lc;
+			online_task = std::async(std::launch::async, [api, redirect_uri] {
+				OnlineTaskResult result;
+				result.operation = OnlineOperation::StartLogin;
+				try { result.auth = OnlineModelClient{api}.StartAuthorization(redirect_uri); }
+				catch (const std::exception& error) { result.error = error.what(); }
+				return result;
+			});
 		}
 
-		void CompleteOnlineLogin() {
-			if (!online_authorization_pending) return;
-			try {
-				OnlineModelClient client{online_api};
-				if (client.PollAuthorization(online_auth.device_code, online_access_token)) {
-					online_authorization_pending = false;
-					if (online_loopback) {
-						online_loopback->Stop();
-						online_loopback.reset();
-					}
-					SaveOnlineToken(client.ApiBase(), online_access_token);
-					online_status = OnlineTokenPersistenceAvailable()
-						? std::string("StartupUI.OnlineLoginSuccess"_lc)
-						: std::string("StartupUI.OnlineLoginSessionOnly"_lc);
-					LoadOnlineModels();
+		void BeginCompleteOnlineLogin() {
+			if (OnlineBusy() || !online_authorization_pending) return;
+			const std::string api = online_api;
+			const std::string device_code = online_auth.device_code;
+			online_operation = OnlineOperation::PollAuthorization;
+			online_status = "StartupUI.OnlineCompletingLogin"_lc;
+			online_task = std::async(std::launch::async, [api, device_code] {
+				OnlineTaskResult result;
+				result.operation = OnlineOperation::PollAuthorization;
+				try { result.authorization_complete = OnlineModelClient{api}.PollAuthorization(device_code, result.access_token); }
+				catch (const std::exception& error) { result.error = error.what(); }
+				return result;
+			});
+		}
+
+#ifdef __ANDROID__
+		bool ConsumeOnlineAuthorizationCallback() {
+			auto* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
+			jobject activity = static_cast<jobject>(SDL_AndroidGetActivity());
+			if (!env || !activity) return false;
+			jclass activity_class = env->GetObjectClass(activity);
+			jmethodID method = activity_class
+				? env->GetMethodID(activity_class, "consumeOnlineAuthorizationCallback", "()Z")
+				: nullptr;
+			const bool result = method && env->CallBooleanMethod(activity, method) == JNI_TRUE;
+			if (env->ExceptionCheck()) env->ExceptionClear();
+			if (activity_class) env->DeleteLocalRef(activity_class);
+			env->DeleteLocalRef(activity);
+			return result;
+		}
+#endif
+
+		void PollOnlineTask() {
+			if (!OnlineBusy() || !online_task.valid()
+				|| online_task.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
+			OnlineTaskResult result = online_task.get();
+			online_operation = OnlineOperation::Idle;
+			if (result.authentication_error) {
+				InvalidateOnlineLogin();
+				return;
+			}
+			if (!result.error.empty()) {
+				if (result.operation == OnlineOperation::StartLogin && online_loopback) {
+					online_loopback->Stop();
+					online_loopback.reset();
 				}
-				else {
+				online_status = result.error;
+				return;
+			}
+			switch (result.operation) {
+			case OnlineOperation::StartLogin:
+				online_auth = std::move(result.auth);
+				online_authorization_pending = true;
+				online_status = "StartupUI.OnlineBrowserOpened"_lc;
+				if (SDL_OpenURL(online_auth.verification_uri.c_str()) != 0)
+					online_status = std::string("SDL_OpenURL failed: ") + SDL_GetError();
+				break;
+			case OnlineOperation::LoadModels:
+				online_models = std::move(result.models);
+				selected_online_model = online_models.empty() ? -1 : 0;
+				online_status = std::to_string(online_models.size()) + " " + std::string("StartupUI.OnlineModelsLoaded"_lc);
+				break;
+			case OnlineOperation::PollAuthorization:
+				if (!result.authorization_complete) {
 					online_status = "StartupUI.OnlineAuthorizationPending"_lc;
+					break;
 				}
+				online_access_token = std::move(result.access_token);
+				online_authorization_pending = false;
+				if (online_loopback) { online_loopback->Stop(); online_loopback.reset(); }
+				SaveOnlineToken(OnlineModelClient{online_api}.ApiBase(), online_access_token);
+				online_status = OnlineTokenPersistenceAvailable()
+					? std::string("StartupUI.OnlineLoginSuccess"_lc)
+					: std::string("StartupUI.OnlineLoginSessionOnly"_lc);
+				BeginLoadOnlineModels();
+				break;
+			case OnlineOperation::Logout:
+				ClearOnlineToken(OnlineModelClient{online_api}.ApiBase());
+				ClearOnlineSessionState();
+				online_status = "StartupUI.OnlineLoggedOut"_lc;
+				break;
+			case OnlineOperation::DownloadModel:
+				try {
+					selected_resources = LoadOnlineModelPackage(result.archive, result.model_id);
+					selected_path = "memory-online-" + result.model_id;
+					close_online_popup_requested = true;
+				}
+				catch (const std::exception& error) { online_status = error.what(); }
+				break;
+			default:
+				break;
 			}
-			catch (const std::exception& e) {
-				online_status = e.what();
+		}
+
+		void BeginDownloadOnlineModel() {
+			if (OnlineBusy()) return;
+			if (selected_online_model < 0 || selected_online_model >= static_cast<int>(online_models.size())
+				|| !OnlineModelVisible(online_models[selected_online_model])) {
+				online_status = "Select an online model first.";
+				return;
 			}
+			const std::string api = online_api;
+			const std::string token = online_access_token;
+			const std::string model_id = online_models[selected_online_model].id;
+			online_operation = OnlineOperation::DownloadModel;
+			online_status = "StartupUI.OnlineDownloading"_lc;
+			online_task = std::async(std::launch::async, [api, token, model_id] {
+				OnlineTaskResult result;
+				result.operation = OnlineOperation::DownloadModel;
+				result.model_id = model_id;
+				try { result.archive = OnlineModelClient{api}.DownloadModel(token, model_id); }
+				catch (const OnlineAuthenticationError& error) { result.authentication_error = true; result.error = error.what(); }
+				catch (const std::exception& error) { result.error = error.what(); }
+				return result;
+			});
 		}
 
 		bool OnlineModelVisible(const OnlineModelEntry& item) const {
@@ -1081,8 +1199,9 @@ namespace casioemu {
 			if (show_online_popup) {
 				ImGui::OpenPopup("StartupUI.OnlineModels"_lc);
 				show_online_popup = false;
-				RefreshOnlineSession();
+				BeginLoadOnlineModels();
 			}
+			PollOnlineTask();
 			const ImVec2 viewport_size = ImGui::GetMainViewport()->WorkSize;
 #ifdef __ANDROID__
 			const ImVec2 online_popup_size(viewport_size.x * 0.96f, viewport_size.y * 0.90f);
@@ -1098,9 +1217,17 @@ namespace casioemu {
 				ImGui::PopStyleColor();
 				return;
 			}
+			if (close_online_popup_requested) {
+				close_online_popup_requested = false;
+				ImGui::CloseCurrentPopup();
+			}
 
-			if (online_authorization_pending && online_loopback && online_loopback->Completed())
-				CompleteOnlineLogin();
+			if (online_authorization_pending && !OnlineBusy() && online_loopback && online_loopback->Completed())
+				BeginCompleteOnlineLogin();
+#ifdef __ANDROID__
+			if (online_authorization_pending && !OnlineBusy() && ConsumeOnlineAuthorizationCallback())
+				BeginCompleteOnlineLogin();
+#endif
 			if (online_authorization_pending && online_loopback) {
 				const auto loopback_error = online_loopback->Error();
 				if (!loopback_error.empty()) online_status = loopback_error;
@@ -1108,40 +1235,42 @@ namespace casioemu {
 
 			ImGui::TextUnformatted("StartupUI.OnlineApiAddress"_lc);
 			ImGui::SetNextItemWidth(-1);
-			if (!online_access_token.empty() || online_authorization_pending) ImGui::BeginDisabled();
+			if (!online_access_token.empty() || online_authorization_pending || OnlineBusy()) ImGui::BeginDisabled();
 			if (ImGui::InputText("##OnlineApiAddress", online_api, sizeof(online_api))) {
 				ClearOnlineSessionState();
 				SaveOnlineApiAddress();
 			}
-			if (!online_access_token.empty() || online_authorization_pending) ImGui::EndDisabled();
+			if (!online_access_token.empty() || online_authorization_pending || OnlineBusy()) ImGui::EndDisabled();
 
+			if (OnlineBusy()) ImGui::BeginDisabled();
 			if (online_access_token.empty() && !online_authorization_pending && ImGui::Button("StartupUI.OnlineLogin"_lc)) {
-				try {
-					StartOnlineLogin();
-				}
+				try { BeginOnlineLogin(); }
 				catch (const std::exception& e) { online_status = e.what(); }
 			}
 			if (online_authorization_pending) {
 				if (ImGui::Button("StartupUI.OnlineRelogin"_lc)) {
-					try { StartOnlineLogin(); }
+					try { BeginOnlineLogin(); }
 					catch (const std::exception& e) { online_status = e.what(); }
 				}
 			}
 			if (!online_access_token.empty() && ImGui::Button("Button.Refresh"_lc)) {
-				try {
-					OnlineModelClient client{online_api};
-					client.CheckStatus(online_access_token);
-					LoadOnlineModels();
-				}
-				catch (const OnlineAuthenticationError&) { InvalidateOnlineLogin(); }
-				catch (const std::exception& e) { online_status = e.what(); }
+				BeginLoadOnlineModels();
 			}
 			if (!online_access_token.empty()) {
 				ImGui::SameLine();
-				if (ImGui::Button("StartupUI.OnlineLogout"_lc)) LogoutOnline();
+				if (ImGui::Button("StartupUI.OnlineLogout"_lc)) BeginLogoutOnline();
 			}
+			if (OnlineBusy()) ImGui::EndDisabled();
 
-			if (!online_status.empty()) ImGui::TextWrapped("%s", online_status.c_str());
+			if (!online_status.empty()) {
+				if (OnlineBusy()) {
+					static constexpr char spinner[] = "|/-\\";
+					const int frame = static_cast<int>(ImGui::GetTime() * 8.0) & 3;
+					ImGui::Text("%c", spinner[frame]);
+					ImGui::SameLine();
+				}
+				ImGui::TextWrapped("%s", online_status.c_str());
+			}
 			ImGui::Separator();
 
 			ImGui::SetNextItemWidth(220.0f);
@@ -1180,25 +1309,11 @@ namespace casioemu {
 			}
 			ImGui::EndChild();
 
-			if (ImGui::Button("StartupUI.OnlineLaunch"_lc)) {
-				try {
-					if (selected_online_model < 0 || selected_online_model >= static_cast<int>(online_models.size()))
-						throw std::runtime_error("Select an online model first.");
-					const auto& item = online_models[selected_online_model];
-					if (!OnlineModelVisible(item))
-						throw std::runtime_error("Select an online model first.");
-					OnlineModelClient client{online_api};
-					online_status = "StartupUI.OnlineDownloading"_lc;
-					const auto archive = client.DownloadModel(online_access_token, item.id);
-					selected_resources = LoadOnlineModelPackage(archive, item.id);
-					selected_path = "memory-online-" + item.id;
-					ImGui::CloseCurrentPopup();
-				}
-				catch (const OnlineAuthenticationError&) { InvalidateOnlineLogin(); }
-				catch (const std::exception& e) { online_status = e.what(); }
-			}
+			if (OnlineBusy()) ImGui::BeginDisabled();
+			if (ImGui::Button("StartupUI.OnlineLaunch"_lc)) BeginDownloadOnlineModel();
 			ImGui::SameLine();
 			if (ImGui::Button("Button.Negative"_lc)) ImGui::CloseCurrentPopup();
+			if (OnlineBusy()) ImGui::EndDisabled();
 			ImGui::EndPopup();
 			ImGui::PopStyleColor();
 		}
