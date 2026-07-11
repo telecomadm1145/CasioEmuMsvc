@@ -23,6 +23,7 @@ namespace casioemu {
 
 		std::string RedirectUri() const;
 		bool Completed() const;
+		std::string ApprovalGrant() const;
 		std::string Error() const;
 		void Stop();
 
@@ -38,5 +39,7 @@ namespace casioemu {
 		std::atomic_bool completed_{false};
 		mutable std::mutex error_mutex_;
 		std::string error_;
+		mutable std::mutex grant_mutex_;
+		std::string approval_grant_;
 	};
 }

@@ -2,6 +2,7 @@
 
 #include <array>
 #include <chrono>
+#include <cctype>
 #include <random>
 #include <stdexcept>
 #include <string_view>
@@ -64,6 +65,22 @@ namespace casioemu {
 		bool RequestMatchesPath(std::string_view target, const std::string& path) {
 			if (target.size() < path.size() || target.substr(0, path.size()) != path) return false;
 			return target.size() == path.size() || target[path.size()] == '?';
+		}
+
+		std::string ApprovalGrantFromTarget(std::string_view target) {
+			const auto query = target.find('?');
+			if (query == std::string_view::npos) return {};
+			constexpr std::string_view name = "approval_grant=";
+			auto start = target.find(name, query + 1);
+			if (start == std::string_view::npos || (start > query + 1 && target[start - 1] != '&')) return {};
+			start += name.size();
+			const auto end = target.find('&', start);
+			const auto value = target.substr(start, end == std::string_view::npos ? target.size() - start : end - start);
+			if (value.empty() || value.size() > 4096) return {};
+			for (const char c : value) {
+				if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_' && c != '-' && c != '.') return {};
+			}
+			return std::string(value);
 		}
 
 		std::string BuildSuccessResponse() {
@@ -232,6 +249,11 @@ namespace casioemu {
 		return completed_.load();
 	}
 
+	std::string OnlineLoopbackServer::ApprovalGrant() const {
+		std::lock_guard<std::mutex> lock(grant_mutex_);
+		return approval_grant_;
+	}
+
 	std::string OnlineLoopbackServer::Error() const {
 		std::lock_guard<std::mutex> lock(error_mutex_);
 		return error_;
@@ -270,18 +292,36 @@ namespace casioemu {
 			const SOCKET client = accept(listen_socket_, reinterpret_cast<sockaddr*>(&remote), &remote_size);
 			if (client == INVALID_SOCKET) continue;
 			std::array<char, 2048> buffer{};
+			std::string request;
+			request.reserve(buffer.size());
+			while (request.size() < 8192 && request.find("\r\n\r\n") == std::string::npos) {
 #ifdef _WIN32
-			const int received = recv(client, buffer.data(), static_cast<int>(buffer.size()), 0);
+				const int received = recv(client, buffer.data(), static_cast<int>(buffer.size()), 0);
 #else
-			const auto received = recv(client, buffer.data(), buffer.size(), 0);
+				const auto received = recv(client, buffer.data(), buffer.size(), 0);
 #endif
-			const auto request = received > 0 ? std::string_view(buffer.data(), static_cast<std::size_t>(received)) : std::string_view{};
+				if (received <= 0) break;
+				request.append(buffer.data(), static_cast<std::size_t>(received));
+			}
 			const auto target = RequestTarget(request);
 			const bool matched = RequestMatchesPath(target, path_);
 			if (matched) {
-				const auto ok = BuildSuccessResponse();
-				SendAll(client, std::string_view(ok.data(), ok.size()));
-				completed_.store(true);
+				const auto grant = ApprovalGrantFromTarget(target);
+				if (!grant.empty()) {
+					{
+						std::lock_guard<std::mutex> lock(grant_mutex_);
+						approval_grant_ = grant;
+					}
+					const auto ok = BuildSuccessResponse();
+					SendAll(client, std::string_view(ok.data(), ok.size()));
+					completed_.store(true);
+				}
+				else {
+					static constexpr std::string_view bad_request =
+						"HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
+					SendAll(client, bad_request);
+					SetError("Authorization callback did not contain a valid approval grant.");
+				}
 			}
 			else {
 				static constexpr std::string_view not_found =

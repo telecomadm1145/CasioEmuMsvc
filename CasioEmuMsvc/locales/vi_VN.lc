@@ -421,7 +421,6 @@ StartupUI.OnlineRelogin=Sign in again
 StartupUI.OnlineBrowserOpened=Complete authorization in the browser.
 StartupUI.OnlineLoginSuccess=Authorization succeeded.
 StartupUI.OnlineLoginExpired=Online login expired or permissions changed. Please sign in again.
-StartupUI.OnlineAuthorizationPending=Waiting for browser authorization.
 StartupUI.OnlineModelsLoaded=models loaded.
 StartupUI.OnlineLaunch=Launch
 StartupUI.OnlineDownloading=Downloading and validating model...

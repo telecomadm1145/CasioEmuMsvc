@@ -277,22 +277,20 @@ namespace casioemu {
 		const auto value = ParseJson(response);
 		if (value.value("device_id", "") != identity_.device_id)
 			throw std::runtime_error("Authorization response does not match this device.");
-		return {value.at("device_code").get<std::string>(), value.at("verification_uri").get<std::string>(),
-			value.value("interval", 2)};
+		return {value.at("device_code").get<std::string>(), value.at("verification_uri").get<std::string>()};
 	}
 
-	bool OnlineModelClient::PollAuthorization(const std::string& device_code, const std::string& approval_grant, std::string& access_token) const {
+	void OnlineModelClient::PollAuthorization(const std::string& device_code, const std::string& approval_grant, std::string& access_token) const {
+		if (approval_grant.empty()) throw std::runtime_error("Authorization callback did not contain an approval grant.");
 		json request{{"action", "auth-poll"}, {"device_code", device_code}};
-		if (!approval_grant.empty()) request["approval_grant"] = approval_grant;
+		request["approval_grant"] = approval_grant;
 		const auto body = request.dump();
 		const auto response = HttpRequest(api_base_ + "/emu/api", body, {}, &identity_, true);
-		if (response.status == 428) return false;
 		RequireSuccess(response, "Authorization poll");
 		const auto value = ParseJson(response);
 		if (value.value("device_id", "") != identity_.device_id)
 			throw std::runtime_error("Authorization response does not match this device.");
 		access_token = value.at("access_token").get<std::string>();
-		return true;
 	}
 
 	void OnlineModelClient::RevokeDevice(const std::string& access_token) const {

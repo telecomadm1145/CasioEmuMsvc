@@ -785,7 +785,6 @@ namespace casioemu {
 		std::unique_ptr<OnlineLoopbackServer> online_loopback;
 		std::string online_access_token;
 		bool online_authorization_pending = false;
-		Uint64 online_next_authorization_poll = 0;
 		Uint64 online_authorization_deadline = 0;
 		Uint64 online_browser_open_at = 0;
 		std::string online_browser_uri;
@@ -807,7 +806,6 @@ namespace casioemu {
 			std::string model_id;
 			std::string error;
 			bool authentication_error = false;
-			bool authorization_complete = false;
 		};
 		OnlineOperation online_operation = OnlineOperation::Idle;
 		std::future<OnlineTaskResult> online_task;
@@ -1026,7 +1024,6 @@ namespace casioemu {
 			}
 			online_access_token.clear();
 			online_authorization_pending = false;
-			online_next_authorization_poll = 0;
 			online_authorization_deadline = 0;
 			online_browser_open_at = 0;
 			online_browser_uri.clear();
@@ -1092,7 +1089,7 @@ namespace casioemu {
 			online_task = std::async(std::launch::async, [api, device_code, approval_grant] {
 				OnlineTaskResult result;
 				result.operation = OnlineOperation::PollAuthorization;
-				try { result.authorization_complete = OnlineModelClient{api}.PollAuthorization(device_code, approval_grant, result.access_token); }
+				try { OnlineModelClient{api}.PollAuthorization(device_code, approval_grant, result.access_token); }
 				catch (const std::exception& error) { result.error = error.what(); }
 				return result;
 			});
@@ -1138,7 +1135,6 @@ namespace casioemu {
 				}
 				if (result.operation == OnlineOperation::PollAuthorization) {
 					online_authorization_pending = false;
-					online_next_authorization_poll = 0;
 				}
 				online_status = result.error;
 				return;
@@ -1158,15 +1154,8 @@ namespace casioemu {
 				online_status = std::to_string(online_models.size()) + " " + std::string("StartupUI.OnlineModelsLoaded"_lc);
 				break;
 			case OnlineOperation::PollAuthorization:
-				if (!result.authorization_complete) {
-					online_status = "StartupUI.OnlineAuthorizationPending"_lc;
-					online_next_authorization_poll = SDL_GetTicks64()
-						+ static_cast<Uint64>((std::max)(1, online_auth.interval)) * 1000;
-					break;
-				}
 				online_access_token = std::move(result.access_token);
 				online_authorization_pending = false;
-				online_next_authorization_poll = 0;
 				online_authorization_deadline = 0;
 				if (online_loopback) { online_loopback->Stop(); online_loopback.reset(); }
 				SaveOnlineToken(OnlineModelClient{online_api}.ApiBase(), online_access_token);
@@ -1241,7 +1230,6 @@ namespace casioemu {
 			if (online_authorization_pending && online_authorization_deadline
 				&& online_now >= online_authorization_deadline) {
 				online_authorization_pending = false;
-				online_next_authorization_poll = 0;
 				if (online_loopback) { online_loopback->Stop(); online_loopback.reset(); }
 				online_status = "StartupUI.OnlineAuthorizationExpired"_lc;
 			}
@@ -1265,8 +1253,10 @@ namespace casioemu {
 				ImGui::CloseCurrentPopup();
 			}
 
-			if (online_authorization_pending && !OnlineBusy() && online_loopback && online_loopback->Completed())
+			if (online_authorization_pending && !OnlineBusy() && online_loopback && online_loopback->Completed()) {
+				online_approval_grant = online_loopback->ApprovalGrant();
 				BeginCompleteOnlineLogin();
+			}
 #ifdef __ANDROID__
 			if (online_authorization_pending && !OnlineBusy()) {
 				if (auto grant = ConsumeOnlineAuthorizationCallback()) {
@@ -1275,11 +1265,6 @@ namespace casioemu {
 				}
 			}
 #endif
-			if (online_authorization_pending && !OnlineBusy() && online_next_authorization_poll
-				&& online_now >= online_next_authorization_poll) {
-				online_next_authorization_poll = 0;
-				BeginCompleteOnlineLogin();
-			}
 			if (online_authorization_pending && online_loopback) {
 				const auto loopback_error = online_loopback->Error();
 				if (!loopback_error.empty()) online_status = loopback_error;

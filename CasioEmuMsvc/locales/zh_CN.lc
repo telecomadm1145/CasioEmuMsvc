@@ -420,7 +420,6 @@ StartupUI.OnlineBrowserOpened=请在浏览器中完成授权。
 StartupUI.OnlineLoginSuccess=授权成功。
 StartupUI.OnlineLoginSessionOnly=授权成功。当前系统没有可用的安全凭据存储，登录仅在本次运行中有效。
 StartupUI.OnlineLoginExpired=登录已过期或权限已变更，请重新登录。
-StartupUI.OnlineAuthorizationPending=等待浏览器授权。
 StartupUI.OnlineModelsLoaded=个型号已加载。
 StartupUI.OnlineLaunch=启动
 StartupUI.OnlineDownloading=正在下载并验证型号...
