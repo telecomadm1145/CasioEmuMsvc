@@ -13,6 +13,7 @@ import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 import android.provider.MediaStore;
 import android.content.pm.PackageManager;
+import android.content.pm.PackageInfo;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.ShortcutInfo;
@@ -77,6 +78,7 @@ public class Game extends SDLActivity {
     private static final long BACKGROUND_TIMEOUT_MS = 5 * 60 * 1000;
     private static final long NOTIFICATION_POST_DELAY_MS = 1500;
     private static final int MAX_ONLINE_RESPONSE_SIZE = 40 * 1024 * 1024;
+    private static final String ASSET_VERSION_FILE = "locales_asset_version.txt";
     private static final String ONLINE_KEY_ALIAS = "CasioEmuMsvcOnlineDeviceKey";
     private static final String ONLINE_PREFS = "casioemu_online_device";
 
@@ -383,21 +385,60 @@ public class Game extends SDLActivity {
         }
     }
     
+    private void copyAsset(String assetName, File outputFile) throws IOException {
+        File parent = outputFile.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
+        try (InputStream in = getAssets().open(assetName);
+             FileOutputStream out = new FileOutputStream(outputFile)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+        }
+    }
+
+    private String getAssetVersionTag() {
+        try {
+            PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+            long versionCode = Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode;
+            return versionCode + ":" + info.lastUpdateTime;
+        } catch (Exception e) {
+            return String.valueOf(System.currentTimeMillis());
+        }
+    }
+
+    private String readTextFile(File file) throws IOException {
+        try (InputStream in = new java.io.FileInputStream(file);
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[1024];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+            return out.toString(StandardCharsets.UTF_8.name());
+        }
+    }
+
+    private void writeTextFile(File file, String value) throws IOException {
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
+        try (FileOutputStream out = new FileOutputStream(file)) {
+            out.write(value.getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
     private void extractAssets() {
         File externalDir = getExternalFilesDir(null);
         if (externalDir == null) return;
         try {
             File romsDb = new File(externalDir, "roms.db");
             if (!romsDb.exists()) {
-                InputStream in = getAssets().open("roms.db");
-                FileOutputStream out = new FileOutputStream(romsDb);
-                byte[] buffer = new byte[8192];
-                int read;
-                while ((read = in.read(buffer)) != -1) {
-                    out.write(buffer, 0, read);
-                }
-                in.close();
-                out.close();
+                copyAsset("roms.db", romsDb);
             }
         } catch (Exception e) {
             Log.e(TAG, "Failed to extract roms.db: " + e.getMessage());
@@ -407,22 +448,38 @@ public class Game extends SDLActivity {
             if (!localesDir.exists()) {
                 localesDir.mkdirs();
             }
+            File versionFile = new File(externalDir, ASSET_VERSION_FILE);
+            String assetVersion = getAssetVersionTag();
+            boolean refreshLocales = true;
+            if (versionFile.exists()) {
+                try {
+                    refreshLocales = !assetVersion.equals(readTextFile(versionFile));
+                } catch (IOException ignored) {
+                    refreshLocales = true;
+                }
+            }
             String[] locales = getAssets().list("locales");
             if (locales != null) {
+                LinkedHashSet<String> packagedLocales = new LinkedHashSet<>();
                 for (String locale : locales) {
+                    packagedLocales.add(locale);
                     File localeFile = new File(localesDir, locale);
-                    if (!localeFile.exists()) {
-                        InputStream in = getAssets().open("locales/" + locale);
-                        FileOutputStream out = new FileOutputStream(localeFile);
-                        byte[] buffer = new byte[8192];
-                        int read;
-                        while ((read = in.read(buffer)) != -1) {
-                            out.write(buffer, 0, read);
-                        }
-                        in.close();
-                        out.close();
+                    if (refreshLocales || !localeFile.exists()) {
+                        copyAsset("locales/" + locale, localeFile);
                     }
                 }
+                if (refreshLocales) {
+                    File[] existingLocales = localesDir.listFiles();
+                    if (existingLocales != null) {
+                        for (File localeFile : existingLocales) {
+                            String name = localeFile.getName();
+                            if (localeFile.isFile() && name.endsWith(".lc") && !packagedLocales.contains(name)) {
+                                localeFile.delete();
+                            }
+                        }
+                    }
+                }
+                writeTextFile(versionFile, assetVersion);
             }
         } catch (Exception e) {
             Log.e(TAG, "Failed to extract locales: " + e.getMessage());
