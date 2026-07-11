@@ -41,7 +41,7 @@ namespace casioemu {
 
 #ifdef __ANDROID__
 		jclass AndroidGameClass(JNIEnv* env) {
-			jobject activity = SDL_AndroidGetActivity();
+			jobject activity = static_cast<jobject>(SDL_AndroidGetActivity());
 			if (!activity) return nullptr;
 			jclass game = env->GetObjectClass(activity);
 			env->DeleteLocalRef(activity);
