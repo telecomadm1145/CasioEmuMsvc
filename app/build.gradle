@@ -11,11 +11,13 @@ else {
     apply plugin: 'com.android.library'
 }
 
-tasks.register('copyLocaleAssets', Copy) {
+def generatedLocaleAssetsRoot = layout.buildDirectory.dir('generated/assets/copyLocaleAssets')
+def copyLocaleAssetsTask = tasks.register('copyLocaleAssets', Sync) {
     from(rootProject.file('CasioEmuMsvc/locales')) {
         include '*.lc'
+        into 'locales'
     }
-    into(layout.projectDirectory.dir('src/main/assets/locales'))
+    into(generatedLocaleAssetsRoot)
 }
 
 android {
@@ -76,6 +78,8 @@ android {
         sourceCompatibility JavaVersion.VERSION_21
         targetCompatibility JavaVersion.VERSION_21
     }
+
+    sourceSets.main.assets.srcDir(files(generatedLocaleAssetsRoot).builtBy(copyLocaleAssetsTask))
     
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
@@ -86,7 +90,6 @@ android {
             outputFileName = "u8emulator-${variant.name}-${abiName}-v${variant.versionName}.apk"
         }
         variant.mergeAssetsProvider.configure {
-            dependsOn("copyLocaleAssets")
             dependsOn("externalNativeBuild${variant.name.capitalize()}")
         }
     }
