@@ -33,7 +33,10 @@ namespace casioemu {
 
 		std::uint32_t Read32(const std::vector<std::uint8_t>& data, size_t offset) {
 			if (offset + 4 > data.size()) throw std::runtime_error("Truncated ZIP archive.");
-			return static_cast<std::uint32_t>(data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24));
+			return static_cast<std::uint32_t>(data[offset]) |
+				(static_cast<std::uint32_t>(data[offset + 1]) << 8) |
+				(static_cast<std::uint32_t>(data[offset + 2]) << 16) |
+				(static_cast<std::uint32_t>(data[offset + 3]) << 24);
 		}
 
 		struct ZipEntry {
@@ -57,7 +60,8 @@ namespace casioemu {
 			const auto entry_count = Read16(archive, eocd + 10);
 			const auto central_size = Read32(archive, eocd + 12);
 			const auto central_offset = Read32(archive, eocd + 16);
-			if (entry_count == 0xffff || central_offset + central_size > archive.size()) throw std::runtime_error("ZIP64 or invalid ZIP archives are not supported.");
+			if (entry_count == 0xffff || static_cast<std::uint64_t>(central_offset) + central_size > archive.size())
+				throw std::runtime_error("ZIP64 or invalid ZIP archives are not supported.");
 
 			std::vector<ZipEntry> result;
 			size_t offset = central_offset;
@@ -94,11 +98,12 @@ namespace casioemu {
 				output.assign(archive.begin() + data_offset, archive.begin() + data_offset + entry.compressed_size);
 			}
 			else if (entry.method == 8) {
-				size_t output_size = 0;
-				void* buffer = tinfl_decompress_mem_to_heap(archive.data() + data_offset, entry.compressed_size, &output_size, 0);
-				if (!buffer) throw std::runtime_error("Failed to inflate ZIP entry.");
-				output.assign(static_cast<std::uint8_t*>(buffer), static_cast<std::uint8_t*>(buffer) + output_size);
-				mz_free(buffer);
+				output.resize(entry.uncompressed_size);
+				const size_t output_size = tinfl_decompress_mem_to_mem(output.data(), output.size(),
+					archive.data() + data_offset, entry.compressed_size, 0);
+				if (output_size == TINFL_DECOMPRESS_MEM_TO_MEM_FAILED)
+					throw std::runtime_error("Failed to inflate ZIP entry.");
+				output.resize(output_size);
 			}
 			else throw std::runtime_error("Unsupported ZIP compression method.");
 			if (output.size() != entry.uncompressed_size || mz_crc32(MZ_CRC32_INIT, output.data(), output.size()) != entry.crc)

@@ -8,6 +8,8 @@ on:
 env:
   SOLUTION_FILE_PATH: .
   BUILD_CONFIGURATION: Release
+  CASIOEMU_ONLINE_CLIENT_KEY_ID: ${{ secrets.CASIOEMU_ONLINE_CLIENT_KEY_ID }}
+  CASIOEMU_ONLINE_CLIENT_KEY_B64: ${{ secrets.CASIOEMU_ONLINE_CLIENT_KEY_B64 }}
 
 permissions:
   contents: write
@@ -20,27 +22,24 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4.1.7
 
-    - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v2
-
-    - name: Restore NuGet packages
+    - name: Configure and build x64
       working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: nuget restore ${{env.SOLUTION_FILE_PATH}}
-
-    - name: Build x64
-      working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x64 ${{env.SOLUTION_FILE_PATH}}
+      run: |
+        cmake -S . -B build-x64 -A x64 -DBUILD_EXECUTABLE=ON
+        cmake --build build-x64 --config ${{env.BUILD_CONFIGURATION}} --parallel
       
-    - name: Build x86
+    - name: Configure and build x86
       working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x86 ${{env.SOLUTION_FILE_PATH}}
+      run: |
+        cmake -S . -B build-x86 -A Win32 -DBUILD_EXECUTABLE=ON
+        cmake --build build-x86 --config ${{env.BUILD_CONFIGURATION}} --parallel
 
     - name: Compress x64 Output
-      run: Compress-Archive -Path .\x64\Release\ -DestinationPath Release-x64.zip
+      run: Compress-Archive -Path .\build-x64\CasioEmuMsvc\Release\ -DestinationPath Release-x64.zip
       shell: pwsh
 
     - name: Compress x86 Output
-      run: Compress-Archive -Path .\Release\ -DestinationPath Release-x86.zip
+      run: Compress-Archive -Path .\build-x86\CasioEmuMsvc\Release\ -DestinationPath Release-x86.zip
       shell: pwsh
 
     - name: Create Release

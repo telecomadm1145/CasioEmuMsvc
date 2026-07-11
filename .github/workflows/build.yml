@@ -21,6 +21,8 @@ on:
 
 env:
   BUILD_CONFIGURATION: Release
+  CASIOEMU_ONLINE_CLIENT_KEY_ID: ${{ secrets.CASIOEMU_ONLINE_CLIENT_KEY_ID }}
+  CASIOEMU_ONLINE_CLIENT_KEY_B64: ${{ secrets.CASIOEMU_ONLINE_CLIENT_KEY_B64 }}
 
 permissions:
   contents: write

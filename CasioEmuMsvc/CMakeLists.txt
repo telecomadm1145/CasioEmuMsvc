@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.10...3.22)
 
 project(CasioEmuMsvc)
+include(FetchContent)
 #set(CMAKE_MESSAGE_LOG_LEVEL NOTICE)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -27,6 +28,85 @@ set(TINYXML2_DIR "${THIRD_PARTY_DIR}/tinyxml2")
 set(TEMP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/temp")
 set(GUI_FONT_SUBSET "${TEMP_DIR}/generated/fonts/CasioEmuGuiCJKSubset.otf")
 file(GLOB GUI_FONT_LOCALE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/locales/*.lc")
+
+if(NOT DEFINED CASIOEMU_ONLINE_CLIENT_KEY_ID AND DEFINED ENV{CASIOEMU_ONLINE_CLIENT_KEY_ID})
+    set(CASIOEMU_ONLINE_CLIENT_KEY_ID "$ENV{CASIOEMU_ONLINE_CLIENT_KEY_ID}")
+endif()
+if(NOT DEFINED CASIOEMU_ONLINE_CLIENT_KEY_B64 AND DEFINED ENV{CASIOEMU_ONLINE_CLIENT_KEY_B64})
+    set(CASIOEMU_ONLINE_CLIENT_KEY_B64 "$ENV{CASIOEMU_ONLINE_CLIENT_KEY_B64}")
+endif()
+set(CASIOEMU_ONLINE_CLIENT_KEY_ID "${CASIOEMU_ONLINE_CLIENT_KEY_ID}" CACHE STRING "Online API build key id")
+set(CASIOEMU_ONLINE_CLIENT_KEY_B64 "${CASIOEMU_ONLINE_CLIENT_KEY_B64}" CACHE STRING "Online API build key in base64url form")
+if((CASIOEMU_ONLINE_CLIENT_KEY_ID AND NOT CASIOEMU_ONLINE_CLIENT_KEY_B64) OR
+   (CASIOEMU_ONLINE_CLIENT_KEY_B64 AND NOT CASIOEMU_ONLINE_CLIENT_KEY_ID))
+    message(FATAL_ERROR "Both CASIOEMU_ONLINE_CLIENT_KEY_ID and CASIOEMU_ONLINE_CLIENT_KEY_B64 must be configured together")
+endif()
+if(CASIOEMU_ONLINE_CLIENT_KEY_ID)
+    string(LENGTH "${CASIOEMU_ONLINE_CLIENT_KEY_ID}" CASIOEMU_ONLINE_CLIENT_KEY_ID_LENGTH)
+    if(CASIOEMU_ONLINE_CLIENT_KEY_ID_LENGTH GREATER 64 OR NOT CASIOEMU_ONLINE_CLIENT_KEY_ID MATCHES "^[A-Za-z0-9._-]+$")
+        message(FATAL_ERROR "CASIOEMU_ONLINE_CLIENT_KEY_ID must be 1-64 characters using only letters, digits, dot, underscore, or hyphen")
+    endif()
+endif()
+if(CASIOEMU_ONLINE_CLIENT_KEY_B64)
+    string(LENGTH "${CASIOEMU_ONLINE_CLIENT_KEY_B64}" CASIOEMU_ONLINE_CLIENT_KEY_LENGTH)
+    if(CASIOEMU_ONLINE_CLIENT_KEY_LENGTH LESS 43 OR NOT CASIOEMU_ONLINE_CLIENT_KEY_B64 MATCHES "^[A-Za-z0-9_-]+$")
+        message(FATAL_ERROR "CASIOEMU_ONLINE_CLIENT_KEY_B64 must be an unpadded base64url value containing at least 32 bytes")
+    endif()
+endif()
+string(TIMESTAMP CASIOEMU_ONLINE_BUILD_TIMESTAMP "%Y%m%dT%H%M%SZ" UTC)
+if(WIN32)
+    set(CASIOEMU_ONLINE_BUILD_OS "Windows")
+elseif(APPLE)
+    set(CASIOEMU_ONLINE_BUILD_OS "macOS")
+elseif(ANDROID)
+    set(CASIOEMU_ONLINE_BUILD_OS "Android")
+else()
+    set(CASIOEMU_ONLINE_BUILD_OS "Linux")
+endif()
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(CASIOEMU_ONLINE_BUILD_ARCH "x86_64")
+else()
+    set(CASIOEMU_ONLINE_BUILD_ARCH "x86")
+endif()
+if(ANDROID_ABI)
+    set(CASIOEMU_ONLINE_BUILD_ARCH "${ANDROID_ABI}")
+elseif(CMAKE_OSX_ARCHITECTURES MATCHES "arm64" AND CMAKE_OSX_ARCHITECTURES MATCHES "x86_64")
+    set(CASIOEMU_ONLINE_BUILD_ARCH "universal")
+elseif(CMAKE_OSX_ARCHITECTURES MATCHES "arm64")
+    set(CASIOEMU_ONLINE_BUILD_ARCH "arm64")
+endif()
+set(ONLINE_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+file(MAKE_DIRECTORY "${ONLINE_GENERATED_DIR}")
+execute_process(COMMAND git describe --tags --exact-match HEAD WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    OUTPUT_VARIABLE CASIOEMU_GIT_REF OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(NOT CASIOEMU_GIT_REF)
+    execute_process(COMMAND git branch --show-current WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE CASIOEMU_GIT_REF OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+endif()
+execute_process(COMMAND git rev-parse --short HEAD WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    OUTPUT_VARIABLE CASIOEMU_GIT_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+execute_process(COMMAND git log -1 --format=%cd --date=format:%Y-%m-%d WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    OUTPUT_VARIABLE CASIOEMU_GIT_COMMIT_DATE OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(NOT CASIOEMU_GIT_REF)
+    set(CASIOEMU_GIT_REF "detached")
+endif()
+string(REGEX REPLACE "[^A-Za-z0-9._-]" "_" CASIOEMU_GIT_REF "${CASIOEMU_GIT_REF}")
+if(NOT CASIOEMU_GIT_COMMIT)
+    set(CASIOEMU_GIT_COMMIT "0000000")
+endif()
+if(NOT CASIOEMU_GIT_COMMIT_DATE)
+    set(CASIOEMU_GIT_COMMIT_DATE "1970-01-01")
+endif()
+configure_file(
+    "${SOURCE_DIR}/StartupUi/OnlineBuildConfig.h.in"
+    "${ONLINE_GENERATED_DIR}/OnlineBuildConfig.h"
+    @ONLY
+)
+configure_file(
+    "${SOURCE_DIR}/git_info.h.in"
+    "${ONLINE_GENERATED_DIR}/git_info.h"
+    @ONLY
+)
 
 set(ASMJIT_STATIC ON CACHE BOOL "Build AsmJit as a static library")
 set(ASMJIT_BUILD_TEST OFF CACHE BOOL "Disable AsmJit tests")
@@ -233,6 +313,23 @@ endif()
 
 # Apply include dirs to target (scoped) to reduce global includes and compiler parsing
 target_include_directories(${TARGET_NAME} PRIVATE ${PROJECT_INCLUDE_DIRS})
+target_include_directories(${TARGET_NAME} BEFORE PRIVATE "${ONLINE_GENERATED_DIR}")
+
+if(NOT CASIOEMU_WEB)
+    FetchContent_Declare(monocypher
+        GIT_REPOSITORY https://github.com/LoupVaillant/Monocypher.git
+        GIT_TAG ab2b16dd619ad5f6979a4fbe69cfa324a6fcc35f
+    )
+    FetchContent_MakeAvailable(monocypher)
+    target_sources(${TARGET_NAME} PRIVATE
+        "${monocypher_SOURCE_DIR}/src/monocypher.c"
+        "${monocypher_SOURCE_DIR}/src/optional/monocypher-ed25519.c"
+    )
+    target_include_directories(${TARGET_NAME} PRIVATE
+        "${monocypher_SOURCE_DIR}/src"
+        "${monocypher_SOURCE_DIR}/src/optional"
+    )
+endif()
 
 if(CASIOEMU_WEB)
     target_compile_definitions(${TARGET_NAME} PRIVATE DISABLE_SENTRY ASMJIT_NO_JIT CASIOEMU_WEB)
@@ -365,6 +462,7 @@ elseif(BUILD_EXECUTABLE)
             dbghelp
             imm32
             crypt32
+            bcrypt
             ws2_32
         )
         set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")

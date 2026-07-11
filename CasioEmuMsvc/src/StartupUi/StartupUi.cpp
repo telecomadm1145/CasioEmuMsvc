@@ -8,6 +8,7 @@
 #include "OnlineLoopbackServer.h"
 #include "OnlineModelClient.h"
 #include "OnlineModelPackage.h"
+#include <OnlineBuildConfig.h>
 #include "3rd_licenses.h"
 #include "Binary.h"
 #include "Config.hpp"
@@ -792,8 +793,7 @@ namespace casioemu {
 			if (api_settings) {
 				std::string value;
 				std::getline(api_settings, value);
-				if (!value.empty())
-					std::snprintf(online_api, sizeof(online_api), "%s", value.c_str());
+				if (!value.empty()) std::snprintf(online_api, sizeof(online_api), "%s", value.c_str());
 			}
 			try {
 				OnlineModelClient client{online_api};
@@ -1003,6 +1003,7 @@ namespace casioemu {
 
 		void LogoutOnline() {
 			try {
+				if (!online_access_token.empty()) OnlineModelClient{online_api}.RevokeDevice(online_access_token);
 				ClearOnlineToken(OnlineModelClient{online_api}.ApiBase());
 			}
 			catch (...) {

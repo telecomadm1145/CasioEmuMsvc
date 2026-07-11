@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "OnlineDeviceIdentity.h"
+
 namespace casioemu {
 	class OnlineAuthenticationError : public std::runtime_error {
 	public:
@@ -31,16 +33,18 @@ namespace casioemu {
 		OnlineAuthRequest StartAuthorization(const std::string& redirect_uri = {}) const;
 		bool PollAuthorization(const std::string& device_code, std::string& access_token) const;
 		int CheckStatus(const std::string& access_token) const;
+		void RevokeDevice(const std::string& access_token) const;
 		std::vector<OnlineModelEntry> ListModels(const std::string& access_token) const;
 		std::vector<std::uint8_t> DownloadModel(const std::string& access_token, const std::string& model_id) const;
 		const std::string& ApiBase() const { return api_base_; }
 
 	private:
 		std::string api_base_;
+		OnlineDeviceIdentity identity_;
 	};
 
 	void SaveOnlineToken(const std::string& api_base, const std::string& token);
 	std::string LoadOnlineToken(const std::string& api_base);
-	void ClearOnlineToken(const std::string& api_base = {});
+	void ClearOnlineToken(const std::string& api_base);
 	bool OnlineTokenPersistenceAvailable();
 }

@@ -10,6 +10,8 @@ on:
 env:
   SOLUTION_FILE_PATH: .
   BUILD_CONFIGURATION: Release
+  CASIOEMU_ONLINE_CLIENT_KEY_ID: ${{ secrets.CASIOEMU_ONLINE_CLIENT_KEY_ID }}
+  CASIOEMU_ONLINE_CLIENT_KEY_B64: ${{ secrets.CASIOEMU_ONLINE_CLIENT_KEY_B64 }}
 
 permissions:
   contents: read
@@ -22,28 +24,28 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4.1.7
 
-    - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v2
-
-    - name: Restore NuGet packages
-      run: nuget restore ${{env.SOLUTION_FILE_PATH}}
-
-    - name: Build Solution
+    - name: Configure and build x64
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: |
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x64 ${{env.SOLUTION_FILE_PATH}}
-        msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x86 ${{env.SOLUTION_FILE_PATH}}
+        cmake -S . -B build-x64 -A x64 -DBUILD_EXECUTABLE=ON
+        cmake --build build-x64 --config ${{env.BUILD_CONFIGURATION}} --parallel
+
+    - name: Configure and build x86
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: |
+        cmake -S . -B build-x86 -A Win32 -DBUILD_EXECUTABLE=ON
+        cmake --build build-x86 --config ${{env.BUILD_CONFIGURATION}} --parallel
 
     - name: Upload x86 Build Artifact
       uses: actions/upload-artifact@v4.4.0
       with:
         name: Release-x86
-        path: Win32\${{env.BUILD_CONFIGURATION}}
+        path: build-x86\CasioEmuMsvc\${{env.BUILD_CONFIGURATION}}
         if-no-files-found: error
 
     - name: Upload x64 Build Artifact
       uses: actions/upload-artifact@v4.4.0
       with:
         name: Release-x64
-        path: x64\${{env.BUILD_CONFIGURATION}}
+        path: build-x64\CasioEmuMsvc\${{env.BUILD_CONFIGURATION}}
         if-no-files-found: error

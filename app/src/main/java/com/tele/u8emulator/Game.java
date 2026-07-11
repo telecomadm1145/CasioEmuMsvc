@@ -44,13 +44,26 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipEntry;
 import java.util.LinkedHashSet;
 import java.util.Enumeration;
+import java.security.KeyStore;
+import java.security.MessageDigest;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import android.util.Base64;
 import io.sentry.Sentry;
 public class Game extends SDLActivity {
     private static final String TAG = "Game";
@@ -63,6 +76,154 @@ public class Game extends SDLActivity {
     private static final int PERMISSION_NOTIFICATION = 102;
     private static final long BACKGROUND_TIMEOUT_MS = 5 * 60 * 1000;
     private static final long NOTIFICATION_POST_DELAY_MS = 1500;
+    private static final int MAX_ONLINE_RESPONSE_SIZE = 40 * 1024 * 1024;
+    private static final String ONLINE_KEY_ALIAS = "CasioEmuMsvcOnlineDeviceKey";
+    private static final String ONLINE_PREFS = "casioemu_online_device";
+
+    private static String onlineIdentityPreferenceKey(String api) throws Exception {
+        byte[] digest = MessageDigest.getInstance("SHA-256").digest(api.getBytes("UTF-8"));
+        return Base64.encodeToString(digest, Base64.NO_WRAP | Base64.URL_SAFE);
+    }
+
+    private static String onlineTokenPreferenceKey(String api) throws Exception {
+        return "token_" + onlineIdentityPreferenceKey(api);
+    }
+
+    private static SecretKey onlineIdentityKey() throws Exception {
+        KeyStore store = KeyStore.getInstance("AndroidKeyStore");
+        store.load(null);
+        if (store.containsAlias(ONLINE_KEY_ALIAS)) {
+            return ((KeyStore.SecretKeyEntry) store.getEntry(ONLINE_KEY_ALIAS, null)).getSecretKey();
+        }
+        KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+        generator.init(new KeyGenParameterSpec.Builder(ONLINE_KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                .build());
+        return generator.generateKey();
+    }
+
+    private static byte[] loadOnlineSecret(String preferenceKey) throws Exception {
+        Activity activity = SDLActivity.mSingleton;
+        String encoded = activity.getSharedPreferences(ONLINE_PREFS, Context.MODE_PRIVATE)
+                .getString(preferenceKey, null);
+        if (encoded == null) return null;
+        byte[] stored = Base64.decode(encoded, Base64.NO_WRAP);
+        if (stored.length < 13) return null;
+        byte[] iv = new byte[12];
+        System.arraycopy(stored, 0, iv, 0, iv.length);
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, onlineIdentityKey(), new GCMParameterSpec(128, iv));
+        cipher.updateAAD(preferenceKey.getBytes(StandardCharsets.UTF_8));
+        return cipher.doFinal(stored, iv.length, stored.length - iv.length);
+    }
+
+    private static boolean saveOnlineSecret(String preferenceKey, byte[] value) throws Exception {
+        Activity activity = SDLActivity.mSingleton;
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, onlineIdentityKey());
+        cipher.updateAAD(preferenceKey.getBytes(StandardCharsets.UTF_8));
+        byte[] iv = cipher.getIV();
+        byte[] encrypted = cipher.doFinal(value);
+        byte[] stored = new byte[iv.length + encrypted.length];
+        System.arraycopy(iv, 0, stored, 0, iv.length);
+        System.arraycopy(encrypted, 0, stored, iv.length, encrypted.length);
+        return activity.getSharedPreferences(ONLINE_PREFS, Context.MODE_PRIVATE).edit()
+                .putString(preferenceKey, Base64.encodeToString(stored, Base64.NO_WRAP))
+                .commit();
+    }
+
+    public static byte[] loadOnlineDeviceIdentity(String api) {
+        try {
+            return loadOnlineSecret(onlineIdentityPreferenceKey(api));
+        } catch (Exception error) {
+            Log.e(TAG, "Failed to load online device identity", error);
+            return null;
+        }
+    }
+
+    public static boolean saveOnlineDeviceIdentity(String api, byte[] value) {
+        try {
+            return saveOnlineSecret(onlineIdentityPreferenceKey(api), value);
+        } catch (Exception error) {
+            Log.e(TAG, "Failed to save online device identity", error);
+            return false;
+        }
+    }
+
+    public static String loadOnlineToken(String api) {
+        try {
+            byte[] value = loadOnlineSecret(onlineTokenPreferenceKey(api));
+            return value == null ? null : new String(value, StandardCharsets.UTF_8);
+        } catch (Exception error) {
+            Log.e(TAG, "Failed to load online token", error);
+            return null;
+        }
+    }
+
+    public static boolean saveOnlineToken(String api, String token) {
+        try {
+            return saveOnlineSecret(onlineTokenPreferenceKey(api), token.getBytes(StandardCharsets.UTF_8));
+        } catch (Exception error) {
+            Log.e(TAG, "Failed to save online token", error);
+            return false;
+        }
+    }
+
+    public static void clearOnlineToken(String api) {
+        try {
+            Activity activity = SDLActivity.mSingleton;
+            activity.getSharedPreferences(ONLINE_PREFS, Context.MODE_PRIVATE).edit()
+                    .remove(onlineTokenPreferenceKey(api)).apply();
+        } catch (Exception error) {
+            Log.e(TAG, "Failed to clear online token", error);
+        }
+    }
+
+    public static byte[] onlineApiRequest(String url, String body, String[] headers, String userAgent) {
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL(url).openConnection();
+            connection.setRequestMethod("POST");
+            connection.setInstanceFollowRedirects(false);
+            connection.setConnectTimeout(10000);
+            connection.setReadTimeout(30000);
+            connection.setDoOutput(true);
+            connection.setRequestProperty("User-Agent", userAgent);
+            for (String header : headers) {
+                int separator = header.indexOf(':');
+                if (separator > 0) connection.setRequestProperty(header.substring(0, separator), header.substring(separator + 1).trim());
+            }
+            byte[] request = body.getBytes("UTF-8");
+            connection.setFixedLengthStreamingMode(request.length);
+            try (OutputStream output = connection.getOutputStream()) { output.write(request); }
+            int status = connection.getResponseCode();
+            InputStream input = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+            ByteArrayOutputStream response = new ByteArrayOutputStream();
+            response.write(status & 0xff);
+            response.write((status >> 8) & 0xff);
+            response.write((status >> 16) & 0xff);
+            response.write((status >> 24) & 0xff);
+            if (input != null) {
+                byte[] buffer = new byte[8192];
+                int count;
+                while ((count = input.read(buffer)) != -1) {
+                    if (count > MAX_ONLINE_RESPONSE_SIZE - (response.size() - 4))
+                        throw new IOException("Online API response is too large");
+                    response.write(buffer, 0, count);
+                }
+                input.close();
+            }
+            return response.toByteArray();
+        } catch (Exception error) {
+            Log.e(TAG, "Online API request failed", error);
+            return null;
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
 
     private Handler backgroundHandler = new Handler(Looper.getMainLooper());
     private boolean isStoppingEmulation = false;
