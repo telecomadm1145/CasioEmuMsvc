@@ -1083,7 +1083,15 @@ namespace casioemu {
 				show_online_popup = false;
 				RefreshOnlineSession();
 			}
-			ImGui::SetNextWindowSize(ImVec2(680, 540), ImGuiCond_Appearing);
+			const ImVec2 viewport_size = ImGui::GetMainViewport()->WorkSize;
+#ifdef __ANDROID__
+			const ImVec2 online_popup_size(viewport_size.x * 0.96f, viewport_size.y * 0.90f);
+#else
+			const ImVec2 online_popup_size(
+				(std::min)(1180.0f, viewport_size.x * 0.90f),
+				(std::min)(820.0f, viewport_size.y * 0.88f));
+#endif
+			ImGui::SetNextWindowSize(online_popup_size, ImGuiCond_Appearing);
 			ImGui::PushStyleColor(ImGuiCol_PopupBg, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg));
 			if (!ImGui::BeginPopupModal("StartupUI.OnlineModels"_lc, nullptr,
 				ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
