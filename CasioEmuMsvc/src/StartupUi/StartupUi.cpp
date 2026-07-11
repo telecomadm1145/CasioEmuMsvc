@@ -1056,6 +1056,9 @@ namespace casioemu {
 
 		void BeginOnlineLogin() {
 			if (OnlineBusy()) return;
+#ifdef __ANDROID__
+			ClearOnlineAuthorizationCallback();
+#endif
 			SaveOnlineApiAddress();
 			OnlineModelClient client{online_api};
 			ClearOnlineToken(client.ApiBase());
@@ -1082,20 +1085,50 @@ namespace casioemu {
 		void BeginCompleteOnlineLogin() {
 			if (OnlineBusy() || !online_authorization_pending) return;
 			const std::string api = online_api;
-			const std::string device_code = online_auth.device_code;
 			const std::string approval_grant = online_approval_grant;
 			online_operation = OnlineOperation::PollAuthorization;
 			online_status = "StartupUI.OnlineCompletingLogin"_lc;
-			online_task = std::async(std::launch::async, [api, device_code, approval_grant] {
+			online_task = std::async(std::launch::async, [api, approval_grant] {
 				OnlineTaskResult result;
 				result.operation = OnlineOperation::PollAuthorization;
-				try { OnlineModelClient{api}.PollAuthorization(device_code, approval_grant, result.access_token); }
+				try { OnlineModelClient{api}.PollAuthorization(approval_grant, result.access_token); }
 				catch (const std::exception& error) { result.error = error.what(); }
 				return result;
 			});
 		}
 
 #ifdef __ANDROID__
+		void ClearOnlineAuthorizationCallback() {
+			auto* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
+			jobject activity = static_cast<jobject>(SDL_AndroidGetActivity());
+			if (!env || !activity) return;
+			jclass activity_class = env->GetObjectClass(activity);
+			jmethodID method = activity_class
+				? env->GetMethodID(activity_class, "clearOnlineAuthorizationCallback", "()V")
+				: nullptr;
+			if (method) env->CallVoidMethod(activity, method);
+			if (env->ExceptionCheck()) env->ExceptionClear();
+			if (activity_class) env->DeleteLocalRef(activity_class);
+			env->DeleteLocalRef(activity);
+		}
+
+		bool OpenOnlineAuthorization(const std::string& uri) {
+			auto* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
+			jobject activity = static_cast<jobject>(SDL_AndroidGetActivity());
+			if (!env || !activity) return false;
+			jclass activity_class = env->GetObjectClass(activity);
+			jmethodID method = activity_class
+				? env->GetMethodID(activity_class, "openOnlineAuthorization", "(Ljava/lang/String;)Z")
+				: nullptr;
+			jstring value = env->NewStringUTF(uri.c_str());
+			const bool opened = method && value && env->CallBooleanMethod(activity, method, value) == JNI_TRUE;
+			if (env->ExceptionCheck()) env->ExceptionClear();
+			if (value) env->DeleteLocalRef(value);
+			if (activity_class) env->DeleteLocalRef(activity_class);
+			env->DeleteLocalRef(activity);
+			return opened;
+		}
+
 		std::optional<std::string> ConsumeOnlineAuthorizationCallback() {
 			auto* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
 			jobject activity = static_cast<jobject>(SDL_AndroidGetActivity());
@@ -1224,8 +1257,12 @@ namespace casioemu {
 				const std::string uri = std::move(online_browser_uri);
 				online_browser_uri.clear();
 				online_browser_open_at = 0;
+#ifdef __ANDROID__
+				if (!OpenOnlineAuthorization(uri)) online_status = "Failed to open browser authorization.";
+#else
 				if (SDL_OpenURL(uri.c_str()) != 0)
 					online_status = std::string("SDL_OpenURL failed: ") + SDL_GetError();
+#endif
 			}
 			if (online_authorization_pending && online_authorization_deadline
 				&& online_now >= online_authorization_deadline) {
@@ -1272,14 +1309,16 @@ namespace casioemu {
 
 			ImGui::TextUnformatted("StartupUI.OnlineApiAddress"_lc);
 			ImGui::SetNextItemWidth(-1);
-			if (!online_access_token.empty() || online_authorization_pending || OnlineBusy()) ImGui::BeginDisabled();
+			const bool api_address_disabled = !online_access_token.empty() || online_authorization_pending || OnlineBusy();
+			if (api_address_disabled) ImGui::BeginDisabled();
 			if (ImGui::InputText("##OnlineApiAddress", online_api, sizeof(online_api))) {
 				ClearOnlineSessionState();
 				SaveOnlineApiAddress();
 			}
-			if (!online_access_token.empty() || online_authorization_pending || OnlineBusy()) ImGui::EndDisabled();
+			if (api_address_disabled) ImGui::EndDisabled();
 
-			if (OnlineBusy()) ImGui::BeginDisabled();
+			const bool network_controls_disabled = OnlineBusy();
+			if (network_controls_disabled) ImGui::BeginDisabled();
 			if (online_access_token.empty() && !online_authorization_pending && ImGui::Button("StartupUI.OnlineLogin"_lc)) {
 				try { BeginOnlineLogin(); }
 				catch (const std::exception& e) { online_status = e.what(); }
@@ -1297,7 +1336,7 @@ namespace casioemu {
 				ImGui::SameLine();
 				if (ImGui::Button("StartupUI.OnlineLogout"_lc)) BeginLogoutOnline();
 			}
-			if (OnlineBusy()) ImGui::EndDisabled();
+			if (network_controls_disabled) ImGui::EndDisabled();
 
 			if (!online_status.empty()) {
 				if (OnlineBusy()) {
@@ -1346,11 +1385,12 @@ namespace casioemu {
 			}
 			ImGui::EndChild();
 
-			if (OnlineBusy()) ImGui::BeginDisabled();
+			const bool launch_controls_disabled = OnlineBusy();
+			if (launch_controls_disabled) ImGui::BeginDisabled();
 			if (ImGui::Button("StartupUI.OnlineLaunch"_lc)) BeginDownloadOnlineModel();
 			ImGui::SameLine();
 			if (ImGui::Button("Button.Negative"_lc)) ImGui::CloseCurrentPopup();
-			if (OnlineBusy()) ImGui::EndDisabled();
+			if (launch_controls_disabled) ImGui::EndDisabled();
 			ImGui::EndPopup();
 			ImGui::PopStyleColor();
 		}

@@ -83,110 +83,6 @@ namespace casioemu {
 			return std::string(value);
 		}
 
-		std::string BuildSuccessResponse() {
-			static constexpr std::string_view html =
-				R"(<!doctype html>
-<html lang="en">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<title data-i18n-tag="Title">CasioEmuMsvc authorization complete</title>
-<style>
-  :root {
-    color-scheme: light dark;
-    --bg: #eef1f4;
-    --card: #ffffff;
-    --text: #17202a;
-    --muted: #5d6977;
-    --border: #d7dde5;
-    --ok: #067647;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #11161d;
-      --card: #18212b;
-      --text: #eef3f8;
-      --muted: #aab6c3;
-      --border: #2a3848;
-      --ok: #32d583;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    min-height: 100vh;
-    display: grid;
-    place-items: center;
-    padding: 24px;
-    background:
-      radial-gradient(circle at top left, rgba(31, 111, 235, .18), transparent 32rem),
-      var(--bg);
-    color: var(--text);
-    font: 16px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  }
-  main {
-    width: min(100%, 520px);
-    padding: 32px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--card);
-    box-shadow: 0 18px 50px rgba(14, 23, 38, .16);
-  }
-  .eyebrow {
-    margin: 0 0 8px;
-    color: var(--muted);
-    font-size: 13px;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-  }
-  h1 {
-    margin: 0 0 16px;
-    font-size: 28px;
-    line-height: 1.2;
-  }
-  p { margin: 0 0 18px; color: var(--muted); }
-  .status {
-    margin: 18px 0 0;
-    padding: 12px 14px;
-    border-radius: 8px;
-    color: var(--ok);
-    background: color-mix(in srgb, var(--card), var(--bg) 65%);
-  }
-</style>
-<main>
-  <p class="eyebrow">CasioEmuMsvc</p>
-  <h1 data-i18n-tag="Heading">Authorization complete</h1>
-  <p data-i18n-tag="Description">CasioEmuMsvc has received the authorization result and will continue automatically.</p>
-  <div class="status" data-i18n-tag="CloseHint">You can close this page and return to CasioEmuMsvc.</div>
-</main>
-<script>
-  const messages = {
-    zh: {
-      Title: '授权成功 - CasioEmuMsvc',
-      Heading: '授权成功',
-      Description: '已完成授权，CasioEmuMsvc 将继续完成登录。',
-      CloseHint: '请关闭此页面，并返回 CasioEmuMsvc。',
-    },
-  };
-  const preferredLanguage = new URLSearchParams(location.search).get('language') || '';
-  const lang = (preferredLanguage || navigator.language || 'en').split('-')[0];
-  const dict = messages[lang];
-  if (dict) {
-    document.documentElement.lang = lang;
-    document.querySelectorAll('[data-i18n-tag]').forEach(el => {
-      const text = dict[el.dataset.i18nTag];
-      if (text) el.innerText = text;
-    });
-    document.title = dict.Title || document.title;
-  }
-</script>
-</html>)";
-			return "HTTP/1.1 200 OK\r\n"
-				"Content-Type: text/html; charset=utf-8\r\n"
-				"Cache-Control: no-store\r\n"
-				"Connection: close\r\n"
-				"Content-Length: " + std::to_string(html.size()) + "\r\n\r\n" + std::string(html);
-		}
 	}
 
 	OnlineLoopbackServer::OnlineLoopbackServer()
@@ -312,8 +208,9 @@ namespace casioemu {
 						std::lock_guard<std::mutex> lock(grant_mutex_);
 						approval_grant_ = grant;
 					}
-					const auto ok = BuildSuccessResponse();
-					SendAll(client, std::string_view(ok.data(), ok.size()));
+					static constexpr std::string_view no_content =
+						"HTTP/1.1 204 No Content\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n";
+					SendAll(client, no_content);
 					completed_.store(true);
 				}
 				else {

@@ -82,7 +82,8 @@ public class Game extends SDLActivity {
     private static final String ASSET_VERSION_FILE = "locales_asset_version.txt";
     private static final String ONLINE_KEY_ALIAS = "CasioEmuMsvcOnlineDeviceKey";
     private static final String ONLINE_PREFS = "casioemu_online_device";
-    private static String pendingOnlineAuthorizationGrant = null;
+    private String pendingOnlineAuthorizationGrant = null;
+    private boolean onlineAuthorizationCallbackReady = false;
 
     private static String onlineIdentityPreferenceKey(String api) throws Exception {
         byte[] digest = MessageDigest.getInstance("SHA-256").digest(api.getBytes("UTF-8"));
@@ -419,19 +420,50 @@ public class Game extends SDLActivity {
         setIntent(intent);
         handleOnlineAuthorizationIntent(intent);
     }
-    private static synchronized void handleOnlineAuthorizationIntent(Intent intent) {
+    private synchronized void handleOnlineAuthorizationIntent(Intent intent) {
         if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) return;
         Uri uri = intent.getData();
         if (uri != null && "u8emu".equalsIgnoreCase(uri.getScheme())
                 && "online-auth".equalsIgnoreCase(uri.getHost())) {
             String grant = uri.getQueryParameter("approval_grant");
             pendingOnlineAuthorizationGrant = grant == null ? "" : grant;
+            onlineAuthorizationCallbackReady = false;
+            setIntent(new Intent(Intent.ACTION_MAIN));
+            getWindow().getDecorView().postDelayed(() -> {
+                setImmersiveMode();
+                getWindow().getDecorView().requestLayout();
+                getWindow().getDecorView().invalidate();
+                SDLActivity.handleNativeState();
+                synchronized (Game.this) {
+                    onlineAuthorizationCallbackReady = true;
+                }
+            }, 250);
         }
     }
     public synchronized String consumeOnlineAuthorizationCallback() {
+        if (!onlineAuthorizationCallbackReady) return null;
         String grant = pendingOnlineAuthorizationGrant;
         pendingOnlineAuthorizationGrant = null;
+        onlineAuthorizationCallbackReady = false;
         return grant;
+    }
+    public synchronized void clearOnlineAuthorizationCallback() {
+        pendingOnlineAuthorizationGrant = null;
+        onlineAuthorizationCallbackReady = false;
+        Intent intent = getIntent();
+        if (intent != null && Intent.ACTION_VIEW.equals(intent.getAction())) {
+            setIntent(new Intent(Intent.ACTION_MAIN));
+        }
+    }
+    public boolean openOnlineAuthorization(String url) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            startActivity(intent);
+            return true;
+        } catch (Exception error) {
+            Log.e(TAG, "Failed to open online authorization", error);
+            return false;
+        }
     }
 
     private String getAssetVersionTag() {

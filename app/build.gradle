@@ -36,7 +36,11 @@ android {
             //    abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
             //}
              cmake {
-                 arguments "-DANDROID_CPP_FEATURES=rtti;exceptions"
+                 arguments "-DANDROID_CPP_FEATURES=rtti;exceptions",
+                         "-DCASIOEMU_ONLINE_BUILD_KEY_ID=${System.getenv('CASIOEMU_ONLINE_BUILD_KEY_ID') ?: ''}",
+                         "-DCASIOEMU_ONLINE_BUILD_KEY_B64=${System.getenv('CASIOEMU_ONLINE_BUILD_KEY_B64') ?: ''}",
+                         "-DCASIOEMU_ONLINE_SERVER_KEY_ID=${System.getenv('CASIOEMU_ONLINE_SERVER_KEY_ID') ?: ''}",
+                         "-DCASIOEMU_ONLINE_SERVER_PUBLIC_KEY_B64=${System.getenv('CASIOEMU_ONLINE_SERVER_PUBLIC_KEY_B64') ?: ''}"
                  abiFilters 'armeabi-v7a', 'arm64-v8a'
              }
         }

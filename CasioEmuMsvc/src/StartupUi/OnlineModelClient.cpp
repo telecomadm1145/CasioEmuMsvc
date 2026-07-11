@@ -280,12 +280,14 @@ namespace casioemu {
 		return {value.at("device_code").get<std::string>(), value.at("verification_uri").get<std::string>()};
 	}
 
-	void OnlineModelClient::PollAuthorization(const std::string& device_code, const std::string& approval_grant, std::string& access_token) const {
+	void OnlineModelClient::PollAuthorization(const std::string& approval_grant, std::string& access_token) const {
 		if (approval_grant.empty()) throw std::runtime_error("Authorization callback did not contain an approval grant.");
-		json request{{"action", "auth-poll"}, {"device_code", device_code}};
-		request["approval_grant"] = approval_grant;
-		const auto body = request.dump();
-		const auto response = HttpRequest(api_base_ + "/emu/api", body, {}, &identity_, true);
+		const auto response = HttpRequest(api_base_ + "/emu/api",
+			json{{"action", "auth-poll"}, {"approval_grant", approval_grant}}.dump(), {}, &identity_, true);
+		if (response.status == 401) {
+			const std::string detail = ParseJson(response).value("error", "unauthorized");
+			throw std::runtime_error("Authorization completion failed: " + detail);
+		}
 		RequireSuccess(response, "Authorization poll");
 		const auto value = ParseJson(response);
 		if (value.value("device_id", "") != identity_.device_id)
