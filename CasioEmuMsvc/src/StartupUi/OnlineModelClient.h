@@ -31,7 +31,7 @@ namespace casioemu {
 	public:
 		explicit OnlineModelClient(std::string api_base);
 		OnlineAuthRequest StartAuthorization(const std::string& redirect_uri = {}) const;
-		bool PollAuthorization(const std::string& device_code, std::string& access_token) const;
+		bool PollAuthorization(const std::string& device_code, const std::string& approval_grant, std::string& access_token) const;
 		void RevokeDevice(const std::string& access_token) const;
 		std::vector<OnlineModelEntry> ListModels(const std::string& access_token) const;
 		std::vector<std::uint8_t> DownloadModel(const std::string& access_token, const std::string& model_id) const;

@@ -32,6 +32,7 @@
 #include <future>
 #include <iostream>
 #include <iterator>
+#include <optional>
 #include <set>
 
 #ifdef _WIN32
@@ -788,6 +789,7 @@ namespace casioemu {
 		Uint64 online_authorization_deadline = 0;
 		Uint64 online_browser_open_at = 0;
 		std::string online_browser_uri;
+		std::string online_approval_grant;
 		std::string online_status;
 		std::vector<OnlineModelEntry> online_models;
 		int selected_online_model = -1;
@@ -1028,6 +1030,7 @@ namespace casioemu {
 			online_authorization_deadline = 0;
 			online_browser_open_at = 0;
 			online_browser_uri.clear();
+			online_approval_grant.clear();
 			online_auth = {};
 			online_models.clear();
 			selected_online_model = -1;
@@ -1083,27 +1086,34 @@ namespace casioemu {
 			if (OnlineBusy() || !online_authorization_pending) return;
 			const std::string api = online_api;
 			const std::string device_code = online_auth.device_code;
+			const std::string approval_grant = online_approval_grant;
 			online_operation = OnlineOperation::PollAuthorization;
 			online_status = "StartupUI.OnlineCompletingLogin"_lc;
-			online_task = std::async(std::launch::async, [api, device_code] {
+			online_task = std::async(std::launch::async, [api, device_code, approval_grant] {
 				OnlineTaskResult result;
 				result.operation = OnlineOperation::PollAuthorization;
-				try { result.authorization_complete = OnlineModelClient{api}.PollAuthorization(device_code, result.access_token); }
+				try { result.authorization_complete = OnlineModelClient{api}.PollAuthorization(device_code, approval_grant, result.access_token); }
 				catch (const std::exception& error) { result.error = error.what(); }
 				return result;
 			});
 		}
 
 #ifdef __ANDROID__
-		bool ConsumeOnlineAuthorizationCallback() {
+		std::optional<std::string> ConsumeOnlineAuthorizationCallback() {
 			auto* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
 			jobject activity = static_cast<jobject>(SDL_AndroidGetActivity());
-			if (!env || !activity) return false;
+			if (!env || !activity) return std::nullopt;
 			jclass activity_class = env->GetObjectClass(activity);
 			jmethodID method = activity_class
-				? env->GetMethodID(activity_class, "consumeOnlineAuthorizationCallback", "()Z")
+				? env->GetMethodID(activity_class, "consumeOnlineAuthorizationCallback", "()Ljava/lang/String;")
 				: nullptr;
-			const bool result = method && env->CallBooleanMethod(activity, method) == JNI_TRUE;
+			jstring grant = method ? static_cast<jstring>(env->CallObjectMethod(activity, method)) : nullptr;
+			std::optional<std::string> result;
+			if (grant) {
+				const char* chars = env->GetStringUTFChars(grant, nullptr);
+				if (chars) { result = chars; env->ReleaseStringUTFChars(grant, chars); }
+				env->DeleteLocalRef(grant);
+			}
 			if (env->ExceptionCheck()) env->ExceptionClear();
 			if (activity_class) env->DeleteLocalRef(activity_class);
 			env->DeleteLocalRef(activity);
@@ -1258,8 +1268,12 @@ namespace casioemu {
 			if (online_authorization_pending && !OnlineBusy() && online_loopback && online_loopback->Completed())
 				BeginCompleteOnlineLogin();
 #ifdef __ANDROID__
-			if (online_authorization_pending && !OnlineBusy() && ConsumeOnlineAuthorizationCallback())
-				BeginCompleteOnlineLogin();
+			if (online_authorization_pending && !OnlineBusy()) {
+				if (auto grant = ConsumeOnlineAuthorizationCallback()) {
+					online_approval_grant = std::move(*grant);
+					BeginCompleteOnlineLogin();
+				}
+			}
 #endif
 			if (online_authorization_pending && !OnlineBusy() && online_next_authorization_poll
 				&& online_now >= online_next_authorization_poll) {

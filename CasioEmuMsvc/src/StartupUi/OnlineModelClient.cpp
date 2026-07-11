@@ -281,8 +281,10 @@ namespace casioemu {
 			value.value("interval", 2)};
 	}
 
-	bool OnlineModelClient::PollAuthorization(const std::string& device_code, std::string& access_token) const {
-		const auto body = json{{"action", "auth-poll"}, {"device_code", device_code}}.dump();
+	bool OnlineModelClient::PollAuthorization(const std::string& device_code, const std::string& approval_grant, std::string& access_token) const {
+		json request{{"action", "auth-poll"}, {"device_code", device_code}};
+		if (!approval_grant.empty()) request["approval_grant"] = approval_grant;
+		const auto body = request.dump();
 		const auto response = HttpRequest(api_base_ + "/emu/api", body, {}, &identity_, true);
 		if (response.status == 428) return false;
 		RequireSuccess(response, "Authorization poll");

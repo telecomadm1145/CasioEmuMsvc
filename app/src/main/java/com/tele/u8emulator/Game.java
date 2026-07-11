@@ -82,7 +82,7 @@ public class Game extends SDLActivity {
     private static final String ASSET_VERSION_FILE = "locales_asset_version.txt";
     private static final String ONLINE_KEY_ALIAS = "CasioEmuMsvcOnlineDeviceKey";
     private static final String ONLINE_PREFS = "casioemu_online_device";
-    private static boolean pendingOnlineAuthorizationCallback = false;
+    private static String pendingOnlineAuthorizationGrant = null;
 
     private static String onlineIdentityPreferenceKey(String api) throws Exception {
         byte[] digest = MessageDigest.getInstance("SHA-256").digest(api.getBytes("UTF-8"));
@@ -424,13 +424,14 @@ public class Game extends SDLActivity {
         Uri uri = intent.getData();
         if (uri != null && "u8emu".equalsIgnoreCase(uri.getScheme())
                 && "online-auth".equalsIgnoreCase(uri.getHost())) {
-            pendingOnlineAuthorizationCallback = true;
+            String grant = uri.getQueryParameter("approval_grant");
+            pendingOnlineAuthorizationGrant = grant == null ? "" : grant;
         }
     }
-    public synchronized boolean consumeOnlineAuthorizationCallback() {
-        boolean pending = pendingOnlineAuthorizationCallback;
-        pendingOnlineAuthorizationCallback = false;
-        return pending;
+    public synchronized String consumeOnlineAuthorizationCallback() {
+        String grant = pendingOnlineAuthorizationGrant;
+        pendingOnlineAuthorizationGrant = null;
+        return grant;
     }
 
     private String getAssetVersionTag() {
