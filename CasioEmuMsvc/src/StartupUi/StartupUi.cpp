@@ -784,6 +784,10 @@ namespace casioemu {
 		std::unique_ptr<OnlineLoopbackServer> online_loopback;
 		std::string online_access_token;
 		bool online_authorization_pending = false;
+		Uint64 online_next_authorization_poll = 0;
+		Uint64 online_authorization_deadline = 0;
+		Uint64 online_browser_open_at = 0;
+		std::string online_browser_uri;
 		std::string online_status;
 		std::vector<OnlineModelEntry> online_models;
 		int selected_online_model = -1;
@@ -1020,6 +1024,10 @@ namespace casioemu {
 			}
 			online_access_token.clear();
 			online_authorization_pending = false;
+			online_next_authorization_poll = 0;
+			online_authorization_deadline = 0;
+			online_browser_open_at = 0;
+			online_browser_uri.clear();
 			online_auth = {};
 			online_models.clear();
 			selected_online_model = -1;
@@ -1113,9 +1121,14 @@ namespace casioemu {
 				return;
 			}
 			if (!result.error.empty()) {
-				if (result.operation == OnlineOperation::StartLogin && online_loopback) {
+				if ((result.operation == OnlineOperation::StartLogin || result.operation == OnlineOperation::PollAuthorization)
+					&& online_loopback) {
 					online_loopback->Stop();
 					online_loopback.reset();
+				}
+				if (result.operation == OnlineOperation::PollAuthorization) {
+					online_authorization_pending = false;
+					online_next_authorization_poll = 0;
 				}
 				online_status = result.error;
 				return;
@@ -1124,9 +1137,10 @@ namespace casioemu {
 			case OnlineOperation::StartLogin:
 				online_auth = std::move(result.auth);
 				online_authorization_pending = true;
+				online_authorization_deadline = SDL_GetTicks64() + 600000;
 				online_status = "StartupUI.OnlineBrowserOpened"_lc;
-				if (SDL_OpenURL(online_auth.verification_uri.c_str()) != 0)
-					online_status = std::string("SDL_OpenURL failed: ") + SDL_GetError();
+				online_browser_uri = online_auth.verification_uri;
+				online_browser_open_at = SDL_GetTicks64() + 250;
 				break;
 			case OnlineOperation::LoadModels:
 				online_models = std::move(result.models);
@@ -1136,10 +1150,14 @@ namespace casioemu {
 			case OnlineOperation::PollAuthorization:
 				if (!result.authorization_complete) {
 					online_status = "StartupUI.OnlineAuthorizationPending"_lc;
+					online_next_authorization_poll = SDL_GetTicks64()
+						+ static_cast<Uint64>((std::max)(1, online_auth.interval)) * 1000;
 					break;
 				}
 				online_access_token = std::move(result.access_token);
 				online_authorization_pending = false;
+				online_next_authorization_poll = 0;
+				online_authorization_deadline = 0;
 				if (online_loopback) { online_loopback->Stop(); online_loopback.reset(); }
 				SaveOnlineToken(OnlineModelClient{online_api}.ApiBase(), online_access_token);
 				online_status = OnlineTokenPersistenceAvailable()
@@ -1202,6 +1220,21 @@ namespace casioemu {
 				BeginLoadOnlineModels();
 			}
 			PollOnlineTask();
+			const Uint64 online_now = SDL_GetTicks64();
+			if (!online_browser_uri.empty() && online_now >= online_browser_open_at) {
+				const std::string uri = std::move(online_browser_uri);
+				online_browser_uri.clear();
+				online_browser_open_at = 0;
+				if (SDL_OpenURL(uri.c_str()) != 0)
+					online_status = std::string("SDL_OpenURL failed: ") + SDL_GetError();
+			}
+			if (online_authorization_pending && online_authorization_deadline
+				&& online_now >= online_authorization_deadline) {
+				online_authorization_pending = false;
+				online_next_authorization_poll = 0;
+				if (online_loopback) { online_loopback->Stop(); online_loopback.reset(); }
+				online_status = "StartupUI.OnlineAuthorizationExpired"_lc;
+			}
 			const ImVec2 viewport_size = ImGui::GetMainViewport()->WorkSize;
 #ifdef __ANDROID__
 			const ImVec2 online_popup_size(viewport_size.x * 0.96f, viewport_size.y * 0.90f);
@@ -1228,6 +1261,11 @@ namespace casioemu {
 			if (online_authorization_pending && !OnlineBusy() && ConsumeOnlineAuthorizationCallback())
 				BeginCompleteOnlineLogin();
 #endif
+			if (online_authorization_pending && !OnlineBusy() && online_next_authorization_poll
+				&& online_now >= online_next_authorization_poll) {
+				online_next_authorization_poll = 0;
+				BeginCompleteOnlineLogin();
+			}
 			if (online_authorization_pending && online_loopback) {
 				const auto loopback_error = online_loopback->Error();
 				if (!loopback_error.empty()) online_status = loopback_error;
