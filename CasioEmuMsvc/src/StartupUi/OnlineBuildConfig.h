@@ -1,8 +1,12 @@
 #pragma once
 
+#include <cstddef>
+
 // CMake and release CI override this header from OnlineBuildConfig.h.in.
-#define CASIOEMU_ONLINE_CLIENT_KEY_ID ""
-#define CASIOEMU_ONLINE_CLIENT_KEY_B64 ""
+#define CASIOEMU_ONLINE_BUILD_KEY_ID ""
+inline const volatile unsigned char CASIOEMU_ONLINE_BUILD_KEY_MASKED[] = { 0 };
+inline const volatile unsigned char CASIOEMU_ONLINE_BUILD_KEY_MASK[] = { 0 };
+inline constexpr std::size_t CASIOEMU_ONLINE_BUILD_KEY_LENGTH = 0;
 #define CASIOEMU_ONLINE_SERVER_KEY_ID ""
 #define CASIOEMU_ONLINE_SERVER_PUBLIC_KEY_B64 ""
 #define CASIOEMU_ONLINE_BUILD_TIMESTAMP "19700101T000000Z"

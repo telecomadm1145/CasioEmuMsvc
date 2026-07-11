@@ -141,6 +141,22 @@ namespace casioemu {
 			return "POST\n/emu/api\n" + timestamp + "\n" + nonce + "\n" + OnlineBase64UrlEncode(body_hash.data(), body_hash.size());
 		}
 
+#ifdef _MSC_VER
+		__declspec(noinline)
+#else
+		__attribute__((noinline))
+#endif
+		std::string RestoreBuildKeyBase64Url() {
+			constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+			std::string encoded(CASIOEMU_ONLINE_BUILD_KEY_LENGTH, '\0');
+			for (std::size_t index = 0; index < CASIOEMU_ONLINE_BUILD_KEY_LENGTH; ++index) {
+				const auto masked = CASIOEMU_ONLINE_BUILD_KEY_MASKED[index];
+				const auto mask = CASIOEMU_ONLINE_BUILD_KEY_MASK[index];
+				encoded[index] = alphabet[(masked ^ mask) & 0x3f];
+			}
+			return encoded;
+		}
+
 		void VerifyServerResponse(const HttpResponse& response, const std::string& request_canonical) {
 			const std::string configured_key_id = CASIOEMU_ONLINE_SERVER_KEY_ID;
 			if (configured_key_id.empty() || response.server_key_id != configured_key_id)
@@ -166,8 +182,10 @@ namespace casioemu {
 
 		HttpResponse HttpRequest(const std::string& url, const std::string& body, const std::string& token,
 			const OnlineDeviceIdentity* identity, bool sign_device) {
-			auto build_key = OnlineBase64UrlDecode(CASIOEMU_ONLINE_CLIENT_KEY_B64);
-			if (std::string(CASIOEMU_ONLINE_CLIENT_KEY_ID).empty() || build_key.size() < 32)
+			auto encoded_build_key = RestoreBuildKeyBase64Url();
+			auto build_key = OnlineBase64UrlDecode(encoded_build_key);
+			std::fill(encoded_build_key.begin(), encoded_build_key.end(), '\0');
+			if (std::string(CASIOEMU_ONLINE_BUILD_KEY_ID).empty() || build_key.size() < 32)
 				throw std::runtime_error("Online API build key is not configured.");
 			const auto timestamp = std::to_string(std::chrono::duration_cast<std::chrono::seconds>(
 				std::chrono::system_clock::now().time_since_epoch()).count());
@@ -189,7 +207,7 @@ namespace casioemu {
 #ifdef __ANDROID__
 			std::vector<std::string> android_headers{
 				"Accept: application/json, application/vnd.webcalcemu.model-encrypted", "Content-Type: application/json",
-				"X-CasioEmu-Key-Id: " + std::string(CASIOEMU_ONLINE_CLIENT_KEY_ID), "X-CasioEmu-Timestamp: " + timestamp,
+				"X-CasioEmu-Key-Id: " + std::string(CASIOEMU_ONLINE_BUILD_KEY_ID), "X-CasioEmu-Timestamp: " + timestamp,
 				"X-CasioEmu-Nonce: " + nonce,
 				"X-CasioEmu-Signature: " + OnlineBase64UrlEncode(build_signature.data(), build_signature.size())};
 			if (!token.empty()) android_headers.push_back("Authorization: Bearer " + token);
@@ -204,7 +222,7 @@ namespace casioemu {
 			HttpResponse result;
 			curl_slist* headers = curl_slist_append(nullptr, "Accept: application/json, application/vnd.webcalcemu.model-encrypted");
 			headers = curl_slist_append(headers, "Content-Type: application/json");
-			headers = curl_slist_append(headers, ("X-CasioEmu-Key-Id: " + std::string(CASIOEMU_ONLINE_CLIENT_KEY_ID)).c_str());
+			headers = curl_slist_append(headers, ("X-CasioEmu-Key-Id: " + std::string(CASIOEMU_ONLINE_BUILD_KEY_ID)).c_str());
 			headers = curl_slist_append(headers, ("X-CasioEmu-Timestamp: " + timestamp).c_str());
 			headers = curl_slist_append(headers, ("X-CasioEmu-Nonce: " + nonce).c_str());
 			headers = curl_slist_append(headers, ("X-CasioEmu-Signature: " + OnlineBase64UrlEncode(build_signature.data(), build_signature.size())).c_str());
