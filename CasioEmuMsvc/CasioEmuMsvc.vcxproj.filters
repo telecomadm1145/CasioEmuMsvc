@@ -112,6 +112,7 @@
     <ClInclude Include="src\Config.hpp" />
     <ClInclude Include="src\Containers\ConcurrentObject.h" />
     <ClInclude Include="src\Ext\LabelFile.h" />
+    <ClInclude Include="src\Ext\Crypto.hpp" />
     <ClInclude Include="src\Ext\RomPackage.h" />
     <ClInclude Include="src\Ext\SysDialog.h" />
     <ClInclude Include="src\Gui\Localization.h" />

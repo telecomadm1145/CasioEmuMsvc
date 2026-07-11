@@ -1,7 +1,7 @@
 #include "OnlineDeviceIdentity.h"
 
 #include "../../../McpPlugin/json.hpp"
-#include "Ext/RomPackage.h"
+#include "Ext/Crypto.hpp"
 #include "monocypher.h"
 #include "monocypher-ed25519.h"
 
