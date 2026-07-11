@@ -66,6 +66,7 @@ import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
 import io.sentry.Sentry;
+import org.json.JSONObject;
 public class Game extends SDLActivity {
     private static final String TAG = "Game";
     private static Uri pendingUri = null;
@@ -208,11 +209,22 @@ public class Game extends SDLActivity {
             response.write((status >> 8) & 0xff);
             response.write((status >> 16) & 0xff);
             response.write((status >> 24) & 0xff);
+            String metadataJson = "{" +
+                    "\"contentType\":" + JSONObject.quote(connection.getHeaderField("Content-Type")) + "," +
+                    "\"keyId\":" + JSONObject.quote(connection.getHeaderField("X-CasioEmu-Server-Key-Id")) + "," +
+                    "\"timestamp\":" + JSONObject.quote(connection.getHeaderField("X-CasioEmu-Server-Timestamp")) + "," +
+                    "\"signature\":" + JSONObject.quote(connection.getHeaderField("X-CasioEmu-Server-Signature")) + "}";
+            byte[] metadata = metadataJson.getBytes(StandardCharsets.UTF_8);
+            response.write(metadata.length & 0xff);
+            response.write((metadata.length >> 8) & 0xff);
+            response.write((metadata.length >> 16) & 0xff);
+            response.write((metadata.length >> 24) & 0xff);
+            response.write(metadata);
             if (input != null) {
                 byte[] buffer = new byte[8192];
                 int count;
                 while ((count = input.read(buffer)) != -1) {
-                    if (count > MAX_ONLINE_RESPONSE_SIZE - (response.size() - 4))
+                    if (count > MAX_ONLINE_RESPONSE_SIZE - (response.size() - 8 - metadata.length))
                         throw new IOException("Online API response is too large");
                     response.write(buffer, 0, count);
                 }

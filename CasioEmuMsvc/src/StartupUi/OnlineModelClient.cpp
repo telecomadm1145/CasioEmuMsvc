@@ -3,6 +3,7 @@
 
 #include "../../../McpPlugin/json.hpp"
 #include "Config.hpp"
+#include "monocypher-ed25519.h"
 
 #include <algorithm>
 #ifndef __ANDROID__
@@ -15,6 +16,7 @@
 #include <fstream>
 #include <chrono>
 #include <cctype>
+#include <cstdlib>
 #include <stdexcept>
 #include <utility>
 
@@ -37,6 +39,10 @@ namespace casioemu {
 
 		struct HttpResponse {
 			unsigned long status{};
+			std::string content_type;
+			std::string server_key_id;
+			std::string server_timestamp;
+			std::string server_signature;
 			std::vector<std::uint8_t> body;
 		};
 
@@ -48,6 +54,24 @@ namespace casioemu {
 			if (output.size() > kMaxOnlineResponseSize || bytes > kMaxOnlineResponseSize - output.size()) return 0;
 			const auto* begin = static_cast<const std::uint8_t*>(data);
 			output.insert(output.end(), begin, begin + bytes);
+			return bytes;
+		}
+
+		size_t CurlHeader(void* data, size_t size, size_t count, void* user_data) {
+			const size_t bytes = size * count;
+			std::string line(static_cast<const char*>(data), bytes);
+			const auto colon = line.find(':');
+			if (colon == std::string::npos) return bytes;
+			std::string name = line.substr(0, colon);
+			std::transform(name.begin(), name.end(), name.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+			std::string value = line.substr(colon + 1);
+			while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) value.erase(value.begin());
+			while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) value.pop_back();
+			auto& response = *static_cast<HttpResponse*>(user_data);
+			if (name == "content-type") response.content_type = value;
+			else if (name == "x-casioemu-server-key-id") response.server_key_id = value;
+			else if (name == "x-casioemu-server-timestamp") response.server_timestamp = value;
+			else if (name == "x-casioemu-server-signature") response.server_signature = value;
 			return bytes;
 		}
 #else
@@ -78,7 +102,7 @@ namespace casioemu {
 			env->DeleteLocalRef(java_ua); env->DeleteLocalRef(java_body); env->DeleteLocalRef(java_url);
 			env->DeleteLocalRef(header_array); env->DeleteLocalRef(string_class); env->DeleteLocalRef(game);
 			if (env->ExceptionCheck()) { env->ExceptionClear(); throw std::runtime_error("Android online HTTP request failed."); }
-			if (!result || env->GetArrayLength(result) < 4) { if (result) env->DeleteLocalRef(result); throw std::runtime_error("Android online HTTP request failed."); }
+			if (!result || env->GetArrayLength(result) < 8) { if (result) env->DeleteLocalRef(result); throw std::runtime_error("Android online HTTP request failed."); }
 			const jsize size = env->GetArrayLength(result); std::vector<std::uint8_t> packed(size);
 			env->GetByteArrayRegion(result, 0, size, reinterpret_cast<jbyte*>(packed.data())); env->DeleteLocalRef(result);
 			HttpResponse response;
@@ -86,7 +110,18 @@ namespace casioemu {
 				(static_cast<unsigned long>(packed[1]) << 8) |
 				(static_cast<unsigned long>(packed[2]) << 16) |
 				(static_cast<unsigned long>(packed[3]) << 24);
-			response.body.assign(packed.begin() + 4, packed.end()); return response;
+			const std::uint32_t metadata_size = static_cast<std::uint32_t>(packed[4]) |
+				(static_cast<std::uint32_t>(packed[5]) << 8) |
+				(static_cast<std::uint32_t>(packed[6]) << 16) |
+				(static_cast<std::uint32_t>(packed[7]) << 24);
+			if (metadata_size > 4096 || 8ull + metadata_size > packed.size()) throw std::runtime_error("Invalid Android online response metadata.");
+			const std::string metadata(reinterpret_cast<const char*>(packed.data() + 8), metadata_size);
+			const auto parsed = json::parse(metadata);
+			response.content_type = parsed.value("contentType", "");
+			response.server_key_id = parsed.value("keyId", "");
+			response.server_timestamp = parsed.value("timestamp", "");
+			response.server_signature = parsed.value("signature", "");
+			response.body.assign(packed.begin() + 8 + metadata_size, packed.end()); return response;
 		}
 #endif
 
@@ -104,6 +139,29 @@ namespace casioemu {
 		std::string RequestCanonical(const std::string& body, const std::string& timestamp, const std::string& nonce) {
 			const auto body_hash = OnlineSha256(body);
 			return "POST\n/emu/api\n" + timestamp + "\n" + nonce + "\n" + OnlineBase64UrlEncode(body_hash.data(), body_hash.size());
+		}
+
+		void VerifyServerResponse(const HttpResponse& response, const std::string& request_canonical) {
+			const std::string configured_key_id = CASIOEMU_ONLINE_SERVER_KEY_ID;
+			if (configured_key_id.empty() || response.server_key_id != configured_key_id)
+				throw std::runtime_error("Online API server signing key does not match this build.");
+			if (response.server_timestamp.size() != 10 || !std::all_of(response.server_timestamp.begin(), response.server_timestamp.end(), [](unsigned char ch) { return std::isdigit(ch); }))
+				throw std::runtime_error("Online API response timestamp is invalid.");
+			const auto server_time = std::stoll(response.server_timestamp);
+			const auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+			if (std::llabs(now - server_time) > 300) throw std::runtime_error("Online API response has expired.");
+			const auto public_key = OnlineBase64UrlDecode(CASIOEMU_ONLINE_SERVER_PUBLIC_KEY_B64);
+			const auto signature = OnlineBase64UrlDecode(response.server_signature);
+			if (public_key.size() != 32 || signature.size() != 64)
+				throw std::runtime_error("Online API server verification key or signature is invalid.");
+			const auto request_hash = OnlineSha256(request_canonical);
+			const auto response_hash = OnlineSha256(response.body);
+			const std::string canonical = "CASIOEMU-RESPONSE-V1\n" + response.server_key_id + "\n" +
+				OnlineBase64UrlEncode(request_hash.data(), request_hash.size()) + "\n" + std::to_string(response.status) + "\n" +
+				response.content_type + "\n" + response.server_timestamp + "\n" +
+				OnlineBase64UrlEncode(response_hash.data(), response_hash.size());
+			if (crypto_ed25519_check(signature.data(), public_key.data(), reinterpret_cast<const std::uint8_t*>(canonical.data()), canonical.size()) != 0)
+				throw std::runtime_error("Online API response signature verification failed.");
 		}
 
 		HttpResponse HttpRequest(const std::string& url, const std::string& body, const std::string& token,
@@ -136,7 +194,9 @@ namespace casioemu {
 				"X-CasioEmu-Signature: " + OnlineBase64UrlEncode(build_signature.data(), build_signature.size())};
 			if (!token.empty()) android_headers.push_back("Authorization: Bearer " + token);
 			if (!device_signature.empty()) android_headers.push_back("X-CasioEmu-Device-Signature: " + device_signature);
-			return AndroidHttpRequest(url, body, user_agent, android_headers);
+			auto result = AndroidHttpRequest(url, body, user_agent, android_headers);
+			VerifyServerResponse(result, canonical);
+			return result;
 #else
 
 			CURL* curl = curl_easy_init();
@@ -158,6 +218,8 @@ namespace casioemu {
 			curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 30000L);
 			curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWrite);
 			curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result.body);
+			curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, CurlHeader);
+			curl_easy_setopt(curl, CURLOPT_HEADERDATA, &result);
 			curl_easy_setopt(curl, CURLOPT_POST, 1L);
 			curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.data());
 			curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
@@ -166,6 +228,7 @@ namespace casioemu {
 			curl_slist_free_all(headers);
 			curl_easy_cleanup(curl);
 			if (code != CURLE_OK) throw std::runtime_error(std::string("HTTP request failed: ") + curl_easy_strerror(code));
+			VerifyServerResponse(result, canonical);
 			return result;
 #endif
 		}

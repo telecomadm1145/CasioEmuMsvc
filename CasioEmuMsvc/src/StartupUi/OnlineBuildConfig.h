@@ -3,6 +3,8 @@
 // CMake and release CI override this header from OnlineBuildConfig.h.in.
 #define CASIOEMU_ONLINE_CLIENT_KEY_ID ""
 #define CASIOEMU_ONLINE_CLIENT_KEY_B64 ""
+#define CASIOEMU_ONLINE_SERVER_KEY_ID ""
+#define CASIOEMU_ONLINE_SERVER_PUBLIC_KEY_B64 ""
 #define CASIOEMU_ONLINE_BUILD_TIMESTAMP "19700101T000000Z"
 #if defined(_WIN32)
 #define CASIOEMU_ONLINE_BUILD_OS "Windows"
