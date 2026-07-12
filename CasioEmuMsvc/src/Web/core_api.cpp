@@ -276,10 +276,10 @@ namespace {
 		g_gui_background_checked = false;
 	}
 
-	casioemu::ModelInfo MakeWebModel(bool real_hardware, bool is_sample_rom, int pd_value, int model_type, bool legacy_ko, bool classwiz_graph) {
-	const auto hardware_id = HardwareIdFromCoreType(model_type);
+	casioemu::ModelInfo MakeWebModel(bool real_hardware, bool is_sample_rom, int pd_value, int model_type, bool legacy_ko) {
+		const auto hardware_id = HardwareIdFromCoreType(model_type);
 		casioemu::ModelInfo model{};
-	model.csr_mask = hardware_id == casioemu::HW_SOLARII ? 0x0 : (hardware_id == casioemu::HW_ES_PLUS ? 0x1 : 0xf);
+		model.csr_mask = hardware_id == casioemu::HW_SOLARII ? 0x0 : (hardware_id == casioemu::HW_ES_PLUS ? 0x1 : 0xf);
 		model.hardware_id = hardware_id;
 		model.real_hardware = real_hardware;
 		model.pd_value = static_cast<unsigned char>(pd_value & 0xff);
@@ -299,10 +299,6 @@ namespace {
 		if (!real_hardware) {
 			model.extra["limit_spd"] = "1";
 		}
-		if (classwiz_graph) {
-			model.extra["classwiz_graph"] = "1";
-		}
-
 		for (int ko = 0; ko < 8; ++ko) {
 			for (int ki = 0; ki < 8; ++ki) {
 				casioemu::ButtonInfo button{};
@@ -902,7 +898,7 @@ void WebDebuggerQueueDownload(const char* path, const char* name) {
 		return true;
 	}
 
-	int InitRealRomCore(const uint8_t* rom, int len, const uint8_t* flash, int flash_len, int pd_value, int model_type, int legacy_ko, int classwiz_graph) {
+	int InitRealRomCore(const uint8_t* rom, int len, const uint8_t* flash, int flash_len, int pd_value, int model_type, int legacy_ko) {
 		if (!rom || len <= 0) return -1;
 		const auto hardware_id = HardwareIdFromCoreType(model_type);
 		if (hardware_id == casioemu::HW_FX_5800P && (!flash || flash_len <= 0)) return -4;
@@ -913,7 +909,7 @@ void WebDebuggerQueueDownload(const char* path, const char* name) {
 			g_emulator.reset();
 			if (!WriteRomFile(rom, len)) return -2;
 			if (flash && flash_len > 0 && !WriteFlashFile(flash, flash_len)) return -4;
-			auto model = MakeWebModel(true, false, pd_value, model_type, legacy_ko != 0, classwiz_graph != 0);
+			auto model = MakeWebModel(true, false, pd_value, model_type, legacy_ko != 0);
 			const auto model_dir = CurrentWebModelDir();
 			std::filesystem::create_directories(model_dir);
 			g_emulator = std::make_unique<casioemu::Emulator>(model, false, true, model_dir);
@@ -938,15 +934,15 @@ int casioemu_core_set_model_id(const char* model_id) {
 	return 0;
 }
 
-int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int model_type, int legacy_ko, int classwiz_graph) {
-	return InitRealRomCore(rom, len, nullptr, 0, pd_value, model_type, legacy_ko, classwiz_graph);
+int casioemu_core_init_real_rom(const uint8_t* rom, int len, int pd_value, int model_type, int legacy_ko) {
+	return InitRealRomCore(rom, len, nullptr, 0, pd_value, model_type, legacy_ko);
 }
 
-int casioemu_core_init_real_rom_with_flash(const uint8_t* rom, int rom_len, const uint8_t* flash, int flash_len, int pd_value, int model_type, int legacy_ko, int classwiz_graph) {
-	return InitRealRomCore(rom, rom_len, flash, flash_len, pd_value, model_type, legacy_ko, classwiz_graph);
+int casioemu_core_init_real_rom_with_flash(const uint8_t* rom, int rom_len, const uint8_t* flash, int flash_len, int pd_value, int model_type, int legacy_ko) {
+	return InitRealRomCore(rom, rom_len, flash, flash_len, pd_value, model_type, legacy_ko);
 }
 
-int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, int pd_value, int model_type, int legacy_ko, int classwiz_graph) {
+int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, int pd_value, int model_type, int legacy_ko) {
 	if (!rom || len <= 0) return -1;
 	try {
 		EnsureSdl();
@@ -956,7 +952,7 @@ int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, i
 		const auto hardware_id = HardwareIdFromCoreType(model_type);
 		auto normalized_rom = NormalizeSimulatorRomForWeb(rom, len, hardware_id);
 		if (!WriteRomFile(normalized_rom.data(), static_cast<int>(normalized_rom.size()))) return -2;
-		auto model = MakeWebModel(false, is_sample_rom != 0, pd_value, model_type, legacy_ko != 0, classwiz_graph != 0);
+		auto model = MakeWebModel(false, is_sample_rom != 0, pd_value, model_type, legacy_ko != 0);
 		const auto model_dir = CurrentWebModelDir();
 		std::filesystem::create_directories(model_dir);
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true, model_dir);
@@ -1224,7 +1220,7 @@ int casioemu_core_save_snapshot() {
 		const std::filesystem::path snapshot_path = std::filesystem::path(kCoreDir) / "state.snapshot";
 		std::filesystem::create_directories(kCoreDir);
 		SnapshotManager manager;
-		const uint32_t id = manager.SaveSnapshot(*g_emulator, 0, "WebCalcEmu");
+		const uint32_t id = manager.SaveSnapshot(*g_emulator, 0, "webemu");
 		manager.ExportNode(snapshot_path, id);
 		std::ifstream in(snapshot_path, std::ios::binary);
 		if (!in) return 2;

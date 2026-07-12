@@ -2,6 +2,7 @@
 #include "Chipset/MMU.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Emulator.hpp"
+#include <algorithm>
 #include <fstream>
 #include <cstring>
 
@@ -109,21 +110,20 @@ namespace casioemu {
 
 		void SaveFlashData() {
 #ifndef CASIOEMU_DISABLE_RAM_IMAGE
-			std::ofstream out_file(emulator.GetModelFilePath(FLASH_SAVE_PATH), std::ios::binary);
-			if (out_file) {
-				out_file.write((char*)emulator.chipset.flash_data.data(), 0x80000);
+			try {
+				emulator.WriteModelSessionResource(FLASH_SAVE_PATH, emulator.chipset.flash_data);
 				logger::Info("[Flash2] Flash data saved to flash.dmp\n");
 			}
-			else {
+			catch (...) {
 				logger::Info("[Flash2] Failed to save flash data to flash.dmp\n");
 			}
 #endif
 		}
 
 		void LoadFlashData() {
-			std::ifstream in_file(emulator.GetModelFilePath(FLASH_SAVE_PATH), std::ios::binary);
-			if (in_file) {
-				in_file.read((char*)emulator.chipset.flash_data.data(), 0x80000);
+			if (emulator.HasModelResource(FLASH_SAVE_PATH)) {
+				const auto data = emulator.ReadModelResource(FLASH_SAVE_PATH);
+				std::copy_n(data.begin(), std::min(data.size(), emulator.chipset.flash_data.size()), emulator.chipset.flash_data.begin());
 				logger::Info("[Flash2] Flash data loaded from flash.dmp\n");
 			}
 			else {

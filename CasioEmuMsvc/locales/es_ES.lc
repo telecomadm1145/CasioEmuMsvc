@@ -116,6 +116,8 @@ RecordStartBtn=Iniciar grabación
 RecordStopBtn=Detener grabación
 RecordStatus=Grabando: %u fotogramas
 
+HwController.CaptureScale=Escala de captura
+HwController.CaptureBackground=Fondo de captura
 HwController.Value1=Umbral de parpadeo
 HwController.Value2=Coef. de brillo
 HwController.ScreenBufferSelect=Selección de búfer
@@ -407,3 +409,22 @@ QrCode.NoHistory=No se ha capturado ningún código QR en esta sesión.
 QrCode.HistoryEntryFmt=#%llu  Versión %d  Longitud %zu
 
 placeholder2=a)"
+
+StartupUI.OnlineModels=Online models...
+StartupUI.OnlineApiAddress=API address
+StartupUI.OnlineLogin=Sign in
+StartupUI.OnlineLogout=Sign out
+StartupUI.OnlineLoggedOut=Signed out.
+StartupUI.OnlineRelogin=Sign in again
+StartupUI.OnlineBrowserOpened=Complete authorization in the browser.
+StartupUI.OnlineLoginSuccess=Authorization succeeded.
+StartupUI.OnlineLoginExpired=Online login expired or permissions changed. Please sign in again.
+StartupUI.OnlineModelsLoaded=models loaded.
+StartupUI.OnlineLaunch=Launch
+StartupUI.OnlineDownloading=Downloading and validating model...
+StartupUI.OnlineLoading=Loading online models...
+StartupUI.OnlineStartingLogin=Starting browser authorization...
+StartupUI.OnlineCompletingLogin=Completing authorization...
+StartupUI.OnlineAuthorizationExpired=Browser authorization expired. Please sign in again.
+StartupUI.OnlineLoggingOut=Signing out...
+StartupUI.OnlineLoginSessionOnly=Authorization succeeded. Secure token storage is unavailable; sign-in lasts for this run only.

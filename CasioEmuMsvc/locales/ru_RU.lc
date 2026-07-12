@@ -116,6 +116,8 @@ RecordStartBtn=Начать запись
 RecordStopBtn=Остановить запись
 RecordStatus=Запись: %u кадров
 
+HwController.CaptureScale=Масштаб захвата
+HwController.CaptureBackground=Фон захвата
 HwController.Value1=Порог мерцания
 HwController.Value2=Коэф. яркости
 HwController.ScreenBufferSelect=Выбор буфера экрана
@@ -407,3 +409,22 @@ QrCode.NoHistory=В этом сеансе QR-коды еще не захваче
 QrCode.HistoryEntryFmt=#%llu  Версия %d  Длина %zu
 
 placeholder2=a)"
+
+StartupUI.OnlineModels=Online models...
+StartupUI.OnlineApiAddress=API address
+StartupUI.OnlineLogin=Sign in
+StartupUI.OnlineLogout=Sign out
+StartupUI.OnlineLoggedOut=Signed out.
+StartupUI.OnlineRelogin=Sign in again
+StartupUI.OnlineBrowserOpened=Complete authorization in the browser.
+StartupUI.OnlineLoginSuccess=Authorization succeeded.
+StartupUI.OnlineLoginExpired=Online login expired or permissions changed. Please sign in again.
+StartupUI.OnlineModelsLoaded=models loaded.
+StartupUI.OnlineLaunch=Launch
+StartupUI.OnlineDownloading=Downloading and validating model...
+StartupUI.OnlineLoading=Loading online models...
+StartupUI.OnlineStartingLogin=Starting browser authorization...
+StartupUI.OnlineCompletingLogin=Completing authorization...
+StartupUI.OnlineAuthorizationExpired=Browser authorization expired. Please sign in again.
+StartupUI.OnlineLoggingOut=Signing out...
+StartupUI.OnlineLoginSessionOnly=Authorization succeeded. Secure token storage is unavailable; sign-in lasts for this run only.

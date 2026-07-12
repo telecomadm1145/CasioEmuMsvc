@@ -6,9 +6,9 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
-//  ¹¹Ôì / »ù´¡
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  æ„é€  / åŸºç¡€
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 TouchMouseTranslator::TouchMouseTranslator(
 	Uint32 windowId,
@@ -37,9 +37,9 @@ bool TouchMouseTranslator::HandleEvent(const SDL_Event& event,
 	}
 }
 
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 //  FingerDown
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 bool TouchMouseTranslator::HandleFingerDown(
 	const SDL_TouchFingerEvent& finger, int windowW, int windowH) {
@@ -56,16 +56,16 @@ bool TouchMouseTranslator::HandleFingerDown(
 		StartFinger(primary_, finger.fingerId, x, y, target);
 
 		/*
-		 * ÎŞÂÛ ImGui »¹ÊÇ Emulator£¬¶¼²»ÔÚ FingerDown Ê±Á¢¼´°´ÏÂÊó±ê¡£
-		 * µÈ Motion ³¬¹ıãĞÖµºó¿ªÊ¼ÍÏ×§£¬»òÔÚ Up Ê±ÅĞ¶Ï tap / long-press¡£
-		 * ÕâÑùÒÆ¶¯¾àÀë²»¹»¾Í²»»á´¥·¢ÈÎºÎÊó±êÊÂ¼ş¡£
+		 * æ— è®º ImGui è¿˜æ˜¯ Emulatorï¼Œéƒ½ä¸åœ¨ FingerDown æ—¶ç«‹å³æŒ‰ä¸‹é¼ æ ‡ã€‚
+		 * ç­‰ Motion è¶…è¿‡é˜ˆå€¼åå¼€å§‹æ‹–æ‹½ï¼Œæˆ–åœ¨ Up æ—¶åˆ¤æ–­ tap / long-pressã€‚
+		 * è¿™æ ·ç§»åŠ¨è·ç¦»ä¸å¤Ÿå°±ä¸ä¼šè§¦å‘ä»»ä½•é¼ æ ‡äº‹ä»¶ã€‚
 		 */
 		return true;
 	}
 
 	if (!secondary_.active && finger.fingerId != primary_.fingerId) {
-		// µÚ¶ş¸ùÊÖÖ¸°´ÏÂ ¡ú ×ªË«Ö¸¹ö¶¯
-		// ÏÈÊÍ·Å×ó¼ü£¬±ÜÃâ¿¨×¡
+		// ç¬¬äºŒæ ¹æ‰‹æŒ‡æŒ‰ä¸‹ â†’ è½¬åŒæŒ‡æ»šåŠ¨
+		// å…ˆé‡Šæ”¾å·¦é”®ï¼Œé¿å…å¡ä½
 		if (primary_.dragging || leftButtonDown_) {
 			EmitMouseButton(primary_.target, SDL_BUTTON_LEFT,
 				SDL_RELEASED,
@@ -82,9 +82,9 @@ bool TouchMouseTranslator::HandleFingerDown(
 	return true;
 }
 
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 //  FingerUp
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 bool TouchMouseTranslator::HandleFingerUp(
 	const SDL_TouchFingerEvent& finger, int windowW, int windowH) {
@@ -93,20 +93,20 @@ bool TouchMouseTranslator::HandleFingerUp(
 	const float y = finger.y * static_cast<float>(windowH);
 	const Uint32 now = SDL_GetTicks();
 
-	// ©¤©¤ primary up ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+	// â”€â”€ primary up â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 	if (primary_.active && primary_.fingerId == finger.fingerId) {
 		primary_.currentX = x;
 		primary_.currentY = y;
 
 		if (primary_.dragging || leftButtonDown_) {
-			// ÕıÔÚÍÏ×§ÖĞ ¡ú ÊÍ·Å×ó¼ü
+			// æ­£åœ¨æ‹–æ‹½ä¸­ â†’ é‡Šæ”¾å·¦é”®
 			EmitMouseMotion(primary_.target, x, y);
 			EmitMouseButton(primary_.target, SDL_BUTTON_LEFT,
 				SDL_RELEASED, x, y);
 			primary_.dragging = false;
 		}
 		else {
-			// Ã»ÓĞÍÏ×§ ¡ú ÅĞ¶Ï tap / long-press
+			// æ²¡æœ‰æ‹–æ‹½ â†’ åˆ¤æ–­ tap / long-press
 			const float dx = x - primary_.startX;
 			const float dy = y - primary_.startY;
 			const float distSq = dx * dx + dy * dy;
@@ -115,17 +115,17 @@ bool TouchMouseTranslator::HandleFingerUp(
 
 			if (!primary_.suppressTap && distSq <= thresholdSq) {
 				if (now - primary_.startTime < longPressDelayMs_) {
-					// ¶Ì°´ ¡ú ×ó¼üµã»÷
+					// çŸ­æŒ‰ â†’ å·¦é”®ç‚¹å‡»
 					EmitMouseClick(primary_.target,
 						SDL_BUTTON_LEFT, x, y);
 				}
 				else {
-					// ³¤°´ ¡ú ÓÒ¼üµã»÷
+					// é•¿æŒ‰ â†’ å³é”®ç‚¹å‡»
 					EmitMouseClick(primary_.target,
 						SDL_BUTTON_RIGHT, x, y);
 				}
 			}
-			// ÒÆ¶¯¾àÀë²»¹» ÇÒ suppressTap ¡ú Ê²Ã´¶¼²»×ö
+			// ç§»åŠ¨è·ç¦»ä¸å¤Ÿ ä¸” suppressTap â†’ ä»€ä¹ˆéƒ½ä¸åš
 		}
 
 		ResetFinger(primary_);
@@ -135,7 +135,7 @@ bool TouchMouseTranslator::HandleFingerUp(
 		return true;
 	}
 
-	// ©¤©¤ secondary up ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+	// â”€â”€ secondary up â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 	if (secondary_.active && secondary_.fingerId == finger.fingerId) {
 		secondary_.currentX = x;
 		secondary_.currentY = y;
@@ -153,9 +153,9 @@ bool TouchMouseTranslator::HandleFingerUp(
 	return true;
 }
 
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 //  FingerMotion
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 bool TouchMouseTranslator::HandleFingerMotion(
 	const SDL_TouchFingerEvent& finger, int windowW, int windowH) {
@@ -163,7 +163,7 @@ bool TouchMouseTranslator::HandleFingerMotion(
 	const float x = finger.x * static_cast<float>(windowW);
 	const float y = finger.y * static_cast<float>(windowH);
 
-	// ©¤©¤ primary motion ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+	// â”€â”€ primary motion â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 	if (primary_.active && primary_.fingerId == finger.fingerId) {
 
 		if (!secondary_.active) {
@@ -182,7 +182,7 @@ bool TouchMouseTranslator::HandleFingerMotion(
 		return true;
 	}
 
-	// ©¤©¤ secondary motion ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+	// â”€â”€ secondary motion â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 	if (secondary_.active && secondary_.fingerId == finger.fingerId) {
 
 		if (primary_.active) {
@@ -201,9 +201,9 @@ bool TouchMouseTranslator::HandleFingerMotion(
 	return true;
 }
 
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
-//  ÄÚ²¿ÒÆ¶¯´¦Àí
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  å†…éƒ¨ç§»åŠ¨å¤„ç†
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 void TouchMouseTranslator::HandleSingleFingerMove(
 	TouchState& state, float x, float y) {
@@ -215,8 +215,8 @@ void TouchMouseTranslator::HandleSingleFingerMove(
 		dragThresholdPixels_ * dragThresholdPixels_;
 
 	if (!state.dragging && distSq > thresholdSq) {
-		// ³¬¹ıãĞÖµ ¡ú ¿ªÊ¼ÍÏ×§
-		// ´ÓÆğÊ¼µã°´ÏÂ£¬ÔÙÒÆµ½µ±Ç°Î»ÖÃ£¬·ÀÖ¹ ImGui ´°¿ÚÆ¯ÒÆ
+		// è¶…è¿‡é˜ˆå€¼ â†’ å¼€å§‹æ‹–æ‹½
+		// ä»èµ·å§‹ç‚¹æŒ‰ä¸‹ï¼Œå†ç§»åˆ°å½“å‰ä½ç½®ï¼Œé˜²æ­¢ ImGui çª—å£æ¼‚ç§»
 		EmitMouseMotion(state.target, state.startX, state.startY);
 		EmitMouseButton(state.target, SDL_BUTTON_LEFT, SDL_PRESSED,
 			state.startX, state.startY);
@@ -241,9 +241,9 @@ void TouchMouseTranslator::HandleTwoFingerMove(
 	EmitMouseWheel(state.target, moveY, anchorX, anchorY);
 }
 
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
-//  ¸¨Öú
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  è¾…åŠ©
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 void TouchMouseTranslator::StartFinger(
 	TouchState& state, SDL_FingerID fingerId,
@@ -296,9 +296,9 @@ void TouchMouseTranslator::ResetTrail(TouchTrail& trail) {
 	trail.count = 0;
 }
 
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
-//  äÖÈ¾
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  æ¸²æŸ“
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 static void RenderFilledCircle(SDL_Renderer* renderer,
 	int cx, int cy, int radius) {
@@ -346,7 +346,7 @@ void TouchMouseTranslator::RenderDebug(SDL_Renderer* renderer) const {
 	DrawCross(renderer, primary_, 255, 0, 0);
 	DrawCross(renderer, secondary_, 0, 255, 0);
 
-	// ³¤°´½ø¶È»·£º½öµ±µ¥Ö¸°´×¡¡¢Î´ÍÏ×§¡¢Î´ suppress Ê±ÏÔÊ¾
+	// é•¿æŒ‰è¿›åº¦ç¯ï¼šä»…å½“å•æŒ‡æŒ‰ä½ã€æœªæ‹–æ‹½ã€æœª suppress æ—¶æ˜¾ç¤º
 	DrawLongPressRing(renderer, primary_);
 	DrawLongPressRing(renderer, secondary_);
 }
@@ -391,7 +391,7 @@ void TouchMouseTranslator::DrawCross(SDL_Renderer* renderer,
 	if (!state.active) {
 		return;
 	}
-	// ¿ÉÑ¡£º»æÖÆÊ®×Ö×¼ĞÇ
+	// å¯é€‰ï¼šç»˜åˆ¶åå­—å‡†æ˜Ÿ
 	// SDL_SetRenderDrawColor(renderer, r, g, b, 255);
 	// ...
 	(void)r;
@@ -407,12 +407,12 @@ void TouchMouseTranslator::DrawLongPressRing(
 		return;
 	}
 
-	// ÕıÔÚÍÏ×§»òÒÑ±»ÒÖÖÆ ¡ú ²»ÏÔÊ¾»·
+	// æ­£åœ¨æ‹–æ‹½æˆ–å·²è¢«æŠ‘åˆ¶ â†’ ä¸æ˜¾ç¤ºç¯
 	if (state.dragging || state.suppressTap) {
 		return;
 	}
 
-	// ¼ì²éÒÆ¶¯¾àÀëÊÇ·ñ»¹ÔÚãĞÖµÄÚ
+	// æ£€æŸ¥ç§»åŠ¨è·ç¦»æ˜¯å¦è¿˜åœ¨é˜ˆå€¼å†…
 	const float dx = state.currentX - state.startX;
 	const float dy = state.currentY - state.startY;
 	const float distSq = dx * dx + dy * dy;
@@ -425,21 +425,21 @@ void TouchMouseTranslator::DrawLongPressRing(
 	const Uint32 now = SDL_GetTicks();
 	const Uint32 elapsed = now - state.startTime;
 
-	// ½ø¶È 0.0 ~ 1.0
+	// è¿›åº¦ 0.0 ~ 1.0
 	float progress = static_cast<float>(elapsed) / static_cast<float>(longPressDelayMs_);
 	progress = std::min(progress, 1.0f);
 
-	// ½ø¶ÈÌ«Ğ¡²»»­
+	// è¿›åº¦å¤ªå°ä¸ç”»
 	if (progress < 0.5f) {
 		return;
 	}
-	progress = (progress - 0.5f) * 2.0f; // 0.5~1.0 Ó³Éäµ½ 0.0~1.0
+	progress = (progress - 0.5f) * 2.0f; // 0.5~1.0 æ˜ å°„åˆ° 0.0~1.0
 
 	const int cx = static_cast<int>(state.startX);
 	const int cy = static_cast<int>(state.startY);
 	const float endAngle = progress * 2.0f * static_cast<float>(M_PI);
 
-	// ÑÕÉ«£ºÎ´Âú°×É«£¬ÂúÁËÂÌÉ«
+	// é¢œè‰²ï¼šæœªæ»¡ç™½è‰²ï¼Œæ»¡äº†ç»¿è‰²
 	if (progress >= 1.0f) {
 		SDL_SetRenderDrawColor(renderer, 100, 255, 100, 220);
 	}
@@ -447,15 +447,15 @@ void TouchMouseTranslator::DrawLongPressRing(
 		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 180);
 	}
 
-	// ÓÃÏß¶Î±Æ½üÔ²»¡
+	// ç”¨çº¿æ®µé€¼è¿‘åœ†å¼§
 	const int segments = std::max(16, static_cast<int>(progress * 64));
-	const float startAng = -static_cast<float>(M_PI) / 2.0f; // 12 µãÖÓ·½Ïò
+	const float startAng = -static_cast<float>(M_PI) / 2.0f; // 12 ç‚¹é’Ÿæ–¹å‘
 
 	for (int i = 0; i < segments; ++i) {
 		float a1 = startAng + endAngle * static_cast<float>(i) / static_cast<float>(segments);
 		float a2 = startAng + endAngle * static_cast<float>(i + 1) / static_cast<float>(segments);
 
-		// ¶ÔÃ¿¶Î»¡Ïß£¬»­¶à²ãÒÔÄ£ÄâÏß¿í
+		// å¯¹æ¯æ®µå¼§çº¿ï¼Œç”»å¤šå±‚ä»¥æ¨¡æ‹Ÿçº¿å®½
 		for (float r = ringRadius_ - ringThickness_ * 0.5f;
 			r <= ringRadius_ + ringThickness_ * 0.5f;
 			r += 1.0f) {
@@ -469,7 +469,7 @@ void TouchMouseTranslator::DrawLongPressRing(
 		}
 	}
 
-	// ÂúÁËÖ®ºó»­Ò»¸öĞ¡µãÇ¿µ÷
+	// æ»¡äº†ä¹‹åç”»ä¸€ä¸ªå°ç‚¹å¼ºè°ƒ
 	if (progress >= 1.0f) {
 		SDL_SetRenderDrawColor(renderer, 100, 255, 100, 255);
 		RenderFilledCircle(renderer,
@@ -481,9 +481,9 @@ void TouchMouseTranslator::DrawLongPressRing(
 	}
 }
 
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
-//  ÊÂ¼ş·¢Éä
-// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  äº‹ä»¶å‘å°„
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 void TouchMouseTranslator::EmitMouseMotion(
 	TouchTarget target, float x, float y) {

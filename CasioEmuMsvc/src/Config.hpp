@@ -81,7 +81,7 @@ public:                       \
 	virtual y Get##x##() = 0; \
 	virtual void Set##x##(y a) = 0;
 
-#include "git_info.h"
+#include <git_info.h>
 
 #define EMULATOR_VERSION GIT_COMMIT_HASH
 

@@ -458,6 +458,8 @@
     <ClCompile Include="src\Chipset\MMURegion.cpp" />
     <ClCompile Include="src\CrashHandler\CrashHandler.cpp" />
     <ClCompile Include="src\Emulator.cpp" />
+    <ClCompile Include="src\ModelConfig.cpp" />
+    <ClCompile Include="src\SvgBoardModelLoader.cpp" />
     <ClCompile Include="src\Ext\SysDialog.cpp" />
     <ClCompile Include="src\Gui\5800FileSystem.cpp" />
     <ClCompile Include="src\Gui\CallAnalysis.cpp" />
@@ -521,6 +523,7 @@
     <ClCompile Include="third_party\miniz\miniz.c" />
     <ClCompile Include="third_party\miniz\miniz_tdef.c" />
     <ClCompile Include="third_party\miniz\miniz_tinfl.c" />
+    <ClCompile Include="third_party\tinyxml2\tinyxml2.cpp" />
     <ClCompile Include="src\Gui\TouchMouseTranslator.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -554,6 +557,7 @@
     <ClInclude Include="src\Config.hpp" />
     <ClInclude Include="src\Containers\ConcurrentObject.h" />
     <ClInclude Include="src\Ext\LabelFile.h" />
+    <ClInclude Include="src\Ext\Crypto.hpp" />
     <ClInclude Include="src\Ext\RomPackage.h" />
     <ClInclude Include="src\Ext\SysDialog.h" />
     <ClInclude Include="src\Gui\Localization.h" />
@@ -601,11 +605,15 @@
     <ClInclude Include="src\Gui\Ui.hpp" />
     <ClInclude Include="src\Gui\WatchWindow.hpp" />
     <ClInclude Include="src\Ext\Logger.hpp" />
+    <ClInclude Include="src\ModelConfig.h" />
     <ClInclude Include="src\ModelInfo.h" />
     <ClInclude Include="src\Models.h" />
+    <ClInclude Include="src\SvgBoardModelLoader.h" />
+    <ClInclude Include="src\RendererBackend.h" />
     <ClInclude Include="src\Gui\VariableWindow.h" />
     <ClInclude Include="src\Gui\PluginLogWindow.hpp" />
     <ClInclude Include="third_party\miniz\miniz_export.h" />
+    <ClInclude Include="third_party\tinyxml2\tinyxml2.h" />
     <ClInclude Include="src\Snapshot.h" />
     <ClInclude Include="src\Compress.h" />
     <ClInclude Include="third_party\miniz\miniz.h" />

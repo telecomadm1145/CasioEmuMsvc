@@ -643,17 +643,15 @@ class PluginApi_Impl : public PluginApi {
 			const bool wasPaused = m_emu->GetPaused();
 			m_emu->SetPaused(true);
 			auto lock = std::lock_guard(m_emu->access_mx);
-			std::ifstream stream(
-				m_emu->GetModelFilePath(m_emu->ModelDefinition.rom_path),
-				std::ifstream::binary);
-			if (!stream) {
+			std::vector<unsigned char> data;
+			try {
+				data = m_emu->ReadModelResource(m_emu->ModelDefinition.rom_path);
+			}
+			catch (...) {
 				error = "Failed to open ROM file";
 				m_emu->SetPaused(wasPaused);
 				return false;
 			}
-			std::vector<unsigned char> data{
-				std::istreambuf_iterator<char>(stream),
-				std::istreambuf_iterator<char>()};
 			std::copy_n(
 				data.begin(),
 				std::min(data.size(), m_emu->chipset.rom_data.size()),

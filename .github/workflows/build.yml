@@ -2,37 +2,40 @@ name: Auto build and pre-release
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Build target"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - windows-x64
+          - windows-x86
+          - android
+          - linux
+          - macos
+          - web
   push:
     branches: [ "stable" ]
 
 env:
   BUILD_CONFIGURATION: Release
+  CASIOEMU_ONLINE_BUILD_KEY_ID: ${{ secrets.CASIOEMU_ONLINE_BUILD_KEY_ID }}
+  CASIOEMU_ONLINE_BUILD_KEY_B64: ${{ secrets.CASIOEMU_ONLINE_BUILD_KEY_B64 }}
+  CASIOEMU_ONLINE_SERVER_KEY_ID: ${{ secrets.CASIOEMU_ONLINE_SERVER_KEY_ID }}
+  CASIOEMU_ONLINE_SERVER_PUBLIC_KEY_B64: ${{ secrets.CASIOEMU_ONLINE_SERVER_PUBLIC_KEY_B64 }}
 
 permissions:
   contents: write
 
 jobs:
   build:
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.target != 'web'
     strategy:
-      matrix:
-        include:
-          - platform: windows
-            platform_arch: x64
-            os: windows-latest
-            name: "Windows-x64"
-          - platform: windows
-            platform_arch: x86
-            os: windows-latest
-            name: "Windows-x86"
-          - platform: android
-            os: ubuntu-latest
-            name: "Android"
-          - platform: linux
-            os: ubuntu-latest
-            name: "Linux-x64"
-          - platform: macos
-            os: macos-latest
-            name: "macOS-universal"
+      matrix: ${{ fromJSON(github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'windows-x64' && '{"include":[{"platform":"windows","platform_arch":"x64","os":"windows-latest","name":"Windows-x64"}]}' || github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'windows-x86' && '{"include":[{"platform":"windows","platform_arch":"x86","os":"windows-latest","name":"Windows-x86"}]}' || github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'android' && '{"include":[{"platform":"android","os":"ubuntu-latest","name":"Android"}]}' || github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'linux' && '{"include":[{"platform":"linux","os":"ubuntu-latest","name":"Linux-x64"}]}' || github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'macos' && '{"include":[{"platform":"macos","os":"macos-latest","name":"macOS-universal"}]}' || '{"include":[{"platform":"windows","platform_arch":"x64","os":"windows-latest","name":"Windows-x64"},{"platform":"windows","platform_arch":"x86","os":"windows-latest","name":"Windows-x86"},{"platform":"android","os":"ubuntu-latest","name":"Android"},{"platform":"linux","os":"ubuntu-latest","name":"Linux-x64"},{"platform":"macos","os":"macos-latest","name":"macOS-universal"}]}') }}
     
     runs-on: ${{ matrix.os }}
     name: Build ${{ matrix.name }}
@@ -183,6 +186,10 @@ jobs:
   web-build:
     runs-on: ubuntu-latest
     name: Build Web
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.target == 'all' ||
+      github.event.inputs.target == 'web'
 
     steps:
     - name: Checkout
