@@ -116,6 +116,8 @@ RecordStartBtn=Aufnahme starten
 RecordStopBtn=Aufnahme stoppen
 RecordStatus=Aufnahme: %u Frames
 
+HwController.CaptureScale=Aufnahmeskalierung
+HwController.CaptureBackground=Aufnahmehintergrund
 HwController.Value1=Flimmerschwelle
 HwController.Value2=Helligkeitskoeff.
 HwController.ScreenBufferSelect=Puffer-Auswahl
@@ -405,5 +407,24 @@ QrCode.NoCurrent=Der Rechner zeigt derzeit keinen QR-Code an.
 QrCode.History=Verlauf
 QrCode.NoHistory=In dieser Sitzung wurde noch kein QR-Code erfasst.
 QrCode.HistoryEntryFmt=#%llu  Version %d  Länge %zu
+
+StartupUI.OnlineModels=Online-Modelle ...
+StartupUI.OnlineApiAddress=API-Adresse
+StartupUI.OnlineLogin=Anmelden
+StartupUI.OnlineLogout=Abmelden
+StartupUI.OnlineLoggedOut=Abgemeldet.
+StartupUI.OnlineRelogin=Erneut anmelden
+StartupUI.OnlineBrowserOpened=Schließe die Autorisierung im Browser ab.
+StartupUI.OnlineLoginSuccess=Autorisierung erfolgreich.
+StartupUI.OnlineLoginExpired=Die Online-Anmeldung ist abgelaufen oder die Berechtigungen wurden geändert. Bitte erneut anmelden.
+StartupUI.OnlineModelsLoaded=Modelle geladen.
+StartupUI.OnlineLaunch=Starten
+StartupUI.OnlineDownloading=Modell wird heruntergeladen und überprüft ...
+StartupUI.OnlineLoading=Online-Modelle werden geladen ...
+StartupUI.OnlineStartingLogin=Browser-Autorisierung wird gestartet ...
+StartupUI.OnlineCompletingLogin=Autorisierung wird abgeschlossen ...
+StartupUI.OnlineAuthorizationExpired=Die Browser-Autorisierung ist abgelaufen. Bitte erneut anmelden.
+StartupUI.OnlineLoggingOut=Abmeldung ...
+StartupUI.OnlineLoginSessionOnly=Autorisierung erfolgreich. Sichere Token-Speicherung ist nicht verfügbar; die Anmeldung gilt nur für diesen Lauf.
 
 placeholder2=a)"

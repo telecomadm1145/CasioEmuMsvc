@@ -116,6 +116,8 @@ RecordStartBtn=Start Recording
 RecordStopBtn=Stop Recording
 RecordStatus=Recording: %u frames
 
+HwController.CaptureScale=Capture scale
+HwController.CaptureBackground=Capture background
 HwController.Value1=Flicker Threshold
 HwController.Value2=Brightness Coeff.
 HwController.ScreenBufferSelect=Buffer Selection
@@ -405,5 +407,24 @@ QrCode.NoCurrent=No QR code is currently displayed by the calculator.
 QrCode.History=History
 QrCode.NoHistory=No QR code has been captured in this session.
 QrCode.HistoryEntryFmt=#%llu  Version %d  Length %zu
+
+StartupUI.OnlineModels=Online models...
+StartupUI.OnlineApiAddress=API address
+StartupUI.OnlineLogin=Sign in
+StartupUI.OnlineLogout=Sign out
+StartupUI.OnlineLoggedOut=Signed out.
+StartupUI.OnlineRelogin=Sign in again
+StartupUI.OnlineBrowserOpened=Complete authorization in the browser.
+StartupUI.OnlineLoginSuccess=Authorization succeeded.
+StartupUI.OnlineLoginExpired=Online login expired or permissions changed. Please sign in again.
+StartupUI.OnlineModelsLoaded=models loaded.
+StartupUI.OnlineLaunch=Launch
+StartupUI.OnlineDownloading=Downloading and validating model...
+StartupUI.OnlineLoading=Loading online models...
+StartupUI.OnlineStartingLogin=Starting browser authorization...
+StartupUI.OnlineCompletingLogin=Completing authorization...
+StartupUI.OnlineAuthorizationExpired=Browser authorization expired. Please sign in again.
+StartupUI.OnlineLoggingOut=Signing out...
+StartupUI.OnlineLoginSessionOnly=Authorization succeeded. Secure token storage is unavailable; sign-in lasts for this run only.
 
 placeholder2=a)"

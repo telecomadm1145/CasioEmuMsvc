@@ -116,6 +116,8 @@ RecordStartBtn=Démarrer l'enregistrement
 RecordStopBtn=Arrêter l'enregistrement
 RecordStatus=Enregistrement : %u images
 
+HwController.CaptureScale=Échelle de capture
+HwController.CaptureBackground=Arrière-plan de capture
 HwController.Value1=Seuil de scintillement
 HwController.Value2=Coeff. de luminosité
 HwController.ScreenBufferSelect=Sélection du tampon
@@ -405,5 +407,24 @@ QrCode.NoCurrent=Aucun code QR n’est actuellement affiché par la calculatrice
 QrCode.History=Historique
 QrCode.NoHistory=Aucun code QR n’a été capturé dans cette session.
 QrCode.HistoryEntryFmt=#%llu  Version %d  Longueur %zu
+
+StartupUI.OnlineModels=Modèles en ligne...
+StartupUI.OnlineApiAddress=Adresse de l'API
+StartupUI.OnlineLogin=Se connecter
+StartupUI.OnlineLogout=Se déconnecter
+StartupUI.OnlineLoggedOut=Déconnecté.
+StartupUI.OnlineRelogin=Se reconnecter
+StartupUI.OnlineBrowserOpened=Terminez l'autorisation dans le navigateur.
+StartupUI.OnlineLoginSuccess=Autorisation réussie.
+StartupUI.OnlineLoginExpired=La connexion en ligne a expiré ou les autorisations ont changé. Veuillez vous reconnecter.
+StartupUI.OnlineModelsLoaded=modèles chargés.
+StartupUI.OnlineLaunch=Lancer
+StartupUI.OnlineDownloading=Téléchargement et validation du modèle...
+StartupUI.OnlineLoading=Chargement des modèles en ligne...
+StartupUI.OnlineStartingLogin=Démarrage de l'autorisation dans le navigateur...
+StartupUI.OnlineCompletingLogin=Finalisation de l'autorisation...
+StartupUI.OnlineAuthorizationExpired=L'autorisation du navigateur a expiré. Veuillez vous reconnecter.
+StartupUI.OnlineLoggingOut=Déconnexion...
+StartupUI.OnlineLoginSessionOnly=Autorisation réussie. Le stockage sécurisé du jeton est indisponible ; la connexion ne durera que cette session.
 
 placeholder2=a)"

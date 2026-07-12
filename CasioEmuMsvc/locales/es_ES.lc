@@ -116,6 +116,8 @@ RecordStartBtn=Iniciar grabación
 RecordStopBtn=Detener grabación
 RecordStatus=Grabando: %u fotogramas
 
+HwController.CaptureScale=Escala de captura
+HwController.CaptureBackground=Fondo de captura
 HwController.Value1=Umbral de parpadeo
 HwController.Value2=Coef. de brillo
 HwController.ScreenBufferSelect=Selección de búfer
@@ -405,5 +407,24 @@ QrCode.NoCurrent=La calculadora no muestra ningún código QR actualmente.
 QrCode.History=Historial
 QrCode.NoHistory=No se ha capturado ningún código QR en esta sesión.
 QrCode.HistoryEntryFmt=#%llu  Versión %d  Longitud %zu
+
+StartupUI.OnlineModels=Modelos en línea...
+StartupUI.OnlineApiAddress=Dirección de la API
+StartupUI.OnlineLogin=Iniciar sesión
+StartupUI.OnlineLogout=Cerrar sesión
+StartupUI.OnlineLoggedOut=Sesión cerrada.
+StartupUI.OnlineRelogin=Iniciar sesión de nuevo
+StartupUI.OnlineBrowserOpened=Completa la autorización en el navegador.
+StartupUI.OnlineLoginSuccess=Autorización correcta.
+StartupUI.OnlineLoginExpired=La sesión en línea ha caducado o han cambiado los permisos. Inicia sesión de nuevo.
+StartupUI.OnlineModelsLoaded=modelos cargados.
+StartupUI.OnlineLaunch=Iniciar
+StartupUI.OnlineDownloading=Descargando y validando el modelo...
+StartupUI.OnlineLoading=Cargando modelos en línea...
+StartupUI.OnlineStartingLogin=Iniciando la autorización en el navegador...
+StartupUI.OnlineCompletingLogin=Completando la autorización...
+StartupUI.OnlineAuthorizationExpired=La autorización del navegador ha caducado. Inicia sesión de nuevo.
+StartupUI.OnlineLoggingOut=Cerrando sesión...
+StartupUI.OnlineLoginSessionOnly=Autorización correcta. El almacenamiento seguro de tokens no está disponible; la sesión solo durará esta ejecución.
 
 placeholder2=a)"

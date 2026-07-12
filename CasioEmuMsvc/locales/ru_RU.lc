@@ -116,6 +116,8 @@ RecordStartBtn=Начать запись
 RecordStopBtn=Остановить запись
 RecordStatus=Запись: %u кадров
 
+HwController.CaptureScale=Масштаб захвата
+HwController.CaptureBackground=Фон захвата
 HwController.Value1=Порог мерцания
 HwController.Value2=Коэф. яркости
 HwController.ScreenBufferSelect=Выбор буфера экрана
@@ -405,5 +407,24 @@ QrCode.NoCurrent=Сейчас калькулятор не отображает Q
 QrCode.History=История
 QrCode.NoHistory=В этом сеансе QR-коды еще не захвачены.
 QrCode.HistoryEntryFmt=#%llu  Версия %d  Длина %zu
+
+StartupUI.OnlineModels=Онлайн-модели...
+StartupUI.OnlineApiAddress=Адрес API
+StartupUI.OnlineLogin=Войти
+StartupUI.OnlineLogout=Выйти
+StartupUI.OnlineLoggedOut=Вы вышли из системы.
+StartupUI.OnlineRelogin=Войти снова
+StartupUI.OnlineBrowserOpened=Завершите авторизацию в браузере.
+StartupUI.OnlineLoginSuccess=Авторизация выполнена.
+StartupUI.OnlineLoginExpired=Срок действия онлайн-сеанса истёк или разрешения изменились. Войдите снова.
+StartupUI.OnlineModelsLoaded=модели загружены.
+StartupUI.OnlineLaunch=Запустить
+StartupUI.OnlineDownloading=Загрузка и проверка модели...
+StartupUI.OnlineLoading=Загрузка онлайн-моделей...
+StartupUI.OnlineStartingLogin=Запуск авторизации в браузере...
+StartupUI.OnlineCompletingLogin=Завершение авторизации...
+StartupUI.OnlineAuthorizationExpired=Срок действия авторизации в браузере истёк. Войдите снова.
+StartupUI.OnlineLoggingOut=Выход из системы...
+StartupUI.OnlineLoginSessionOnly=Авторизация выполнена. Безопасное хранение токена недоступно; вход действует только до завершения текущего запуска.
 
 placeholder2=a)"

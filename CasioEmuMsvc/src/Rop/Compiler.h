@@ -66,7 +66,7 @@ namespace lc::details {
 		return rtrim(line);
 	}
 
-	// Ä£Äâ Python µÄ canonicalize£¬°şÀë·Ç×ÖÄ¸/Êı×ÖÇ°ºóµÄ¿Õ¸ñ£¨Í¬Ê±°²È«Ìø¹ı×Ö·û´®ÄÚÈİ£©
+	// æ¨¡æ‹Ÿ Python çš„ canonicalizeï¼Œå‰¥ç¦»éå­—æ¯/æ•°å­—å‰åçš„ç©ºæ ¼ï¼ˆåŒæ—¶å®‰å…¨è·³è¿‡å­—ç¬¦ä¸²å†…å®¹ï¼‰
 	static string canonicalize(string st) {
 		st = trim(std::move(st));
 		string out;
@@ -292,7 +292,7 @@ namespace lc::details {
 
 	public:
 		void addCommand(int address, string name, vector<string> tags = {}) {
-			name = lower(canonicalize(name)); // È·±£´æÈëµÄ Key ±»ÕıÈ·¸ñÊ½»¯
+			name = lower(canonicalize(name)); // ç¡®ä¿å­˜å…¥çš„ Key è¢«æ­£ç¡®æ ¼å¼åŒ–
 			if (name.empty())
 				throw runtime_error("empty command");
 
@@ -400,7 +400,7 @@ namespace lc::details {
 
 	class Parser {
 		Diagnostic diag;
-		const CommandDatabase* db; // Ìí¼Ó db Ö¸Õë¸ĞÖªÄÚÖÃĞ¡¹Ò¼ş
+		const CommandDatabase* db; // æ·»åŠ  db æŒ‡é’ˆæ„ŸçŸ¥å†…ç½®å°æŒ‚ä»¶
 
 	public:
 		explicit Parser(const CommandDatabase* db = nullptr, Diagnostic d = {}) : diag(std::move(d)), db(db) {}
@@ -414,8 +414,8 @@ namespace lc::details {
 
 			string low = lower(line);
 
-			// Èç¹ûÒÑ¾­´æÔÚÓÚ Commands ÖĞ£¬ÔòÖ±½Ó×÷Îª Call Ö´ĞĞ¡£
-			// ÕâÊÇÎªÁË·ÀÖ¹ `[er0]=er2,rt` ±»ÎóÅĞÎª Assignment ¸³Öµ´Ó¶ø±ÀÀ£¡£
+			// å¦‚æœå·²ç»å­˜åœ¨äº Commands ä¸­ï¼Œåˆ™ç›´æ¥ä½œä¸º Call æ‰§è¡Œã€‚
+			// è¿™æ˜¯ä¸ºäº†é˜²æ­¢ `[er0]=er2,rt` è¢«è¯¯åˆ¤ä¸º Assignment èµ‹å€¼ä»è€Œå´©æºƒã€‚
 			if (db && db->hasCommand(low)) {
 				return CallStmt{low};
 			}

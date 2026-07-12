@@ -115,6 +115,8 @@ RecordStartBtn=録画開始
 RecordStopBtn=録画停止
 RecordStatus=録画中: %u フレーム
 
+HwController.CaptureScale=キャプチャ倍率
+HwController.CaptureBackground=キャプチャ背景
 HwController.Value1=画面のちらつきしきい値
 HwController.Value2=画面のちらつき輝度係数
 HwController.ScreenBufferSelect=画面バッファ選択
@@ -403,5 +405,24 @@ QrCode.NoCurrent=現在、電卓に QR コードは表示されていません�
 QrCode.History=履歴
 QrCode.NoHistory=このセッションではまだ QR コードを取得していません。
 QrCode.HistoryEntryFmt=#%llu  バージョン %d  長さ %zu
+
+StartupUI.OnlineModels=オンラインモデル...
+StartupUI.OnlineApiAddress=APIアドレス
+StartupUI.OnlineLogin=サインイン
+StartupUI.OnlineLogout=サインアウト
+StartupUI.OnlineLoggedOut=サインアウトしました。
+StartupUI.OnlineRelogin=再度サインイン
+StartupUI.OnlineBrowserOpened=ブラウザーで認証を完了してください。
+StartupUI.OnlineLoginSuccess=認証に成功しました。
+StartupUI.OnlineLoginExpired=オンラインログインの有効期限が切れたか、権限が変更されました。再度サインインしてください。
+StartupUI.OnlineModelsLoaded=モデルを読み込みました。
+StartupUI.OnlineLaunch=起動
+StartupUI.OnlineDownloading=モデルをダウンロードして検証しています...
+StartupUI.OnlineLoading=オンラインモデルを読み込んでいます...
+StartupUI.OnlineStartingLogin=ブラウザー認証を開始しています...
+StartupUI.OnlineCompletingLogin=認証を完了しています...
+StartupUI.OnlineAuthorizationExpired=ブラウザー認証の有効期限が切れました。再度サインインしてください。
+StartupUI.OnlineLoggingOut=サインアウトしています...
+StartupUI.OnlineLoginSessionOnly=認証に成功しました。安全なトークン保存を利用できないため、サインインは今回の実行中のみ有効です。
 
 placeholder2=a)"

@@ -13,12 +13,18 @@
 #define THEME_DEFAULT_INJECTION_FILE_PATH "./hc-inj.txt"
 #endif
 
+#ifdef __ANDROID__
+#define THEME_DEFAULT_SCALE 3.0f
+#else
+#define THEME_DEFAULT_SCALE 1.0f
+#endif
+
 #define THEME_CONFIG_MAP(CFG_VAR, CFG_STR)\
 	CFG_VAR(bool, isDarkMode, true)\
 	CFG_VAR(ImGuiStyle, igs_light, ImGuiStyle())\
 	CFG_VAR(ImGuiStyle, igs_dark, ImGuiStyle())\
 	CFG_STR(language, 30, "en_US")\
-	CFG_VAR(float, scale, 1.0f)\
+	CFG_VAR(float, scale, THEME_DEFAULT_SCALE)\
 	CFG_STR(injectionFilePath, 256, THEME_DEFAULT_INJECTION_FILE_PATH)\
 	CFG_VAR(bool, lowPerformanceMode, false)\
 	CFG_VAR(bool, enableAutoTint, false)\
@@ -268,7 +274,7 @@ private:
 	ThemeManager& operator=(const ThemeManager&) = delete;
 
 	ThemeSettings m_settings;
-	float m_fontScale = 1.0f;
+	float m_fontScale = THEME_DEFAULT_SCALE;
 	bool m_fontRebuildRequested = false;
 	bool m_bgReloadRequested = false;
 	mutable std::unordered_map<uint64_t, ImVec4> m_harmonizeCache;

@@ -14,6 +14,7 @@
 #include "LabelViewer.h"
 #include "MemBreakPoint.hpp"
 #include "Random.hpp"
+#include "RendererBackend.h"
 #include "Theme.h"
 #include "VariableWindow.h"
 #include "WatchWindow.hpp"
@@ -298,9 +299,9 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 	while (!me_mmu)
 		std::this_thread::sleep_for(std::chrono::microseconds(1));
 	std::filesystem::path label_file = m_emu->GetModelFilePath("labels.txt");
-	if (std::filesystem::exists(label_file))
+	if (!label_file.empty() && std::filesystem::exists(label_file))
 		g_labels = parseFile(label_file.string());
-	else
+	else if (!m_emu->IsMemoryModel())
 		std::cout << "[Warning] " << label_file.string() << " doesn't exist. You can consider create one for better debugging experiences. Format: address(0x1234),func name(can be quoted)\n";
 
 	if (m_emu->hardware_id == casioemu::HW_FX_5800P) {
@@ -393,6 +394,7 @@ CodeViewer* test_gui(bool* guiCreated, SDL_Window* wnd, SDL_Renderer* rnd) {
 #ifdef _WIN32
 	EnableDarkTitleBar(GetSDLWindowHandle(window));
 #endif
+	casioemu::SetPreferredRendererDriverHint();
 	renderer = SDL_CreateRenderer(window, -1,
 		SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
 #endif

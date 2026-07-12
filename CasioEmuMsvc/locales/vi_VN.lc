@@ -117,6 +117,8 @@ RecordStartBtn=Bắt đầu quay
 RecordStopBtn=Dừng quay
 RecordStatus=Đang quay: %u khung
 
+HwController.CaptureScale=Tỷ lệ chụp
+HwController.CaptureBackground=Nền ảnh chụp
 HwController.Value1=Ngưỡng nháy màn hình
 HwController.Value2=Hệ số độ sáng nháy màn hình
 HwController.ScreenBufferSelect=Chọn buffer màn hình
@@ -407,5 +409,24 @@ QrCode.NoCurrent=Máy tính hiện không hiển thị mã QR.
 QrCode.History=Lịch sử
 QrCode.NoHistory=Chưa bắt được mã QR nào trong phiên này.
 QrCode.HistoryEntryFmt=#%llu  Phiên bản %d  Độ dài %zu
+
+StartupUI.OnlineModels=Online models...
+StartupUI.OnlineApiAddress=API address
+StartupUI.OnlineLogin=Sign in
+StartupUI.OnlineLogout=Sign out
+StartupUI.OnlineLoggedOut=Signed out.
+StartupUI.OnlineRelogin=Sign in again
+StartupUI.OnlineBrowserOpened=Complete authorization in the browser.
+StartupUI.OnlineLoginSuccess=Authorization succeeded.
+StartupUI.OnlineLoginExpired=Online login expired or permissions changed. Please sign in again.
+StartupUI.OnlineModelsLoaded=models loaded.
+StartupUI.OnlineLaunch=Launch
+StartupUI.OnlineDownloading=Downloading and validating model...
+StartupUI.OnlineLoading=Loading online models...
+StartupUI.OnlineStartingLogin=Starting browser authorization...
+StartupUI.OnlineCompletingLogin=Completing authorization...
+StartupUI.OnlineAuthorizationExpired=Browser authorization expired. Please sign in again.
+StartupUI.OnlineLoggingOut=Signing out...
+StartupUI.OnlineLoginSessionOnly=Authorization succeeded. Secure token storage is unavailable; sign-in lasts for this run only.
 
 placeholder2=a)"

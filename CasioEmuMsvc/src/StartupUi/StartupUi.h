@@ -1,3 +1,13 @@
-﻿#pragma once
+#pragma once
+
+#include "ModelResourceStore.h"
+
+#include <memory>
 #include <string>
-std::string sui_loop();
+
+struct StartupSelection {
+	std::string model_path;
+	std::shared_ptr<casioemu::ModelResourceStore> resources;
+};
+
+StartupSelection sui_loop();

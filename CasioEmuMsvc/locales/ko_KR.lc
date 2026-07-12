@@ -116,6 +116,8 @@ RecordStartBtn=녹화 시작
 RecordStopBtn=녹화 중지
 RecordStatus=녹화 중: %u 프레임
 
+HwController.CaptureScale=캡처 배율
+HwController.CaptureBackground=캡처 배경
 HwController.Value1=플리커 임계값
 HwController.Value2=밝기 계수
 HwController.ScreenBufferSelect=버퍼 선택
@@ -405,5 +407,24 @@ QrCode.NoCurrent=현재 계산기에 QR 코드가 표시되어 있지 않습니�
 QrCode.History=기록
 QrCode.NoHistory=이 세션에서 캡처된 QR 코드가 없습니다.
 QrCode.HistoryEntryFmt=#%llu  버전 %d  길이 %zu
+
+StartupUI.OnlineModels=온라인 모델...
+StartupUI.OnlineApiAddress=API 주소
+StartupUI.OnlineLogin=로그인
+StartupUI.OnlineLogout=로그아웃
+StartupUI.OnlineLoggedOut=로그아웃되었습니다.
+StartupUI.OnlineRelogin=다시 로그인
+StartupUI.OnlineBrowserOpened=브라우저에서 인증을 완료하세요.
+StartupUI.OnlineLoginSuccess=인증에 성공했습니다.
+StartupUI.OnlineLoginExpired=온라인 로그인이 만료되었거나 권한이 변경되었습니다. 다시 로그인하세요.
+StartupUI.OnlineModelsLoaded=모델을 불러왔습니다.
+StartupUI.OnlineLaunch=실행
+StartupUI.OnlineDownloading=모델을 다운로드하고 확인하는 중...
+StartupUI.OnlineLoading=온라인 모델을 불러오는 중...
+StartupUI.OnlineStartingLogin=브라우저 인증을 시작하는 중...
+StartupUI.OnlineCompletingLogin=인증을 완료하는 중...
+StartupUI.OnlineAuthorizationExpired=브라우저 인증이 만료되었습니다. 다시 로그인하세요.
+StartupUI.OnlineLoggingOut=로그아웃하는 중...
+StartupUI.OnlineLoginSessionOnly=인증에 성공했습니다. 보안 토큰 저장을 사용할 수 없어 로그인은 이번 실행 중에만 유지됩니다.
 
 placeholder2=a)"

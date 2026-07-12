@@ -115,6 +115,8 @@ RecordStartBtn=开始录像
 RecordStopBtn=停止录像
 RecordStatus=正在录像：%u 帧
 
+HwController.CaptureScale=缩放倍数
+HwController.CaptureBackground=背景颜色
 HwController.Value1=屏幕闪烁阈值
 HwController.Value2=屏幕闪烁亮度系数
 HwController.ScreenBufferSelect=屏幕缓冲区选择
@@ -405,5 +407,24 @@ QrCode.NoCurrent=计算器当前未显示 QR 码。
 QrCode.History=历史
 QrCode.NoHistory=本次运行尚未捕获 QR 码。
 QrCode.HistoryEntryFmt=#%llu  版本 %d  长度 %zu
+
+StartupUI.OnlineModels=在线获取...
+StartupUI.OnlineApiAddress=API 地址
+StartupUI.OnlineLogin=登录
+StartupUI.OnlineLogout=登出
+StartupUI.OnlineLoggedOut=已登出。
+StartupUI.OnlineRelogin=重新登录
+StartupUI.OnlineBrowserOpened=请在浏览器中完成授权。
+StartupUI.OnlineLoginSuccess=授权成功。
+StartupUI.OnlineLoginSessionOnly=授权成功。当前系统没有可用的安全凭据存储，登录仅在本次运行中有效。
+StartupUI.OnlineLoginExpired=登录已过期或权限已变更，请重新登录。
+StartupUI.OnlineModelsLoaded=个型号已加载。
+StartupUI.OnlineLaunch=启动
+StartupUI.OnlineDownloading=正在下载并验证型号...
+StartupUI.OnlineLoading=正在加载在线型号...
+StartupUI.OnlineStartingLogin=正在启动浏览器授权...
+StartupUI.OnlineCompletingLogin=正在完成授权...
+StartupUI.OnlineAuthorizationExpired=浏览器授权已过期，请重新登录。
+StartupUI.OnlineLoggingOut=正在登出...
 
 placeholder2=a)"

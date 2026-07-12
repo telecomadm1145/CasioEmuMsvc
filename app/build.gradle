@@ -11,6 +11,15 @@ else {
     apply plugin: 'com.android.library'
 }
 
+def generatedLocaleAssetsRoot = layout.buildDirectory.dir('generated/assets/copyLocaleAssets')
+def copyLocaleAssetsTask = tasks.register('copyLocaleAssets', Sync) {
+    from(rootProject.file('CasioEmuMsvc/locales')) {
+        include '*.lc'
+        into 'locales'
+    }
+    into(generatedLocaleAssetsRoot)
+}
+
 android {
     if (buildAsApplication) {
         namespace "com.tele.u8emulator"
@@ -27,7 +36,11 @@ android {
             //    abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
             //}
              cmake {
-                 arguments "-DANDROID_CPP_FEATURES=rtti;exceptions"
+                 arguments "-DANDROID_CPP_FEATURES=rtti;exceptions",
+                         "-DCASIOEMU_ONLINE_BUILD_KEY_ID=${System.getenv('CASIOEMU_ONLINE_BUILD_KEY_ID') ?: ''}",
+                         "-DCASIOEMU_ONLINE_BUILD_KEY_B64=${System.getenv('CASIOEMU_ONLINE_BUILD_KEY_B64') ?: ''}",
+                         "-DCASIOEMU_ONLINE_SERVER_KEY_ID=${System.getenv('CASIOEMU_ONLINE_SERVER_KEY_ID') ?: ''}",
+                         "-DCASIOEMU_ONLINE_SERVER_PUBLIC_KEY_B64=${System.getenv('CASIOEMU_ONLINE_SERVER_PUBLIC_KEY_B64') ?: ''}"
                  abiFilters 'armeabi-v7a', 'arm64-v8a'
              }
         }
@@ -69,6 +82,8 @@ android {
         sourceCompatibility JavaVersion.VERSION_21
         targetCompatibility JavaVersion.VERSION_21
     }
+
+    sourceSets.main.assets.srcDir(files(generatedLocaleAssetsRoot).builtBy(copyLocaleAssetsTask))
     
     applicationVariants.all { variant ->
         variant.outputs.all { output ->

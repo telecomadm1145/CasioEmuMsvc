@@ -148,34 +148,29 @@ namespace casioemu {
 	}
 
 	void BatteryBackedRAM::SaveRAMImage() {
-		auto ram_path = emulator.GetModelFilePath("ram.dmp");
-		std::ofstream ram_out(ram_path, std::ofstream::binary);
-		if (ram_out) {
-			ram_out.write(reinterpret_cast<const char*>(ram_buffer), ram_size);
+		try {
+			emulator.WriteModelSessionResource("ram.dmp", std::vector<std::uint8_t>(ram_buffer, ram_buffer + ram_size));
 			logger::Info("[BatteryBackedRAM][Info] RAM image saved to ram.dmp\n");
 		}
-		else {
+		catch (...) {
 			logger::Info("[BatteryBackedRAM][Error] Failed to save RAM image to ram.dmp\n");
 		}
 
 		if (pram_buffer) {
-			auto pram_path = emulator.GetModelFilePath("pram.dmp");
-			std::ofstream pram_out(pram_path, std::ofstream::binary);
-			if (pram_out) {
-				pram_out.write(reinterpret_cast<const char*>(pram_buffer), 0x8000);
+			try {
+				emulator.WriteModelSessionResource("pram.dmp", std::vector<std::uint8_t>(pram_buffer, pram_buffer + 0x8000));
 				logger::Info("[BatteryBackedRAM][Info] PRAM image saved to pram.dmp\n");
 			}
-			else {
+			catch (...) {
 				logger::Info("[BatteryBackedRAM][Error] Failed to save PRAM image to pram.dmp\n");
 			}
 		}
 	}
 
 	void BatteryBackedRAM::LoadRAMImage() {
-		auto ram_path = emulator.GetModelFilePath("ram.dmp");
-		std::ifstream ram_in(ram_path, std::ifstream::binary);
-		if (ram_in) {
-			ram_in.read(reinterpret_cast<char*>(ram_buffer), ram_size);
+		if (emulator.HasModelResource("ram.dmp")) {
+			const auto data = emulator.ReadModelResource("ram.dmp");
+			std::copy_n(data.begin(), std::min<std::size_t>(data.size(), ram_size), ram_buffer);
 			logger::Info("[BatteryBackedRAM][Info] RAM image loaded from ram.dmp\n");
 		}
 		else {
@@ -183,10 +178,9 @@ namespace casioemu {
 		}
 
 		if (pram_buffer) {
-			auto pram_path = emulator.GetModelFilePath("pram.dmp");
-			std::ifstream pram_in(pram_path, std::ifstream::binary);
-			if (pram_in) {
-				pram_in.read(reinterpret_cast<char*>(pram_buffer), 0x8000);
+			if (emulator.HasModelResource("pram.dmp")) {
+				const auto data = emulator.ReadModelResource("pram.dmp");
+				std::copy_n(data.begin(), std::min<std::size_t>(data.size(), 0x8000), pram_buffer);
 				logger::Info("[BatteryBackedRAM][Info] PRAM image loaded from pram.dmp\n");
 			}
 			else {
