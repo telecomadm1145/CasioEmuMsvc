@@ -408,8 +408,6 @@ QrCode.History=Verlauf
 QrCode.NoHistory=In dieser Sitzung wurde noch kein QR-Code erfasst.
 QrCode.HistoryEntryFmt=#%llu  Version %d  Länge %zu
 
-placeholder2=a)"
-
 StartupUI.OnlineModels=Online-Modelle ...
 StartupUI.OnlineApiAddress=API-Adresse
 StartupUI.OnlineLogin=Anmelden
@@ -428,3 +426,5 @@ StartupUI.OnlineCompletingLogin=Autorisierung wird abgeschlossen ...
 StartupUI.OnlineAuthorizationExpired=Die Browser-Autorisierung ist abgelaufen. Bitte erneut anmelden.
 StartupUI.OnlineLoggingOut=Abmeldung ...
 StartupUI.OnlineLoginSessionOnly=Autorisierung erfolgreich. Sichere Token-Speicherung ist nicht verfügbar; die Anmeldung gilt nur für diesen Lauf.
+
+placeholder2=a)"

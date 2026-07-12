@@ -408,8 +408,6 @@ QrCode.History=История
 QrCode.NoHistory=В этом сеансе QR-коды еще не захвачены.
 QrCode.HistoryEntryFmt=#%llu  Версия %d  Длина %zu
 
-placeholder2=a)"
-
 StartupUI.OnlineModels=Онлайн-модели...
 StartupUI.OnlineApiAddress=Адрес API
 StartupUI.OnlineLogin=Войти
@@ -428,3 +426,5 @@ StartupUI.OnlineCompletingLogin=Завершение авторизации...
 StartupUI.OnlineAuthorizationExpired=Срок действия авторизации в браузере истёк. Войдите снова.
 StartupUI.OnlineLoggingOut=Выход из системы...
 StartupUI.OnlineLoginSessionOnly=Авторизация выполнена. Безопасное хранение токена недоступно; вход действует только до завершения текущего запуска.
+
+placeholder2=a)"

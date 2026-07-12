@@ -408,8 +408,6 @@ QrCode.History=History
 QrCode.NoHistory=No QR code has been captured in this session.
 QrCode.HistoryEntryFmt=#%llu  Version %d  Length %zu
 
-placeholder2=a)"
-
 StartupUI.OnlineModels=Online models...
 StartupUI.OnlineApiAddress=API address
 StartupUI.OnlineLogin=Sign in
@@ -428,3 +426,5 @@ StartupUI.OnlineCompletingLogin=Completing authorization...
 StartupUI.OnlineAuthorizationExpired=Browser authorization expired. Please sign in again.
 StartupUI.OnlineLoggingOut=Signing out...
 StartupUI.OnlineLoginSessionOnly=Authorization succeeded. Secure token storage is unavailable; sign-in lasts for this run only.
+
+placeholder2=a)"

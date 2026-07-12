@@ -406,8 +406,6 @@ QrCode.History=履歴
 QrCode.NoHistory=このセッションではまだ QR コードを取得していません。
 QrCode.HistoryEntryFmt=#%llu  バージョン %d  長さ %zu
 
-placeholder2=a)"
-
 StartupUI.OnlineModels=オンラインモデル...
 StartupUI.OnlineApiAddress=APIアドレス
 StartupUI.OnlineLogin=サインイン
@@ -426,3 +424,5 @@ StartupUI.OnlineCompletingLogin=認証を完了しています...
 StartupUI.OnlineAuthorizationExpired=ブラウザー認証の有効期限が切れました。再度サインインしてください。
 StartupUI.OnlineLoggingOut=サインアウトしています...
 StartupUI.OnlineLoginSessionOnly=認証に成功しました。安全なトークン保存を利用できないため、サインインは今回の実行中のみ有効です。
+
+placeholder2=a)"

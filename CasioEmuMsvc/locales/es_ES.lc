@@ -408,8 +408,6 @@ QrCode.History=Historial
 QrCode.NoHistory=No se ha capturado ningún código QR en esta sesión.
 QrCode.HistoryEntryFmt=#%llu  Versión %d  Longitud %zu
 
-placeholder2=a)"
-
 StartupUI.OnlineModels=Modelos en línea...
 StartupUI.OnlineApiAddress=Dirección de la API
 StartupUI.OnlineLogin=Iniciar sesión
@@ -428,3 +426,5 @@ StartupUI.OnlineCompletingLogin=Completando la autorización...
 StartupUI.OnlineAuthorizationExpired=La autorización del navegador ha caducado. Inicia sesión de nuevo.
 StartupUI.OnlineLoggingOut=Cerrando sesión...
 StartupUI.OnlineLoginSessionOnly=Autorización correcta. El almacenamiento seguro de tokens no está disponible; la sesión solo durará esta ejecución.
+
+placeholder2=a)"

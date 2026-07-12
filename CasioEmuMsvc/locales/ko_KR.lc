@@ -408,8 +408,6 @@ QrCode.History=기록
 QrCode.NoHistory=이 세션에서 캡처된 QR 코드가 없습니다.
 QrCode.HistoryEntryFmt=#%llu  버전 %d  길이 %zu
 
-placeholder2=a)"
-
 StartupUI.OnlineModels=온라인 모델...
 StartupUI.OnlineApiAddress=API 주소
 StartupUI.OnlineLogin=로그인
@@ -428,3 +426,5 @@ StartupUI.OnlineCompletingLogin=인증을 완료하는 중...
 StartupUI.OnlineAuthorizationExpired=브라우저 인증이 만료되었습니다. 다시 로그인하세요.
 StartupUI.OnlineLoggingOut=로그아웃하는 중...
 StartupUI.OnlineLoginSessionOnly=인증에 성공했습니다. 보안 토큰 저장을 사용할 수 없어 로그인은 이번 실행 중에만 유지됩니다.
+
+placeholder2=a)"

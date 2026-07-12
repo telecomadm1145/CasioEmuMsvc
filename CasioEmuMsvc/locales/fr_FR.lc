@@ -408,8 +408,6 @@ QrCode.History=Historique
 QrCode.NoHistory=Aucun code QR n’a été capturé dans cette session.
 QrCode.HistoryEntryFmt=#%llu  Version %d  Longueur %zu
 
-placeholder2=a)"
-
 StartupUI.OnlineModels=Modèles en ligne...
 StartupUI.OnlineApiAddress=Adresse de l'API
 StartupUI.OnlineLogin=Se connecter
@@ -428,3 +426,5 @@ StartupUI.OnlineCompletingLogin=Finalisation de l'autorisation...
 StartupUI.OnlineAuthorizationExpired=L'autorisation du navigateur a expiré. Veuillez vous reconnecter.
 StartupUI.OnlineLoggingOut=Déconnexion...
 StartupUI.OnlineLoginSessionOnly=Autorisation réussie. Le stockage sécurisé du jeton est indisponible ; la connexion ne durera que cette session.
+
+placeholder2=a)"
