@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <stdexcept>
 #include <vector>
 
 namespace crypto {
@@ -219,6 +220,9 @@ namespace crypto {
 	}
 
 	inline void chacha20_crypt(const std::vector<std::uint8_t>& key, const std::vector<std::uint8_t>& nonce, std::vector<std::uint8_t>& data) {
+		if (key.size() < 32 || nonce.size() < 12) {
+			throw std::invalid_argument("ChaCha20 requires a 32-byte key and a 12-byte nonce");
+		}
 		std::uint32_t key_words[8];
 		for (int i = 0; i < 8; ++i) {
 			key_words[i] = (static_cast<std::uint32_t>(key[i * 4])) |

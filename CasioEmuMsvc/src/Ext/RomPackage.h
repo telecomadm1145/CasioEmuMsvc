@@ -283,6 +283,10 @@ public:
 		std::string error;
 		if (!LoadModelInfoFromFolder(pth, ModelInfo, nullptr, &error))
 			throw std::runtime_error(error);
+		if (!isPathSafe(ModelInfo.rom_path) ||
+			(!ModelInfo.flash_path.empty() && !isPathSafe(ModelInfo.flash_path)) ||
+			!isPathSafe(ModelInfo.interface_path))
+			throw std::runtime_error("Path traversal detected");
 		ReadFile(pth / ModelInfo.rom_path, RomData);
 		if (!ModelInfo.flash_path.empty())
 			ReadFile(pth / ModelInfo.flash_path, FlashData);

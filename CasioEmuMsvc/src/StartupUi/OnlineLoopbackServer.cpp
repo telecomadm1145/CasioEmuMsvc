@@ -47,7 +47,11 @@ namespace casioemu {
 #ifdef _WIN32
 				const int sent = send(socket, data.data(), static_cast<int>(data.size()), 0);
 #else
+				#ifdef MSG_NOSIGNAL
+				const auto sent = send(socket, data.data(), data.size(), MSG_NOSIGNAL);
+				#else
 				const auto sent = send(socket, data.data(), data.size(), 0);
+				#endif
 #endif
 				if (sent <= 0) return;
 				data.remove_prefix(static_cast<std::size_t>(sent));
@@ -187,6 +191,22 @@ namespace casioemu {
 #endif
 			const SOCKET client = accept(listen_socket_, reinterpret_cast<sockaddr*>(&remote), &remote_size);
 			if (client == INVALID_SOCKET) continue;
+#ifndef _WIN32
+#ifdef SO_NOSIGPIPE
+			int no_sigpipe = 1;
+			setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &no_sigpipe, sizeof(no_sigpipe));
+#endif
+#endif
+#ifdef _WIN32
+			const DWORD receive_timeout_ms = 250;
+			setsockopt(client, SOL_SOCKET, SO_RCVTIMEO,
+				reinterpret_cast<const char*>(&receive_timeout_ms), sizeof(receive_timeout_ms));
+#else
+			timeval receive_timeout{};
+			receive_timeout.tv_sec = 0;
+			receive_timeout.tv_usec = 250000;
+			setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &receive_timeout, sizeof(receive_timeout));
+#endif
 			std::array<char, 2048> buffer{};
 			std::string request;
 			request.reserve(buffer.size());

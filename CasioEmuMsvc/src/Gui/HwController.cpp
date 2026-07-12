@@ -156,11 +156,16 @@ void HwController::RenderCore() {
 	if (ImGui::Button("HwController.HotReload"_lc)) {
 		m_emu->SetPaused(true);
 		auto lg = std::lock_guard(m_emu->access_mx);
-		auto dat = m_emu->ReadModelResource(m_emu->ModelDefinition.rom_path);
-		for (size_t i = 0; i < std::min(dat.size(), m_emu->chipset.rom_data.size()); i++) {
-			m_emu->chipset.rom_data[i] = dat[i];
+		try {
+			auto dat = m_emu->ReadModelResource(m_emu->ModelDefinition.rom_path);
+			for (size_t i = 0; i < std::min(dat.size(), m_emu->chipset.rom_data.size()); i++) {
+				m_emu->chipset.rom_data[i] = dat[i];
+			}
+			m_emu->chipset.Reset();
 		}
-		m_emu->chipset.Reset();
+		catch (const std::exception&) {
+			// Keep resource-load failures from escaping the ImGui render loop.
+		}
 		m_emu->SetPaused(false);
 	}
 }

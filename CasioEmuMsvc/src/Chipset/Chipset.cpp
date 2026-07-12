@@ -536,6 +536,9 @@ namespace casioemu {
 			PANIC("Failed to read ROM: %s\n", error.what());
 		}
 		if (epscpu) {
+			if (rom_data.size() < 0x40000) {
+				PANIC("EPS ROM is smaller than 0x40000 bytes\n");
+			}
 			std::copy(rom_data.begin(), rom_data.begin() + 0x40000, epscpu->Rom);
 		}
 		if (emulator.hardware_id == HW_FX_5800P) {
