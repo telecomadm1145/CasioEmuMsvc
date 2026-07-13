@@ -27,12 +27,12 @@ UpdateInfo Check() {
 #ifdef __ANDROID__
 	auto* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
 	if (!env) throw std::runtime_error("Android runtime unavailable");
-	jobject activity = SDL_AndroidGetActivity(); jclass cls = env->GetObjectClass(activity);
+	jobject activity = static_cast<jobject>(SDL_AndroidGetActivity()); jclass cls = env->GetObjectClass(activity);
 	jmethodID method = env->GetStaticMethodID(cls, "checkUpdate", "(Ljava/lang/String;)[B");
 	if (!method) throw std::runtime_error("Android update API unavailable");
 	jstring url = env->NewStringUTF(api); auto bytes = static_cast<jbyteArray>(env->CallStaticObjectMethod(cls, method, url));
 	env->DeleteLocalRef(url); if (!bytes) throw std::runtime_error("release request failed");
-	const jsize len = env->GetArrayLength(bytes); std::string body(static_cast<size_t>(len), '\0');
+	const jsize len = env->GetArrayLength(bytes); body.assign(static_cast<size_t>(len), '\0');
 	env->GetByteArrayRegion(bytes, 0, len, reinterpret_cast<jbyte*>(body.data())); env->DeleteLocalRef(bytes);
 #else
 	CURL* c = curl_easy_init(); if (!c) throw std::runtime_error("curl init failed");
