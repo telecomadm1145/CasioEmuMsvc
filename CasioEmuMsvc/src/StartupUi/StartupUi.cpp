@@ -779,7 +779,7 @@ namespace casioemu {
 		std::vector<Model> models;
 		std::filesystem::path selected_path{};
 		std::shared_ptr<ModelResourceStore> selected_resources;
-		char online_api[512] = "http://127.0.0.1:8788";
+		char online_api[512] = "";
 		bool show_online_popup = false;
 		OnlineAuthRequest online_auth{};
 		std::unique_ptr<OnlineLoopbackServer> online_loopback;
