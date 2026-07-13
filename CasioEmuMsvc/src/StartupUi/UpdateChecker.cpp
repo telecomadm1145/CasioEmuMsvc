@@ -8,23 +8,43 @@
 #include <SDL_system.h>
 #endif
 #include <chrono>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <optional>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 #include <SDL.h>
 
 namespace casioemu {
 namespace {
 constexpr const char* kApi = "https://api.github.com/repos/telecomadm1145/CasioEmuMsvc/releases?per_page=1";
+constexpr const char* kReleaseBase = "https://github.com/telecomadm1145/CasioEmuMsvc/releases/tag/";
 constexpr const char* kCachePath = "update-check.json";
-constexpr auto kCacheLifetime = std::chrono::hours(24);
+constexpr auto kCacheLifetime = std::chrono::hours(1);
 constexpr std::size_t kMaxResponseSize = 1024 * 1024;
 size_t Write(void* p, size_t s, size_t n, void* u) {
 	const auto bytes = s * n; auto& body = *static_cast<std::string*>(u);
 	if (bytes > kMaxResponseSize || body.size() > kMaxResponseSize - bytes) return 0;
 	body.append(static_cast<char*>(p), bytes); return bytes;
+}
+
+bool SetTrustedReleaseUrl(UpdateInfo& release) {
+	constexpr std::string_view prefix = "stable-";
+	if (release.tag.size() < prefix.size() + 14 + 1 + 7 || release.tag.size() > prefix.size() + 14 + 1 + 40
+		|| release.tag.compare(0, prefix.size(), prefix) != 0) return false;
+	const std::size_t timestamp_begin = prefix.size();
+	const std::size_t separator = timestamp_begin + 14;
+	for (std::size_t i = timestamp_begin; i < separator; ++i)
+		if (release.tag[i] < '0' || release.tag[i] > '9') return false;
+	if (release.tag[separator] != '-') return false;
+	for (std::size_t i = separator + 1; i < release.tag.size(); ++i) {
+		const char ch = release.tag[i];
+		if (!((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F'))) return false;
+	}
+	release.url = std::string(kReleaseBase) + release.tag;
+	return true;
 }
 
 UpdateInfo EvaluateRelease(UpdateInfo release) {
@@ -36,6 +56,8 @@ UpdateInfo EvaluateRelease(UpdateInfo release) {
 	SDL_Log("[UpdateChecker] Update available: %s", release.tag.c_str());
 	return release;
 }
+
+std::string LocalDate();
 
 std::optional<UpdateInfo> LoadCachedRelease() {
 	std::ifstream input{kCachePath, std::ios::binary};
@@ -49,8 +71,16 @@ std::optional<UpdateInfo> LoadCachedRelease() {
 			SDL_Log("[UpdateChecker] Cached result expired");
 			return std::nullopt;
 		}
-		UpdateInfo release{cache.value("tag", ""), cache.value("url", ""), cache.value("title", ""), cache.value("notes", "")};
+		UpdateInfo release{cache.value("tag", ""), {}, cache.value("title", ""), cache.value("notes", "")};
+		if (!SetTrustedReleaseUrl(release)) {
+			SDL_Log("[UpdateChecker] Ignoring cache with invalid release tag");
+			return std::nullopt;
+		}
 		SDL_Log("[UpdateChecker] Using cached release result: %s", release.tag.c_str());
+		if (!release.tag.empty() && cache.value("dismissed_tag", "") == release.tag && cache.value("dismissed_on", "") == LocalDate()) {
+			SDL_Log("[UpdateChecker] Update reminder suppressed for today: %s", release.tag.c_str());
+			return UpdateInfo{};
+		}
 		return release;
 	}
 	catch (const std::exception& e) {
@@ -63,16 +93,47 @@ void SaveCachedRelease(const UpdateInfo& release) {
 	try {
 		const auto checked_at = std::chrono::duration_cast<std::chrono::seconds>(
 			std::chrono::system_clock::now().time_since_epoch()).count();
-		const nlohmann::json cache{{"checked_at", checked_at}, {"tag", release.tag}, {"url", release.url},
+		const nlohmann::json cache{{"checked_at", checked_at}, {"tag", release.tag},
 			{"title", release.title}, {"notes", release.notes}};
 		std::ofstream output{kCachePath, std::ios::binary | std::ios::trunc};
 		if (!output) throw std::runtime_error("cannot open cache file");
 		output << cache.dump();
 		if (!output) throw std::runtime_error("cannot write cache file");
-		SDL_Log("[UpdateChecker] Cached release result for 24 hours");
+		SDL_Log("[UpdateChecker] Cached release result for 1 hour");
 	}
 	catch (const std::exception& e) {
 		SDL_Log("[UpdateChecker] Failed to save cache: %s", e.what());
+	}
+}
+
+std::string LocalDate() {
+	const std::time_t now = std::time(nullptr);
+	std::tm local{};
+#ifdef _WIN32
+	localtime_s(&local, &now);
+#else
+	localtime_r(&now, &local);
+#endif
+	char value[11]{};
+	std::strftime(value, sizeof(value), "%Y-%m-%d", &local);
+	return value;
+}
+
+void SaveDismissal(const std::string& tag) {
+	try {
+		std::ifstream input{kCachePath, std::ios::binary};
+		if (!input) throw std::runtime_error("cache file does not exist");
+		auto cache = nlohmann::json::parse(input);
+		cache["dismissed_tag"] = tag;
+		cache["dismissed_on"] = LocalDate();
+		std::ofstream output{kCachePath, std::ios::binary | std::ios::trunc};
+		if (!output) throw std::runtime_error("cannot open cache file");
+		output << cache.dump();
+		if (!output) throw std::runtime_error("cannot write cache file");
+		SDL_Log("[UpdateChecker] Suppressed %s for today", tag.c_str());
+	}
+	catch (const std::exception& e) {
+		SDL_Log("[UpdateChecker] Failed to save dismissal: %s", e.what());
 	}
 }
 
@@ -111,7 +172,11 @@ UpdateInfo Check() {
 		const auto it = json.find(name);
 		return it != json.end() && it->is_string() ? it->get<std::string>() : std::string{};
 	};
-	UpdateInfo release{string_value("tag_name"), string_value("html_url"), string_value("name"), string_value("body")};
+	UpdateInfo release{string_value("tag_name"), {}, string_value("name"), string_value("body")};
+	if (!SetTrustedReleaseUrl(release)) {
+		SDL_Log("[UpdateChecker] Ignoring release with invalid tag: %s", release.tag.c_str());
+		return {};
+	}
 	SaveCachedRelease(release);
 	return EvaluateRelease(std::move(release));
 }
@@ -132,4 +197,5 @@ void UpdateChecker::Start() {
 }
 bool UpdateChecker::Ready() const { return state_->ready.load(std::memory_order_acquire); }
 UpdateInfo UpdateChecker::TakeResult() { std::lock_guard lock(state_->mutex); return state_->result; }
+void UpdateChecker::DismissForToday(const std::string& tag) const { SaveDismissal(tag); }
 }

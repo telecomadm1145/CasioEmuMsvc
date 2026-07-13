@@ -432,5 +432,6 @@ StartupUI.UpdateAvailableMessage=A new release is available:
 StartupUI.ReleaseNotes=Release notes
 StartupUI.OpenReleasePage=Open release page
 StartupUI.UpdateLater=Later
+StartupUI.UpdateDismissToday=Don't remind me again today
 
 placeholder2=a)"

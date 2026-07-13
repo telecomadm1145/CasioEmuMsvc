@@ -430,5 +430,6 @@ StartupUI.UpdateAvailableMessage=新しいリリースがあります：
 StartupUI.ReleaseNotes=リリースノート
 StartupUI.OpenReleasePage=リリースページを開く
 StartupUI.UpdateLater=後で
+StartupUI.UpdateDismissToday=今日はもう通知しない
 
 placeholder2=a)"

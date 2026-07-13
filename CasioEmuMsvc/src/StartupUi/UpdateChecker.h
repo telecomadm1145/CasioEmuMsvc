@@ -21,6 +21,7 @@ public:
 	void Start();
 	bool Ready() const;
 	UpdateInfo TakeResult();
+	void DismissForToday(const std::string& tag) const;
 private:
 	struct State { std::mutex mutex; UpdateInfo result; std::atomic<bool> ready{false}; };
 	std::shared_ptr<State> state_;

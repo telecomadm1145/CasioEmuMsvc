@@ -1407,29 +1407,51 @@ namespace casioemu {
 				update_result_consumed = true;
 				show_update = !update_info.tag.empty();
 			}
-			if (show_update) {
+			if (show_update && std::filesystem::exists("locale.txt")) {
 				const ImVec2 work_size = ImGui::GetMainViewport()->WorkSize;
-				const float popup_width = (std::min)(640.0f, work_size.x * 0.9f);
-				const float popup_height = (std::min)(440.0f, work_size.y * 0.7f);
-				ImGui::SetNextWindowSize(ImVec2(popup_width, popup_height), ImGuiCond_Appearing);
-				ImGui::SetNextWindowSizeConstraints(ImVec2((std::min)(280.0f, popup_width), 0.0f), ImVec2(popup_width, popup_height));
+#ifdef __ANDROID__
+				const ImVec2 update_popup_size(work_size.x * 0.96f, work_size.y * 0.90f);
+#else
+				const ImVec2 update_popup_size(
+					(std::min)(1180.0f, work_size.x * 0.90f),
+					(std::min)(820.0f, work_size.y * 0.88f));
+#endif
+				ImGui::SetNextWindowSize(update_popup_size, ImGuiCond_Appearing);
 				ImGui::OpenPopup("StartupUI.UpdateAvailableTitle"_lc);
 				if (ImGui::BeginPopupModal("StartupUI.UpdateAvailableTitle"_lc, &show_update)) {
 					ImGui::PushTextWrapPos(0.0f);
 					ImGui::TextWrapped("%s %s", "StartupUI.UpdateAvailableMessage"_lc, update_info.tag.c_str());
 					if (!update_info.title.empty() && update_info.title != update_info.tag) ImGui::TextWrapped("%s", update_info.title.c_str());
 					ImGui::PopTextWrapPos();
+					const char* open_label = "StartupUI.OpenReleasePage"_lc;
+					const char* later_label = "StartupUI.UpdateLater"_lc;
+					const char* dismiss_label = "StartupUI.UpdateDismissToday"_lc;
+					const ImGuiStyle& style = ImGui::GetStyle();
+					const float open_width = ImGui::CalcTextSize(open_label).x + style.FramePadding.x * 2.0f;
+					const float later_width = ImGui::CalcTextSize(later_label).x + style.FramePadding.x * 2.0f;
+					const float dismiss_width = ImGui::CalcTextSize(dismiss_label).x + style.FramePadding.x * 2.0f;
+					const float available_width = ImGui::GetContentRegionAvail().x;
+					const bool first_row_fits = open_width + style.ItemSpacing.x + later_width <= available_width;
+					const bool all_buttons_fit = open_width + style.ItemSpacing.x + later_width + style.ItemSpacing.x + dismiss_width <= available_width;
+					const int button_rows = all_buttons_fit ? 1 : (first_row_fits ? 2 : 3);
+					const float footer_height = button_rows * ImGui::GetFrameHeight() + button_rows * style.ItemSpacing.y;
 					if (!update_info.notes.empty()) {
 						ImGui::SeparatorText("StartupUI.ReleaseNotes"_lc);
-						if (ImGui::BeginChild("UpdateReleaseNotes", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 1.5f), ImGuiChildFlags_Border)) {
+						if (ImGui::BeginChild("UpdateReleaseNotes", ImVec2(0.0f, -footer_height), ImGuiChildFlags_Border)) {
 							ImGui::PushTextWrapPos(0.0f);
 							ImGui::TextWrapped("%s", update_info.notes.c_str());
 							ImGui::PopTextWrapPos();
 						}
 						ImGui::EndChild();
 					}
-					if (ImGui::Button("StartupUI.OpenReleasePage"_lc)) { SDL_OpenURL(update_info.url.c_str()); show_update = false; }
-					ImGui::SameLine(); if (ImGui::Button("StartupUI.UpdateLater"_lc)) show_update = false;
+					if (ImGui::Button(open_label)) { SDL_OpenURL(update_info.url.c_str()); show_update = false; }
+					if (first_row_fits) ImGui::SameLine();
+					if (ImGui::Button(later_label)) show_update = false;
+					if (all_buttons_fit) ImGui::SameLine();
+					if (ImGui::Button(dismiss_label)) {
+						update_checker.DismissForToday(update_info.tag);
+						show_update = false;
+					}
 					ImGui::EndPopup();
 				}
 			}

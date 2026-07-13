@@ -432,5 +432,6 @@ StartupUI.UpdateAvailableMessage=Eine neue Version ist verfügbar:
 StartupUI.ReleaseNotes=Versionshinweise
 StartupUI.OpenReleasePage=Release-Seite öffnen
 StartupUI.UpdateLater=Später
+StartupUI.UpdateDismissToday=Heute nicht mehr erinnern
 
 placeholder2=a)"

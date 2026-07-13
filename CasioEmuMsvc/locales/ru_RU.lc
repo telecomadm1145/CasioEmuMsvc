@@ -432,5 +432,6 @@ StartupUI.UpdateAvailableMessage=Доступен новый выпуск:
 StartupUI.ReleaseNotes=Примечания к выпуску
 StartupUI.OpenReleasePage=Открыть страницу выпуска
 StartupUI.UpdateLater=Позже
+StartupUI.UpdateDismissToday=Больше не напоминать сегодня
 
 placeholder2=a)"
