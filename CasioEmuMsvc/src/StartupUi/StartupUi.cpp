@@ -2005,6 +2005,11 @@ public:
 };
 
 void HandleStartupEvent(const SDL_Event& event) {
+#ifdef __ANDROID__
+	if (event.type == SDL_TEXTINPUT) {
+		ThemeManager::Instance().RegisterInputGlyphs(event.text.text);
+	}
+#endif
 	ImGui_ImplSDL2_ProcessEvent(&event);
 }
 
@@ -2090,7 +2095,7 @@ StartupSelection sui_loop() {
 	while (!done) {
 		SDL_Event event;
 		if (SDL_WaitEvent(&event)) {
-			ImGui_ImplSDL2_ProcessEvent(&event);
+			HandleStartupEvent(event);
 			if (event.type == SDL_QUIT) {
 				done = true;
 			}
@@ -2101,7 +2106,7 @@ StartupSelection sui_loop() {
 				needs_render = true;
 			}
 			while (SDL_PollEvent(&event)) {
-				ImGui_ImplSDL2_ProcessEvent(&event);
+				HandleStartupEvent(event);
 				if (event.type == SDL_QUIT) {
 					done = true;
 				}
@@ -2172,11 +2177,7 @@ StartupSelection sui_loop() {
 					if (!languages.empty() && selected_language_index < languages.size()) {
 						const std::string& selected_lang = languages[selected_language_index];
 						g_local.ChangeLanguage(selected_lang);
-						if ("Localization.EnableCJK"_l == "1" || "Localization.EnableCJK"_l == "true")
-							ThemeManager::Instance().RequestFontRebuild();
-						std::ofstream outfile("locale.txt");
-						outfile << selected_lang;
-						outfile.close();
+						ThemeManager::Instance().RequestFontRebuild();
 						ImGui::CloseCurrentPopup();
 						DiscordRPC::UpdatePresence("");
 					}

@@ -230,6 +230,9 @@ public:
 
 	// —— 字体重建 ——
 	void RequestFontRebuild();
+#ifdef __ANDROID__
+	void RegisterInputGlyphs(const char* utf8_text);
+#endif
 	void SetFontScale(float scale);
 	float GetFontScale() const { return m_fontScale; }
 	bool IsFontRebuildRequested() const { return m_fontRebuildRequested; }

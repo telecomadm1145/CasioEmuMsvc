@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "../locales/lang.h"
 #include <codecvt>
 #include <filesystem>
@@ -85,6 +85,21 @@ public:
 
 	std::string GetCurrentLanguage() const {
 		return m_currentLocale;
+	}
+
+	std::string CollectFontGlyphText() const {
+		std::string text;
+		for (const auto& translation : m_translations) {
+			text.append(translation.second);
+			text.push_back('\n');
+		}
+		for (const auto& plural : m_pluralRules) {
+			for (const auto& rule : plural.second) {
+				text.append(rule.form);
+				text.push_back('\n');
+			}
+		}
+		return text;
 	}
 
 	std::string Get(std::string_view key) const {

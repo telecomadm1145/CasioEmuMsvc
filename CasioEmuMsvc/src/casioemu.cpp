@@ -1,5 +1,6 @@
 #include "Config.hpp"
 #include "Gui/PopUpDisplay.h"
+#include "Gui/ThemeManager.h"
 #include "Ui.hpp"
 #include "imgui_impl_sdl2.h"
 
@@ -160,6 +161,15 @@ static Uint32 GetEventWindowId(const SDL_Event& event) {
 	}
 }
 
+static void ProcessImGuiEvent(const SDL_Event& event) {
+#ifdef __ANDROID__
+	if (event.type == SDL_TEXTINPUT) {
+		ThemeManager::Instance().RegisterInputGlyphs(event.text.text);
+	}
+#endif
+	ImGui_ImplSDL2_ProcessEvent(&event);
+}
+
 static bool IsScreenMirrorWindowEvent(const SDL_Event& event) {
 	const Uint32 windowId = GetEventWindowId(event);
 	if (windowId == 0) {
@@ -294,7 +304,7 @@ int main(int argc, char* argv[]) {
 
 		[&](const SDL_Event& translatedEvent, TouchTarget target) {
 			if (target == TouchTarget::ImGui) {
-				ImGui_ImplSDL2_ProcessEvent(&translatedEvent);
+				ProcessImGuiEvent(translatedEvent);
 				return;
 			}
 
@@ -473,14 +483,14 @@ int main(int argc, char* argv[]) {
 		case SDL_TEXTINPUT:
 		case SDL_MOUSEWHEEL:
 #ifdef SINGLE_WINDOW
-			ImGui_ImplSDL2_ProcessEvent(&event);
+			ProcessImGuiEvent(event);
 			if (ImGui::GetIO().WantCaptureMouse) {
 				break;
 			}
 #else
 			if (!no_dbg)
 				if (guiCreated && eventWindowId != 0 && window && eventWindowId == SDL_GetWindowID(window)) {
-					ImGui_ImplSDL2_ProcessEvent(&event);
+					ProcessImGuiEvent(event);
 					break;
 				}
 #endif
