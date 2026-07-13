@@ -429,6 +429,7 @@ StartupUI.OnlineLoggingOut=正在登出...
 
 StartupUI.UpdateAvailableTitle=发现新版本
 StartupUI.UpdateAvailableMessage=新版本已发布：
+StartupUI.ReleaseNotes=版本变更说明
 StartupUI.OpenReleasePage=打开下载页
 StartupUI.UpdateLater=稍后
 

@@ -11,6 +11,7 @@ struct UpdateInfo {
 	std::string tag;
 	std::string url;
 	std::string title;
+	std::string notes;
 };
 
 class UpdateChecker {

@@ -427,6 +427,7 @@ StartupUI.OnlineLoginSessionOnly=認証に成功しました。安全なトー�
 
 StartupUI.UpdateAvailableTitle=アップデートがあります
 StartupUI.UpdateAvailableMessage=新しいリリースがあります：
+StartupUI.ReleaseNotes=リリースノート
 StartupUI.OpenReleasePage=リリースページを開く
 StartupUI.UpdateLater=後で
 

@@ -1408,9 +1408,26 @@ namespace casioemu {
 				show_update = !update_info.tag.empty();
 			}
 			if (show_update) {
+				const ImVec2 work_size = ImGui::GetMainViewport()->WorkSize;
+				const float popup_width = (std::min)(640.0f, work_size.x * 0.9f);
+				const float popup_height = (std::min)(440.0f, work_size.y * 0.7f);
+				ImGui::SetNextWindowSize(ImVec2(popup_width, popup_height), ImGuiCond_Appearing);
+				ImGui::SetNextWindowSizeConstraints(ImVec2((std::min)(280.0f, popup_width), 0.0f), ImVec2(popup_width, popup_height));
 				ImGui::OpenPopup("StartupUI.UpdateAvailableTitle"_lc);
-				if (ImGui::BeginPopupModal("StartupUI.UpdateAvailableTitle"_lc, &show_update, ImGuiWindowFlags_AlwaysAutoResize)) {
-					ImGui::Text("%s", (std::string("StartupUI.UpdateAvailableMessage"_lc) + " " + update_info.tag).c_str());
+				if (ImGui::BeginPopupModal("StartupUI.UpdateAvailableTitle"_lc, &show_update)) {
+					ImGui::PushTextWrapPos(0.0f);
+					ImGui::TextWrapped("%s %s", "StartupUI.UpdateAvailableMessage"_lc, update_info.tag.c_str());
+					if (!update_info.title.empty() && update_info.title != update_info.tag) ImGui::TextWrapped("%s", update_info.title.c_str());
+					ImGui::PopTextWrapPos();
+					if (!update_info.notes.empty()) {
+						ImGui::SeparatorText("StartupUI.ReleaseNotes"_lc);
+						if (ImGui::BeginChild("UpdateReleaseNotes", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 1.5f), ImGuiChildFlags_Border)) {
+							ImGui::PushTextWrapPos(0.0f);
+							ImGui::TextWrapped("%s", update_info.notes.c_str());
+							ImGui::PopTextWrapPos();
+						}
+						ImGui::EndChild();
+					}
 					if (ImGui::Button("StartupUI.OpenReleasePage"_lc)) { SDL_OpenURL(update_info.url.c_str()); show_update = false; }
 					ImGui::SameLine(); if (ImGui::Button("StartupUI.UpdateLater"_lc)) show_update = false;
 					ImGui::EndPopup();

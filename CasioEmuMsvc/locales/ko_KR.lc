@@ -429,6 +429,7 @@ StartupUI.OnlineLoginSessionOnly=인증에 성공했습니다. 보안 토큰 저
 
 StartupUI.UpdateAvailableTitle=업데이트 가능
 StartupUI.UpdateAvailableMessage=새 릴리스가 있습니다:
+StartupUI.ReleaseNotes=릴리스 정보
 StartupUI.OpenReleasePage=릴리스 페이지 열기
 StartupUI.UpdateLater=나중에
 

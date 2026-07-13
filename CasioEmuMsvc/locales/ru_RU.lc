@@ -429,6 +429,7 @@ StartupUI.OnlineLoginSessionOnly=Авторизация выполнена. Бе
 
 StartupUI.UpdateAvailableTitle=Доступно обновление
 StartupUI.UpdateAvailableMessage=Доступен новый выпуск:
+StartupUI.ReleaseNotes=Примечания к выпуску
 StartupUI.OpenReleasePage=Открыть страницу выпуска
 StartupUI.UpdateLater=Позже
 

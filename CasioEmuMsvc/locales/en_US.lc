@@ -429,6 +429,7 @@ StartupUI.OnlineLoginSessionOnly=Authorization succeeded. Secure token storage i
 
 StartupUI.UpdateAvailableTitle=Update available
 StartupUI.UpdateAvailableMessage=A new release is available:
+StartupUI.ReleaseNotes=Release notes
 StartupUI.OpenReleasePage=Open release page
 StartupUI.UpdateLater=Later
 

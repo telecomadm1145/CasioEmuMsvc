@@ -431,6 +431,7 @@ StartupUI.OnlineLoginSessionOnly=Authorization succeeded. Secure token storage i
 
 StartupUI.UpdateAvailableTitle=Có bản cập nhật
 StartupUI.UpdateAvailableMessage=Có bản phát hành mới:
+StartupUI.ReleaseNotes=Ghi chú phát hành
 StartupUI.OpenReleasePage=Mở trang phát hành
 StartupUI.UpdateLater=Để sau
 

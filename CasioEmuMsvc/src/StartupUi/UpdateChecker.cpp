@@ -8,19 +8,76 @@
 #include <SDL_system.h>
 #endif
 #include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <optional>
 #include <stdexcept>
+#include <utility>
 #include <SDL.h>
 
 namespace casioemu {
 namespace {
 constexpr const char* kApi = "https://api.github.com/repos/telecomadm1145/CasioEmuMsvc/releases?per_page=1";
+constexpr const char* kCachePath = "update-check.json";
+constexpr auto kCacheLifetime = std::chrono::hours(24);
 constexpr std::size_t kMaxResponseSize = 1024 * 1024;
 size_t Write(void* p, size_t s, size_t n, void* u) {
 	const auto bytes = s * n; auto& body = *static_cast<std::string*>(u);
 	if (bytes > kMaxResponseSize || body.size() > kMaxResponseSize - bytes) return 0;
 	body.append(static_cast<char*>(p), bytes); return bytes;
 }
+
+UpdateInfo EvaluateRelease(UpdateInfo release) {
+	SDL_Log("[UpdateChecker] Local commit=%s ref=%s remote tag=%s", GIT_COMMIT_HASH, GIT_LATEST_TAG, release.tag.c_str());
+	if (release.tag.empty() || release.tag == GIT_LATEST_TAG || release.tag.find(GIT_COMMIT_HASH) != std::string::npos) {
+		SDL_Log("[UpdateChecker] No update available");
+		return {};
+	}
+	SDL_Log("[UpdateChecker] Update available: %s", release.tag.c_str());
+	return release;
+}
+
+std::optional<UpdateInfo> LoadCachedRelease() {
+	std::ifstream input{kCachePath, std::ios::binary};
+	if (!input) return std::nullopt;
+	try {
+		const auto cache = nlohmann::json::parse(input);
+		const auto checked_at = cache.value("checked_at", std::int64_t{});
+		const auto now = std::chrono::duration_cast<std::chrono::seconds>(
+			std::chrono::system_clock::now().time_since_epoch()).count();
+		if (checked_at <= 0 || now < checked_at || now - checked_at >= std::chrono::duration_cast<std::chrono::seconds>(kCacheLifetime).count()) {
+			SDL_Log("[UpdateChecker] Cached result expired");
+			return std::nullopt;
+		}
+		UpdateInfo release{cache.value("tag", ""), cache.value("url", ""), cache.value("title", ""), cache.value("notes", "")};
+		SDL_Log("[UpdateChecker] Using cached release result: %s", release.tag.c_str());
+		return release;
+	}
+	catch (const std::exception& e) {
+		SDL_Log("[UpdateChecker] Ignoring invalid cache: %s", e.what());
+		return std::nullopt;
+	}
+}
+
+void SaveCachedRelease(const UpdateInfo& release) {
+	try {
+		const auto checked_at = std::chrono::duration_cast<std::chrono::seconds>(
+			std::chrono::system_clock::now().time_since_epoch()).count();
+		const nlohmann::json cache{{"checked_at", checked_at}, {"tag", release.tag}, {"url", release.url},
+			{"title", release.title}, {"notes", release.notes}};
+		std::ofstream output{kCachePath, std::ios::binary | std::ios::trunc};
+		if (!output) throw std::runtime_error("cannot open cache file");
+		output << cache.dump();
+		if (!output) throw std::runtime_error("cannot write cache file");
+		SDL_Log("[UpdateChecker] Cached release result for 24 hours");
+	}
+	catch (const std::exception& e) {
+		SDL_Log("[UpdateChecker] Failed to save cache: %s", e.what());
+	}
+}
+
 UpdateInfo Check() {
+	if (auto cached = LoadCachedRelease()) return EvaluateRelease(std::move(*cached));
 	std::string body;
 	const char* api = kApi;
 	SDL_Log("[UpdateChecker] Checking releases: %s", api);
@@ -49,11 +106,14 @@ UpdateInfo Check() {
 
 #endif
 	const auto releases = nlohmann::json::parse(body); if (!releases.is_array() || releases.empty()) { SDL_Log("[UpdateChecker] No releases returned"); return {}; }
-	const auto& json = releases.front(); UpdateInfo r{json.value("tag_name", ""), json.value("html_url", ""), json.value("name", "")};
-	SDL_Log("[UpdateChecker] Local commit=%s ref=%s remote tag=%s", GIT_COMMIT_HASH, GIT_LATEST_TAG, r.tag.c_str());
-	if (r.tag.empty() || r.tag == GIT_LATEST_TAG || r.tag.find(GIT_COMMIT_HASH) != std::string::npos) { SDL_Log("[UpdateChecker] No update available"); return {}; }
-	SDL_Log("[UpdateChecker] Update available: %s", r.tag.c_str());
-	return r;
+	const auto& json = releases.front();
+	const auto string_value = [&json](const char* name) {
+		const auto it = json.find(name);
+		return it != json.end() && it->is_string() ? it->get<std::string>() : std::string{};
+	};
+	UpdateInfo release{string_value("tag_name"), string_value("html_url"), string_value("name"), string_value("body")};
+	SaveCachedRelease(release);
+	return EvaluateRelease(std::move(release));
 }
 }
 UpdateChecker::UpdateChecker() : state_(std::make_shared<State>()) {}

@@ -429,6 +429,7 @@ StartupUI.OnlineLoginSessionOnly=Autorización correcta. El almacenamiento segur
 
 StartupUI.UpdateAvailableTitle=Actualización disponible
 StartupUI.UpdateAvailableMessage=Hay una nueva versión disponible:
+StartupUI.ReleaseNotes=Notas de la versión
 StartupUI.OpenReleasePage=Abrir página de la versión
 StartupUI.UpdateLater=Más tarde
 

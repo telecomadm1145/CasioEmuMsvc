@@ -429,6 +429,7 @@ StartupUI.OnlineLoginSessionOnly=Autorisierung erfolgreich. Sichere Token-Speich
 
 StartupUI.UpdateAvailableTitle=Update verfügbar
 StartupUI.UpdateAvailableMessage=Eine neue Version ist verfügbar:
+StartupUI.ReleaseNotes=Versionshinweise
 StartupUI.OpenReleasePage=Release-Seite öffnen
 StartupUI.UpdateLater=Später
 
