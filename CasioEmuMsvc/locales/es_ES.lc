@@ -427,4 +427,9 @@ StartupUI.OnlineAuthorizationExpired=La autorización del navegador ha caducado.
 StartupUI.OnlineLoggingOut=Cerrando sesión...
 StartupUI.OnlineLoginSessionOnly=Autorización correcta. El almacenamiento seguro de tokens no está disponible; la sesión solo durará esta ejecución.
 
+StartupUI.UpdateAvailableTitle=Actualización disponible
+StartupUI.UpdateAvailableMessage=Hay una nueva versión disponible:
+StartupUI.OpenReleasePage=Abrir página de la versión
+StartupUI.UpdateLater=Más tarde
+
 placeholder2=a)"

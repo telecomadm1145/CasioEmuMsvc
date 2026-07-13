@@ -427,4 +427,9 @@ StartupUI.OnlineAuthorizationExpired=Die Browser-Autorisierung ist abgelaufen. B
 StartupUI.OnlineLoggingOut=Abmeldung ...
 StartupUI.OnlineLoginSessionOnly=Autorisierung erfolgreich. Sichere Token-Speicherung ist nicht verfügbar; die Anmeldung gilt nur für diesen Lauf.
 
+StartupUI.UpdateAvailableTitle=Update verfügbar
+StartupUI.UpdateAvailableMessage=Eine neue Version ist verfügbar:
+StartupUI.OpenReleasePage=Release-Seite öffnen
+StartupUI.UpdateLater=Später
+
 placeholder2=a)"

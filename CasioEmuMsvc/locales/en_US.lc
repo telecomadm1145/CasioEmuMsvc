@@ -427,4 +427,9 @@ StartupUI.OnlineAuthorizationExpired=Browser authorization expired. Please sign 
 StartupUI.OnlineLoggingOut=Signing out...
 StartupUI.OnlineLoginSessionOnly=Authorization succeeded. Secure token storage is unavailable; sign-in lasts for this run only.
 
+StartupUI.UpdateAvailableTitle=Update available
+StartupUI.UpdateAvailableMessage=A new release is available:
+StartupUI.OpenReleasePage=Open release page
+StartupUI.UpdateLater=Later
+
 placeholder2=a)"

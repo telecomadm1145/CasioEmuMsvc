@@ -427,4 +427,9 @@ StartupUI.OnlineAuthorizationExpired=L'autorisation du navigateur a expiré. Veu
 StartupUI.OnlineLoggingOut=Déconnexion...
 StartupUI.OnlineLoginSessionOnly=Autorisation réussie. Le stockage sécurisé du jeton est indisponible ; la connexion ne durera que cette session.
 
+StartupUI.UpdateAvailableTitle=Mise à jour disponible
+StartupUI.UpdateAvailableMessage=Une nouvelle version est disponible :
+StartupUI.OpenReleasePage=Ouvrir la page de la version
+StartupUI.UpdateLater=Plus tard
+
 placeholder2=a)"

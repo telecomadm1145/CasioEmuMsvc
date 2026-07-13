@@ -427,4 +427,9 @@ StartupUI.OnlineAuthorizationExpired=Срок действия авториза�
 StartupUI.OnlineLoggingOut=Выход из системы...
 StartupUI.OnlineLoginSessionOnly=Авторизация выполнена. Безопасное хранение токена недоступно; вход действует только до завершения текущего запуска.
 
+StartupUI.UpdateAvailableTitle=Доступно обновление
+StartupUI.UpdateAvailableMessage=Доступен новый выпуск:
+StartupUI.OpenReleasePage=Открыть страницу выпуска
+StartupUI.UpdateLater=Позже
+
 placeholder2=a)"

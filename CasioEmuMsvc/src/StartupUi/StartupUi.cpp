@@ -8,6 +8,7 @@
 #include "OnlineLoopbackServer.h"
 #include "OnlineModelClient.h"
 #include "OnlineModelPackage.h"
+#include "UpdateChecker.h"
 #include <OnlineBuildConfig.h>
 #include "3rd_licenses.h"
 #include "Binary.h"
@@ -809,7 +810,12 @@ namespace casioemu {
 		};
 		OnlineOperation online_operation = OnlineOperation::Idle;
 		std::future<OnlineTaskResult> online_task;
+		UpdateChecker update_checker;
+		UpdateInfo update_info;
+		bool show_update = false;
+		bool update_result_consumed = false;
 		StartupUi() {
+			update_checker.Start();
 			std::ifstream api_settings{"online_api.cfg"};
 			if (api_settings) {
 				std::string value;
@@ -1396,6 +1402,20 @@ namespace casioemu {
 		}
 
 		void Render() {
+			if (update_checker.Ready() && !update_result_consumed) {
+				update_info = update_checker.TakeResult();
+				update_result_consumed = true;
+				show_update = !update_info.tag.empty();
+			}
+			if (show_update) {
+				ImGui::OpenPopup("StartupUI.UpdateAvailableTitle"_lc);
+				if (ImGui::BeginPopupModal("StartupUI.UpdateAvailableTitle"_lc, &show_update, ImGuiWindowFlags_AlwaysAutoResize)) {
+					ImGui::Text("%s", (std::string("StartupUI.UpdateAvailableMessage"_lc) + " " + update_info.tag).c_str());
+					if (ImGui::Button("StartupUI.OpenReleasePage"_lc)) { SDL_OpenURL(update_info.url.c_str()); show_update = false; }
+					ImGui::SameLine(); if (ImGui::Button("StartupUI.UpdateLater"_lc)) show_update = false;
+					ImGui::EndPopup();
+				}
+			}
 			auto& io = ImGui::GetIO();
 
 #ifdef __ANDROID__

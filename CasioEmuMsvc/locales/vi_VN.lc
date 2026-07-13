@@ -429,4 +429,9 @@ StartupUI.OnlineAuthorizationExpired=Browser authorization expired. Please sign 
 StartupUI.OnlineLoggingOut=Signing out...
 StartupUI.OnlineLoginSessionOnly=Authorization succeeded. Secure token storage is unavailable; sign-in lasts for this run only.
 
+StartupUI.UpdateAvailableTitle=Có bản cập nhật
+StartupUI.UpdateAvailableMessage=Có bản phát hành mới:
+StartupUI.OpenReleasePage=Mở trang phát hành
+StartupUI.UpdateLater=Để sau
+
 placeholder2=a)"

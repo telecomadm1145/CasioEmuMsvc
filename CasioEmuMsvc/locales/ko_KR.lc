@@ -427,4 +427,9 @@ StartupUI.OnlineAuthorizationExpired=브라우저 인증이 만료되었습니�
 StartupUI.OnlineLoggingOut=로그아웃하는 중...
 StartupUI.OnlineLoginSessionOnly=인증에 성공했습니다. 보안 토큰 저장을 사용할 수 없어 로그인은 이번 실행 중에만 유지됩니다.
 
+StartupUI.UpdateAvailableTitle=업데이트 가능
+StartupUI.UpdateAvailableMessage=새 릴리스가 있습니다:
+StartupUI.OpenReleasePage=릴리스 페이지 열기
+StartupUI.UpdateLater=나중에
+
 placeholder2=a)"

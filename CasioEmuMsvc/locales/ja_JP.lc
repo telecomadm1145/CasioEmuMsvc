@@ -425,4 +425,9 @@ StartupUI.OnlineAuthorizationExpired=ブラウザー認証の有効期限が切�
 StartupUI.OnlineLoggingOut=サインアウトしています...
 StartupUI.OnlineLoginSessionOnly=認証に成功しました。安全なトークン保存を利用できないため、サインインは今回の実行中のみ有効です。
 
+StartupUI.UpdateAvailableTitle=アップデートがあります
+StartupUI.UpdateAvailableMessage=新しいリリースがあります：
+StartupUI.OpenReleasePage=リリースページを開く
+StartupUI.UpdateLater=後で
+
 placeholder2=a)"
