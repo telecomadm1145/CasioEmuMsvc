@@ -33,13 +33,6 @@ import android.content.ClipboardManager;
 import android.content.ClipData;
 import android.content.DialogInterface;
 import android.system.Os;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.Notification;
-import android.os.Handler;
-import android.os.Looper;
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -72,28 +65,19 @@ public class Game extends SDLActivity {
     private static Uri pendingUri = null;
     private static byte[] pendingData = null;
     private static int pendingRequestCode = -1;
-    private static final String CHANNEL_ID = "emu_channel";
-    private static final int NOTIFICATION_RUNNING = 100;
-    private static final int NOTIFICATION_STOPPED = 101;
-    private static final int PERMISSION_NOTIFICATION = 102;
-    private static final long BACKGROUND_TIMEOUT_MS = 5 * 60 * 1000;
-    private static final long NOTIFICATION_POST_DELAY_MS = 1500;
     private static final int MAX_ONLINE_RESPONSE_SIZE = 40 * 1024 * 1024;
     private static final String ASSET_VERSION_FILE = "locales_asset_version.txt";
     private static final String ONLINE_KEY_ALIAS = "CasioEmuMsvcOnlineDeviceKey";
     private static final String ONLINE_PREFS = "casioemu_online_device";
     private String pendingOnlineAuthorizationGrant = null;
     private boolean onlineAuthorizationCallbackReady = false;
-
     private static String onlineIdentityPreferenceKey(String api) throws Exception {
         byte[] digest = MessageDigest.getInstance("SHA-256").digest(api.getBytes("UTF-8"));
         return Base64.encodeToString(digest, Base64.NO_WRAP | Base64.URL_SAFE);
     }
-
     private static String onlineTokenPreferenceKey(String api) throws Exception {
         return "token_" + onlineIdentityPreferenceKey(api);
     }
-
     private static SecretKey onlineIdentityKey() throws Exception {
         KeyStore store = KeyStore.getInstance("AndroidKeyStore");
         store.load(null);
@@ -109,7 +93,6 @@ public class Game extends SDLActivity {
                 .build());
         return generator.generateKey();
     }
-
     private static byte[] loadOnlineSecret(String preferenceKey) throws Exception {
         Activity activity = SDLActivity.mSingleton;
         String encoded = activity.getSharedPreferences(ONLINE_PREFS, Context.MODE_PRIVATE)
@@ -124,7 +107,6 @@ public class Game extends SDLActivity {
         cipher.updateAAD(preferenceKey.getBytes(StandardCharsets.UTF_8));
         return cipher.doFinal(stored, iv.length, stored.length - iv.length);
     }
-
     private static boolean saveOnlineSecret(String preferenceKey, byte[] value) throws Exception {
         Activity activity = SDLActivity.mSingleton;
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
@@ -139,7 +121,6 @@ public class Game extends SDLActivity {
                 .putString(preferenceKey, Base64.encodeToString(stored, Base64.NO_WRAP))
                 .commit();
     }
-
     public static byte[] loadOnlineDeviceIdentity(String api) {
         try {
             return loadOnlineSecret(onlineIdentityPreferenceKey(api));
@@ -148,7 +129,6 @@ public class Game extends SDLActivity {
             return null;
         }
     }
-
     public static boolean saveOnlineDeviceIdentity(String api, byte[] value) {
         try {
             return saveOnlineSecret(onlineIdentityPreferenceKey(api), value);
@@ -157,7 +137,6 @@ public class Game extends SDLActivity {
             return false;
         }
     }
-
     public static String loadOnlineToken(String api) {
         try {
             byte[] value = loadOnlineSecret(onlineTokenPreferenceKey(api));
@@ -167,7 +146,6 @@ public class Game extends SDLActivity {
             return null;
         }
     }
-
     public static boolean saveOnlineToken(String api, String token) {
         try {
             return saveOnlineSecret(onlineTokenPreferenceKey(api), token.getBytes(StandardCharsets.UTF_8));
@@ -176,7 +154,6 @@ public class Game extends SDLActivity {
             return false;
         }
     }
-
     public static void clearOnlineToken(String api) {
         try {
             Activity activity = SDLActivity.mSingleton;
@@ -186,7 +163,6 @@ public class Game extends SDLActivity {
             Log.e(TAG, "Failed to clear online token", error);
         }
     }
-
     public static byte[] onlineApiRequest(String url, String body, String[] headers, String userAgent) {
         HttpURLConnection connection = null;
         try {
@@ -240,84 +216,6 @@ public class Game extends SDLActivity {
             if (connection != null) connection.disconnect();
         }
     }
-
-    private Handler backgroundHandler = new Handler(Looper.getMainLooper());
-    private boolean isStoppingEmulation = false;
-
-
-    private Runnable showRunningNotificationRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (isFinishing() || isStoppingEmulation) return;
-            if (!canPostNotifications()) return;
-
-            NotificationCompat.Builder builder = new NotificationCompat.Builder(Game.this, CHANNEL_ID)
-                    .setSmallIcon(android.R.drawable.ic_media_play)
-                    .setContentTitle("Emulation Running")
-                    .setContentText("Emulation is currently running in the background.")
-                    .setPriority(NotificationCompat.PRIORITY_LOW)
-                    .setAutoCancel(false);
-
-            NotificationManagerCompat notificationManager = NotificationManagerCompat.from(Game.this);
-            notificationManager.notify(NOTIFICATION_RUNNING, builder.build());
-        }
-    };
-
-    private Runnable stopEmulationRunnable = new Runnable() {
-        @Override
-        public void run() {
-            isStoppingEmulation = true;
-
-            NotificationManagerCompat notificationManager = NotificationManagerCompat.from(Game.this);
-            notificationManager.cancel(NOTIFICATION_RUNNING);
-
-            if (canPostNotifications()) {
-                NotificationCompat.Builder builder = new NotificationCompat.Builder(Game.this, CHANNEL_ID)
-                        .setSmallIcon(android.R.drawable.ic_media_pause)
-                        .setContentTitle("Emulation Stopped")
-                        .setContentText("Emulation was stopped after 5 minutes in background.")
-                        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                        .setAutoCancel(true);
-                notificationManager.notify(NOTIFICATION_STOPPED, builder.build());
-            }
-
-            finish();
-            System.exit(0);
-        }
-    };
-
-    private boolean canPostNotifications() {
-        if (Build.VERSION.SDK_INT >= 33) {
-            return checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
-                    == PackageManager.PERMISSION_GRANTED;
-        }
-        return true;
-    }
-
-    private void cancelAllNotifications() {
-        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
-        notificationManager.cancel(NOTIFICATION_RUNNING);
-        notificationManager.cancel(NOTIFICATION_STOPPED);
-    }
-
-    private void removeAllCallbacks() {
-        backgroundHandler.removeCallbacks(showRunningNotificationRunnable);
-        backgroundHandler.removeCallbacks(stopEmulationRunnable);
-    }
-
-    private void createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            CharSequence name = "Emulation Status";
-            String description = "Notifications for emulator background running status";
-            int importance = NotificationManager.IMPORTANCE_DEFAULT;
-            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, name, importance);
-            channel.setDescription(description);
-            NotificationManager notificationManager = getSystemService(NotificationManager.class);
-            if (notificationManager != null) {
-                notificationManager.createNotificationChannel(channel);
-            }
-        }
-    }
     private void setImmersiveMode() {
         if (Build.VERSION.SDK_INT >= 19) {
             View decorView = getWindow().getDecorView();
@@ -352,8 +250,6 @@ public class Game extends SDLActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         handleOnlineAuthorizationIntent(getIntent());
-        isStoppingEmulation = false;
-        createNotificationChannel();
         setImmersiveMode();
         extractAssets();
         checkAndExtractPluginAssets();
@@ -362,44 +258,13 @@ public class Game extends SDLActivity {
         } catch (Exception e) {}
     }
     @Override
-    protected void onResume() {
-        super.onResume();
-        isStoppingEmulation = false;
-        removeAllCallbacks();
-        cancelAllNotifications();
-        if (Build.VERSION.SDK_INT >= 33) {
-            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, PERMISSION_NOTIFICATION);
-            }
-        }
-    }
-    @Override
-    protected void onPause() {
-        super.onPause();
-        if (isFinishing() || isStoppingEmulation) {
-            return;
-        }
-        
-        backgroundHandler.removeCallbacks(showRunningNotificationRunnable);
-        backgroundHandler.postDelayed(showRunningNotificationRunnable, NOTIFICATION_POST_DELAY_MS);
-
-        backgroundHandler.removeCallbacks(stopEmulationRunnable);
-        backgroundHandler.postDelayed(stopEmulationRunnable, BACKGROUND_TIMEOUT_MS);
-    }
-    @Override
-    protected void onDestroy() {
-        removeAllCallbacks();
-        cancelAllNotifications();
-        super.onDestroy();
-    }
-    @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
             setImmersiveMode();
         }
     }
-    
+
     private void copyAsset(String assetName, File outputFile) throws IOException {
         File parent = outputFile.getParentFile();
         if (parent != null && !parent.exists()) {
@@ -465,7 +330,6 @@ public class Game extends SDLActivity {
             return false;
         }
     }
-
     private String getAssetVersionTag() {
         try {
             PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
@@ -475,7 +339,6 @@ public class Game extends SDLActivity {
             return String.valueOf(System.currentTimeMillis());
         }
     }
-
     private String readTextFile(File file) throws IOException {
         try (InputStream in = new java.io.FileInputStream(file);
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -487,7 +350,6 @@ public class Game extends SDLActivity {
             return out.toString(StandardCharsets.UTF_8.name());
         }
     }
-
     private void writeTextFile(File file, String value) throws IOException {
         File parent = file.getParentFile();
         if (parent != null && !parent.exists()) {
@@ -497,7 +359,6 @@ public class Game extends SDLActivity {
             out.write(value.getBytes(StandardCharsets.UTF_8));
         }
     }
-
     private void extractAssets() {
         File externalDir = getExternalFilesDir(null);
         if (externalDir == null) return;
@@ -590,7 +451,7 @@ public class Game extends SDLActivity {
                 }
                 zipFile.close();
                 String pName = "Unknown Plugin", pAuthor = "Unknown", pVer = "1.0", pDesc = "No description";
-                
+
                 if (metaData != null) {
                     pName = metaData.getString("casioemu.plugin.name", pName);
                     pAuthor = metaData.getString("casioemu.plugin.author", pAuthor);
@@ -624,12 +485,12 @@ public class Game extends SDLActivity {
                 infoBuilder.append("Description: ").append(pDesc).append("\n");
                 infoBuilder.append("Package: ").append(appInfo.packageName).append("\n");
                 infoBuilder.append("---\n");
-                
+
             } catch (Exception e) {
                 Log.e(TAG, "Error processing plugin: " + e.getMessage());
             }
         }
-        
+
         try {
             FileOutputStream fos = new FileOutputStream(loadOrderFile);
             for (String so : loadOrder) {
@@ -863,10 +724,6 @@ public class Game extends SDLActivity {
                 processPendingOperations();
             } else {
                 onExportFailed();
-            }
-        } else if (requestCode == PERMISSION_NOTIFICATION) {
-            if (grantResults.length > 0 && grantResults[0] != PackageManager.PERMISSION_GRANTED) {
-                Log.w(TAG, "Notification permission denied");
             }
         }
     }
