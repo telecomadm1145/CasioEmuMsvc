@@ -59,7 +59,7 @@ RomInfo rom_info(std::vector<byte>& rom, const std::vector<byte>& flash, bool ch
 			if (rom.size() < 0x60000) {
 				return ri;
 			}
-			if (dat[0x5ffee] != 'E') { // this means... it is stored at 0x71xxx
+			if (dat[0x5ffee] != 'E' && dat[0x5ffee] != 'F') { // this means... it is stored at 0x71xxx
 				if (rom.size() < 0x80000) {
 					return ri;
 				}
@@ -67,7 +67,7 @@ RomInfo rom_info(std::vector<byte>& rom, const std::vector<byte>& flash, bool ch
 			}
 			memcpy(ri.ver, &dat[0x5ffee], 8);
 			memcpy(ri.cid, &dat[0x5fff8], 8);
-			if (ri.ver[0] != 'E') {
+			if (ri.ver[0] != 'E' && ri.ver[0] != 'F') {
 				auto ver = (byte*)FindSignature(dat, 0x5e000, "?? 00 e9 90 ca ff ?? 00 e9 90 cb ff ?? 00 e9 90 cc ff ?? 00 e9 90 cd ff ?? 00 e9 90 ce ff ?? 00 e9 90 cf ff");
 				auto ver2 = (byte*)FindSignature(dat, 0x5e000, "56 00 e9 90 d1 ff 2e 00 e9 90 d2 ff");
 				if (ver && ver2) {
