@@ -51,6 +51,7 @@ namespace casioemu {
 		std::string interface_svg_data;
 		unsigned int cycles_per_second;
 		unsigned int timer_interval;
+		Uint64 eps_frame_cycle_remainder = 0;
 		bool running, Paused;
 		bool headless = false;
 		std::atomic<bool> m_step_requested;

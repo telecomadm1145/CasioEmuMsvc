@@ -169,9 +169,9 @@ namespace casioemu {
 			cycles_per_second = 1024 * 1024 * 8;
 		}
 		if (hardware_id == HW_EPS6800) {
-			cycles_per_second = 1024 * 1024 * 2;
+			cycles_per_second = 100000;
 		}
-		timer_interval = 20;
+		timer_interval = hardware_id == HW_EPS6800 ? 40 : 20;
 
 		cycles.Setup(cycles_per_second, timer_interval);
 		chipset.Setup();
@@ -327,9 +327,9 @@ namespace casioemu {
 			cycles_per_second = 1024 * 1024 * 8;
 		}
 		if (hardware_id == HW_EPS6800) {
-			cycles_per_second = 1024 * 1024 * 2;
+			cycles_per_second = 100000;
 		}
-		timer_interval = 20;
+		timer_interval = hardware_id == HW_EPS6800 ? 40 : 20;
 
 		cycles.Setup(cycles_per_second, timer_interval);
 		chipset.Setup();
@@ -583,6 +583,20 @@ namespace casioemu {
 
 	void Emulator::TimerCallback() {
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
+		if (hardware_id == HW_EPS6800) {
+			constexpr Uint64 cycles_per_eps_frame = 4000;
+			const auto cycles_to_emulate = cycles.GetDelta();
+			if (Paused) {
+				eps_frame_cycle_remainder = 0;
+				return;
+			}
+			eps_frame_cycle_remainder += cycles_to_emulate;
+			while (eps_frame_cycle_remainder >= cycles_per_eps_frame) {
+				chipset.RunEpsFrame();
+				eps_frame_cycle_remainder -= cycles_per_eps_frame;
+			}
+			return;
+		}
 
 		Uint64 cycles_to_emulate = cycles.GetDelta();
 		for (Uint64 ix = 0; ix != cycles_to_emulate; ++ix)
@@ -768,6 +782,7 @@ namespace casioemu {
 
 	void Emulator::SetClockSpeed(float speed) {
 		cycles.Setup((unsigned int)(cycles_per_second * speed), timer_interval);
+		eps_frame_cycle_remainder = 0;
 	}
 
 	FairRecursiveMutex::FairRecursiveMutex() : holding{}, recursive_count{} {

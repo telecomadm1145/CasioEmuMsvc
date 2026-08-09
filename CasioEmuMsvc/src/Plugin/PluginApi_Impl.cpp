@@ -71,12 +71,23 @@ class PluginApi_Impl : public PluginApi {
 
 	class IMMU_Impl : public IMMU {
 		uint8_t ReadData(size_t addr) override {
+			if (auto* eps = m_emu->chipset.epscpu)
+				return addr < 0x2000 ? eps->ram[addr] : 0xff;
 			return me_mmu->ReadData(addr);
 		}
 		void WriteData(size_t addr, uint8_t dat) override {
+			if (auto* eps = m_emu->chipset.epscpu) {
+				if (addr < 0x2000)
+					eps->ram[addr] = dat;
+				return;
+			}
 			me_mmu->WriteData(addr, dat);
 		}
 		uint16_t ReadCode(size_t addr) override {
+			if (m_emu->chipset.epscpu) {
+				const auto& rom = m_emu->chipset.rom_data;
+				return addr + 1 < rom.size() ? static_cast<uint16_t>(rom[addr] | (rom[addr + 1] << 8)) : 0xffff;
+			}
 			return me_mmu->ReadCode(addr);
 		}
 		void WriteCode(size_t addr, uint8_t dat) override {
@@ -250,8 +261,37 @@ class PluginApi_Impl : public PluginApi {
 		bool WriteRegister(const char* name, uint32_t value) override {
 			auto lock = std::lock_guard(m_emu->access_mx);
 			const auto normalized = NormalizeRegisterName(name);
-			if (m_emu->chipset.epscpu)
+			if (auto* eps = m_emu->chipset.epscpu) {
+				if (normalized == "pc") {
+					eps->SetPC(value);
+					return true;
+				}
+				if (normalized == "lr" || normalized == "ea" || normalized == "ex1") {
+					auto* fsr = normalized == "lr" ? &eps->FSR : (normalized == "ea" ? &eps->FSR1 : &eps->FSR2);
+					auto* bsr = normalized == "lr" ? &eps->BSR : (normalized == "ea" ? &eps->BSR1 : &eps->BSR2);
+					*fsr = static_cast<uint8_t>(0x80 | (value & 0x7f));
+					*bsr = static_cast<uint8_t>(value >> 7);
+					return true;
+				}
+				if (normalized == "lcdar") {
+					eps->LCDARL = static_cast<uint8_t>(value % 0x60);
+					eps->LCDARH = static_cast<uint8_t>((value / 0x60) & 0x03);
+					return true;
+				}
+				if (normalized == "sp") {
+					eps->STKPTR = static_cast<uint8_t>((value >> 1) & 0x1f);
+					return true;
+				}
+				if (normalized == "psw") {
+					eps->STATUS = static_cast<uint8_t>(value);
+					return true;
+				}
+				if (normalized == "dsr") {
+					eps->BSR = static_cast<uint8_t>(value);
+					return true;
+				}
 				return false;
+			}
 			if (normalized == "pc") {
 				m_emu->chipset.cpu.reg_pc = static_cast<uint16_t>(value);
 				m_emu->chipset.cpu.reg_csr = static_cast<uint16_t>(value >> 16);
@@ -273,15 +313,27 @@ class PluginApi_Impl : public PluginApi {
 			auto lock = std::lock_guard(m_emu->access_mx);
 			std::vector<uint8_t> result;
 			result.reserve(size);
-			for (size_t i = 0; i < size; ++i)
-				result.push_back(m_emu->chipset.mmu.ReadData(address + i));
+			if (auto* eps = m_emu->chipset.epscpu) {
+				for (size_t i = 0; i < size; ++i)
+					result.push_back(address + i < 0x2000 ? eps->ram[address + i] : 0xff);
+			}
+			else {
+				for (size_t i = 0; i < size; ++i)
+					result.push_back(m_emu->chipset.mmu.ReadData(address + i));
+			}
 			return result;
 		}
 
 		void WriteMemory(uint32_t address, const std::vector<uint8_t>& data) override {
 			auto lock = std::lock_guard(m_emu->access_mx);
-			for (size_t i = 0; i < data.size(); ++i)
-				m_emu->chipset.mmu.WriteData(address + i, data[i]);
+			if (auto* eps = m_emu->chipset.epscpu) {
+				for (size_t i = 0; i < data.size() && address + i < 0x2000; ++i)
+					eps->ram[address + i] = data[i];
+			}
+			else {
+				for (size_t i = 0; i < data.size(); ++i)
+					m_emu->chipset.mmu.WriteData(address + i, data[i]);
+			}
 		}
 
 		std::vector<uint16_t> ReadCode(uint32_t address, size_t count) override {

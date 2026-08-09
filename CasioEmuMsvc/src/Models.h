@@ -25,7 +25,7 @@ namespace casioemu {
 																					   : 0x6000;
 	}
 	inline constexpr size_t GetRamEditorSize(HardwareId hid) {
-		return hid == HW_SOLARII ? GetRamSize(hid) : 0x10000 - GetRamBaseAddr(hid);
+		return hid == HW_SOLARII || hid == HW_EPS6800 ? GetRamSize(hid) : 0x10000 - GetRamBaseAddr(hid);
 	}
 #define ColorA ImColor{40, 150, 40, 255}
 #define ColorB ImColor{40, 40, 150, 255}

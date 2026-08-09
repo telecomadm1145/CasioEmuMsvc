@@ -308,7 +308,7 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 		windows.push_back(CreateFx5800FileSystem());
 	}
 
-	if (m_emu->hardware_id != casioemu::HW_SOLARII) {
+	if (m_emu->hardware_id != casioemu::HW_SOLARII && m_emu->hardware_id != casioemu::HW_EPS6800) {
 		windows.push_back(new VariableWindow());
 	}
 

@@ -104,6 +104,39 @@ void WatchWindow::ShowRX() {
 }
 void WatchWindow::ModRX() {
 	char id[10];
+	if (m_emu->chipset.epscpu) {
+		auto edit_sfr = ([&](char* ptr, const char* label, int i, int width) {
+			ImGui::TextColored(~UIHelpers::kColorSuccess, "%s", label);
+			ImGui::SameLine();
+			snprintf(id, sizeof(id), "##epssfr%d", i);
+			ImGui::SetNextItemWidth(char_width * width + 5);
+			ImGui::InputText(id, ptr, width + 1, ImGuiInputTextFlags_CharsHexadecimal);
+		});
+		edit_sfr(reg_pc, "PC: ", 1, 6);
+		ImGui::SameLine();
+		if (m_emu->chipset.epscpu->FSR & 0x80) {
+			edit_sfr(reg_lr, "INDF0: ", 2, 6);
+		}
+		else {
+			ImGui::TextColored(~UIHelpers::kColorSuccess, "INDF0: ");
+			ImGui::SameLine();
+			ImGui::TextUnformatted(reg_lr);
+		}
+		ImGui::SameLine();
+		edit_sfr(reg_ea, "INDF1: ", 3, 6);
+		ImGui::SameLine();
+		edit_sfr(reg_ex1, "INDF2: ", 4, 6);
+		ImGui::SameLine();
+		edit_sfr(reg_sp, "STKPTR: ", 5, 4);
+		ImGui::SameLine();
+		edit_sfr(reg_psw, "STATUS: ", 6, 2);
+		ImGui::SameLine();
+		ImGui::TextColored(~UIHelpers::kColorSuccess, "BSR: ");
+		ImGui::SameLine();
+		ImGui::TextUnformatted(reg_dsr);
+		edit_sfr(reg_ex2, "LCDAR: ", 8, 6);
+		return;
+	}
 	ImGui::TextColored(~UIHelpers::kColorSuccess, "RXn: ");
 	for (int i = 0; i < 16; i++) {
 		ImGui::SameLine();
@@ -143,6 +176,24 @@ void WatchWindow::ModRX() {
 }
 
 void WatchWindow::UpdateRX() {
+	if (auto* eps = m_emu->chipset.epscpu) {
+		const auto set_indirect = [](uint32_t value, uint8_t& fsr, uint8_t& bsr) {
+			const bool uses_ram = (fsr & 0x80) != 0;
+			fsr = static_cast<uint8_t>((uses_ram ? 0x80 : 0) | (value & 0x7f));
+			if (uses_ram)
+				bsr = static_cast<uint8_t>(value >> 7);
+		};
+		eps->SetPC(static_cast<uint32_t>(strtoul(reg_pc, nullptr, 16)));
+		set_indirect(static_cast<uint32_t>(strtoul(reg_lr, nullptr, 16)), eps->FSR, eps->BSR);
+		set_indirect(static_cast<uint32_t>(strtoul(reg_ea, nullptr, 16)), eps->FSR1, eps->BSR1);
+		set_indirect(static_cast<uint32_t>(strtoul(reg_ex1, nullptr, 16)), eps->FSR2, eps->BSR2);
+		eps->STKPTR = static_cast<uint8_t>((strtoul(reg_sp, nullptr, 16) >> 1) & 0x1f);
+		eps->STATUS = static_cast<uint8_t>(strtoul(reg_psw, nullptr, 16));
+		const auto lcdar = static_cast<uint32_t>(strtoul(reg_ex2, nullptr, 16));
+		eps->LCDARL = static_cast<uint8_t>(lcdar % 0x60);
+		eps->LCDARH = static_cast<uint8_t>((lcdar / 0x60) & 0x03);
+		return;
+	}
 	for (int i = 0; i < 16; i++) {
 		m_emu->chipset.cpu.reg_r[i] = (uint8_t)strtol((char*)reg_rx[i], nullptr, 16);
 	}
@@ -292,7 +343,7 @@ void WatchWindow::RenderCore() {
 	ImGui::TextUnformatted("WatchWindow.StackMemViewRange"_lc);
 	ImGui::SameLine();
 	ImGui::SliderInt("##range", &range, 64, 2048);
-	uint16_t offset = chipset.cpu.reg_sp & 0xffff;
+	uint16_t offset = chipset.epscpu ? 0 : chipset.cpu.reg_sp & 0xffff;
 	mem_editor.ReadFn = [](const ImU8* data, size_t off) -> ImU8 {
 		return me_mmu->ReadData((size_t)data + off);
 	};

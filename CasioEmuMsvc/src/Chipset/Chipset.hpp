@@ -90,12 +90,12 @@ namespace casioemu {
 
 		bool remap = false;
 
-		InterruptSource* MaskableInterrupts;
+		InterruptSource* MaskableInterrupts = nullptr;
 		size_t EffectiveMICount;
 
 		// Reserve these pointers to make it easy for other peripherals to input to pins.
-		IOPorts* ioport;
-		ExternalInterrupts* EXIhandle;
+		IOPorts* ioport = nullptr;
+		ExternalInterrupts* EXIhandle = nullptr;
 
 		bool WDT_enabled = false;
 
@@ -165,6 +165,7 @@ namespace casioemu {
 		void RemovePortInput(int, int);
 
 		void Tick();
+		void RunEpsFrame();
 		void EmulatorTick();
 		void Frame();
 		void UIEvent(SDL_Event event);

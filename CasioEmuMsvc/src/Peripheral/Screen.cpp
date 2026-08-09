@@ -22,6 +22,7 @@
 #include "Chipset/MMU.hpp"
 #include "Chipset/MMURegion.hpp"
 #include "Chipset/ePSCpu.h"
+#include "Chipset/Eps6800Display.h"
 #include "Emulator.hpp"
 #include "Ext/Random.hpp"
 #include "Gui/HwController.h"
@@ -822,7 +823,7 @@ namespace casioemu {
 			tick();
 #endif
 		}
-		int GetFrameWidth() const override { return 192; }
+		int GetFrameWidth() const override { return hardware_id == HW_EPS6800 ? 96 : 192; }
 		int GetFrameHeight() const override { return hardware_id == HW_FX_5800P || hardware_id == HW_ES_PLUS || hardware_id == HW_EPS6800 ? 32 : 64; }
 		void WriteFrameRgba(uint8_t* out, int r, int g, int b) const override {
 			if (!out) return;
@@ -967,35 +968,27 @@ namespace casioemu {
 				float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);
 				ink_alpha_off = screen_residual_enabled ? ink_alpha_off * screen_residual_alpha_scale : 0.0f;
 				ink_alpha_on = std::clamp(ink_alpha_on, 0.0f, 255.0f);
-				uint8_t* screen_buffer = (uint8_t*)(emulator.chipset.epscpu->vram + 0x120);
-				// if (emulator.ModelDefinition.real_hardware) {
-				//	screen_buffer = this->screen_buffer;
-				// }
-				for (int blk = 0; blk < 4; ++blk) {
-					for (int ix = 0; ix < 98; ++ix) {
-						for (int iy = 0; iy < 8; ++iy) {
-							uint32_t i = (ix * 8) | iy;
-							int bIndx = (i >> 3);
-							int subIndx = (i & 7);
-							int mask = (1 << subIndx);
-							bool on = (screen_buffer[bIndx] & mask) != 0;
-							auto& data = screen_ink_alpha[(((8 - iy + (blk) * 8)) * 192) + ix];
-							data = data * ratio + (on ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
-						}
+				std::array<uint8_t, EPS6800_LCD_RAW_SIZE> lcd{};
+				if (!emulator.chipset.epscpu || emulator.chipset.epscpu->CopyLcd(lcd.data(), lcd.size()) != lcd.size())
+					return;
+
+				// EPS stores four 8-pixel pages bottom-to-top. The physical top
+				// row is a 96-bit segmented annunciator bus; it must not be drawn
+				// as dot-matrix pixels. The remaining 31 rows form the 96x31 LCD.
+				const auto decoded = DecodeEps6800Display(lcd.data(), lcd.size());
+				for (int y = 0; y < static_cast<int>(EPS6800_LCD_PIXEL_HEIGHT); ++y) {
+					for (int x = 0; x < static_cast<int>(EPS6800_LCD_WIDTH); ++x) {
+						const bool on = decoded.pixels[y * EPS6800_LCD_WIDTH + x] != 0;
+						auto& alpha = screen_ink_alpha[(y + 1) * 192 + x];
+						alpha = alpha * ratio + (on ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
 					}
-					screen_buffer -= 0x60;
 				}
-				screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xe5d4;
-				// if (emulator.ModelDefinition.real_hardware) {
-				//	screen_buffer = this->screen_buffer + 8 * 192;
-				// }
-				// int x = 0;
-				// for (int ix = 1; ix != SPR_MAX; ++ix) {
-				//	auto off = sprite_bitmap[ix].offset;
-				//	auto& data = screen_ink_alpha[x];
-				//	data = data * ratio + ((screen_buffer[off] & sprite_bitmap[ix].mask) ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
-				//	x++;
-				// }
+
+				for (int ix = 1; ix < SPR_MAX; ++ix) {
+					const bool on = (decoded.status[sprite_bitmap[ix].offset] & sprite_bitmap[ix].mask) != 0;
+					auto& alpha = screen_ink_alpha[ix - 1];
+					alpha = alpha * ratio + (on ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
+				}
 				return;
 			}
 
@@ -1428,24 +1421,27 @@ namespace casioemu {
 	template <>
 	const SpriteBitmap Screen<HW_EPS6800>::sprite_bitmap[] = {
 		{"rsd_pixel", 0, 0},
-		{"rsd_s", 0x10, 0x00},
-		{"rsd_a", 0x04, 0x00},
-		{"rsd_m", 0x10, 0x01},
-		{"rsd_sto", 0x02, 0x01},
-		{"rsd_rcl", 0x40, 0x02},
-		{"rsd_stat", 0x40, 0x03},
-		{"rsd_cmplx", 0x80, 0x04},
-		{"rsd_mat", 0x40, 0x05},
-		{"rsd_vct", 0x02, 0x05},
-		{"rsd_d", 0x20, 0x07},
-		{"rsd_r", 0x02, 0x07},
-		{"rsd_g", 0x10, 0x08},
-		{"rsd_fix", 0x01, 0x08},
-		{"rsd_sci", 0x20, 0x09},
-		{"rsd_math", 0x40, 0x0A},
-		{"rsd_down", 0x08, 0x0A},
-		{"rsd_up", 0x80, 0x0B},
-		{"rsd_disp", 0x10, 0x0B} };
+		// HP 300S+ exposes the indicators as the top row of the EPS6800 LCD
+		// framebuffer.  The bits are ordered by their physical X positions and
+		// are not compatible with the ES Plus controller mapping above.
+		{"rsd_s", 0x01, 0x00},       // x=0
+		{"rsd_a", 0x08, 0x00},       // x=3
+		{"rsd_m", 0x80, 0x00},       // x=7
+		{"rsd_sto", 0x10, 0x01},     // x=12
+		{"rsd_rcl", 0x04, 0x02},     // x=18
+		{"rsd_stat", 0x02, 0x03},    // x=25
+		{"rsd_cmplx", 0x80, 0x03},   // x=31
+		{"rsd_mat", 0x02, 0x05},     // x=41
+		{"rsd_vct", 0x80, 0x05},     // x=47
+		{"rsd_d", 0x80, 0x06},       // x=55
+		{"rsd_r", 0x04, 0x07},       // x=58
+		{"rsd_g", 0x20, 0x07},       // x=61
+		{"rsd_fix", 0x02, 0x08},     // x=65
+		{"rsd_sci", 0x80, 0x08},     // x=71
+		{"rsd_math", 0x01, 0x0A},    // x=80
+		{"rsd_down", 0x10, 0x0A},    // x=84
+		{"rsd_up", 0x80, 0x0A},      // x=87
+		{"rsd_disp", 0x80, 0x0B} };  // x=95
 
 	template <HardwareId hardware_id>
 	void Screen<hardware_id>::Initialise() {
@@ -1500,6 +1496,11 @@ namespace casioemu {
 				fillRandomData(screen_buffer1, (N_ROW + 1) * ROW_SIZE);
 			}
 			inited = true;
+		}
+		if constexpr (hardware_id == HW_EPS6800) {
+			// CPU-visible LCD registers and RAM are owned by EPS6800Core. This
+			// peripheral is only the CasioEmuMsvc presentation/resource layer.
+			return;
 		}
 		if constexpr (hardware_id == HW_TI) {
 			auto pp = emulator.chipset.QueryInterface<IPortProvider>();

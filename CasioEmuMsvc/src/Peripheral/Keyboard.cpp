@@ -104,6 +104,7 @@ namespace casioemu {
 		void PressButtonByCode(uint8_t code);
 		bool TryReleaseButton(Button& button);
 		void ExecuteDelayedRelease(size_t button_index);
+		void SetEpsButtonState(Button& button, bool pressed);
 		void BuildButtonShape(Button& button, const ButtonInfo& info);
 		void DestroyButtonShapes();
 		bool ButtonContainsPoint(const Button& button, int x, int y) const;
@@ -218,6 +219,7 @@ namespace casioemu {
 		if (button.pressed && !button.stuck) {
 			button.pressed = false;
 			button.pressingFingerId = -1;
+			SetEpsButtonState(button, false);
 			if (real_hardware) {
 				RecalculateGhost();
 			}
@@ -246,7 +248,29 @@ namespace casioemu {
 		// Immediately release
 		button.pressed = false;
 		button.pressingFingerId = -1;
+		SetEpsButtonState(button, false);
 		return true; // Indicates it was immediately released
+	}
+
+	void Keyboard::SetEpsButtonState(Button& button, bool pressed) {
+		if (emulator.hardware_id != HW_EPS6800 || !emulator.chipset.epscpu)
+			return;
+		if (button.type == Button::BT_POWER) {
+			if (pressed) {
+				emulator.chipset.epscpu->OnDown();
+			}
+			else {
+				emulator.chipset.epscpu->OnUp();
+			}
+			return;
+		}
+		if (button.type != Button::BT_BUTTON)
+			return;
+		const auto matrix_index = static_cast<uint8_t>(&button - buttons);
+		if (pressed)
+			emulator.chipset.epscpu->KeyDown(matrix_index);
+		else
+			emulator.chipset.epscpu->KeyUp(matrix_index);
 	}
 
 	void Keyboard::Initialise() {
@@ -278,10 +302,6 @@ namespace casioemu {
 			goto init_kbd;
 		}
 		if (emulator.hardware_id == HW_EPS6800) {
-			// TODO!
-			emulator.chipset.epscpu->portacalc = [this]() {
-				this->RecalculateKI();
-			};
 			goto init_kbd;
 		}
 		region_ki.Setup(0xF040, 1, "Keyboard/KI", this,
@@ -497,6 +517,7 @@ namespace casioemu {
 			else
 				button.type = Button::BT_BUTTON;
 			button.rect = btn.rect;
+			button.code = code;
 			if (emulator.hardware_id == HW_TI) {
 				int kimap[] = {7, 0, 1, 2, 3, 4, 5, 6};
 				auto ki = kimap[btn.kiko & 7];
@@ -506,7 +527,6 @@ namespace casioemu {
 				}
 				button.ki_bit = 1 << ki;
 				button.ko_bit = 1 << ko;
-				button.code = btn.kiko;
 			}
 			else {
 				button.ko_bit = 1 << ((code >> 4) & 0xF);
@@ -534,7 +554,8 @@ namespace casioemu {
 			emu_ko_readcount = 0;
 		}
 
-		RecalculateGhost();
+		if (emulator.hardware_id != HW_EPS6800)
+			RecalculateGhost();
 	}
 
 	void Keyboard::Tick() {
@@ -920,7 +941,10 @@ namespace casioemu {
 		}
 
 		if (button.type == Button::BT_POWER && button.pressed && !old_pressed_state) {
-			if (!(emulator.hardware_id == HW_CLASSWIZ && (emulator.chipset.data_FCON & 0x03) == 0x03)) {
+			if (emulator.hardware_id == HW_EPS6800) {
+				// EPS ON is a wake/interrupt input, not a hard reset line.
+			}
+			else if (!(emulator.hardware_id == HW_CLASSWIZ && (emulator.chipset.data_FCON & 0x03) == 0x03)) {
 				emulator.chipset.Reset();
 			}
 			else {
@@ -935,12 +959,17 @@ namespace casioemu {
 		}
 
 		bool state_effectively_changed = (old_pressed_state != button.pressed) || (button.pressed && old_finger_id != button.pressingFingerId);
+		if (old_pressed_state != button.pressed)
+			SetEpsButtonState(button, button.pressed);
 
 		if (button.type == Button::BT_BUTTON && state_effectively_changed) {
 			if (button.pressed) { // Vibrate only if it results in a pressed state
 				Vibration::vibrate(100);
 			}
-			if (real_hardware) {
+			if (emulator.hardware_id == HW_EPS6800) {
+				// The EPS core owns matrix scanning, debounce and ghosting.
+			}
+			else if (real_hardware) {
 				RecalculateGhost(); // This internally calls RecalculateKI
 			}
 			else {
@@ -1018,6 +1047,8 @@ namespace casioemu {
 	}
 
 	void Keyboard::RecalculateGhost() { // This is for real_hardware=true path
+		if (emulator.hardware_id == HW_EPS6800)
+			return;
 		struct KOColumn {
 			uint8_t connections;
 			uint8_t KIRows;

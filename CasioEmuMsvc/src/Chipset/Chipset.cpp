@@ -79,16 +79,17 @@ namespace casioemu {
 				mmu.GenerateSegmentDispatch(segment_index);
 		}
 		else {
-			epscpu = new ePSCPU(mmu);
-			mmu.GenerateSegmentDispatch(0);
+			epscpu = new ePSCPU();
 		}
 		ConstructPeripherals();
 	}
 
 	Chipset::~Chipset() {
 		DestructPeripherals();
-		DestructClockGenerator();
-		DestructInterruptSFR();
+		if (emulator.hardware_id != HW_EPS6800) {
+			DestructClockGenerator();
+			DestructInterruptSFR();
+		}
 		delete epscpu;
 		delete& mmu;
 		delete& cpu;
@@ -448,7 +449,6 @@ namespace casioemu {
 
 	void Chipset::ConstructPeripherals() {
 		if (emulator.hardware_id == HW_EPS6800) {
-			peripherals.push_front(CreateBatteryBackedRAM(emulator));
 			peripherals.push_front(CreateScreen(emulator));
 			peripherals.push_front(CreateKeyboard(emulator));
 			return;
@@ -535,11 +535,15 @@ namespace casioemu {
 		catch (const std::exception& error) {
 			PANIC("Failed to read ROM: %s\n", error.what());
 		}
-		if (epscpu) {
-			if (rom_data.size() < 0x40000) {
-				PANIC("EPS ROM is smaller than 0x40000 bytes\n");
-			}
-			std::copy(rom_data.begin(), rom_data.begin() + 0x40000, epscpu->Rom);
+		if (emulator.hardware_id == HW_EPS6800) {
+			if (!epscpu || !epscpu->LoadRom(rom_data))
+				PANIC("EPS ROM must contain exactly 0x40000 bytes\n");
+			for (auto& peripheral : peripherals)
+				peripheral->Initialise();
+			// The EPS core owns CPU-visible memory, but the debugger and plugins
+			// still discover their memory bridge through the project MMU object.
+			mmu.SetupInternals();
+			return;
 		}
 		if (emulator.hardware_id == HW_FX_5800P) {
 			if (emulator.ModelDefinition.flash_path.empty()) {
@@ -591,6 +595,15 @@ namespace casioemu {
 	}
 
 	void Chipset::Reset() {
+		if (emulator.hardware_id == HW_EPS6800) {
+			RaiseEvent(on_reset, *this);
+			for (auto& peripheral : peripherals)
+				peripheral->Reset();
+			epscpu->Reset();
+			run_mode = RM_RUN;
+			emulator.qr_code.Reset(false);
+			return;
+		}
 		ResetInterruptSFR();
 		isMIBlocked = false;
 
@@ -879,6 +892,11 @@ namespace casioemu {
 	}
 
 	void Chipset::Tick() {
+		if (emulator.hardware_id == HW_EPS6800) {
+			if (run_mode == RM_RUN)
+				epscpu->Next();
+			return;
+		}
 		// * TODO: decrement delay counter, return if it's not 0
 
 		if (real_hardware) {
@@ -943,6 +961,11 @@ namespace casioemu {
 		SYSCLKTick = false;
 	}
 
+	void Chipset::RunEpsFrame() {
+		if (emulator.hardware_id == HW_EPS6800 && run_mode == RM_RUN && epscpu)
+			epscpu->RunFrame();
+	}
+
 	void Chipset::EmulatorTick() {
 		for (auto& peripheral : peripherals) {
 			switch (peripheral->clock_type) {
@@ -962,6 +985,10 @@ namespace casioemu {
 	}
 
 	void Chipset::SaveStateAll(std::ostream& os) {
+		if (emulator.hardware_id == HW_EPS6800) {
+			epscpu->SaveState(os);
+			return;
+		}
 		for (auto& peripheral : peripherals)
 			peripheral->SaveState(os);
 		Binary::Write(os, cpu.reg_r);
@@ -978,6 +1005,10 @@ namespace casioemu {
 	}
 
 	void Chipset::LoadStateAll(std::istream& is) {
+		if (emulator.hardware_id == HW_EPS6800) {
+			epscpu->LoadState(is);
+			return;
+		}
 		for (auto& peripheral : peripherals)
 			peripheral->LoadState(is);
 		Binary::Read(is, cpu.reg_r);

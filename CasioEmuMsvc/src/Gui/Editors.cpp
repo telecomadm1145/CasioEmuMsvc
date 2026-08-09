@@ -117,8 +117,8 @@ std::vector<UIWindow*> GetEditors() {
 	windows.push_back(new HexEditor{"Rom", m_emu->chipset.rom_data.data(), m_emu->chipset.rom_data.size(), 0});
 	if (m_emu->hardware_id == casioemu::HW_EPS6800) {
 		windows.push_back(new HexEditor{"Ram", m_emu->chipset.epscpu->ram, 128 * 64, 0});
-		windows.push_back(new HexEditor{"Regs", m_emu->chipset.epscpu->regs, 128, 0});
-		windows.push_back(new HexEditor{"VRam", m_emu->chipset.epscpu->vram, 0x2000, 0});
+		windows.push_back(new HexEditor{"Regs", m_emu->chipset.epscpu->regs, 0x7f, 0});
+		windows.push_back(new HexEditor{"VRam", m_emu->chipset.epscpu->vram, m_emu->chipset.epscpu->LcdRawSize(), 0});
 	}
 	else {
 		windows.push_back(

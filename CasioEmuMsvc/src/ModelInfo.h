@@ -26,8 +26,8 @@ namespace casioemu {
 		HW_TI = 7,
 		HW_SOLARII = 8,
 		// our test ends here, so we can add new models without worrying about breaking old configs
-		HW_MAX = HW_SOLARII,
 		HW_EPS6800 = 9,
+		HW_MAX = HW_EPS6800,
 	};
 	struct SpriteInfo {
 		Rect src, dest;
