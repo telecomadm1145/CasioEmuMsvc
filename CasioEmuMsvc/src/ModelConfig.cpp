@@ -270,13 +270,13 @@ namespace casioemu {
 						model.extra[key] = std::move(item);
 				}
 			}
-			if (value.contains("is-unpacked-nibbles")) {
-				if (!value.at("is-unpacked-nibbles").is_boolean())
-					throw std::runtime_error("config.json field is-unpacked-nibbles must be a boolean.");
-				if (value.at("is-unpacked-nibbles").get<bool>())
-					model.extra["is-unpacked-nibbles"] = "1";
+			if (value.contains("is_unpacked_nibbles")) {
+				if (!value.at("is_unpacked_nibbles").is_boolean())
+					throw std::runtime_error("config.json field is_unpacked_nibbles must be a boolean.");
+				if (value.at("is_unpacked_nibbles").get<bool>())
+					model.extra["is_unpacked_nibbles"] = "1";
 				else
-					model.extra.erase("is-unpacked-nibbles");
+					model.extra.erase("is_unpacked_nibbles");
 			}
 			if (value.contains("buttons")) {
 				if (!model.board_path.empty()) {
@@ -335,8 +335,8 @@ namespace casioemu {
 			value["screen_scale_y"] = model.screen_scale_y;
 		}
 		auto extra = model.extra;
-		if (auto it = extra.find("is-unpacked-nibbles"); it != extra.end()) {
-			value["is-unpacked-nibbles"] = it->second != "0" && it->second != "false";
+		if (auto it = extra.find("is_unpacked_nibbles"); it != extra.end()) {
+			value["is_unpacked_nibbles"] = it->second != "0" && it->second != "false";
 			extra.erase(it);
 		}
 		if (!extra.empty())

@@ -579,7 +579,7 @@ namespace casioemu {
 			PANIC("Failed to read ROM: %s\n", error.what());
 		}
 		if (emulator.hardware_id == HW_EPS6800) {
-			const auto unpacked_entry = emulator.ModelDefinition.extra.find("is-unpacked-nibbles");
+			const auto unpacked_entry = emulator.ModelDefinition.extra.find("is_unpacked_nibbles");
 			const bool is_unpacked_nibbles = unpacked_entry != emulator.ModelDefinition.extra.end() &&
 				unpacked_entry->second != "0" && unpacked_entry->second != "false";
 			const auto rom_format = is_unpacked_nibbles ? Eps6800RomFormat::UnpackedNibbles :

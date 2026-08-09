@@ -302,7 +302,7 @@ namespace {
 		}
 		if (hardware_id == casioemu::HW_EPS6800) {
 			// The legacy web EPS6800 entry point receives HP-style ROM resources.
-			model.extra["is-unpacked-nibbles"] = "1";
+			model.extra["is_unpacked_nibbles"] = "1";
 		}
 		for (int ko = 0; ko < 8; ++ko) {
 			for (int ki = 0; ki < 8; ++ki) {
