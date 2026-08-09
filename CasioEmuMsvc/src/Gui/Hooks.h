@@ -23,6 +23,7 @@ struct InstructionEventArgs {
 	uint32_t pc_before;
 	uint32_t pc_after;
 	bool should_break{};
+	uint8_t stack_pointer{};
 };
 struct EpsFunctionEventArgs {
 	FunctionEventArgs function{};

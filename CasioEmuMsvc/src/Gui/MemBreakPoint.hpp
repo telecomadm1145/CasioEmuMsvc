@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "Ui.hpp"
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <mutex>
@@ -42,10 +43,14 @@ private:
 	int reg_compare_mode = 0;
 	
 	int target_sp = 0;
+	std::atomic<uint64_t> register_breakpoint_config{0};
 
 	void DrawFindContent();
 
 	void DrawContent();
+	bool RegisterBreakpointTriggered(uint32_t value) const;
+	void UpdateRegisterBreakpointConfig();
+	void RefreshEpsBreakpoints();
 	void SyncEpsBreakpoints();
 
 public:

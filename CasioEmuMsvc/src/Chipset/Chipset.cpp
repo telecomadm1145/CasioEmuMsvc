@@ -54,8 +54,9 @@ namespace casioemu {
 	void Chipset::SetupEpsCpu() {
 		epscpu = new ePSCPU();
 		epscpu->SetDebugHooks(
-			[](uint32_t pc_before, uint32_t pc_after) {
+			[](uint32_t pc_before, uint32_t pc_after, uint8_t stack_pointer) {
 				InstructionEventArgs args{pc_before, pc_after};
+				args.stack_pointer = stack_pointer;
 				RaiseEvent(on_eps_instruction, args);
 				return args.should_break;
 			},

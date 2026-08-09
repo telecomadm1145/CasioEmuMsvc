@@ -176,34 +176,44 @@ void Breakpoints::SetupHooks() {
 		TryTrigBp(mea.offset, true);
 	});
 	SetupHook(on_instruction, [&](casioemu::CPU& sender, InstructionEventArgs& iea) {
-		if (break_on_sp) {
-			bool trig = false;
-			switch (reg_compare_mode) {
-			case 1:
-				trig = sender.reg_sp == target_sp;
-				break;
-			case 2:
-				trig = sender.reg_sp != target_sp;
-				break;
-			case 3:
-				trig = sender.reg_sp > target_sp;
-				break;
-			case 4:
-				trig = sender.reg_sp < target_sp;
-				break;
-			case 5:
-				trig = sender.reg_sp >= target_sp;
-				break;
-			case 6:
-				trig = sender.reg_sp <= target_sp;
-				break;
-			}
-			if (trig) {
-				SetDebugbreak();
-			}
-		}
+		if (RegisterBreakpointTriggered(sender.reg_sp.raw))
+			SetDebugbreak();
+	});
+	SetupHook(on_eps_instruction, [&](InstructionEventArgs& iea) {
+		if (RegisterBreakpointTriggered(iea.stack_pointer))
+			iea.should_break = true;
 	});
 	membp_cv = this;
+}
+
+bool Breakpoints::RegisterBreakpointTriggered(uint32_t value) const {
+	const uint64_t config = register_breakpoint_config.load(std::memory_order_acquire);
+	if ((config & (uint64_t{1} << 63)) == 0)
+		return false;
+	const auto target = static_cast<uint32_t>(config);
+	switch (static_cast<uint8_t>(config >> 32)) {
+	case 1:
+		return value == target;
+	case 2:
+		return value != target;
+	case 3:
+		return value > target;
+	case 4:
+		return value < target;
+	case 5:
+		return value >= target;
+	case 6:
+		return value <= target;
+	default:
+		return false;
+	}
+}
+
+void Breakpoints::UpdateRegisterBreakpointConfig() {
+	const uint64_t config = (break_on_sp ? (uint64_t{1} << 63) : 0) |
+		(static_cast<uint64_t>(static_cast<uint8_t>(reg_compare_mode)) << 32) |
+		static_cast<uint32_t>(target_sp);
+	register_breakpoint_config.store(config, std::memory_order_release);
 }
 
 void Breakpoints::TryTrigBp(uint32_t addr, bool write) {
@@ -225,6 +235,7 @@ void Breakpoints::TryTrigBp(uint32_t addr, bool write) {
 
 void Breakpoints::RenderCore() {
 	std::lock_guard lock(breakpoints_mutex);
+	RefreshEpsBreakpoints();
 	if (ImGui::BeginTabBar("Breakpoints")) {
 		if (ImGui::BeginTabItem("Memory")) {
 			static char buf[10] = {0};
@@ -255,20 +266,53 @@ void Breakpoints::RenderCore() {
 			ImGui::EndTabItem();
 		}
 		if (ImGui::BeginTabItem("Register")) {
+			const bool eps6800 = m_emu && m_emu->chipset.epscpu;
 			static char buf[10] = {0};
 			ImGui::Combo("BP.RegCmpMode"_lc, &reg_compare_mode, "Disabled\0Equal\0Not Equal\0Greater\0Less\0Greater or Equal\0Less or Equal\0");
+			if (eps6800)
+				ImGui::TextDisabled("EPS6800 STKPTR (00-1F)");
 			ImGui::Separator();
 			ImGui::SetNextItemWidth(ImGui::CalcTextSize("F").x * 8);
 			if (ImGui::InputText(
 					"##addressin2",
 					buf, 10, ImGuiInputTextFlags_CharsHexadecimal)) {
 				target_sp = (uint16_t)strtol(buf, nullptr, 16);
+				if (eps6800)
+					target_sp &= 0x1f;
 			}
 			ImGui::SameLine();
-			ImGui::Checkbox("BP.SPHint"_lc, &break_on_sp);
+			ImGui::Checkbox(eps6800 ? "STKPTR" : "BP.SPHint"_lc, &break_on_sp);
+			UpdateRegisterBreakpointConfig();
 			ImGui::EndTabItem();
 		}
 		ImGui::EndTabBar();
+	}
+}
+
+void Breakpoints::RefreshEpsBreakpoints() {
+	if (!m_emu || !m_emu->chipset.epscpu)
+		return;
+	const auto core_breakpoints = m_emu->chipset.epscpu->MemoryBreakpoints();
+	std::vector<MemBPData_t> refreshed;
+	refreshed.reserve(core_breakpoints.size());
+	for (const auto& item : core_breakpoints) {
+		refreshed.push_back({
+			.enableWrite = item.write,
+			.breakWhenHit = item.break_when_hit,
+			.enabled = item.enabled,
+			.compareData = item.compare_data,
+			.data = item.data,
+			.mask = item.mask,
+			.skipCount = item.skip_count,
+			.addr = item.address});
+	}
+	break_point_hash = std::move(refreshed);
+	if (target_addr < 0 || static_cast<size_t>(target_addr) >= break_point_hash.size()) {
+		target_addr = -1;
+		break_on_cv = false;
+	}
+	else {
+		break_on_cv = break_point_hash[target_addr].breakWhenHit;
 	}
 }
 

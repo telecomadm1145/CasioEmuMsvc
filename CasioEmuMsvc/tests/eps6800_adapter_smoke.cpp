@@ -128,9 +128,14 @@ namespace {
 		int calls = 0;
 		int returns = 0;
 		int writes = 0;
+		uint8_t maximum_stack_pointer = 0;
 		bool saw_backtrace = false;
 		machine.SetDebugHooks(
-			[&](uint32_t, uint32_t) { ++instructions; return false; },
+			[&](uint32_t, uint32_t, uint8_t stack_pointer) {
+				++instructions;
+				maximum_stack_pointer = std::max(maximum_stack_pointer, stack_pointer);
+				return stack_pointer == 1;
+			},
 			[&](uint32_t, uint32_t, bool call, uint32_t accumulator, const std::string& backtrace) {
 				(call ? calls : returns)++;
 				saw_backtrace |= call && accumulator == 0x5a && !backtrace.empty();
@@ -146,7 +151,8 @@ namespace {
 		machine.Reset();
 		for (int i = 0; i < 5; ++i)
 			machine.Next();
-		if (instructions != 5 || calls != 1 || returns != 1 || writes != 1 ||
+		if (instructions != 5 || calls != 1 || returns != 1 || writes != 1 || maximum_stack_pointer != 1 ||
+			machine.LastDebugStop().reason != casioemu::Eps6800DebugStopReason::Hook ||
 			!saw_backtrace || machine.ReadDebugMemory(0x80) != 0)
 			return false;
 

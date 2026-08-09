@@ -142,7 +142,7 @@ namespace casioemu {
 		size_t trace_capacity_{4096};
 		std::deque<Eps6800TraceEntry> trace_buffer_;
 		Eps6800RomFormat rom_format_{Eps6800RomFormat::PackedBigEndian};
-		std::function<bool(uint32_t, uint32_t)> instruction_hook_;
+		std::function<bool(uint32_t, uint32_t, uint8_t)> instruction_hook_;
 		std::function<void(uint32_t, uint32_t, bool, uint32_t, const std::string&)> function_hook_;
 		std::function<bool(uint32_t, uint8_t&, bool)> memory_hook_;
 		std::function<void(uint8_t)> interrupt_hook_;
@@ -167,7 +167,7 @@ namespace casioemu {
 		Eps6800RomFormat RomFormat() const;
 		bool WriteRomImageWord(std::vector<unsigned char>& rom, uint32_t word_address, uint16_t value) const;
 		void SetDebugHooks(
-			std::function<bool(uint32_t, uint32_t)> instruction,
+			std::function<bool(uint32_t, uint32_t, uint8_t)> instruction,
 			std::function<void(uint32_t, uint32_t, bool, uint32_t, const std::string&)> function,
 			std::function<bool(uint32_t, uint8_t&, bool)> memory,
 			std::function<void(uint8_t)> interrupt);

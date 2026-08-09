@@ -317,10 +317,9 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 	windows.push_back(new WatchWindow());
 	windows.push_back(CreateCallAnalysisWindow());
 	windows.push_back(code_viewer = new CodeViewer());
-	if (m_emu->hardware_id != casioemu::HW_EPS6800) {
+	if (m_emu->hardware_id != casioemu::HW_EPS6800)
 		windows.push_back(injector = new Injector());
-		windows.push_back(membp = new Breakpoints());
-	}
+	windows.push_back(membp = new Breakpoints());
 	windows.push_back(CreateAddressWindow());
 	if (m_emu->hardware_id != casioemu::HW_EPS6800) {
 #if !defined(TEST_BUILD)

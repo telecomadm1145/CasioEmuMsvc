@@ -130,7 +130,7 @@ namespace casioemu {
 	}
 
 	void ePSCPU::SetDebugHooks(
-		std::function<bool(uint32_t, uint32_t)> instruction,
+		std::function<bool(uint32_t, uint32_t, uint8_t)> instruction,
 		std::function<void(uint32_t, uint32_t, bool, uint32_t, const std::string&)> function,
 		std::function<bool(uint32_t, uint8_t&, bool)> memory,
 		std::function<void(uint8_t)> interrupt) {
@@ -220,7 +220,7 @@ namespace casioemu {
 		}
 
 		Eps6800DebugStopReason reason = Eps6800DebugStopReason::None;
-		if (instruction_hook_ && instruction_hook_(pc_before, pc_after))
+		if (instruction_hook_ && instruction_hook_(pc_before, pc_after, stack_pointer_after))
 			reason = Eps6800DebugStopReason::Hook;
 		if (reason == Eps6800DebugStopReason::None && !ShouldStopLocked(pc_after, stack_pointer_after, reason))
 			return false;
