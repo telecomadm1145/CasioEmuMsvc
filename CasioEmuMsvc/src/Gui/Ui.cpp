@@ -317,10 +317,12 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 	windows.push_back(new WatchWindow());
 	windows.push_back(CreateCallAnalysisWindow());
 	windows.push_back(code_viewer = new CodeViewer());
-	windows.push_back(CreateAddressWindow());
 	if (m_emu->hardware_id != casioemu::HW_EPS6800) {
 		windows.push_back(injector = new Injector());
 		windows.push_back(membp = new Breakpoints());
+	}
+	windows.push_back(CreateAddressWindow());
+	if (m_emu->hardware_id != casioemu::HW_EPS6800) {
 #if !defined(TEST_BUILD)
 		windows.push_back(CreateRopCompilerWindow());
 #endif
@@ -337,9 +339,10 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 #endif
 	windows.push_back(MakeThemeWindow());
 	windows.push_back(CreateBitmapViewer());
-	if (m_emu->hardware_id != casioemu::HW_EPS6800)
+	if (m_emu->hardware_id != casioemu::HW_EPS6800) {
 		for (auto item : GetEditors())
 			windows.push_back(item);
+	}
 
 #ifdef __ANDROID__
 	for (auto item : windows) {

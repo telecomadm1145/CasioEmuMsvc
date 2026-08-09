@@ -51,6 +51,7 @@ namespace casioemu {
 
 		void ConstructPeripherals();
 		void DestructPeripherals();
+		void SetupEpsCpu();
 
 		void ConstructClockGenerator();
 		void GenerateTickForClock();
@@ -172,6 +173,7 @@ namespace casioemu {
 		void SaveStateAll(std::ostream& os);
 		void LoadStateAll(std::istream& is);
 		void PersistEpsRam();
+		bool ReloadRom(std::string& error);
 
 		template <typename T>
 		T* QueryInterface() {

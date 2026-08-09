@@ -559,10 +559,8 @@ namespace casioemu {
 	}
 
 	void Keyboard::Tick() {
-		if (emulator.ModelDefinition.hardware_id == HW_TI) {
-			return;
-		}
-		if (emulator.ModelDefinition.hardware_id == HW_EPS6800) {
+		if (emulator.ModelDefinition.hardware_id == HW_TI ||
+			emulator.ModelDefinition.hardware_id == HW_EPS6800) {
 			return;
 		}
 		if (factory_test) {
@@ -940,11 +938,9 @@ namespace casioemu {
 			button.pressingFingerId = fingerId; // Assign current finger, or -1 for mouse/key
 		}
 
-		if (button.type == Button::BT_POWER && button.pressed && !old_pressed_state) {
-			if (emulator.hardware_id == HW_EPS6800) {
-				// EPS ON is a wake/interrupt input, not a hard reset line.
-			}
-			else if (!(emulator.hardware_id == HW_CLASSWIZ && (emulator.chipset.data_FCON & 0x03) == 0x03)) {
+		if (button.type == Button::BT_POWER && button.pressed && !old_pressed_state &&
+			emulator.hardware_id != HW_EPS6800) {
+			if (!(emulator.hardware_id == HW_CLASSWIZ && (emulator.chipset.data_FCON & 0x03) == 0x03)) {
 				emulator.chipset.Reset();
 			}
 			else {
@@ -966,14 +962,13 @@ namespace casioemu {
 			if (button.pressed) { // Vibrate only if it results in a pressed state
 				Vibration::vibrate(100);
 			}
-			if (emulator.hardware_id == HW_EPS6800) {
-				// The EPS core owns matrix scanning, debounce and ghosting.
-			}
-			else if (real_hardware) {
-				RecalculateGhost(); // This internally calls RecalculateKI
-			}
-			else {
-				RecalculateEmuInput();
+			if (emulator.hardware_id != HW_EPS6800) {
+				if (real_hardware) {
+					RecalculateGhost(); // This internally calls RecalculateKI
+				}
+				else {
+					RecalculateEmuInput();
+				}
 			}
 		}
 	}

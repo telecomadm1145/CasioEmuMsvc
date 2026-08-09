@@ -51,6 +51,40 @@ namespace casioemu {
 		tiKey = 0;
 	}
 
+	void Chipset::SetupEpsCpu() {
+		epscpu = new ePSCPU();
+		epscpu->SetDebugHooks(
+			[](uint32_t pc_before, uint32_t pc_after) {
+				InstructionEventArgs args{pc_before, pc_after};
+				RaiseEvent(on_eps_instruction, args);
+				return args.should_break;
+			},
+			[](uint32_t pc, uint32_t lr, bool call, uint32_t accumulator, const std::string& backtrace) {
+				EpsFunctionEventArgs args{{pc, lr}, accumulator, backtrace};
+				if (call) {
+					RaiseEvent(on_eps_call_function, args);
+				}
+				else {
+					RaiseEvent(on_eps_function_return, args);
+				}
+			},
+			[](uint32_t address, uint8_t& value, bool write) {
+				MemoryEventArgs args{address, false, value};
+				if (write) {
+					RaiseEvent(on_eps_memory_write, args);
+				}
+				else {
+					RaiseEvent(on_eps_memory_read, args);
+				}
+				value = args.value;
+				return args.handled;
+			},
+			[this](uint8_t index) {
+				InterruptEventArgs args{index};
+				RaiseEvent(on_eps_interrupt, *this, args);
+			});
+	}
+
 	void Chipset::Setup() {
 		for (size_t ix = 0; ix != INT_COUNT; ++ix)
 			interrupts_active[ix] = false;
@@ -79,37 +113,7 @@ namespace casioemu {
 				mmu.GenerateSegmentDispatch(segment_index);
 		}
 		else {
-			epscpu = new ePSCPU();
-			epscpu->SetDebugHooks(
-				[](uint32_t pc_before, uint32_t pc_after) {
-					InstructionEventArgs args{pc_before, pc_after};
-					RaiseEvent(on_eps_instruction, args);
-					return args.should_break;
-				},
-				[](uint32_t pc, uint32_t lr, bool call, uint32_t accumulator, const std::string& backtrace) {
-					EpsFunctionEventArgs args{{pc, lr}, accumulator, backtrace};
-					if (call) {
-						RaiseEvent(on_eps_call_function, args);
-					}
-					else {
-						RaiseEvent(on_eps_function_return, args);
-					}
-				},
-				[](uint32_t address, uint8_t& value, bool write) {
-					MemoryEventArgs args{address, false, value};
-					if (write) {
-						RaiseEvent(on_eps_memory_write, args);
-					}
-					else {
-						RaiseEvent(on_eps_memory_read, args);
-					}
-					value = args.value;
-					return args.handled;
-				},
-				[this](uint8_t index) {
-					InterruptEventArgs args{index};
-					RaiseEvent(on_eps_interrupt, *this, args);
-				});
+			SetupEpsCpu();
 		}
 		ConstructPeripherals();
 	}
@@ -136,6 +140,32 @@ namespace casioemu {
 		catch (const std::exception& error) {
 			logger::Info("[EPS6800][Warn] Failed to save RAM image: %s\n", error.what());
 		}
+	}
+
+	bool Chipset::ReloadRom(std::string& error) {
+		std::vector<unsigned char> data;
+		try {
+			data = emulator.ReadModelResource(emulator.ModelDefinition.rom_path);
+		}
+		catch (const std::exception&) {
+			error = "Failed to open ROM file";
+			return false;
+		}
+
+		if (epscpu) {
+			if (!epscpu->LoadRom(data, epscpu->RomFormat())) {
+				error = "Invalid EPS6800 ROM image";
+				return false;
+			}
+			rom_data = std::move(data);
+		}
+		else {
+			std::copy_n(data.begin(), std::min(data.size(), rom_data.size()), rom_data.begin());
+		}
+
+		Reset();
+		error.clear();
+		return true;
 	}
 
 	void Chipset::ConstructInterruptSFR() {
@@ -676,10 +706,7 @@ namespace casioemu {
 
 		for (auto& peripheral : peripherals)
 			peripheral->Reset();
-		if (emulator.hardware_id != HW_EPS6800)
-			cpu.Reset();
-		else
-			epscpu->Reset();
+		cpu.Reset();
 
 		interrupts_active[INT_RESET] = true;
 		pending_interrupt_count = 1;
@@ -1007,13 +1034,8 @@ namespace casioemu {
 				peripheral->TickAfterInterrupts();
 		}
 
-		if (run_mode == RM_RUN && SYSCLKTick) {
-			if (emulator.hardware_id != HW_EPS6800)
-				cpu.Next();
-			else {
-				epscpu->Next();
-			}
-		}
+		if (run_mode == RM_RUN && SYSCLKTick)
+			cpu.Next();
 
 		LSCLKTick = false;
 		LTBCReset = false;

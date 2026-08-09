@@ -775,34 +775,11 @@ class PluginApi_Impl : public PluginApi {
 			const bool wasPaused = m_emu->GetPaused();
 			m_emu->SetPaused(true);
 			auto lock = std::lock_guard(m_emu->access_mx);
-			std::vector<unsigned char> data;
-			try {
-				data = m_emu->ReadModelResource(m_emu->ModelDefinition.rom_path);
-			}
-			catch (...) {
-				error = "Failed to open ROM file";
-				m_emu->SetPaused(wasPaused);
-				return false;
-			}
-			if (auto* eps = m_emu->chipset.epscpu) {
-				if (!eps->LoadRom(data, eps->RomFormat())) {
-					error = "Invalid EPS6800 ROM image";
-					m_emu->SetPaused(wasPaused);
-					return false;
-				}
-				m_emu->chipset.rom_data = data;
-				if (code_viewer)
-					code_viewer->PrepareDisasm();
-			}
-			else {
-				std::copy_n(
-					data.begin(),
-					std::min(data.size(), m_emu->chipset.rom_data.size()),
-					m_emu->chipset.rom_data.begin());
-			}
-			m_emu->chipset.Reset();
+			const bool reloaded = m_emu->chipset.ReloadRom(error);
+			if (reloaded && m_emu->chipset.epscpu && code_viewer)
+				code_viewer->PrepareDisasm();
 			m_emu->SetPaused(wasPaused);
-			return true;
+			return reloaded;
 		}
 	} debugger_impl;
 	class Hooks_Impl : public Hooks {

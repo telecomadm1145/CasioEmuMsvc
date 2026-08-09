@@ -95,6 +95,10 @@ try {
     $status = Invoke-McpTool 3 "get_status"
     Assert-True ($status.model_name -eq "fx-JP900CW") "Unexpected model: $($status.model_name)"
     Assert-True $status.paused "The smoke test model must start paused."
+    $reload = Invoke-McpTool 30 "hot_reload_rom"
+    Assert-True $reload.success "Hot ROM reload failed for the non-EPS smoke model."
+    $statusAfterReload = Invoke-McpTool 31 "get_status"
+    Assert-True $statusAfterReload.paused "Hot ROM reload did not preserve the paused state."
 
     $registers = Invoke-McpTool 4 "list_registers"
     Assert-True ($registers.registers.Count -gt 0) "No registers were returned."

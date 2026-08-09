@@ -1,6 +1,6 @@
 # EPS6800 core provenance
 
-The files in this directory were ported from the local eps-emu-0601 written by [@zephray](https://github.com/zephray) reference
+The files in this directory were ported from the local eps-emu-0601 (written by [@zephray](https://github.com/zephray)) reference
 implementation for the HP 300S+ EPS6800 calculator. They remain licensed under
 GPL-3.0-or-later, which is compatible with CasioEmuMsvc.
 

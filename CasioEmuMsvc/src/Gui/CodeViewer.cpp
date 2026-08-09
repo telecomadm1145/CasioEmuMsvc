@@ -251,7 +251,7 @@ void SetDebugbreak(void) {
 void CodeViewer::PrepareDisasm() {
 	disasm_requested = true;
 	is_loaded.store(false, std::memory_order_release);
-		auto build_disasm = [this]() {
+	auto build_disasm = [this]() {
 		std::vector<CodeElem> new_codes;
 		if (m_emu->chipset.epscpu) {
 			std::map<uint32_t, std::string> labels = {
@@ -264,7 +264,17 @@ void CodeViewer::PrepareDisasm() {
 			}
 			std::set<uint32_t> branch_targets;
 			new_codes.reserve(0x10000);
-			auto ptr = m_emu->chipset.rom_data.data();
+			// The legacy disassembler consumes one byte per nibble. Build that view
+			// from logical words so both packed and unpacked model ROMs are safe.
+			std::vector<char> disasm_rom((0x10000 + 1) * 4, 0);
+			for (uint32_t address = 0; address <= 0x10000; ++address) {
+				const uint16_t word = m_emu->chipset.epscpu->ReadCodeWord(address);
+				const size_t offset = static_cast<size_t>(address) * 4;
+				disasm_rom[offset] = static_cast<char>((word >> 12) & 0x0f);
+				disasm_rom[offset + 1] = static_cast<char>((word >> 8) & 0x0f);
+				disasm_rom[offset + 2] = static_cast<char>((word >> 4) & 0x0f);
+				disasm_rom[offset + 3] = static_cast<char>(word & 0x0f);
+			}
 			for (size_t i = 0; i < 0x10000; i++) {
 				if (i >= 0xc && i <= 0xf) {
 					new_codes.push_back(CodeElem{(uint32_t)(i), "<Code Option>", 0, 0});
@@ -273,7 +283,7 @@ void CodeViewer::PrepareDisasm() {
 				CodeElem ce{};
 				ce.offset = i;
 				bool l = false;
-				auto str = decodeeps((char*)ptr, i, l);
+				auto str = decodeeps(disasm_rom.data(), i, l);
 				strncpy(ce.srcbuf, str, sizeof(ce.srcbuf) - 1);
 				ce.srcbuf[sizeof(ce.srcbuf) - 1] = '\0';
 				free(str);
@@ -1169,27 +1179,38 @@ void CodeViewer::RequestRunTo(uint32_t word_address) {
 void CodeViewer::AddBreakpoint(uint32_t address) {
 	if (!is_loaded.load(std::memory_order_acquire))
 		return;
-	auto it = std::find_if(codes.begin(), codes.end(), [address](const CodeElem& line) {
-		return !line.is_label && line.offset == address;
-	});
-	if (it == codes.end())
-		return;
-	const int idx = static_cast<int>(it - codes.begin());
-	break_points[idx] = 1;
-	if (m_emu->chipset.epscpu)
+	if (m_emu->chipset.epscpu) {
+		auto it = std::find_if(codes.begin(), codes.end(), [address](const CodeElem& line) {
+			return !line.is_label && line.offset == address;
+		});
+		if (it == codes.end())
+			return;
+		break_points[static_cast<int>(it - codes.begin())] = 1;
 		m_emu->chipset.epscpu->AddExecutionBreakpoint(address);
+	}
+	else {
+		int idx = 0;
+		LookUp(address, &idx);
+		break_points[idx] = 1;
+	}
 }
 
 void CodeViewer::RemoveBreakpoint(uint32_t address) {
 	if (!is_loaded.load(std::memory_order_acquire))
 		return;
-	auto it = std::find_if(codes.begin(), codes.end(), [address](const CodeElem& line) {
-		return !line.is_label && line.offset == address;
-	});
-	if (it != codes.end())
-		break_points.erase(static_cast<int>(it - codes.begin()));
-	if (m_emu->chipset.epscpu)
+	if (m_emu->chipset.epscpu) {
+		auto it = std::find_if(codes.begin(), codes.end(), [address](const CodeElem& line) {
+			return !line.is_label && line.offset == address;
+		});
+		if (it != codes.end())
+			break_points.erase(static_cast<int>(it - codes.begin()));
 		m_emu->chipset.epscpu->RemoveExecutionBreakpoint(address);
+	}
+	else {
+		int idx = 0;
+		LookUp(address, &idx);
+		break_points.erase(idx);
+	}
 }
 
 void CodeViewer::ClearBreakpoints() {

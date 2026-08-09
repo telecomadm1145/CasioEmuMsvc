@@ -63,7 +63,6 @@ void Breakpoints::DrawContent() {
 			ImGui::PopID();
 			if (ImGui::BeginPopupContextItem()) {
 				selected = i;
-				bool configuration_changed = false;
 
 				ImGui::TextUnformatted("MemBP.BPType"_lc);
 				if (ImGui::Button("HexEditors.ContextMenu.MonitorRead"_lc)) {
@@ -80,27 +79,30 @@ void Breakpoints::DrawContent() {
 					SyncEpsBreakpoints();
 					ImGui::CloseCurrentPopup();
 				}
-				configuration_changed |= ImGui::Checkbox("Enabled", &data.enabled);
-				configuration_changed |= ImGui::Checkbox("Compare data", &data.compareData);
-				if (data.compareData) {
-					int compare_data = data.data;
-					int compare_mask = data.mask;
-					int skip_count = static_cast<int>(std::min<uint64_t>(data.skipCount, 0x7fffffffu));
-					if (ImGui::InputInt("Data", &compare_data, 1, 16, ImGuiInputTextFlags_CharsHexadecimal)) {
-						data.data = static_cast<uint8_t>(compare_data);
-						configuration_changed = true;
+				if (m_emu && m_emu->chipset.epscpu) {
+					bool configuration_changed = false;
+					configuration_changed |= ImGui::Checkbox("Enabled", &data.enabled);
+					configuration_changed |= ImGui::Checkbox("Compare data", &data.compareData);
+					if (data.compareData) {
+						int compare_data = data.data;
+						int compare_mask = data.mask;
+						int skip_count = static_cast<int>(std::min<uint64_t>(data.skipCount, 0x7fffffffu));
+						if (ImGui::InputInt("Data", &compare_data, 1, 16, ImGuiInputTextFlags_CharsHexadecimal)) {
+							data.data = static_cast<uint8_t>(compare_data);
+							configuration_changed = true;
+						}
+						if (ImGui::InputInt("Mask", &compare_mask, 1, 16, ImGuiInputTextFlags_CharsHexadecimal)) {
+							data.mask = static_cast<uint8_t>(compare_mask);
+							configuration_changed = true;
+						}
+						if (ImGui::InputInt("Skip count", &skip_count, 1, 10)) {
+							data.skipCount = static_cast<uint64_t>(std::max(skip_count, 0));
+							configuration_changed = true;
+						}
 					}
-					if (ImGui::InputInt("Mask", &compare_mask, 1, 16, ImGuiInputTextFlags_CharsHexadecimal)) {
-						data.mask = static_cast<uint8_t>(compare_mask);
-						configuration_changed = true;
-					}
-					if (ImGui::InputInt("Skip count", &skip_count, 1, 10)) {
-						data.skipCount = static_cast<uint64_t>(std::max(skip_count, 0));
-						configuration_changed = true;
-					}
+					if (configuration_changed)
+						SyncEpsBreakpoints();
 				}
-				if (configuration_changed)
-					SyncEpsBreakpoints();
 				ImGui::Separator();
 				if (ImGui::Button("MemBP.Delete"_lc)) {
 					data.records.clear();
@@ -240,11 +242,11 @@ void Breakpoints::RenderCore() {
 			}
 			ImGui::Checkbox("MemBP.BreakWhenHit"_lc,
 				&break_on_cv);
-		if (target_addr >= 0 && static_cast<size_t>(target_addr) < break_point_hash.size() &&
-			break_point_hash[target_addr].breakWhenHit != break_on_cv) {
-			break_point_hash[target_addr].breakWhenHit = break_on_cv;
-			SyncEpsBreakpoints();
-		}
+			if (target_addr >= 0 && static_cast<size_t>(target_addr) < break_point_hash.size() &&
+				break_point_hash[target_addr].breakWhenHit != break_on_cv) {
+				break_point_hash[target_addr].breakWhenHit = break_on_cv;
+				SyncEpsBreakpoints();
+			}
 			if (!break_on_cv) {
 				ImGui::BeginChild("##findoutput");
 				DrawFindContent();
