@@ -339,10 +339,8 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 #endif
 	windows.push_back(MakeThemeWindow());
 	windows.push_back(CreateBitmapViewer());
-	if (m_emu->hardware_id != casioemu::HW_EPS6800) {
-		for (auto item : GetEditors())
-			windows.push_back(item);
-	}
+	for (auto item : GetEditors())
+		windows.push_back(item);
 
 #ifdef __ANDROID__
 	for (auto item : windows) {
