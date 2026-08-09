@@ -16,6 +16,11 @@ struct Record {
 struct MemBPData_t {
 	bool enableWrite = false;
 	bool breakWhenHit = false;
+	bool enabled = true;
+	bool compareData = false;
+	uint8_t data = 0;
+	uint8_t mask = 0xff;
+	uint64_t skipCount = 0;
 	uint32_t addr;
 	std::unordered_map<uint32_t, Record> records;
 };
@@ -41,6 +46,7 @@ private:
 	void DrawFindContent();
 
 	void DrawContent();
+	void SyncEpsBreakpoints();
 
 public:
 	Breakpoints() : UIWindow("Breakpoints") {
@@ -54,7 +60,9 @@ public:
 	void RenderCore() override;
 
 	void ExternalAddBp(uint32_t addr, bool write);
-	void ExternalAddBp(uint32_t addr, bool write, bool breakWhenHit);
+	void ExternalAddBp(uint32_t addr, bool write, bool breakWhenHit,
+		bool enabled = true, bool compareData = false, uint8_t data = 0,
+		uint8_t mask = 0xff, uint64_t skipCount = 0);
 	bool ExternalRemoveBp(uint32_t addr, bool write);
 	void ExternalClearBps();
 	std::vector<MemBPData_t> ExternalListBps() const;

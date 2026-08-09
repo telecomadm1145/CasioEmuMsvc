@@ -14,6 +14,8 @@ private:
 	char reg_ex3[10];
 	int char_width;
 	MemoryEditor mem_editor;
+	bool eps_trace_enabled = false;
+	int eps_trace_capacity = 4096;
 
 public:
 	WatchWindow() : UIWindow("Watch"){};

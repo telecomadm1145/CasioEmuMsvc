@@ -3,6 +3,8 @@
 #include "Ui.hpp"
 #include "imgui/imgui.h"
 #include "Chipset.hpp"
+#include "Chipset/ePSCpu.h"
+#include "CodeViewer.hpp"
 #include "Localization.h"
 #include <algorithm>
 #include <cstdint>
@@ -82,9 +84,11 @@ void HwController::RenderCore() {
 	}
 #endif
 
-	ImGui::SliderInt("HwController.Value1"_lc, &screen_flashing_threshold, 0, 0x3F);
-	ImGui::SliderFloat("HwController.Value2"_lc, &screen_flashing_brightness_coeff, 1.0f, 8.0f);
-	ImGui::SliderInt("HwController.ScreenBufferSelect"_lc, &screen_buffer_select, 0, 2);
+	if (m_emu->hardware_id != casioemu::HW_EPS6800) {
+		ImGui::SliderInt("HwController.Value1"_lc, &screen_flashing_threshold, 0, 0x3F);
+		ImGui::SliderFloat("HwController.Value2"_lc, &screen_flashing_brightness_coeff, 1.0f, 8.0f);
+		ImGui::SliderInt("HwController.ScreenBufferSelect"_lc, &screen_buffer_select, 0, 2);
+	}
 
 	UIHelpers::SectionHeader("CPU & Performance");
 	
@@ -96,6 +100,7 @@ void HwController::RenderCore() {
 	
 	ImGui::Spacing();
 	
+	if (m_emu->hardware_id != casioemu::HW_EPS6800) {
 	static bool pdx[8];
 	int pd = m_emu->ModelDefinition.pd_value;
 
@@ -150,22 +155,32 @@ void HwController::RenderCore() {
 			m_emu->chipset.RaiseMaskable(irq);
 		}
 	}
+	}
 
 	UIHelpers::SectionHeader("Advanced");
 	
 	if (ImGui::Button("HwController.HotReload"_lc)) {
+		const bool was_paused = m_emu->GetPaused();
 		m_emu->SetPaused(true);
 		auto lg = std::lock_guard(m_emu->access_mx);
 		try {
 			auto dat = m_emu->ReadModelResource(m_emu->ModelDefinition.rom_path);
-			for (size_t i = 0; i < std::min(dat.size(), m_emu->chipset.rom_data.size()); i++) {
-				m_emu->chipset.rom_data[i] = dat[i];
+			if (auto* eps = m_emu->chipset.epscpu) {
+				if (!eps->LoadRom(dat, eps->RomFormat()))
+					throw std::runtime_error("Invalid EPS6800 ROM image");
+				m_emu->chipset.rom_data = std::move(dat);
+				if (code_viewer)
+					code_viewer->PrepareDisasm();
+			}
+			else {
+				for (size_t i = 0; i < std::min(dat.size(), m_emu->chipset.rom_data.size()); i++)
+					m_emu->chipset.rom_data[i] = dat[i];
 			}
 			m_emu->chipset.Reset();
 		}
 		catch (const std::exception&) {
 			// Keep resource-load failures from escaping the ImGui render loop.
 		}
-		m_emu->SetPaused(false);
+		m_emu->SetPaused(was_paused);
 	}
 }

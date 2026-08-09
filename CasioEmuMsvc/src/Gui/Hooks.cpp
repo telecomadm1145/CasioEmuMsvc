@@ -12,3 +12,10 @@ std::function<void(casioemu::Chipset&, InterruptEventArgs&)> on_brk;
 std::function<void(casioemu::Chipset&, InterruptEventArgs&)> on_interrupt;
 
 std::function<void(casioemu::Chipset&)> on_reset;
+
+std::function<void(InstructionEventArgs&)> on_eps_instruction;
+std::function<void(const EpsFunctionEventArgs&)> on_eps_call_function;
+std::function<void(const EpsFunctionEventArgs&)> on_eps_function_return;
+std::function<void(MemoryEventArgs&)> on_eps_memory_read;
+std::function<void(MemoryEventArgs&)> on_eps_memory_write;
+std::function<void(casioemu::Chipset&, InterruptEventArgs&)> on_eps_interrupt;

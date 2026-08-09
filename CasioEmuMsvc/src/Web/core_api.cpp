@@ -300,6 +300,10 @@ namespace {
 		if (!real_hardware) {
 			model.extra["limit_spd"] = "1";
 		}
+		if (hardware_id == casioemu::HW_EPS6800) {
+			// The legacy web EPS6800 entry point receives HP-style ROM resources.
+			model.extra["is-unpacked-nibbles"] = "1";
+		}
 		for (int ko = 0; ko < 8; ++ko) {
 			for (int ki = 0; ki < 8; ++ki) {
 				casioemu::ButtonInfo button{};
@@ -397,7 +401,7 @@ namespace {
 			len = 0x2000;
 			return true;
 		case casioemu::HW_EPS6800:
-			addr = 0;
+			addr = 0x80;
 			len = 0x2000;
 			return g_emulator->chipset.epscpu != nullptr;
 		case casioemu::HW_FX_5800P:
@@ -1171,10 +1175,6 @@ int casioemu_core_save_user_ram(uint8_t* out, int max_len) {
 	int len = 0;
 	if (!UserRamRange(addr, len)) return -2;
 	if (max_len < len) return -len;
-	if (g_emulator->hardware_id == casioemu::HW_EPS6800) {
-		std::memcpy(out, g_emulator->chipset.epscpu->ram, static_cast<size_t>(len));
-		return 0;
-	}
 	return ReadDataBulk(addr, len, out);
 }
 
@@ -1184,10 +1184,6 @@ int casioemu_core_load_user_ram(const uint8_t* in, int len) {
 	int ram_len = 0;
 	if (!UserRamRange(addr, ram_len)) return 2;
 	const int copy_len = std::min(len, ram_len);
-	if (g_emulator->hardware_id == casioemu::HW_EPS6800) {
-		std::memcpy(g_emulator->chipset.epscpu->ram, in, static_cast<size_t>(copy_len));
-		return 0;
-	}
 	for (int i = 0; i < copy_len; ++i) {
 		g_emulator->chipset.mmu.WriteData(addr + i, in[i], false);
 	}

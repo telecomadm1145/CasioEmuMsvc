@@ -7,7 +7,6 @@
 #include <string.h>
 
 enum {
-	LCD_ADDRH_MASK = 0x03,
 	LCD_ADDRH_SHIFT = 7,
 	LCD_ADDRL_MIN = 0x00,
 	LCD_ADDRL_MAX = 0x61,
@@ -23,7 +22,7 @@ static void lcd_bus_write_internal(struct lcd_state *state, uint8_t addr, uint8_
 }
 
 static uint16_t lcd_data_address(const struct lcd_state *state) {
-	return (uint16_t)(((uint16_t)(state->reg[REG_LCDARH] & LCD_ADDRH_MASK) << LCD_ADDRH_SHIFT) |
+	return (uint16_t)(((uint16_t)(state->reg[REG_LCDARH] & MASK_LCD_ADDRESS_HIGH) << LCD_ADDRH_SHIFT) |
 		state->reg[REG_LCDARL]);
 }
 
@@ -83,6 +82,8 @@ void lcd_process_postid_state(struct lcd_state *state) {
 void lcd_write_byte_state(struct lcd_state *state, uint8_t addr, uint8_t byte) {
 	if (addr < LCD_REG_COUNT) {
 		state->reg[addr] = byte;
+		/* Keep the debugger's flat SFR view synchronized with the peripheral. */
+		lcd_bus_write_internal(state, addr, byte);
 		switch (addr) {
 		case REG_LCDDAT:
 			state->fb[lcd_data_address(state)] = byte;
@@ -101,5 +102,4 @@ uint8_t lcd_ram_read_byte_state(const struct lcd_state *state, uint16_t addr) {
 void lcd_reset_state(struct lcd_state *state) {
 	memset(state->reg, 0, sizeof(state->reg));
 }
-
 

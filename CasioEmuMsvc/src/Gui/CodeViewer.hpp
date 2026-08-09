@@ -72,6 +72,8 @@ public:
 	void RequestStep();
 	void RequestTrace();
 	bool RequestStepOut();
+	void RequestContinue(bool honor_breakpoints = true);
+	void RequestRunTo(uint32_t word_address);
 	void AddBreakpoint(uint32_t address);
 	void RemoveBreakpoint(uint32_t address);
 	void ClearBreakpoints();

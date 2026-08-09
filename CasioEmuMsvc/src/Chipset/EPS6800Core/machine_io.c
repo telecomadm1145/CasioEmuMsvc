@@ -1,9 +1,15 @@
 /* Emulated machine host I/O wrappers */
 
+#include "eps6800.h"
 #include "machine_internal.h"
 #include "machine_io.h"
 
-size_t machine_state_lcd_copy_framebuffer(const struct machine_state *state, uint8_t *data, size_t size) {
+size_t machine_state_lcd_copy_display(
+	const struct machine_state *state,
+	uint8_t *data,
+	size_t size,
+	struct machine_lcd_control *control
+) {
 	size_t i;
 	size_t copy_size;
 
@@ -15,7 +21,15 @@ size_t machine_state_lcd_copy_framebuffer(const struct machine_state *state, uin
 	for (i = 0; i < copy_size; i++) {
 		data[i] = lcd_ram_read_byte_state(&state->lcd, (uint16_t)i);
 	}
+	if (control) {
+		control->lcdarh = state->lcd.reg[REG_LCDARH];
+		control->lcdcon = state->lcd.reg[REG_LCDCON];
+	}
 	return copy_size;
+}
+
+size_t machine_state_lcd_copy_framebuffer(const struct machine_state *state, uint8_t *data, size_t size) {
+	return machine_state_lcd_copy_display(state, data, size, NULL);
 }
 
 void machine_state_keydown(struct machine_state *state, uint8_t key) {
@@ -49,5 +63,3 @@ void machine_state_onup(struct machine_state *state) {
 
 	kbd_onup_state(&state->kbd);
 }
-
-

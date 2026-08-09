@@ -164,7 +164,9 @@ public:
 
 	virtual std::vector<DebugMemoryBreakpointInfo> GetMemoryBreakpoints() = 0;
 	virtual std::vector<DebugMemoryBreakpointHitInfo> GetMemoryBreakpointHits(uint32_t address, bool write) = 0;
-	virtual bool AddMemoryBreakpoint(uint32_t address, bool write, bool breakWhenHit) = 0;
+	virtual bool AddMemoryBreakpoint(uint32_t address, bool write, bool breakWhenHit,
+		bool enabled = true, bool compareData = false, uint8_t data = 0,
+		uint8_t mask = 0xff, uint64_t skipCount = 0) = 0;
 	virtual bool RemoveMemoryBreakpoint(uint32_t address, bool write) = 0;
 	virtual void ClearMemoryBreakpoints() = 0;
 

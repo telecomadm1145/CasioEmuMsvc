@@ -26,11 +26,16 @@ struct CallAnalysis : public UIWindow {
 	std::vector<FunctionCall> viewing_calls;
 	CallAnalysis() : UIWindow("Funcs") {
 		SetupHook(on_call_function, [this](casioemu::CPU& sender, const FunctionEventArgs& ea) {
-			OnCallFunction(sender, ea.pc, ea.lr);
+			const uint32_t xr0 = (sender.reg_r[3] << 24) | (sender.reg_r[2] << 16) |
+				(sender.reg_r[1] << 8) | sender.reg_r[0];
+			OnCallFunction(ea.pc, ea.lr, xr0, sender.GetBacktrace());
+		});
+		SetupHook(on_eps_call_function, [this](const EpsFunctionEventArgs& ea) {
+			OnCallFunction(ea.function.pc, ea.function.lr, ea.accumulator, ea.backtrace);
 		});
 	}
 
-	void OnCallFunction(casioemu::CPU& sender, uint32_t pc, uint32_t lr) {
+	void OnCallFunction(uint32_t pc, uint32_t lr, uint32_t xr0, const std::string& backtrace) {
 		std::lock_guard lock(data_mutex);
 		if (is_call_recoding) {
 			if (check_caller)
@@ -42,10 +47,10 @@ struct CallAnalysis : public UIWindow {
 					return;
 
 			FunctionCall fc{};
-			fc.xr0 = (sender.reg_r[3] << 24) | (sender.reg_r[2] << 16) | (sender.reg_r[1] << 8) | (sender.reg_r[0]);
+			fc.xr0 = xr0;
 			fc.pc = pc;
 			fc.lr = lr;
-			fc.stack = sender.GetBacktrace(); // 已经上锁了，草（
+			fc.stack = backtrace;
 			funcs[pc].push_back(fc);
 		}
 	}

@@ -592,7 +592,11 @@ namespace casioemu {
 			}
 			eps_frame_cycle_remainder += cycles_to_emulate;
 			while (eps_frame_cycle_remainder >= cycles_per_eps_frame) {
-				chipset.RunEpsFrame();
+				if (chipset.RunEpsFrame()) {
+					SetPaused(true);
+					eps_frame_cycle_remainder = 0;
+					break;
+				}
 				eps_frame_cycle_remainder -= cycles_per_eps_frame;
 			}
 			return;
@@ -738,6 +742,8 @@ namespace casioemu {
 	void Emulator::Shutdown() {
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
+		if (hardware_id == HW_EPS6800)
+			chipset.PersistEpsRam();
 		running = false;
 	}
 

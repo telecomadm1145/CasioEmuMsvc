@@ -165,12 +165,13 @@ namespace casioemu {
 		void RemovePortInput(int, int);
 
 		void Tick();
-		void RunEpsFrame();
+		bool RunEpsFrame();
 		void EmulatorTick();
 		void Frame();
 		void UIEvent(SDL_Event event);
 		void SaveStateAll(std::ostream& os);
 		void LoadStateAll(std::istream& is);
+		void PersistEpsRam();
 
 		template <typename T>
 		T* QueryInterface() {

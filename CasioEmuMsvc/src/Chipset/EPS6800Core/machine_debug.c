@@ -60,6 +60,7 @@ void machine_state_debug_get_register_overview(
 	}
 
 	/* Reading INDF and LCDDATA can have side effects through POSTID. */
+	mmio_suppress_debug_access_state(&state->mmio, true);
 	postid = mmio_read_byte_state(&state->mmio, REG_POSTID);
 	mmio_write_byte_state(&state->mmio, REG_POSTID, MACHINE_DEBUG_POSTID_DISABLED);
 	for (i = 0; i < MACHINE_DEBUG_LOW_REGISTER_COUNT; i++) {
@@ -67,22 +68,135 @@ void machine_state_debug_get_register_overview(
 	}
 	overview->cpucon = mmio_read_byte_state(&state->mmio, REG_CPUCON);
 	mmio_write_byte_state(&state->mmio, REG_POSTID, postid);
+	mmio_suppress_debug_access_state(&state->mmio, false);
+}
+
+void machine_state_debug_get_snapshot(
+	struct machine_state *state,
+	struct machine_debug_snapshot *snapshot
+) {
+	size_t i;
+	uint8_t postid;
+
+	if (!snapshot) {
+		return;
+	}
+	memset(snapshot, 0, sizeof(*snapshot));
+	if (!state) {
+		return;
+	}
+
+	snapshot->pc = state->cpu.pc;
+	mmio_suppress_debug_access_state(&state->mmio, true);
+	postid = mmio_read_byte_state(&state->mmio, REG_POSTID);
+	mmio_write_byte_state(&state->mmio, REG_POSTID, MACHINE_DEBUG_POSTID_DISABLED);
+	for (i = 0; i < MACHINE_DEBUG_REGISTER_COUNT; i++) {
+		snapshot->registers[i] = mmio_read_byte_state(&state->mmio, (uint8_t)i);
+	}
+	mmio_write_byte_state(&state->mmio, REG_POSTID, postid);
+	mmio_suppress_debug_access_state(&state->mmio, false);
+	memcpy(snapshot->wbk_registers, state->mmio.ram_wbk, sizeof(snapshot->wbk_registers));
+	memcpy(snapshot->stack, state->cpu.stack, sizeof(snapshot->stack));
+	snapshot->stack_pointer = snapshot->registers[REG_STKPTR] & (MACHINE_DEBUG_STACK_DEPTH - 1);
 }
 
 uint8_t machine_state_debug_read_byte(struct machine_state *state, uint8_t addr) {
+	uint8_t byte;
 	if (!state) {
 		return 0;
 	}
 
-	return mmio_read_byte_state(&state->mmio, addr);
+	mmio_suppress_debug_access_state(&state->mmio, true);
+	byte = mmio_read_byte_state(&state->mmio, addr);
+	mmio_suppress_debug_access_state(&state->mmio, false);
+	return byte;
 }
 
 void machine_state_debug_write_byte(struct machine_state *state, uint8_t addr, uint8_t byte) {
 	if (!state) {
 		return;
 	}
+	switch (addr) {
+	case REG_BSR:
+	case REG_BSR1:
+	case REG_BSR2:
+		byte &= 0x3f;
+		break;
+	case REG_STKPTR:
+		byte &= MACHINE_DEBUG_STACK_DEPTH - 1;
+		break;
+	case REG_CPUCON:
+		byte &= BIT_WBK | BIT_GLINT | BIT_MS1 | BIT_MS0;
+		break;
+	case REG_LCDARH:
+		byte &= MASK_LCD_CONTRAST | MASK_LCD_ADDRESS_HIGH;
+		break;
+	default:
+		break;
+	}
 
+	mmio_suppress_debug_access_state(&state->mmio, true);
 	mmio_write_byte_state(&state->mmio, addr, byte);
+	mmio_suppress_debug_access_state(&state->mmio, false);
+	if ((addr == REG_PCL) || (addr == REG_PCM) || (addr == REG_PCH)) {
+		state->cpu.pc = machine_debug_read_pc(state);
+	}
+}
+
+uint8_t machine_state_debug_peek_memory(struct machine_state *state, uint32_t linear_addr) {
+	uint8_t postid;
+	uint8_t byte;
+
+	if (!state || linear_addr >= MACHINE_DEBUG_LINEAR_MEMORY_SIZE) {
+		return 0xff;
+	}
+	if (linear_addr >= 0x80) {
+		return state->mmio.ram[linear_addr - 0x80];
+	}
+
+	mmio_suppress_debug_access_state(&state->mmio, true);
+	postid = mmio_read_byte_state(&state->mmio, REG_POSTID);
+	mmio_write_byte_state(&state->mmio, REG_POSTID, MACHINE_DEBUG_POSTID_DISABLED);
+	byte = mmio_read_byte_state(&state->mmio, (uint8_t)linear_addr);
+	mmio_write_byte_state(&state->mmio, REG_POSTID, postid);
+	mmio_suppress_debug_access_state(&state->mmio, false);
+	return byte;
+}
+
+bool machine_state_debug_write_memory(struct machine_state *state, uint32_t linear_addr, uint8_t byte) {
+	if (!state || linear_addr >= MACHINE_DEBUG_LINEAR_MEMORY_SIZE) {
+		return false;
+	}
+	if (linear_addr >= 0x80) {
+		state->mmio.ram[linear_addr - 0x80] = byte;
+		return true;
+	}
+	machine_state_debug_write_byte(state, (uint8_t)linear_addr, byte);
+	return true;
+}
+
+uint16_t machine_state_debug_read_rom_word(const struct machine_state *state, uint32_t word_addr) {
+	if (!state) {
+		return 0xffff;
+	}
+	return rom_read_word(&state->rom, word_addr);
+}
+
+bool machine_state_debug_write_rom_word(struct machine_state *state, uint32_t word_addr, uint16_t word) {
+	if (!state) {
+		return false;
+	}
+	return rom_write_word(&state->rom, word_addr, word);
+}
+
+void machine_state_debug_set_memory_access_callback(
+	struct machine_state *state,
+	machine_debug_memory_access_callback callback,
+	void *user
+) {
+	if (!state)
+		return;
+	mmio_set_debug_access_callback_state(&state->mmio, callback, user);
 }
 
 void machine_state_debug_step(struct machine_state *state) {
@@ -92,5 +206,3 @@ void machine_state_debug_step(struct machine_state *state) {
 
 	cpu_loop_state(&state->cpu, 1);
 }
-
-

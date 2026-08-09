@@ -1,11 +1,13 @@
 #include "MemBreakPoint.hpp"
 #include "Chipset/CPU.hpp"
 #include "Chipset/Chipset.hpp"
+#include "Chipset/ePSCpu.h"
 #include "Emulator.hpp"
 #include "Gui/Hooks.h"
 #include "Ui.hpp"
 #include "imgui/imgui.h"
 #include <Localization.h>
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <stdlib.h>
@@ -61,20 +63,44 @@ void Breakpoints::DrawContent() {
 			ImGui::PopID();
 			if (ImGui::BeginPopupContextItem()) {
 				selected = i;
+				bool configuration_changed = false;
 
 				ImGui::TextUnformatted("MemBP.BPType"_lc);
 				if (ImGui::Button("HexEditors.ContextMenu.MonitorRead"_lc)) {
 					target_addr = i;
 					data.enableWrite = 0;
 					data.records.clear();
+					SyncEpsBreakpoints();
 					ImGui::CloseCurrentPopup();
 				}
 				if (ImGui::Button("HexEditors.ContextMenu.MonitorWrite"_lc)) {
 					data.enableWrite = true;
 					target_addr = i;
 					data.records.clear();
+					SyncEpsBreakpoints();
 					ImGui::CloseCurrentPopup();
 				}
+				configuration_changed |= ImGui::Checkbox("Enabled", &data.enabled);
+				configuration_changed |= ImGui::Checkbox("Compare data", &data.compareData);
+				if (data.compareData) {
+					int compare_data = data.data;
+					int compare_mask = data.mask;
+					int skip_count = static_cast<int>(std::min<uint64_t>(data.skipCount, 0x7fffffffu));
+					if (ImGui::InputInt("Data", &compare_data, 1, 16, ImGuiInputTextFlags_CharsHexadecimal)) {
+						data.data = static_cast<uint8_t>(compare_data);
+						configuration_changed = true;
+					}
+					if (ImGui::InputInt("Mask", &compare_mask, 1, 16, ImGuiInputTextFlags_CharsHexadecimal)) {
+						data.mask = static_cast<uint8_t>(compare_mask);
+						configuration_changed = true;
+					}
+					if (ImGui::InputInt("Skip count", &skip_count, 1, 10)) {
+						data.skipCount = static_cast<uint64_t>(std::max(skip_count, 0));
+						configuration_changed = true;
+					}
+				}
+				if (configuration_changed)
+					SyncEpsBreakpoints();
 				ImGui::Separator();
 				if (ImGui::Button("MemBP.Delete"_lc)) {
 					data.records.clear();
@@ -82,6 +108,7 @@ void Breakpoints::DrawContent() {
 						target_addr = -1;
 					}
 					break_point_hash.erase(break_point_hash.begin() + i);
+					SyncEpsBreakpoints();
 					ImGui::CloseCurrentPopup();
 				}
 				ImGui::EndPopup();
@@ -110,6 +137,16 @@ void Breakpoints::DrawFindContent() {
 		ImGui::TableSetupColumn("");
 		ImGui::TableHeadersRow();
 		int i = 0;
+		if (m_emu && m_emu->chipset.epscpu) {
+			for (const auto& hit : m_emu->chipset.epscpu->MemoryBreakpointHits(
+				break_point_hash[target_addr].addr, write != 0)) {
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				UIHelpers::ClickableAddress(hit.program_counter, UIHelpers::JumpTarget::Code);
+				ImGui::TableSetColumnIndex(1);
+				ImGui::Text("%s %02X", hit.write ? "W" : "R", hit.value);
+			}
+		}
 		for (auto kv : break_point_hash[target_addr].records) {
 			uint32_t pc_addr = kv.first;
 			ImGui::TableNextRow();
@@ -199,11 +236,15 @@ void Breakpoints::RenderCore() {
 			ImGui::SameLine();
 			if (ImGui::Button("MemBP.AddAddr"_lc)) {
 				break_point_hash.push_back({.addr = (uint32_t)strtol(buf, nullptr, 16)});
+				SyncEpsBreakpoints();
 			}
 			ImGui::Checkbox("MemBP.BreakWhenHit"_lc,
 				&break_on_cv);
-			if (target_addr >= 0 && static_cast<size_t>(target_addr) < break_point_hash.size())
-				break_point_hash[target_addr].breakWhenHit = break_on_cv;
+		if (target_addr >= 0 && static_cast<size_t>(target_addr) < break_point_hash.size() &&
+			break_point_hash[target_addr].breakWhenHit != break_on_cv) {
+			break_point_hash[target_addr].breakWhenHit = break_on_cv;
+			SyncEpsBreakpoints();
+		}
 			if (!break_on_cv) {
 				ImGui::BeginChild("##findoutput");
 				DrawFindContent();
@@ -233,11 +274,15 @@ void Breakpoints::ExternalAddBp(uint32_t addr, bool write) {
 	ExternalAddBp(addr, write, false);
 }
 
-void Breakpoints::ExternalAddBp(uint32_t addr, bool write, bool breakWhenHit) {
+void Breakpoints::ExternalAddBp(uint32_t addr, bool write, bool breakWhenHit,
+	bool enabled, bool compareData, uint8_t data, uint8_t mask, uint64_t skipCount) {
 	std::lock_guard lock(breakpoints_mutex);
-	break_point_hash.push_back({.enableWrite = write, .breakWhenHit = breakWhenHit, .addr = addr});
+	break_point_hash.push_back({.enableWrite = write, .breakWhenHit = breakWhenHit,
+		.enabled = enabled, .compareData = compareData, .data = data, .mask = mask,
+		.skipCount = skipCount, .addr = addr});
 	target_addr = break_point_hash.size() - 1;
 	break_on_cv = breakWhenHit;
+	SyncEpsBreakpoints();
 }
 
 bool Breakpoints::ExternalRemoveBp(uint32_t addr, bool write) {
@@ -253,6 +298,7 @@ bool Breakpoints::ExternalRemoveBp(uint32_t addr, bool write) {
 		target_addr = -1;
 	else if (target_addr > removed)
 		--target_addr;
+	SyncEpsBreakpoints();
 	return true;
 }
 
@@ -261,6 +307,26 @@ void Breakpoints::ExternalClearBps() {
 	break_point_hash.clear();
 	target_addr = -1;
 	break_on_cv = false;
+	SyncEpsBreakpoints();
+}
+
+void Breakpoints::SyncEpsBreakpoints() {
+	if (!m_emu || !m_emu->chipset.epscpu)
+		return;
+	auto* eps = m_emu->chipset.epscpu;
+	eps->ClearMemoryBreakpoints();
+	for (const auto& item : break_point_hash) {
+		casioemu::Eps6800MemoryBreakpoint breakpoint{};
+		breakpoint.address = item.addr;
+		breakpoint.write = item.enableWrite;
+		breakpoint.enabled = item.enabled;
+		breakpoint.break_when_hit = item.breakWhenHit;
+		breakpoint.compare_data = item.compareData;
+		breakpoint.data = item.data;
+		breakpoint.mask = item.mask;
+		breakpoint.skip_count = item.skipCount;
+		eps->AddMemoryBreakpoint(breakpoint);
+	}
 }
 
 std::vector<MemBPData_t> Breakpoints::ExternalListBps() const {

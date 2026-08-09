@@ -14,15 +14,34 @@
 #include "EPS6800Core/machine_rom.h"
 #include "EPS6800Core/machine_snapshot.h"
 
+#include <algorithm>
 #include <istream>
 #include <limits>
 #include <ostream>
+#include <sstream>
 #include <stdexcept>
 #include <vector>
 
 namespace {
 	constexpr uint32_t kSnapshotMagic = 0x31535045; // "EPS1", little-endian
 	constexpr uint32_t kMaximumSnapshotSize = 1024 * 1024;
+	constexpr size_t kPackedBytesPerWord = 2;
+	constexpr size_t kUnpackedBytesPerWord = 4;
+	constexpr size_t kMaximumRomWords = 96 * 1024;
+
+	bool ConvertUnpackedNibbles(const std::vector<unsigned char>& source,
+		std::vector<unsigned char>& packed) {
+		if (source.empty() || source.size() % kUnpackedBytesPerWord != 0 ||
+			source.size() / kUnpackedBytesPerWord > kMaximumRomWords)
+			return false;
+		packed.resize(source.size() / 2);
+		for (size_t i = 0; i < source.size(); i += 2) {
+			if (source[i] > 0x0f || source[i + 1] > 0x0f)
+				return false;
+			packed[i / 2] = static_cast<unsigned char>((source[i] << 4) | source[i + 1]);
+		}
+		return true;
+	}
 
 	machine_state* CreateMachineOrThrow() {
 		auto* state = machine_state_create();
@@ -30,67 +49,323 @@ namespace {
 			throw std::runtime_error("Failed to create EPS6800 machine state");
 		return state;
 	}
+
+	bool IsEpsCallInstruction(uint16_t word) {
+		return (word & 0xf000u) == 0x3000u || // S0CALL
+			(word & 0xe000u) == 0xe000u || // SCALL
+			(word & 0xfff0u) == 0x0030u; // LCALL
+	}
+
+	bool IsEpsReturnInstruction(uint16_t word) {
+		return word == 0x2bfeu || word == 0x2bffu;
+	}
+
+	uint8_t EpsInstructionWords(uint16_t word) {
+		if ((word & 0xfff0u) == 0x0020u || (word & 0xfff0u) == 0x0030u)
+			return 2;
+		const uint8_t high = static_cast<uint8_t>(word >> 8);
+		if ((high >= 0x50 && high <= 0x51) ||
+			(high >= 0x55 && high <= 0x67) ||
+			(high >= 0x47 && high <= 0x49))
+			return 2;
+		return 1;
+	}
+
+	uint8_t EpsInstructionCycles(uint16_t word) {
+		const uint8_t high = static_cast<uint8_t>(word >> 8);
+		if ((word & 0xfff0u) == 0x0020u || (word & 0xfff0u) == 0x0030u ||
+			(high >= 0x2c && high <= 0x2f) ||
+			(high >= 0x50 && high <= 0x51) ||
+			(high >= 0x55 && high <= 0x67) ||
+			(high >= 0x47 && high <= 0x49))
+			return 2;
+		return 1;
+	}
 }
 
 namespace casioemu {
+	const char* Eps6800RomFormatName(Eps6800RomFormat format) {
+		switch (format) {
+		case Eps6800RomFormat::PackedBigEndian:
+			return "packed-big-endian";
+		case Eps6800RomFormat::UnpackedNibbles:
+			return "unpacked-nibbles";
+		}
+		return "unknown";
+	}
+
 	ePSCPU::ePSCPU()
-		: state_(CreateMachineOrThrow()),
-		  regs(state_->mmio.regs),
-		  ram(state_->mmio.ram),
-		  wbk(state_->mmio.ram_wbk),
-		  vram(state_->lcd.fb),
-		  stack(state_->cpu.stack),
-		  FSR(state_->mmio.regs[REG_FSR0]),
-		  BSR(state_->mmio.regs[REG_BSR]),
-		  FSR1(state_->mmio.regs[REG_FSR1]),
-		  BSR1(state_->mmio.regs[REG_BSR1]),
-		  STKPTR(state_->mmio.regs[REG_STKPTR]),
-		  ACC(state_->mmio.regs[REG_ACC]),
-		  STATUS(state_->cpu.status),
-		  FSR2(state_->mmio.regs[REG_FSR2]),
-		  BSR2(state_->mmio.regs[REG_BSR2]),
-		  LCDARL(state_->mmio.regs[REG_LCDARL]),
-		  LCDARH(state_->mmio.regs[REG_LCDARH]) {
+		: state_(CreateMachineOrThrow()) {
+		machine_state_debug_set_memory_access_callback(state_, &ePSCPU::MemoryAccessThunk, this);
 	}
 
 	ePSCPU::~ePSCPU() {
 		machine_state_destroy(state_);
 	}
 
-	bool ePSCPU::LoadRom(const std::vector<unsigned char>& rom) {
-		return machine_state_load_rom_image(state_, rom.data(), rom.size());
+	bool ePSCPU::LoadRom(const std::vector<unsigned char>& rom, Eps6800RomFormat format) {
+		const std::lock_guard lock(state_mutex_);
+		const unsigned char* data = rom.data();
+		size_t size = rom.size();
+		std::vector<unsigned char> packed;
+		if (format == Eps6800RomFormat::UnpackedNibbles) {
+			if (!ConvertUnpackedNibbles(rom, packed))
+				return false;
+			data = packed.data();
+			size = packed.size();
+		}
+		else if (rom.empty() || rom.size() % kPackedBytesPerWord != 0 ||
+			rom.size() / kPackedBytesPerWord > kMaximumRomWords) {
+			return false;
+		}
+		if (!machine_state_load_rom_image(state_, data, size))
+			return false;
+		rom_format_ = format;
+		return true;
+	}
+
+	Eps6800RomFormat ePSCPU::RomFormat() const {
+		const std::lock_guard lock(state_mutex_);
+		return rom_format_;
+	}
+
+	void ePSCPU::SetDebugHooks(
+		std::function<bool(uint32_t, uint32_t)> instruction,
+		std::function<void(uint32_t, uint32_t, bool, uint32_t, const std::string&)> function,
+		std::function<bool(uint32_t, uint8_t&, bool)> memory,
+		std::function<void(uint8_t)> interrupt) {
+		const std::lock_guard lock(state_mutex_);
+		instruction_hook_ = std::move(instruction);
+		function_hook_ = std::move(function);
+		memory_hook_ = std::move(memory);
+		interrupt_hook_ = std::move(interrupt);
+	}
+
+	bool ePSCPU::WriteRomImageWord(std::vector<unsigned char>& rom, uint32_t word_address,
+		uint16_t value) const {
+		const std::lock_guard lock(state_mutex_);
+		if (rom_format_ == Eps6800RomFormat::UnpackedNibbles) {
+			const size_t offset = static_cast<size_t>(word_address) * kUnpackedBytesPerWord;
+			if (offset + 3 >= rom.size())
+				return false;
+			rom[offset] = static_cast<unsigned char>((value >> 12) & 0x0f);
+			rom[offset + 1] = static_cast<unsigned char>((value >> 8) & 0x0f);
+			rom[offset + 2] = static_cast<unsigned char>((value >> 4) & 0x0f);
+			rom[offset + 3] = static_cast<unsigned char>(value & 0x0f);
+			return true;
+		}
+		const size_t offset = static_cast<size_t>(word_address) * kPackedBytesPerWord;
+		if (offset + 1 >= rom.size())
+			return false;
+		rom[offset] = static_cast<unsigned char>(value >> 8);
+		rom[offset + 1] = static_cast<unsigned char>(value);
+		return true;
 	}
 
 	void ePSCPU::Reset() {
+		const std::lock_guard lock(state_mutex_);
 		machine_state_reset(state_);
+		debug_run_mode_ = DebugRunMode::Continue;
+		honor_execution_breakpoints_ = true;
+		honor_memory_breakpoints_ = true;
+		last_debug_stop_ = {};
+		instruction_count_ = 0;
+		cycle_count_ = 0;
+		trace_buffer_.clear();
+		memory_break_pending_ = false;
 	}
 
 	void ePSCPU::Next() {
-		machine_state_advance_cycles(state_, 1, true);
+		const std::lock_guard lock(state_mutex_);
+		RunInstructionLocked(true);
 	}
 
-	void ePSCPU::RunFrame() {
-		machine_state_run_frame(state_);
+	bool ePSCPU::RunFrame() {
+		const std::lock_guard lock(state_mutex_);
+		constexpr uint32_t kActiveInstructions = 2000;
+		constexpr uint32_t kFrameInstructions = 4000;
+		for (uint32_t i = 0; i < kFrameInstructions; ++i) {
+			if (RunInstructionLocked(i < kActiveInstructions))
+				return true;
+		}
+		return false;
+	}
+
+	bool ePSCPU::RunInstructionLocked(bool tick_timer) {
+		memory_break_pending_ = false;
+		const uint32_t pc_before = state_->cpu.pc;
+		const uint8_t stack_pointer_before = state_->mmio.regs[REG_STKPTR] & 0x1f;
+		const uint8_t interrupt_pending = state_->cpu.int_pending;
+		const uint32_t instruction = machine_state_debug_fetch_instruction(state_, pc_before);
+		const uint16_t word = static_cast<uint16_t>(instruction >> 16);
+		machine_state_advance_cycles(state_, 1, tick_timer);
+		++instruction_count_;
+
+		const uint32_t pc_after = state_->cpu.pc;
+		uint8_t elapsed_cycles = EpsInstructionCycles(word);
+		if (elapsed_cycles == 1 && pc_after != pc_before + EpsInstructionWords(word))
+			elapsed_cycles = 2; // ePS6800 control-flow / PC-write penalty.
+		cycle_count_ += elapsed_cycles;
+		const uint8_t stack_pointer_after = state_->mmio.regs[REG_STKPTR] & 0x1f;
+		RecordTraceLocked(pc_before, instruction, pc_after);
+		if (function_hook_ && IsEpsCallInstruction(word)) {
+			function_hook_(pc_after, pc_before + EpsInstructionWords(word), true,
+				state_->mmio.regs[REG_ACC], BacktraceLocked());
+		}
+		else if (function_hook_ && IsEpsReturnInstruction(word)) {
+			function_hook_(pc_after, pc_after, false, state_->mmio.regs[REG_ACC], BacktraceLocked());
+		}
+		if (interrupt_hook_ && interrupt_pending && stack_pointer_after > stack_pointer_before) {
+			interrupt_hook_((interrupt_pending & INT_LEVEL4_TIMINT) ? 4 : 1);
+		}
+
+		Eps6800DebugStopReason reason = Eps6800DebugStopReason::None;
+		if (instruction_hook_ && instruction_hook_(pc_before, pc_after))
+			reason = Eps6800DebugStopReason::Hook;
+		if (reason == Eps6800DebugStopReason::None && !ShouldStopLocked(pc_after, stack_pointer_after, reason))
+			return false;
+		RecordStopLocked(reason, pc_after);
+		debug_run_mode_ = DebugRunMode::Continue;
+		return true;
+	}
+
+	bool ePSCPU::ShouldStopLocked(uint32_t pc_after, uint8_t stack_pointer_after,
+		Eps6800DebugStopReason& reason) {
+		if (memory_break_pending_) {
+			reason = Eps6800DebugStopReason::MemoryBreakpoint;
+			return true;
+		}
+		switch (debug_run_mode_) {
+		case DebugRunMode::StepInto:
+			reason = Eps6800DebugStopReason::Step;
+			return true;
+		case DebugRunMode::StepOver:
+			if (pc_after == debug_target_pc_ && stack_pointer_after <= debug_target_stack_pointer_) {
+				reason = Eps6800DebugStopReason::StepOver;
+				return true;
+			}
+			break;
+		case DebugRunMode::StepOut:
+			if (pc_after == debug_target_pc_ && stack_pointer_after <= debug_target_stack_pointer_) {
+				reason = Eps6800DebugStopReason::StepOut;
+				return true;
+			}
+			break;
+		case DebugRunMode::RunToAddress:
+			if (pc_after == debug_target_pc_) {
+				reason = Eps6800DebugStopReason::RunToAddress;
+				return true;
+			}
+			break;
+		case DebugRunMode::Continue:
+			break;
+		}
+
+		if (honor_execution_breakpoints_) {
+			if (auto it = execution_breakpoints_.find(pc_after);
+				it != execution_breakpoints_.end() && it->second.enabled) {
+				++it->second.hit_count;
+				if (it->second.hit_count > it->second.skip_count) {
+					reason = Eps6800DebugStopReason::ExecutionBreakpoint;
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	void ePSCPU::RecordStopLocked(Eps6800DebugStopReason reason, uint32_t pc) {
+		last_debug_stop_.reason = reason;
+		last_debug_stop_.program_counter = pc;
+		last_debug_stop_.instruction_count = instruction_count_;
+		last_debug_stop_.cycle_count = cycle_count_;
+		if (reason == Eps6800DebugStopReason::MemoryBreakpoint) {
+			last_debug_stop_.memory_address = pending_memory_address_;
+			last_debug_stop_.memory_value = pending_memory_value_;
+			last_debug_stop_.memory_write = pending_memory_write_;
+		}
+	}
+
+	bool ePSCPU::MemoryAccessThunk(void* user, uint32_t address, uint8_t* value, bool write, bool before) {
+		return user && value
+			? static_cast<ePSCPU*>(user)->OnMemoryAccessLocked(address, *value, write, before)
+			: false;
+	}
+
+	bool ePSCPU::OnMemoryAccessLocked(uint32_t address, uint8_t& value, bool write, bool before) {
+		if (before)
+			return memory_hook_ ? memory_hook_(address, value, write) : false;
+		for (auto& breakpoint : memory_breakpoints_) {
+			if (!breakpoint.enabled || breakpoint.address != address || breakpoint.write != write)
+				continue;
+			if (breakpoint.compare_data && ((value & breakpoint.mask) != (breakpoint.data & breakpoint.mask)))
+				continue;
+			++breakpoint.hit_count;
+			memory_breakpoint_hits_.push_back({state_->cpu.pc, address, value, write, instruction_count_ + 1});
+			if (memory_breakpoint_hits_.size() > 4096)
+				memory_breakpoint_hits_.pop_front();
+			if (breakpoint.break_when_hit && honor_memory_breakpoints_ &&
+				breakpoint.hit_count > breakpoint.skip_count && !memory_break_pending_) {
+				memory_break_pending_ = true;
+				pending_memory_address_ = address;
+				pending_memory_value_ = value;
+				pending_memory_write_ = write;
+			}
+		}
+		return false;
+	}
+
+	void ePSCPU::RecordTraceLocked(uint32_t pc_before, uint32_t instruction, uint32_t pc_after) {
+		if (!trace_enabled_ || trace_capacity_ == 0)
+			return;
+		Eps6800TraceEntry entry{};
+		entry.program_counter = pc_before;
+		entry.instruction = instruction;
+		entry.next_program_counter = pc_after;
+		entry.stack_pointer = state_->mmio.regs[REG_STKPTR] & 0x1f;
+		entry.accumulator = state_->mmio.regs[REG_ACC];
+		entry.status = state_->cpu.status;
+		entry.instruction_count = instruction_count_;
+		entry.cycle_count = cycle_count_;
+		if (trace_buffer_.size() >= trace_capacity_)
+			trace_buffer_.pop_front();
+		trace_buffer_.push_back(entry);
 	}
 
 	void ePSCPU::KeyDown(uint8_t matrix_index) {
+		const std::lock_guard lock(state_mutex_);
 		machine_state_keydown(state_, matrix_index);
 	}
 
 	void ePSCPU::KeyUp(uint8_t matrix_index) {
+		const std::lock_guard lock(state_mutex_);
 		machine_state_keyup(state_, matrix_index);
 	}
 
 	void ePSCPU::OnDown() {
+		const std::lock_guard lock(state_mutex_);
 		machine_state_ondown(state_);
 	}
 
 	void ePSCPU::OnUp() {
+		const std::lock_guard lock(state_mutex_);
 		machine_state_onup(state_);
 	}
 
-	size_t ePSCPU::CopyLcd(uint8_t* output, size_t size) const {
-		return machine_state_lcd_copy_framebuffer(state_, output, size);
+	size_t ePSCPU::CopyLcd(uint8_t* output, size_t size, Eps6800LcdControl* control) const {
+		const std::lock_guard lock(state_mutex_);
+		machine_lcd_control raw_control{};
+		const auto copied = machine_state_lcd_copy_display(
+			state_, output, size, control ? &raw_control : nullptr);
+		if (control) {
+			control->lcdarh = raw_control.lcdarh;
+			control->lcdcon = raw_control.lcdcon;
+			control->contrast = static_cast<uint8_t>(
+				(raw_control.lcdarh & MASK_LCD_CONTRAST) >> SHIFT_LCD_CONTRAST);
+			control->display_on = (raw_control.lcdcon & BIT_LCD_ON) != 0;
+			control->blanked = (raw_control.lcdcon & BIT_LCD_BLANK) != 0;
+		}
+		return copied;
 	}
 
 	size_t ePSCPU::LcdRawSize() const {
@@ -98,18 +373,286 @@ namespace casioemu {
 	}
 
 	uint8_t ePSCPU::ReadByte(uint8_t address) {
+		const std::lock_guard lock(state_mutex_);
 		return machine_state_debug_read_byte(state_, address);
 	}
 
 	void ePSCPU::WriteByte(uint8_t address, uint8_t value) {
+		const std::lock_guard lock(state_mutex_);
 		machine_state_debug_write_byte(state_, address, value);
 	}
 
+	uint8_t ePSCPU::ReadDebugMemory(uint32_t linear_address) const {
+		const std::lock_guard lock(state_mutex_);
+		return machine_state_debug_peek_memory(state_, linear_address);
+	}
+
+	bool ePSCPU::WriteDebugMemory(uint32_t linear_address, uint8_t value) {
+		const std::lock_guard lock(state_mutex_);
+		return machine_state_debug_write_memory(state_, linear_address, value);
+	}
+
+	uint16_t ePSCPU::ReadCodeWord(uint32_t word_address) const {
+		const std::lock_guard lock(state_mutex_);
+		return machine_state_debug_read_rom_word(state_, word_address);
+	}
+
+	bool ePSCPU::WriteCodeWord(uint32_t word_address, uint16_t value) {
+		const std::lock_guard lock(state_mutex_);
+		return machine_state_debug_write_rom_word(state_, word_address, value);
+	}
+
+	uint8_t ePSCPU::ReadLcdMemory(size_t address) const {
+		const std::lock_guard lock(state_mutex_);
+		return address < LcdRawSize() ? state_->lcd.fb[address] : 0xff;
+	}
+
+	bool ePSCPU::WriteLcdMemory(size_t address, uint8_t value) {
+		const std::lock_guard lock(state_mutex_);
+		if (address >= LcdRawSize())
+			return false;
+		state_->lcd.fb[address] = value;
+		return true;
+	}
+
+	Eps6800DebugSnapshot ePSCPU::DebugSnapshot() const {
+		const std::lock_guard lock(state_mutex_);
+		machine_debug_snapshot raw{};
+		machine_state_debug_get_snapshot(state_, &raw);
+		Eps6800DebugSnapshot result{};
+		result.program_counter = raw.pc;
+		std::copy(std::begin(raw.registers), std::end(raw.registers), result.registers.begin());
+		std::copy(std::begin(raw.wbk_registers), std::end(raw.wbk_registers), result.wbk_registers.begin());
+		std::copy(std::begin(raw.stack), std::end(raw.stack), result.stack.begin());
+		result.stack_pointer = raw.stack_pointer;
+		result.instruction_count = instruction_count_;
+		result.cycle_count = cycle_count_;
+		return result;
+	}
+
+	std::string ePSCPU::BacktraceLocked() const {
+		std::ostringstream stream;
+		const uint8_t depth = state_->mmio.regs[REG_STKPTR] & 0x1f;
+		stream << "PC=" << std::hex << state_->cpu.pc;
+		for (uint8_t i = depth; i > 0; --i)
+			stream << " <- " << state_->cpu.stack[i - 1];
+		return stream.str();
+	}
+
+	std::string ePSCPU::GetBacktrace() const {
+		const std::lock_guard lock(state_mutex_);
+		return BacktraceLocked();
+	}
+
+	std::vector<uint8_t> ePSCPU::ExportRam() const {
+		const std::lock_guard lock(state_mutex_);
+		return {std::begin(state_->mmio.ram), std::end(state_->mmio.ram)};
+	}
+
+	bool ePSCPU::ImportRam(const std::vector<uint8_t>& data) {
+		const std::lock_guard lock(state_mutex_);
+		if (data.size() != sizeof(state_->mmio.ram))
+			return false;
+		std::copy(data.begin(), data.end(), std::begin(state_->mmio.ram));
+		return true;
+	}
+
+	void ePSCPU::RequestContinue(bool honor_breakpoints) {
+		const std::lock_guard lock(state_mutex_);
+		debug_run_mode_ = DebugRunMode::Continue;
+		honor_execution_breakpoints_ = honor_breakpoints;
+		honor_memory_breakpoints_ = honor_breakpoints;
+		last_debug_stop_ = {};
+	}
+
+	void ePSCPU::RequestStepInto() {
+		const std::lock_guard lock(state_mutex_);
+		debug_run_mode_ = DebugRunMode::StepInto;
+		honor_execution_breakpoints_ = true;
+		honor_memory_breakpoints_ = true;
+		last_debug_stop_ = {};
+	}
+
+	void ePSCPU::RequestStepOver() {
+		const std::lock_guard lock(state_mutex_);
+		const uint32_t pc = state_->cpu.pc;
+		const uint16_t word = machine_state_debug_read_rom_word(state_, pc);
+		last_debug_stop_ = {};
+		honor_execution_breakpoints_ = true;
+		honor_memory_breakpoints_ = true;
+		if (!IsEpsCallInstruction(word)) {
+			debug_run_mode_ = DebugRunMode::StepInto;
+			return;
+		}
+		debug_run_mode_ = DebugRunMode::StepOver;
+		debug_target_pc_ = pc + EpsInstructionWords(word);
+		debug_target_stack_pointer_ = state_->mmio.regs[REG_STKPTR] & 0x1f;
+	}
+
+	bool ePSCPU::RequestStepOut() {
+		const std::lock_guard lock(state_mutex_);
+		const uint8_t stack_pointer = state_->mmio.regs[REG_STKPTR] & 0x1f;
+		if (stack_pointer == 0)
+			return false;
+		debug_run_mode_ = DebugRunMode::StepOut;
+		debug_target_stack_pointer_ = stack_pointer - 1;
+		debug_target_pc_ = state_->cpu.stack[stack_pointer - 1];
+		honor_execution_breakpoints_ = true;
+		honor_memory_breakpoints_ = true;
+		last_debug_stop_ = {};
+		return true;
+	}
+
+	void ePSCPU::RequestRunToAddress(uint32_t word_address) {
+		const std::lock_guard lock(state_mutex_);
+		debug_run_mode_ = DebugRunMode::RunToAddress;
+		debug_target_pc_ = word_address;
+		honor_execution_breakpoints_ = true;
+		honor_memory_breakpoints_ = true;
+		last_debug_stop_ = {};
+	}
+
+	void ePSCPU::CancelDebugRun() {
+		const std::lock_guard lock(state_mutex_);
+		debug_run_mode_ = DebugRunMode::Continue;
+		last_debug_stop_ = {};
+	}
+
+	void ePSCPU::AddExecutionBreakpoint(uint32_t word_address) {
+		const std::lock_guard lock(state_mutex_);
+		execution_breakpoints_.try_emplace(word_address,
+			Eps6800ExecutionBreakpoint{.address = word_address});
+	}
+
+	bool ePSCPU::ConfigureExecutionBreakpoint(const Eps6800ExecutionBreakpoint& breakpoint) {
+		if (breakpoint.address >= 0x10000u)
+			return false;
+		const std::lock_guard lock(state_mutex_);
+		execution_breakpoints_[breakpoint.address] = breakpoint;
+		return true;
+	}
+
+	void ePSCPU::RemoveExecutionBreakpoint(uint32_t word_address) {
+		const std::lock_guard lock(state_mutex_);
+		execution_breakpoints_.erase(word_address);
+	}
+
+	void ePSCPU::ClearExecutionBreakpoints() {
+		const std::lock_guard lock(state_mutex_);
+		execution_breakpoints_.clear();
+	}
+
+	std::vector<uint32_t> ePSCPU::ExecutionBreakpoints() const {
+		const std::lock_guard lock(state_mutex_);
+		std::vector<uint32_t> result;
+		result.reserve(execution_breakpoints_.size());
+		for (const auto& [address, breakpoint] : execution_breakpoints_)
+			result.push_back(address);
+		std::sort(result.begin(), result.end());
+		return result;
+	}
+
+	std::vector<Eps6800ExecutionBreakpoint> ePSCPU::ExecutionBreakpointDetails() const {
+		const std::lock_guard lock(state_mutex_);
+		std::vector<Eps6800ExecutionBreakpoint> result;
+		result.reserve(execution_breakpoints_.size());
+		for (const auto& [address, breakpoint] : execution_breakpoints_)
+			result.push_back(breakpoint);
+		std::sort(result.begin(), result.end(), [](const auto& lhs, const auto& rhs) {
+			return lhs.address < rhs.address;
+		});
+		return result;
+	}
+
+	bool ePSCPU::AddMemoryBreakpoint(const Eps6800MemoryBreakpoint& breakpoint) {
+		if (breakpoint.address >= 0x2080u)
+			return false;
+		const std::lock_guard lock(state_mutex_);
+		auto it = std::find_if(memory_breakpoints_.begin(), memory_breakpoints_.end(), [&](const auto& item) {
+			return item.address == breakpoint.address && item.write == breakpoint.write;
+		});
+		if (it == memory_breakpoints_.end())
+			memory_breakpoints_.push_back(breakpoint);
+		else
+			*it = breakpoint;
+		return true;
+	}
+
+	bool ePSCPU::RemoveMemoryBreakpoint(uint32_t address, bool write) {
+		const std::lock_guard lock(state_mutex_);
+		auto it = std::find_if(memory_breakpoints_.begin(), memory_breakpoints_.end(), [&](const auto& item) {
+			return item.address == address && item.write == write;
+		});
+		if (it == memory_breakpoints_.end())
+			return false;
+		memory_breakpoints_.erase(it);
+		return true;
+	}
+
+	void ePSCPU::ClearMemoryBreakpoints() {
+		const std::lock_guard lock(state_mutex_);
+		memory_breakpoints_.clear();
+		memory_break_pending_ = false;
+	}
+
+	std::vector<Eps6800MemoryBreakpoint> ePSCPU::MemoryBreakpoints() const {
+		const std::lock_guard lock(state_mutex_);
+		return memory_breakpoints_;
+	}
+
+	std::vector<Eps6800MemoryBreakpointHit> ePSCPU::MemoryBreakpointHits(uint32_t address, bool write) const {
+		const std::lock_guard lock(state_mutex_);
+		std::vector<Eps6800MemoryBreakpointHit> result;
+		for (const auto& hit : memory_breakpoint_hits_) {
+			if (hit.address == address && hit.write == write)
+				result.push_back(hit);
+		}
+		return result;
+	}
+
+	void ePSCPU::ClearMemoryBreakpointHits() {
+		const std::lock_guard lock(state_mutex_);
+		memory_breakpoint_hits_.clear();
+	}
+
+	Eps6800DebugStop ePSCPU::LastDebugStop() const {
+		const std::lock_guard lock(state_mutex_);
+		return last_debug_stop_;
+	}
+
+	void ePSCPU::EnableTrace(bool enabled) {
+		const std::lock_guard lock(state_mutex_);
+		trace_enabled_ = enabled;
+	}
+
+	void ePSCPU::ClearTrace() {
+		const std::lock_guard lock(state_mutex_);
+		trace_buffer_.clear();
+	}
+
+	void ePSCPU::SetTraceCapacity(size_t capacity) {
+		const std::lock_guard lock(state_mutex_);
+		trace_capacity_ = capacity;
+		while (trace_buffer_.size() > trace_capacity_)
+			trace_buffer_.pop_front();
+	}
+
+	std::vector<Eps6800TraceEntry> ePSCPU::TraceBuffer() const {
+		const std::lock_guard lock(state_mutex_);
+		return {trace_buffer_.begin(), trace_buffer_.end()};
+	}
+
 	uint32_t ePSCPU::PC() const {
-		return state_->cpu.pc << 1;
+		return ProgramCounter() << 1;
+	}
+
+	uint32_t ePSCPU::ProgramCounter() const {
+		const std::lock_guard lock(state_mutex_);
+		return state_->cpu.pc;
 	}
 
 	void ePSCPU::SetPC(uint32_t word_address) {
+		const std::lock_guard lock(state_mutex_);
 		state_->cpu.pc = word_address & 0x00ffffffu;
 		state_->mmio.regs[REG_PCL] = static_cast<uint8_t>(state_->cpu.pc);
 		state_->mmio.regs[REG_PCM] = static_cast<uint8_t>(state_->cpu.pc >> 8);
@@ -118,7 +661,11 @@ namespace casioemu {
 
 	void ePSCPU::SaveState(std::ostream& stream) const {
 		size_t size = 0;
-		machine_snapshot* snapshot = machine_state_save_snapshot(state_, &size);
+		machine_snapshot* snapshot = nullptr;
+		{
+			const std::lock_guard lock(state_mutex_);
+			snapshot = machine_state_save_snapshot(state_, &size);
+		}
 		if (!snapshot || size > std::numeric_limits<uint32_t>::max()) {
 			machine_snapshot_free(snapshot);
 			throw std::runtime_error("Failed to capture EPS6800 snapshot");
@@ -150,7 +697,11 @@ namespace casioemu {
 		machine_snapshot* snapshot = machine_snapshot_from_data(data.data(), data.size());
 		if (!snapshot)
 			throw std::runtime_error("Invalid EPS6800 snapshot payload");
-		machine_state_load_snapshot(state_, snapshot);
+		{
+			const std::lock_guard lock(state_mutex_);
+			machine_state_load_snapshot(state_, snapshot);
+			machine_state_debug_set_memory_access_callback(state_, &ePSCPU::MemoryAccessThunk, this);
+		}
 		machine_snapshot_free(snapshot);
 	}
 } // namespace casioemu

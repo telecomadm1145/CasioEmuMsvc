@@ -53,6 +53,36 @@ static bool mmio_wbk_register_selected(const struct mmio_state *state, uint8_t a
 		(state->regs[REG_CPUCON] & BIT_WBK);
 }
 
+static uint32_t mmio_effective_linear_address(const struct mmio_state *state, uint8_t addr) {
+	if (addr & MMIO_RAM_SELECT_MASK) {
+		return 0x80u + mmio_direct_ram_address(state, addr);
+	}
+	switch (addr) {
+	case REG_INDF0:
+		if (state->regs[REG_FSR0] & MMIO_RAM_SELECT_MASK)
+			return 0x80u + mmio_fsr0_ram_address(state);
+		return state->regs[REG_FSR0] & 0x7fu;
+	case REG_INDF1:
+		return 0x80u + mmio_fsr1_ram_address(state);
+	case REG_INDF2:
+		return 0x80u + mmio_fsr2_ram_address(state);
+	default:
+		return addr;
+	}
+}
+
+static bool mmio_notify_debug_access(
+	struct mmio_state *state,
+	uint32_t linear_address,
+	uint8_t *value,
+	bool write,
+	bool before
+) {
+	if (state->debug_access && state->debug_access_suppression == 0)
+		return state->debug_access(state->debug_access_user, linear_address, value, write, before);
+	return false;
+}
+
 static bool mmio_lcd_register(uint8_t addr) {
 	switch (addr) {
 	case REG_POSTID:
@@ -192,6 +222,24 @@ void mmio_connect_cpu_state(struct mmio_state *state, struct cpu_state *cpu) {
 	state->cpu = cpu;
 }
 
+void mmio_set_debug_access_callback_state(
+	struct mmio_state *state,
+	mmio_debug_access_callback callback,
+	void *user
+) {
+	state->debug_access = callback;
+	state->debug_access_user = user;
+}
+
+void mmio_suppress_debug_access_state(struct mmio_state *state, bool suppress) {
+	if (suppress) {
+		state->debug_access_suppression++;
+	}
+	else if (state->debug_access_suppression > 0) {
+		state->debug_access_suppression--;
+	}
+}
+
 static uint8_t mmio_cpu_get_status(struct mmio_state *state) {
 	return cpu_get_status_state(state->cpu);
 }
@@ -280,15 +328,22 @@ static void mmio_postid_step_fsr2(struct mmio_state *state) {
 
 /* Address 00-FF: regular registers and memory bank 0. */
 uint8_t mmio_read_byte_state(struct mmio_state *state, uint8_t addr) {
-	uint8_t byte;
+	uint8_t byte = 0;
+	const uint32_t linear_address = mmio_effective_linear_address(state, addr);
+	if (mmio_notify_debug_access(state, linear_address, &byte, false, true)) {
+		mmio_notify_debug_access(state, linear_address, &byte, false, false);
+		return byte;
+	}
 	if (addr & MMIO_RAM_SELECT_MASK) {
 		byte = state->ram[mmio_direct_ram_address(state, addr)];
 		cpu_verbose_log_read_state(state->cpu, addr, byte);
+		mmio_notify_debug_access(state, linear_address, &byte, false, false);
 		return byte;
 	}
 	if (mmio_wbk_register_selected(state, addr)) {
 		uint8_t wbk_byte = state->ram_wbk[mmio_wbk_index(addr)];
 		cpu_verbose_log_read_state(state->cpu, addr, wbk_byte);
+		mmio_notify_debug_access(state, linear_address, &wbk_byte, false, false);
 		return wbk_byte;
 	}
 
@@ -312,6 +367,7 @@ uint8_t mmio_read_byte_state(struct mmio_state *state, uint8_t addr) {
 		break;
 	}
 	cpu_verbose_log_read_state(state->cpu, addr, byte);
+	mmio_notify_debug_access(state, linear_address, &byte, false, false);
 	return byte;
 }
 
@@ -419,6 +475,10 @@ void mmio_borrow_propagate_state(struct mmio_state *state, uint8_t addr) {
 }
 
 void mmio_write_byte_state(struct mmio_state *state, uint8_t addr, uint8_t byte) {
+	const uint32_t linear_address = mmio_effective_linear_address(state, addr);
+	if (mmio_notify_debug_access(state, linear_address, &byte, true, true)) {
+		return;
+	}
 	if (addr & MMIO_RAM_SELECT_MASK) {
 		uint32_t mem_addr = mmio_direct_ram_address(state, addr);
 		state->ram[mem_addr] = byte;
@@ -448,6 +508,7 @@ void mmio_write_byte_state(struct mmio_state *state, uint8_t addr, uint8_t byte)
 			break;
 		}
 	}
+	mmio_notify_debug_access(state, linear_address, &byte, true, false);
 }
 
 static void mmio_clear_registers(struct mmio_state *state) {
@@ -476,6 +537,9 @@ void mmio_init_state(struct mmio_state *state) {
 	state->kbd = NULL;
 	state->lcd = NULL;
 	state->timer = NULL;
+	state->debug_access = NULL;
+	state->debug_access_user = NULL;
+	state->debug_access_suppression = 0;
 }
 
 void mmio_trace_snapshot_state(
@@ -494,5 +558,3 @@ void mmio_trace_snapshot_state(
 		memcpy(ram_out, state->ram, MMIO_RAM_COUNT);
 	}
 }
-
-

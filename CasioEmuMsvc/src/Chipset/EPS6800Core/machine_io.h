@@ -20,9 +20,21 @@ extern "C" {
 
 struct machine_state;
 
+struct machine_lcd_control {
+	uint8_t lcdarh;
+	uint8_t lcdcon;
+};
+
 void machine_state_run_frame(struct machine_state *state);
 /* Copies page-major visible LCD bytes: page * MACHINE_LCD_VISIBLE_WIDTH + column. */
 size_t machine_state_lcd_copy_framebuffer(const struct machine_state *state, uint8_t *data, size_t size);
+/* Copies the visible framebuffer and its associated control registers together. */
+size_t machine_state_lcd_copy_display(
+	const struct machine_state *state,
+	uint8_t *data,
+	size_t size,
+	struct machine_lcd_control *control
+);
 void machine_state_keydown(struct machine_state *state, uint8_t key);
 void machine_state_keyup(struct machine_state *state, uint8_t key);
 void machine_state_ondown(struct machine_state *state);
@@ -33,5 +45,4 @@ void machine_state_onup(struct machine_state *state);
 #endif
 
 #endif /* FX_EMU_CORE_MACHINE_IO_H */
-
 

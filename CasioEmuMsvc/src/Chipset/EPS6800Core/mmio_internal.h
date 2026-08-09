@@ -5,11 +5,20 @@
 #include "mmio_layout.h"
 
 #include <stdint.h>
+#include <stdbool.h>
 
 struct cpu_state;
 struct kbd_state;
 struct lcd_state;
 struct timer_state;
+
+typedef bool (*mmio_debug_access_callback)(
+	void *user,
+	uint32_t linear_address,
+	uint8_t *value,
+	bool write,
+	bool before
+);
 
 struct mmio_state {
 	uint8_t regs[MMIO_REG_COUNT];
@@ -19,6 +28,9 @@ struct mmio_state {
 	struct kbd_state *kbd;
 	struct lcd_state *lcd;
 	struct timer_state *timer;
+	mmio_debug_access_callback debug_access;
+	void *debug_access_user;
+	uint32_t debug_access_suppression;
 };
 
 void mmio_connect_peripherals_state(
@@ -28,6 +40,12 @@ void mmio_connect_peripherals_state(
 	struct timer_state *timer
 );
 void mmio_connect_cpu_state(struct mmio_state *state, struct cpu_state *cpu);
+void mmio_set_debug_access_callback_state(
+	struct mmio_state *state,
+	mmio_debug_access_callback callback,
+	void *user
+);
+void mmio_suppress_debug_access_state(struct mmio_state *state, bool suppress);
 void mmio_bad_read_byte_state(struct mmio_state *state, uint8_t addr);
 void mmio_bad_write_byte_state(struct mmio_state *state, uint8_t addr);
 uint8_t mmio_read_byte_state(struct mmio_state *state, uint8_t addr);
@@ -47,5 +65,3 @@ void mmio_trace_snapshot_state(
 );
 
 #endif /* FX_EMU_CORE_MMIO_INTERNAL_H */
-
-

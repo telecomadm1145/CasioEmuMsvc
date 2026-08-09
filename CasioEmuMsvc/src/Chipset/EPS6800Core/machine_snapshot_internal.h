@@ -9,7 +9,7 @@
 
 enum {
 	MACHINE_SNAPSHOT_MAGIC = 0x46585353u,
-	MACHINE_SNAPSHOT_VERSION = 1u
+	MACHINE_SNAPSHOT_VERSION = 2u
 };
 
 struct machine_cpu_snapshot {
@@ -74,5 +74,4 @@ struct machine_snapshot *machine_snapshot_alloc_internal(void);
 void machine_snapshot_set_size_internal(size_t *size, size_t value);
 
 #endif /* FX_EMU_CORE_MACHINE_SNAPSHOT_INTERNAL_H */
-
 

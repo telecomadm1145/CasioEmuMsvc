@@ -47,30 +47,50 @@ static uint8_t kbd_scan_row_mask(uint8_t row) {
 	return (uint8_t)(1 << row);
 }
 
-static bool kbd_scan_selects_row(uint8_t scan, uint8_t row) {
-	return !(scan & kbd_scan_row_mask(row));
-}
+/*
+ * The keyboard is an undioded PA/PB switch matrix.  A closed switch joins one
+ * PA line to one PB line, so three corners of a rectangle can pull the fourth
+ * corner low while firmware is scanning.  Propagate the low level through the
+ * bipartite graph instead of merely ANDing the selected PB rows; this also
+ * preserves simultaneous keys in the same row/column.
+ *
+ * DCR bit 0 means output.  Inputs and high outputs do not seed a low level;
+ * low outputs do.  In an output conflict the low level wins, matching the
+ * conservative electrical behaviour expected by the calculator firmware.
+ */
+static uint8_t kbd_get_matrix(const struct kbd_state *state) {
+	uint8_t low_pa = (uint8_t)~(state->reg[REG_DCRA] | state->porta_latch);
+	uint8_t low_pb = (uint8_t)~(state->reg[REG_DCRB] | state->portb_latch);
+	bool changed;
 
-static uint8_t kbd_get_matrix(const struct kbd_state *state, uint8_t scan) {
-	int i;
-	uint8_t result = KBD_MATRIX_IDLE;
-	for (i = 0; i < KBD_ROW_COUNT; i++) {
-		if (kbd_scan_selects_row(scan, (uint8_t)i)) {
-			result &= state->matrix[i];
+	do {
+		int pb;
+		uint8_t next_low_pa = low_pa;
+		uint8_t next_low_pb = low_pb;
+
+		for (pb = 0; pb < KBD_ROW_COUNT; ++pb) {
+			const uint8_t closed_pa = (uint8_t)~state->matrix[pb];
+			if (low_pb & kbd_scan_row_mask((uint8_t)pb)) {
+				next_low_pa |= closed_pa;
+			}
+			if (closed_pa & low_pa) {
+				next_low_pb |= kbd_scan_row_mask((uint8_t)pb);
+			}
 		}
-	}
-	if (state->on_pressed) {
-		result &= (uint8_t)~KBD_ON_COLUMN_MASK;
-	}
-	return result;
-}
 
-static uint8_t kbd_get_pb(const struct kbd_state *state) {
-	return state->reg[REG_DCRB] | state->portb_latch;
+		changed = next_low_pa != low_pa || next_low_pb != low_pb;
+		low_pa = next_low_pa;
+		low_pb = next_low_pb;
+	} while (changed);
+
+	if (state->on_pressed) {
+		low_pa |= KBD_ON_COLUMN_MASK;
+	}
+	return (uint8_t)~low_pa;
 }
 
 static uint8_t kbd_get_pa(const struct kbd_state *state) {
-	uint8_t input = kbd_get_matrix(state, kbd_get_pb(state));
+	uint8_t input = kbd_get_matrix(state);
 	return (input & state->reg[REG_DCRA]) | (state->porta_latch & ~state->reg[REG_DCRA]);
 }
 

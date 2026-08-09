@@ -76,6 +76,22 @@ enum {
 	BIT_FSR2ID = 0x80
 };
 
+/* LCDARH */
+enum {
+	MASK_LCD_CONTRAST = 0xf0,
+	SHIFT_LCD_CONTRAST = 4,
+	MASK_LCD_ADDRESS_HIGH = 0x03
+};
+
+/* LCDCON */
+enum {
+	BIT_LCD_R1EN = 0x80,
+	BIT_LCD_BLANK = 0x40,
+	BIT_LCD_ON = 0x20,
+	MASK_LCD_FRAME_RATE = 0x1c,
+	MASK_LCD_CHARGE_PUMP = 0x03
+};
+
 /* CPUCON */
 enum {
 	BIT_WBK = 0x80,
@@ -142,5 +158,4 @@ enum {
 };
 
 #endif /* FX_EMU_CORE_EPS6800_H */
-
 

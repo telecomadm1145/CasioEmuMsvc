@@ -42,6 +42,11 @@ struct DebugMemoryBreakpointInfo {
 	bool Write = false;
 	bool BreakWhenHit = false;
 	size_t HitCount = 0;
+	bool Enabled = true;
+	bool CompareData = false;
+	uint8_t Data = 0;
+	uint8_t Mask = 0xff;
+	uint64_t SkipCount = 0;
 };
 
 struct DebugMemoryBreakpointHitInfo {
