@@ -74,6 +74,7 @@ namespace casioemu {
 		int LSCLKFreqAddition{};
 
 		bool real_hardware;
+		SDL_TimerID eps_ram_save_timer_id{};
 
 	public:
 		void* QueryInterface(const char* name);

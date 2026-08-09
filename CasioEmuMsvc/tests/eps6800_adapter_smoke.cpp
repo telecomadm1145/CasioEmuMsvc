@@ -156,13 +156,25 @@ namespace {
 			!saw_backtrace || machine.ReadDebugMemory(0x80) != 0)
 			return false;
 
+		machine.WriteDebugMemory(0x20, 0x80); // CPUCON.WBK
+		machine.WriteDebugMemory(0x25, 0x5a); // First WBK-backed RAM byte.
 		auto ram = machine.ExportRam();
-		if (ram.size() != 8192 || machine.ImportRam(std::vector<uint8_t>(1, 0)))
+		if (ram.size() != 8219 || ram[8192] != 0x5a || machine.ImportRam(std::vector<uint8_t>(1, 0)))
 			return false;
 		ram.front() = 0xa5;
-		ram.back() = 0x3c;
-		return machine.ImportRam(ram) && machine.ReadDebugMemory(0x80) == 0xa5 &&
-			machine.ReadDebugMemory(0x207f) == 0x3c;
+		ram[8191] = 0x3c;
+		ram[8192] = 0x5a;
+		ram.back() = 0x6b;
+		machine.WriteDebugMemory(0x25, 0);
+		machine.WriteDebugMemory(0x3f, 0);
+		if (!machine.ImportRam(ram) || machine.ReadDebugMemory(0x80) != 0xa5 ||
+			machine.ReadDebugMemory(0x207f) != 0x3c || machine.ReadDebugMemory(0x25) != 0x5a ||
+			machine.ReadDebugMemory(0x3f) != 0x6b)
+			return false;
+
+		// RAM files produced by older builds contain only the 8 KiB banked area.
+		ram.resize(8192);
+		return machine.ImportRam(ram);
 	}
 
 	bool DebuggerSmoke() {

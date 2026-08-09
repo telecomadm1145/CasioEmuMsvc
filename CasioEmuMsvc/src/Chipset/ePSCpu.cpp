@@ -446,14 +446,24 @@ namespace casioemu {
 
 	std::vector<uint8_t> ePSCPU::ExportRam() const {
 		const std::lock_guard lock(state_mutex_);
-		return {std::begin(state_->mmio.ram), std::end(state_->mmio.ram)};
+		std::vector<uint8_t> data;
+		data.reserve(sizeof(state_->mmio.ram) + sizeof(state_->mmio.ram_wbk));
+		data.insert(data.end(), std::begin(state_->mmio.ram), std::end(state_->mmio.ram));
+		data.insert(data.end(), std::begin(state_->mmio.ram_wbk), std::end(state_->mmio.ram_wbk));
+		return data;
 	}
 
 	bool ePSCPU::ImportRam(const std::vector<uint8_t>& data) {
 		const std::lock_guard lock(state_mutex_);
-		if (data.size() != sizeof(state_->mmio.ram))
+		const size_t bank_ram_size = sizeof(state_->mmio.ram);
+		const size_t persistent_ram_size = bank_ram_size + sizeof(state_->mmio.ram_wbk);
+		// Older builds wrote only the banked 8 KiB. Keep those images usable while
+		// including the WBK window in all newly written images.
+		if (data.size() != bank_ram_size && data.size() != persistent_ram_size)
 			return false;
-		std::copy(data.begin(), data.end(), std::begin(state_->mmio.ram));
+		std::copy_n(data.begin(), bank_ram_size, std::begin(state_->mmio.ram));
+		if (data.size() == persistent_ram_size)
+			std::copy(data.begin() + bank_ram_size, data.end(), std::begin(state_->mmio.ram_wbk));
 		return true;
 	}
 

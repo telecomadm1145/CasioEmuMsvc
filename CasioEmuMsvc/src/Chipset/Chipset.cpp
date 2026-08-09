@@ -38,6 +38,7 @@
 #include <iostream>
 
 namespace casioemu {
+	constexpr uint32_t EPS_RAM_SAVE_INTERVAL_MS = 10 * 1000;
 	void* Chipset::QueryInterface(const char* name) {
 		auto d = (void*)0;
 		for (auto& phe : peripherals) {
@@ -120,6 +121,10 @@ namespace casioemu {
 	}
 
 	Chipset::~Chipset() {
+		if (eps_ram_save_timer_id) {
+			SDL_RemoveTimer(eps_ram_save_timer_id);
+			eps_ram_save_timer_id = 0;
+		}
 		PersistEpsRam();
 		DestructPeripherals();
 		if (emulator.hardware_id != HW_EPS6800) {
@@ -132,6 +137,9 @@ namespace casioemu {
 	}
 
 	void Chipset::PersistEpsRam() {
+	#ifdef CASIOEMU_DISABLE_RAM_IMAGE
+		return;
+	#else
 		if (!epscpu)
 			return;
 		try {
@@ -141,6 +149,7 @@ namespace casioemu {
 		catch (const std::exception& error) {
 			logger::Info("[EPS6800][Warn] Failed to save RAM image: %s\n", error.what());
 		}
+	#endif
 	}
 
 	bool Chipset::ReloadRom(std::string& error) {
@@ -617,11 +626,12 @@ namespace casioemu {
 				Eps6800RomFormat::PackedBigEndian;
 			if (!epscpu || !epscpu->LoadRom(rom_data, rom_format))
 				PANIC("Invalid EPS6800 ROM for configured format %s\n", Eps6800RomFormatName(rom_format));
+		#ifndef CASIOEMU_DISABLE_RAM_IMAGE
 			if (emulator.HasModelResource("ram.dmp")) {
 				try {
 					const auto saved_ram = emulator.ReadModelResource("ram.dmp");
 					if (!epscpu->ImportRam(saved_ram))
-						logger::Info("[EPS6800][Warn] Ignoring ram.dmp with size %zu (expected 8192)\n", saved_ram.size());
+						logger::Info("[EPS6800][Warn] Ignoring ram.dmp with size %zu (expected 8192 or 8219)\n", saved_ram.size());
 					else
 						logger::Info("[EPS6800][Info] RAM image loaded from ram.dmp\n");
 				}
@@ -629,6 +639,14 @@ namespace casioemu {
 					logger::Info("[EPS6800][Warn] Failed to load RAM image: %s\n", error.what());
 				}
 			}
+			eps_ram_save_timer_id = SDL_AddTimer(
+				EPS_RAM_SAVE_INTERVAL_MS,
+				[](Uint32 interval, void* param) -> Uint32 {
+					static_cast<Chipset*>(param)->PersistEpsRam();
+					return interval;
+				},
+				this);
+		#endif
 			for (auto& peripheral : peripherals)
 				peripheral->Initialise();
 			// The EPS core owns CPU-visible memory, but the debugger and plugins

@@ -240,6 +240,12 @@ namespace casioemu {
 
 		SetupInternals();
 		cycles.Reset();
+		// EPS reset clears CPU/SFR state but preserves its RAM image. Do this before
+		// the worker starts so firmware sees a clean reset with the restored RAM.
+		if (hardware_id == HW_EPS6800)
+			chipset.Reset();
+		if (hardware_id == HW_EPS6800 && argv_map.find("paused") != argv_map.end())
+			SetPaused(true);
 		#ifdef __EMSCRIPTEN__
 		tick_thread = nullptr;
 		#else
@@ -298,7 +304,8 @@ namespace casioemu {
 
 		RunStartupScript();
 
-		chipset.Reset();
+		if (hardware_id != HW_EPS6800)
+			chipset.Reset();
 
 		if (argv_map.find("paused") != argv_map.end())
 			SetPaused(true);
@@ -390,6 +397,10 @@ namespace casioemu {
 		}
 		SetupInternals();
 		cycles.Reset();
+		// EPS reset clears CPU/SFR state but preserves its RAM image. Do this before
+		// the worker starts so firmware sees a clean reset with the restored RAM.
+		if (hardware_id == HW_EPS6800)
+			chipset.Reset();
 		if (!headless) {
 		#ifdef __EMSCRIPTEN__
 			tick_thread = nullptr;
@@ -450,7 +461,8 @@ namespace casioemu {
 			RunStartupScript();
 		}
 
-		chipset.Reset();
+		if (hardware_id != HW_EPS6800)
+			chipset.Reset();
 	}
 
 	Emulator::~Emulator() {
@@ -742,8 +754,6 @@ namespace casioemu {
 	void Emulator::Shutdown() {
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
 
-		if (hardware_id == HW_EPS6800)
-			chipset.PersistEpsRam();
 		running = false;
 	}
 
