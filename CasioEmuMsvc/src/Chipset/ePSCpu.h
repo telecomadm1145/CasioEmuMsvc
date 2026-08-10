@@ -34,9 +34,6 @@ namespace casioemu {
 		uint8_t lcdarh{};
 		uint8_t lcdcon{};
 		uint8_t contrast{};
-		uint8_t charge_pump{};
-		uint8_t requested_contrast{};
-		uint8_t effective_contrast{};
 		bool display_on{};
 		bool blanked{};
 
