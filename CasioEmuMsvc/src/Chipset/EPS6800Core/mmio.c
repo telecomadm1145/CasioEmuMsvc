@@ -19,7 +19,7 @@ enum {
 	MMIO_FSR_RAM_END = 0xFF,
 	MMIO_POSTID_RESET = BIT_FSR0ID | BIT_FSR1ID | BIT_LCDID,
 	MMIO_DCR_ALL_INPUTS = 0xFF,
-	MMIO_DCRC_RESET = 0x0F
+	MMIO_DCRC_RESET = 0xFF
 };
 
 static uint32_t mmio_ram_address(uint8_t page, uint8_t offset) {
@@ -458,6 +458,9 @@ void mmio_borrow_propagate_state(struct mmio_state *state, uint8_t addr) {
 		mmio_borrow_extended_fsr(state, REG_BSR1, REG_FSR1);
 		break;
 	case REG_PCL:
+		state->regs[REG_PCM]--;
+		break;
+	case REG_PCM:
 		state->regs[REG_PCH]--;
 		break;
 	case REG_TABPTRL:

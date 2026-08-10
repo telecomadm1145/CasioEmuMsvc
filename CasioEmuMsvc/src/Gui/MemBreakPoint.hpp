@@ -44,6 +44,7 @@ private:
 	
 	int target_sp = 0;
 	std::atomic<uint64_t> register_breakpoint_config{0};
+	uint64_t last_eps_breakpoint_version{~0ull};
 
 	void DrawFindContent();
 

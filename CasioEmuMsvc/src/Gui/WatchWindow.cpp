@@ -22,15 +22,16 @@ void WatchWindow::PrepareRX() {
 		const auto snapshot = eps->DebugSnapshot();
 		const auto& regs = snapshot.registers;
 		snprintf(reg_pc, sizeof(reg_pc), "%05x", snapshot.program_counter);
-		if (regs[0x01] & 0x80) {
-			snprintf(reg_lr, sizeof(reg_lr), "%05x", (uint32_t)((regs[0x02] << 7) | (regs[0x01] & 0x7f)));
-		}
-		else {
-			snprintf(reg_lr, sizeof(reg_lr), "%02x(SFR)", (uint32_t)(regs[0x01] & 0x7f));
-		}
-		snprintf(reg_ea, sizeof(reg_ea), "%05x", (uint32_t)((regs[0x05] << 7) | (regs[0x04] & 0x7f)));
-		snprintf(reg_ex1, sizeof(reg_ex1), "%05x", (uint32_t)((regs[0x12] << 7) | (regs[0x11] & 0x7f)));
-		snprintf(reg_ex2, sizeof(reg_ex2), "%05x", (uint32_t)(((regs[0x23] & 0x03) * 0x60) | regs[0x22]));
+		const auto format_indirect = [](uint8_t fsr, uint8_t bsr, char* out, size_t out_size) {
+			if (fsr & 0x80)
+				snprintf(out, out_size, "%05x", (uint32_t)((bsr << 7) | (fsr & 0x7f)));
+			else
+				snprintf(out, out_size, "%02x(SFR)", (uint32_t)(fsr & 0x7f));
+		};
+		format_indirect(regs[0x01], regs[0x02], reg_lr, sizeof(reg_lr));
+		format_indirect(regs[0x04], regs[0x05], reg_ea, sizeof(reg_ea));
+		format_indirect(regs[0x11], regs[0x12], reg_ex1, sizeof(reg_ex1));
+		snprintf(reg_ex2, sizeof(reg_ex2), "%05x", (uint32_t)(((regs[0x23] & 0x03) * 0x60) + regs[0x22]));
 		snprintf(reg_sp, sizeof(reg_sp), "%04x", snapshot.stack_pointer);
 		snprintf(reg_psw, sizeof(reg_psw), "%02x", regs[0x0f]);
 		snprintf(reg_dsr, sizeof(reg_dsr), "%02x", regs[0x02]);
@@ -116,18 +117,22 @@ void WatchWindow::ModRX() {
 		});
 		edit_sfr(reg_pc, "PC: ", 1, 6);
 		ImGui::SameLine();
-		if (m_emu->chipset.epscpu->DebugSnapshot().registers[0x01] & 0x80) {
-			edit_sfr(reg_lr, "INDF0: ", 2, 6);
-		}
-		else {
-			ImGui::TextColored(~UIHelpers::kColorSuccess, "INDF0: ");
+		const auto snapshot = m_emu->chipset.epscpu->DebugSnapshot();
+		const auto& regs = snapshot.registers;
+		const auto show_indirect = [&](const char* label, int id, char* ptr, uint8_t fsr) {
+			if (regs[fsr] & 0x80) {
+				edit_sfr(ptr, label, id, 6);
+				return;
+			}
+			ImGui::TextColored(~UIHelpers::kColorSuccess, "%s", label);
 			ImGui::SameLine();
-			ImGui::TextUnformatted(reg_lr);
-		}
+			ImGui::TextUnformatted(ptr);
+		};
+		show_indirect("INDF0: ", 2, reg_lr, 0x01);
 		ImGui::SameLine();
-		edit_sfr(reg_ea, "INDF1: ", 3, 6);
+		show_indirect("INDF1: ", 3, reg_ea, 0x04);
 		ImGui::SameLine();
-		edit_sfr(reg_ex1, "INDF2: ", 4, 6);
+		show_indirect("INDF2: ", 4, reg_ex1, 0x11);
 		ImGui::SameLine();
 		edit_sfr(reg_sp, "STKPTR: ", 5, 4);
 		ImGui::SameLine();
@@ -187,8 +192,8 @@ void WatchWindow::UpdateRX() {
 		};
 		eps->SetPC(static_cast<uint32_t>(strtoul(reg_pc, nullptr, 16)));
 		set_indirect(static_cast<uint32_t>(strtoul(reg_lr, nullptr, 16)), (snapshot.registers[0x01] & 0x80) != 0, 0x01, 0x02);
-		set_indirect(static_cast<uint32_t>(strtoul(reg_ea, nullptr, 16)), true, 0x04, 0x05);
-		set_indirect(static_cast<uint32_t>(strtoul(reg_ex1, nullptr, 16)), true, 0x11, 0x12);
+		set_indirect(static_cast<uint32_t>(strtoul(reg_ea, nullptr, 16)), (snapshot.registers[0x04] & 0x80) != 0, 0x04, 0x05);
+		set_indirect(static_cast<uint32_t>(strtoul(reg_ex1, nullptr, 16)), (snapshot.registers[0x11] & 0x80) != 0, 0x11, 0x12);
 		eps->WriteDebugMemory(0x06, static_cast<uint8_t>(strtoul(reg_sp, nullptr, 16)));
 		eps->WriteDebugMemory(0x0f, static_cast<uint8_t>(strtoul(reg_psw, nullptr, 16)));
 		const auto lcdar = static_cast<uint32_t>(strtoul(reg_ex2, nullptr, 16));
@@ -296,7 +301,7 @@ void WatchWindow::RenderCore() {
 		ImGui::TableHeadersRow();
 		if (chipset.epscpu) {
 			const auto snapshot = chipset.epscpu->DebugSnapshot();
-			for (size_t i = 0; i < snapshot.stack_pointer; i++) {
+			for (size_t i = 0; i < snapshot.stack_pointer && i < snapshot.stack.size(); i++) {
 				ImGui::TableNextRow();
 				ImGui::TableNextColumn();
 				ImGui::TextUnformatted(lookup_symbol(snapshot.stack[i], g_labels).c_str());

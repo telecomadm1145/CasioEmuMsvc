@@ -446,20 +446,18 @@ static uint8_t cpu_bit_mask(uint8_t bit_index) {
 
 static void cpu_push_state(struct cpu_state *state, uint32_t dat) {
 	uint8_t stkptr;
-	stkptr = cpu_bus_read_internal(state, REG_STKPTR);
+	/* STKPTR is a 5-bit circular stack pointer; normalize the register value
+	 * before every array access so guest writes or a full stack can never
+	 * index outside stack[CPU_STACK_DEPTH]. */
+	stkptr = cpu_bus_read_internal(state, REG_STKPTR) & (CPU_STACK_DEPTH - 1);
 	state->stack[stkptr] = dat;
-	if (stkptr < CPU_STACK_DEPTH) {
-		stkptr++;
-	}
-	else {
-		stkptr = 0;
-	}
+	stkptr = (uint8_t)((stkptr + 1) & (CPU_STACK_DEPTH - 1));
 	cpu_bus_write_internal(state, REG_STKPTR, stkptr);
 }
 
 static uint32_t cpu_pop_state(struct cpu_state *state) {
 	uint8_t stkptr;
-	stkptr = cpu_bus_read_internal(state, REG_STKPTR);
+	stkptr = cpu_bus_read_internal(state, REG_STKPTR) & (CPU_STACK_DEPTH - 1);
 	if (stkptr > 0) {
 		stkptr--;
 	}

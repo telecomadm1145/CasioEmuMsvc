@@ -130,6 +130,7 @@ namespace casioemu {
 		bool honor_memory_breakpoints_{true};
 		std::unordered_map<uint32_t, Eps6800ExecutionBreakpoint> execution_breakpoints_;
 		std::vector<Eps6800MemoryBreakpoint> memory_breakpoints_;
+		uint64_t memory_breakpoint_version_{};
 		std::deque<Eps6800MemoryBreakpointHit> memory_breakpoint_hits_;
 		bool memory_break_pending_{};
 		uint32_t pending_memory_address_{};
@@ -211,6 +212,7 @@ namespace casioemu {
 		bool RemoveMemoryBreakpoint(uint32_t address, bool write);
 		void ClearMemoryBreakpoints();
 		std::vector<Eps6800MemoryBreakpoint> MemoryBreakpoints() const;
+		uint64_t MemoryBreakpointsVersion() const;
 		std::vector<Eps6800MemoryBreakpointHit> MemoryBreakpointHits(uint32_t address, bool write) const;
 		void ClearMemoryBreakpointHits();
 		Eps6800DebugStop LastDebugStop() const;

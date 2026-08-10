@@ -86,7 +86,6 @@ void Breakpoints::DrawContent() {
 					if (data.compareData) {
 						int compare_data = data.data;
 						int compare_mask = data.mask;
-						int skip_count = static_cast<int>(std::min<uint64_t>(data.skipCount, 0x7fffffffu));
 						if (ImGui::InputInt("Data", &compare_data, 1, 16, ImGuiInputTextFlags_CharsHexadecimal)) {
 							data.data = static_cast<uint8_t>(compare_data);
 							configuration_changed = true;
@@ -95,6 +94,9 @@ void Breakpoints::DrawContent() {
 							data.mask = static_cast<uint8_t>(compare_mask);
 							configuration_changed = true;
 						}
+					}
+					{
+						int skip_count = static_cast<int>(std::min<uint64_t>(data.skipCount, 0x7fffffffu));
 						if (ImGui::InputInt("Skip count", &skip_count, 1, 10)) {
 							data.skipCount = static_cast<uint64_t>(std::max(skip_count, 0));
 							configuration_changed = true;
@@ -235,7 +237,13 @@ void Breakpoints::TryTrigBp(uint32_t addr, bool write) {
 
 void Breakpoints::RenderCore() {
 	std::lock_guard lock(breakpoints_mutex);
-	RefreshEpsBreakpoints();
+	if (m_emu && m_emu->chipset.epscpu) {
+		const uint64_t version = m_emu->chipset.epscpu->MemoryBreakpointsVersion();
+		if (version != last_eps_breakpoint_version) {
+			RefreshEpsBreakpoints();
+			last_eps_breakpoint_version = version;
+		}
+	}
 	if (ImGui::BeginTabBar("Breakpoints")) {
 		if (ImGui::BeginTabItem("Memory")) {
 			static char buf[10] = {0};
@@ -292,6 +300,11 @@ void Breakpoints::RenderCore() {
 void Breakpoints::RefreshEpsBreakpoints() {
 	if (!m_emu || !m_emu->chipset.epscpu)
 		return;
+	/* Track the selected breakpoint by (address, write) instead of by index so
+	 * a core reorder or length change cannot silently retarget the checkbox. */
+	bool have_selected = target_addr >= 0 && static_cast<size_t>(target_addr) < break_point_hash.size();
+	const uint32_t selected_addr = have_selected ? break_point_hash[target_addr].addr : 0;
+	const bool selected_write = have_selected ? break_point_hash[target_addr].enableWrite : false;
 	const auto core_breakpoints = m_emu->chipset.epscpu->MemoryBreakpoints();
 	std::vector<MemBPData_t> refreshed;
 	refreshed.reserve(core_breakpoints.size());
@@ -307,13 +320,18 @@ void Breakpoints::RefreshEpsBreakpoints() {
 			.addr = item.address});
 	}
 	break_point_hash = std::move(refreshed);
-	if (target_addr < 0 || static_cast<size_t>(target_addr) >= break_point_hash.size()) {
-		target_addr = -1;
-		break_on_cv = false;
+	if (have_selected) {
+		const auto it = std::find_if(break_point_hash.begin(), break_point_hash.end(), [&](const MemBPData_t& bp) {
+			return bp.addr == selected_addr && bp.enableWrite == selected_write;
+		});
+		if (it != break_point_hash.end()) {
+			target_addr = static_cast<int>(std::distance(break_point_hash.begin(), it));
+			break_on_cv = it->breakWhenHit;
+			return;
+		}
 	}
-	else {
-		break_on_cv = break_point_hash[target_addr].breakWhenHit;
-	}
+	target_addr = -1;
+	break_on_cv = false;
 }
 
 void Breakpoints::ExternalAddBp(uint32_t addr, bool write) {
@@ -360,7 +378,7 @@ void Breakpoints::SyncEpsBreakpoints() {
 	if (!m_emu || !m_emu->chipset.epscpu)
 		return;
 	auto* eps = m_emu->chipset.epscpu;
-	eps->ClearMemoryBreakpoints();
+	const auto core_breakpoints = eps->MemoryBreakpoints();
 	for (const auto& item : break_point_hash) {
 		casioemu::Eps6800MemoryBreakpoint breakpoint{};
 		breakpoint.address = item.addr;
@@ -372,6 +390,15 @@ void Breakpoints::SyncEpsBreakpoints() {
 		breakpoint.mask = item.mask;
 		breakpoint.skip_count = item.skipCount;
 		eps->AddMemoryBreakpoint(breakpoint);
+	}
+	/* Reconcile removals without clearing the whole core list, so retained
+	 * breakpoints keep their hit_count and skip-pending state. */
+	for (const auto& core_bp : core_breakpoints) {
+		const auto it = std::find_if(break_point_hash.begin(), break_point_hash.end(), [&](const MemBPData_t& bp) {
+			return bp.addr == core_bp.address && bp.enableWrite == core_bp.write;
+		});
+		if (it == break_point_hash.end())
+			eps->RemoveMemoryBreakpoint(core_bp.address, core_bp.write);
 	}
 }
 

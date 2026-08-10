@@ -131,7 +131,14 @@ namespace casioemu {
 			DestructClockGenerator();
 			DestructInterruptSFR();
 		}
-		delete epscpu;
+		{
+			/* SDL_RemoveTimer does not wait for a callback that is already
+			 * running; acquire the save mutex so an in-flight PersistEpsRam can
+			 * never outlive epscpu. */
+			const std::lock_guard lock(eps_ram_save_mutex);
+			delete epscpu;
+			epscpu = nullptr;
+		}
 		delete& mmu;
 		delete& cpu;
 	}
@@ -140,6 +147,7 @@ namespace casioemu {
 	#ifdef CASIOEMU_DISABLE_RAM_IMAGE
 		return;
 	#else
+		const std::lock_guard lock(eps_ram_save_mutex);
 		if (!epscpu)
 			return;
 		try {
@@ -999,8 +1007,8 @@ namespace casioemu {
 
 	void Chipset::Tick() {
 		if (emulator.hardware_id == HW_EPS6800) {
-			if (run_mode == RM_RUN)
-				epscpu->Next();
+			if (run_mode == RM_RUN && RunEpsFrame())
+				emulator.SetPaused(true);
 			return;
 		}
 		// * TODO: decrement delay counter, return if it's not 0

@@ -15,7 +15,7 @@
 
 namespace {
 	constexpr size_t kRomSize = 0x40000;
-	constexpr size_t kLcdSize = 96 * 4;
+	constexpr size_t kLcdSize = casioemu::EPS6800_LCD_RAW_SIZE;
 
 	uint32_t Fnv1a(const uint8_t* data, size_t size) {
 		uint32_t hash = 2166136261u;
@@ -77,6 +77,12 @@ namespace {
 		const size_t offset = static_cast<size_t>(address) * 2;
 		rom[offset] = static_cast<uint8_t>(word >> 8);
 		rom[offset + 1] = static_cast<uint8_t>(word);
+	}
+
+	bool Check(bool condition, const char* label, int line) {
+		if (!condition)
+			std::cerr << "[eps6800][fail] line " << line << ": " << label << "\n";
+		return condition;
 	}
 
 	bool KeyboardMatrixSmoke() {
@@ -190,69 +196,78 @@ namespace {
 		SetRomWord(rom, 8, 0x0000); // NOP
 
 		casioemu::ePSCPU machine;
-		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::UnpackedNibbles) ||
-			machine.ReadCodeWord(2) != 0xe004)
+		if (!Check(machine.LoadRom(rom, casioemu::Eps6800RomFormat::UnpackedNibbles) &&
+				machine.ReadCodeWord(2) == 0xe004, "unpacked ROM load/word decode", __LINE__))
 			return false;
 		std::vector<uint8_t> packed_rom(0x20000, 0);
 		SetPackedRomWord(packed_rom, 2, 0xe004);
 		casioemu::ePSCPU packed_machine;
-		if (!packed_machine.LoadRom(packed_rom, casioemu::Eps6800RomFormat::PackedBigEndian) ||
-			packed_machine.ReadCodeWord(2) != 0xe004 ||
-			packed_machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedBigEndian))
+		if (!Check(packed_machine.LoadRom(packed_rom, casioemu::Eps6800RomFormat::PackedBigEndian) &&
+				packed_machine.ReadCodeWord(2) == 0xe004 &&
+				!packed_machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedBigEndian),
+				"packed ROM load/word decode/reject mismatch", __LINE__))
 			return false;
 
 		machine.Reset();
 		machine.AddExecutionBreakpoint(1);
 		machine.RequestContinue();
-		if (!machine.RunFrame())
+		if (!Check(machine.RunFrame(), "execution breakpoint run", __LINE__))
 			return false;
 		auto stop = machine.LastDebugStop();
 		auto snapshot = machine.DebugSnapshot();
-		if (stop.reason != casioemu::Eps6800DebugStopReason::ExecutionBreakpoint ||
-			stop.program_counter != 1 || snapshot.program_counter != 1 || snapshot.registers[0x0a] != 0x12)
+		if (!Check(stop.reason == casioemu::Eps6800DebugStopReason::ExecutionBreakpoint &&
+				stop.program_counter == 1 && snapshot.program_counter == 1 && snapshot.registers[0x0a] == 0x12,
+				"execution breakpoint stop state", __LINE__))
 			return false;
 		casioemu::Eps6800ExecutionBreakpoint skipped_breakpoint{};
 		skipped_breakpoint.address = 1;
 		skipped_breakpoint.skip_count = 1;
-		if (!machine.ConfigureExecutionBreakpoint(skipped_breakpoint))
+		if (!Check(machine.ConfigureExecutionBreakpoint(skipped_breakpoint), "configure skip breakpoint", __LINE__))
 			return false;
 		machine.SetPC(0);
 		machine.RequestContinue();
-		if (machine.RunFrame())
+		if (!Check(!machine.RunFrame(), "skip-count run must not stop", __LINE__))
 			return false;
 		machine.SetPC(0);
 		machine.RequestContinue();
-		if (!machine.RunFrame() || machine.LastDebugStop().reason != casioemu::Eps6800DebugStopReason::ExecutionBreakpoint ||
-			machine.ExecutionBreakpointDetails().front().hit_count != 2)
+		if (!Check(machine.RunFrame() &&
+				machine.LastDebugStop().reason == casioemu::Eps6800DebugStopReason::ExecutionBreakpoint &&
+				machine.ExecutionBreakpointDetails().front().hit_count == 2,
+				"skip-count second hit", __LINE__))
 			return false;
 
 		machine.RequestStepInto();
-		if (!machine.RunFrame() || machine.LastDebugStop().reason != casioemu::Eps6800DebugStopReason::Step ||
-			machine.ProgramCounter() != 2)
+		if (!Check(machine.RunFrame() &&
+				machine.LastDebugStop().reason == casioemu::Eps6800DebugStopReason::Step &&
+				machine.ProgramCounter() == 2, "step_into stop state", __LINE__))
 			return false;
 
 		machine.RequestStepOver();
-		if (!machine.RunFrame() || machine.LastDebugStop().reason != casioemu::Eps6800DebugStopReason::StepOver ||
-			machine.ProgramCounter() != 3 || machine.DebugSnapshot().stack_pointer != 0 ||
-			machine.DebugSnapshot().registers[0x0a] != 0x34)
+		if (!Check(machine.RunFrame() &&
+				machine.LastDebugStop().reason == casioemu::Eps6800DebugStopReason::StepOver &&
+				machine.ProgramCounter() == 3 && machine.DebugSnapshot().stack_pointer == 0 &&
+				machine.DebugSnapshot().registers[0x0a] == 0x34, "step_over stop state", __LINE__))
 			return false;
 
 		machine.SetPC(2);
 		machine.RequestStepInto();
-		if (!machine.RunFrame() || machine.ProgramCounter() != 4 || machine.DebugSnapshot().stack_pointer != 1)
+		if (!Check(machine.RunFrame() && machine.ProgramCounter() == 4 &&
+				machine.DebugSnapshot().stack_pointer == 1, "SCALL step_into state", __LINE__))
 			return false;
-		if (!machine.RequestStepOut() || !machine.RunFrame() ||
-			machine.LastDebugStop().reason != casioemu::Eps6800DebugStopReason::StepOut ||
-			machine.ProgramCounter() != 3 || machine.DebugSnapshot().stack_pointer != 0)
-			return false;
-
-		if (!machine.WriteDebugMemory(0x0f, 0xa5) || machine.ReadDebugMemory(0x0f) != 0xa5 ||
-			!machine.WriteDebugMemory(0x80, 0x5a) || machine.ReadDebugMemory(0x80) != 0x5a ||
-			!machine.WriteDebugMemory(0x207f, 0xc3) || machine.ReadDebugMemory(0x207f) != 0xc3 ||
-			machine.WriteDebugMemory(0x2080, 0xff))
+		if (!Check(machine.RequestStepOut() && machine.RunFrame() &&
+				machine.LastDebugStop().reason == casioemu::Eps6800DebugStopReason::StepOut &&
+				machine.ProgramCounter() == 3 && machine.DebugSnapshot().stack_pointer == 0,
+				"step_out stop state", __LINE__))
 			return false;
 
-		if (!machine.WriteCodeWord(6, 0x4e56) || machine.ReadCodeWord(6) != 0x4e56)
+		if (!Check(machine.WriteDebugMemory(0x0f, 0xa5) && machine.ReadDebugMemory(0x0f) == 0xa5 &&
+				machine.WriteDebugMemory(0x80, 0x5a) && machine.ReadDebugMemory(0x80) == 0x5a &&
+				machine.WriteDebugMemory(0x207f, 0xc3) && machine.ReadDebugMemory(0x207f) == 0xc3 &&
+				!machine.WriteDebugMemory(0x2080, 0xff), "debug memory bounds", __LINE__))
+			return false;
+
+		if (!Check(machine.WriteCodeWord(6, 0x4e56) && machine.ReadCodeWord(6) == 0x4e56,
+				"code word write/read", __LINE__))
 			return false;
 		machine.WriteCodeWord(6, 0x4e5a);
 		casioemu::Eps6800MemoryBreakpoint memory_breakpoint{};
@@ -262,22 +277,23 @@ namespace {
 		memory_breakpoint.compare_data = true;
 		memory_breakpoint.data = 0x50;
 		memory_breakpoint.mask = 0xf0;
-		if (!machine.AddMemoryBreakpoint(memory_breakpoint))
+		if (!Check(machine.AddMemoryBreakpoint(memory_breakpoint), "add conditional memory breakpoint", __LINE__))
 			return false;
 		machine.SetPC(6);
 		machine.RequestContinue();
-		if (!machine.RunFrame())
+		if (!Check(machine.RunFrame(), "memory breakpoint run", __LINE__))
 			return false;
 		stop = machine.LastDebugStop();
 		const auto memory_hits = machine.MemoryBreakpointHits(0x80, true);
-		if (stop.reason != casioemu::Eps6800DebugStopReason::MemoryBreakpoint ||
-			stop.program_counter != 8 || stop.memory_address != 0x80 ||
-			stop.memory_value != 0x5a || !stop.memory_write || memory_hits.size() != 1 ||
-			machine.ReadDebugMemory(0x80) != 0x5a)
+		if (!Check(stop.reason == casioemu::Eps6800DebugStopReason::MemoryBreakpoint &&
+				stop.program_counter == 8 && stop.memory_address == 0x80 &&
+				stop.memory_value == 0x5a && stop.memory_write && memory_hits.size() == 1 &&
+				machine.ReadDebugMemory(0x80) == 0x5a, "conditional memory breakpoint stop", __LINE__))
 			return false;
 		machine.SetPC(6);
 		machine.RequestContinue(false);
-		if (machine.RunFrame() || machine.MemoryBreakpointHits(0x80, true).size() != 2)
+		if (!Check(!machine.RunFrame() && machine.MemoryBreakpointHits(0x80, true).size() == 2,
+				"free run records memory accesses", __LINE__))
 			return false; // Free Run records accesses but ignores break controls.
 		machine.ClearMemoryBreakpoints();
 
@@ -291,8 +307,8 @@ namespace {
 		machine.RequestStepInto();
 		machine.RunFrame();
 		const auto trace = machine.TraceBuffer();
-		return trace.size() == 2 && trace.back().program_counter == 2 &&
-			trace.back().next_program_counter == 4;
+		return Check(trace.size() == 2 && trace.back().program_counter == 2 &&
+				trace.back().next_program_counter == 4, "trace buffer tail", __LINE__);
 	}
 
 	bool StatusEquals(const casioemu::Eps6800DisplayFrame& frame,
@@ -303,8 +319,8 @@ namespace {
 }
 
 int main(int argc, char** argv) {
-	if (argc != 2) {
-		std::cerr << "usage: Eps6800AdapterSmoke <rom.bin>\n";
+	if (argc > 2) {
+		std::cerr << "usage: Eps6800AdapterSmoke [<rom.bin>]\n";
 		return 2;
 	}
 	if (!DebuggerSmoke()) {
@@ -318,6 +334,11 @@ int main(int argc, char** argv) {
 	if (!HookAndRamSmoke()) {
 		std::cerr << "EPS6800 hook/RAM persistence regression\n";
 		return 1;
+	}
+	if (argc != 2) {
+		std::cout << "EPS6800 synthetic checks passed (no golden ROM provided; "
+			"skipping golden/status/LCD scenarios).\n";
+		return 0;
 	}
 
 	auto rom = ReadRom(argv[1]);
@@ -441,9 +462,13 @@ int main(int argc, char** argv) {
 
 	// The HP indicator row has its own physical bit layout. Exercise independent
 	// cold boots so persistent calculator settings cannot leak across scenarios.
+	bool rom_load_failed = false;
 	const auto Scenario = [&](std::initializer_list<uint8_t> keys) {
 		casioemu::ePSCPU scenario_machine;
-		scenario_machine.LoadRom(rom, casioemu::Eps6800RomFormat::UnpackedNibbles);
+		if (!scenario_machine.LoadRom(rom, casioemu::Eps6800RomFormat::UnpackedNibbles)) {
+			rom_load_failed = true;
+			return Capture(scenario_machine);
+		}
 		Boot(scenario_machine);
 		for (const auto key : keys)
 			Tap(scenario_machine, key);
@@ -463,6 +488,10 @@ int main(int argc, char** argv) {
 		StatusEquals(Scenario({5, 38}), {0, 0, 0, 0, 0, 0, 0x80, 0, 0, 0, 0x81, 0}) &&
 		StatusEquals(Scenario({5, 38, 13, 38, 49}), {0, 0, 0, 0, 0, 0, 0x80, 0, 0, 0, 0x11, 0}) &&
 		StatusEquals(Scenario({50, 45}), {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x80});
+	if (rom_load_failed) {
+		std::cerr << "Scenario ROM load failed\n";
+		return 2;
+	}
 	if (!status_ok) {
 		std::cerr << "HP 300S+ status mapping regression\n";
 		return 1;
@@ -471,7 +500,10 @@ int main(int argc, char** argv) {
 	std::cout << " snapshot=ok status_map=ok keyboard_matrix=ok debugger=ok hooks=ok ram=ok";
 
 	casioemu::ePSCPU lcd_control_machine;
-	lcd_control_machine.LoadRom(rom, casioemu::Eps6800RomFormat::UnpackedNibbles);
+	if (!lcd_control_machine.LoadRom(rom, casioemu::Eps6800RomFormat::UnpackedNibbles)) {
+		std::cerr << "ROM load failed\n";
+		return 2;
+	}
 	Boot(lcd_control_machine);
 	const auto boot_control = CaptureControl(lcd_control_machine);
 	if (boot_control.lcdarh != 0x83 || boot_control.lcdcon != 0xa1 ||
@@ -488,7 +520,10 @@ int main(int argc, char** argv) {
 	}
 
 	casioemu::ePSCPU contrast_machine;
-	contrast_machine.LoadRom(rom, casioemu::Eps6800RomFormat::UnpackedNibbles);
+	if (!contrast_machine.LoadRom(rom, casioemu::Eps6800RomFormat::UnpackedNibbles)) {
+		std::cerr << "ROM load failed\n";
+		return 2;
+	}
 	Boot(contrast_machine);
 	Tap(contrast_machine, 46);
 	Tap(contrast_machine, 50);

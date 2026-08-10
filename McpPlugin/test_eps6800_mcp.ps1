@@ -55,6 +55,7 @@ try {
         -Method Post `
         -ContentType "application/json" `
         -Headers @{ Accept = "application/json, text/event-stream" } `
+        -UseBasicParsing `
         -Body $initialize
     $session = $response.Headers["MCP-Session-Id"]
     Assert-True ([bool]$session) "Initialize response did not contain an MCP session ID."
@@ -84,6 +85,15 @@ try {
         return $reply.result.structuredContent
     }
 
+    function Wait-StatusPaused([int]$Id, [int]$TimeoutSeconds = 10) {
+        $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+        do {
+            Start-Sleep -Milliseconds 200
+            $status = Invoke-McpTool $Id "get_status"
+        } while (-not $status.paused -and (Get-Date) -lt $deadline)
+        return $status
+    }
+
     $initial = Invoke-McpTool 2 "get_status"
     Assert-True $initial.paused "EPS6800 model must start paused."
     Assert-True ($initial.program_counter -eq 0) "Unexpected reset PC: $($initial.program_counter)"
@@ -107,23 +117,20 @@ try {
     $listed = Invoke-McpTool 9 "list_execution_breakpoints"
     Assert-True ($listed.breakpoints -contains 0x100) "Execution breakpoint was not registered."
     $null = Invoke-McpTool 10 "resume"
-    Start-Sleep -Milliseconds 500
-    $atBreakpoint = Invoke-McpTool 11 "get_status"
+    $atBreakpoint = Wait-StatusPaused 33
     Assert-True $atBreakpoint.paused "EPS6800 execution breakpoint did not pause execution."
     Assert-True ($atBreakpoint.program_counter -eq 0x100) "Execution breakpoint stopped at the wrong PC."
 
     $null = Invoke-McpTool 12 "remove_execution_breakpoint" @{ address = 0x100 }
     $beforeStep = Invoke-McpTool 13 "get_status"
     $null = Invoke-McpTool 14 "step_into"
-    Start-Sleep -Milliseconds 250
-    $afterStep = Invoke-McpTool 15 "get_status"
+    $afterStep = Wait-StatusPaused 34
     Assert-True $afterStep.paused "EPS6800 step_into did not pause."
     Assert-True ($afterStep.program_counter -ne $beforeStep.program_counter) "EPS6800 step_into did not execute one instruction."
 
     $null = Invoke-McpTool 16 "reset"
     $null = Invoke-McpTool 17 "step_over"
-    Start-Sleep -Milliseconds 250
-    $afterStepOver = Invoke-McpTool 18 "get_status"
+    $afterStepOver = Wait-StatusPaused 35
     Assert-True $afterStepOver.paused "EPS6800 step_over did not pause."
     Assert-True ($afterStepOver.program_counter -eq 0x100) "Non-CALL step_over did not execute exactly one LJMP instruction."
 
@@ -157,8 +164,13 @@ try {
 	$afterReload = Invoke-McpTool 27 "get_status"
 	Assert-True ($afterReload.program_counter -eq 0) "EPS6800 hot reload did not reset the reloaded core."
 	$null = Invoke-McpTool 28 "start_call_recording"
+	$recordingBaseline = Invoke-McpTool 36 "get_status"
 	$null = Invoke-McpTool 29 "resume"
-	Start-Sleep -Milliseconds 300
+	$recordingDeadline = (Get-Date).AddSeconds(10)
+	do {
+		Start-Sleep -Milliseconds 200
+		$recordingStatus = Invoke-McpTool 37 "get_status"
+	} while (-not $recordingStatus.paused -and $recordingStatus.program_counter -eq $recordingBaseline.program_counter -and (Get-Date) -lt $recordingDeadline)
 	$null = Invoke-McpTool 30 "pause"
 	$null = Invoke-McpTool 31 "stop_call_recording"
 	$calls = Invoke-McpTool 32 "list_function_calls"

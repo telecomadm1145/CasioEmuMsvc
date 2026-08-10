@@ -599,17 +599,17 @@ namespace casioemu {
 			constexpr Uint64 cycles_per_eps_frame = 4000;
 			const auto cycles_to_emulate = cycles.GetDelta();
 			if (Paused) {
-				eps_frame_cycle_remainder = 0;
+				eps_frame_cycle_remainder.store(0, std::memory_order_relaxed);
 				return;
 			}
-			eps_frame_cycle_remainder += cycles_to_emulate;
-			while (eps_frame_cycle_remainder >= cycles_per_eps_frame) {
+			eps_frame_cycle_remainder.fetch_add(cycles_to_emulate, std::memory_order_relaxed);
+			while (eps_frame_cycle_remainder.load(std::memory_order_relaxed) >= cycles_per_eps_frame) {
 				if (chipset.RunEpsFrame()) {
 					SetPaused(true);
-					eps_frame_cycle_remainder = 0;
+					eps_frame_cycle_remainder.store(0, std::memory_order_relaxed);
 					break;
 				}
-				eps_frame_cycle_remainder -= cycles_per_eps_frame;
+				eps_frame_cycle_remainder.fetch_sub(cycles_per_eps_frame, std::memory_order_relaxed);
 			}
 			return;
 		}
@@ -798,7 +798,7 @@ namespace casioemu {
 
 	void Emulator::SetClockSpeed(float speed) {
 		cycles.Setup((unsigned int)(cycles_per_second * speed), timer_interval);
-		eps_frame_cycle_remainder = 0;
+		eps_frame_cycle_remainder.store(0, std::memory_order_relaxed);
 	}
 
 	FairRecursiveMutex::FairRecursiveMutex() : holding{}, recursive_count{} {

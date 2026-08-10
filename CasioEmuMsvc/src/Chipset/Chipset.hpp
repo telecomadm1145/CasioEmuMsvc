@@ -9,6 +9,7 @@
 #include <SDL.h>
 #include <forward_list>
 #include <iosfwd>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -75,6 +76,8 @@ namespace casioemu {
 
 		bool real_hardware;
 		SDL_TimerID eps_ram_save_timer_id{};
+		/* Serializes PersistEpsRam against ~Chipset deleting epscpu. */
+		std::mutex eps_ram_save_mutex;
 
 	public:
 		void* QueryInterface(const char* name);

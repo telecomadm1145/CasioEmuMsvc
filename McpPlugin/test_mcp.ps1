@@ -53,6 +53,7 @@ try {
         -Method Post `
         -ContentType "application/json" `
         -Headers @{ Accept = "application/json, text/event-stream" } `
+        -UseBasicParsing `
         -Body $initialize
     $session = $response.Headers["MCP-Session-Id"]
     Assert-True ([bool]$session) "Initialize response did not contain an MCP session ID."

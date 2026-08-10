@@ -89,7 +89,10 @@ static bool timer_tick_counter(
 		return false;
 	}
 
-	rem = dec - timer_reload;
+	/* The counter is already at or below dec here; compute the residual from
+	 * the current counter value, not from the reload, so the post-overflow
+	 * counter reflects the remaining ticks. */
+	rem = dec - *timer_counter;
 	if (rem >= timer_reload) {
 		rem = timer_reload; /* Emulation resolution is not enough. */
 	}

@@ -581,10 +581,17 @@ namespace casioemu {
 		auto it = std::find_if(memory_breakpoints_.begin(), memory_breakpoints_.end(), [&](const auto& item) {
 			return item.address == breakpoint.address && item.write == breakpoint.write;
 		});
-		if (it == memory_breakpoints_.end())
+		if (it == memory_breakpoints_.end()) {
 			memory_breakpoints_.push_back(breakpoint);
-		else
+		}
+		else {
+			/* Preserve the running hit/skip progress when an existing
+			 * breakpoint is reconfigured. */
+			const uint64_t preserved_hit_count = it->hit_count;
 			*it = breakpoint;
+			it->hit_count = preserved_hit_count;
+		}
+		++memory_breakpoint_version_;
 		return true;
 	}
 
@@ -596,6 +603,7 @@ namespace casioemu {
 		if (it == memory_breakpoints_.end())
 			return false;
 		memory_breakpoints_.erase(it);
+		++memory_breakpoint_version_;
 		return true;
 	}
 
@@ -603,11 +611,17 @@ namespace casioemu {
 		const std::lock_guard lock(state_mutex_);
 		memory_breakpoints_.clear();
 		memory_break_pending_ = false;
+		++memory_breakpoint_version_;
 	}
 
 	std::vector<Eps6800MemoryBreakpoint> ePSCPU::MemoryBreakpoints() const {
 		const std::lock_guard lock(state_mutex_);
 		return memory_breakpoints_;
+	}
+
+	uint64_t ePSCPU::MemoryBreakpointsVersion() const {
+		const std::lock_guard lock(state_mutex_);
+		return memory_breakpoint_version_;
 	}
 
 	std::vector<Eps6800MemoryBreakpointHit> ePSCPU::MemoryBreakpointHits(uint32_t address, bool write) const {

@@ -105,7 +105,9 @@ namespace casioemu {
 			return 0xFFFF;
 		case HW_EPS6800:
 			return emulator.chipset.epscpu
-				? emulator.chipset.epscpu->ReadCodeWord(static_cast<uint32_t>(offset))
+				/* ReadCode uses byte offsets on the legacy paths; convert to the
+				 * word address expected by the EPS core. */
+				? emulator.chipset.epscpu->ReadCodeWord(static_cast<uint32_t>(offset >> 1))
 				: 0xffff;
 		default:
 			return 0;

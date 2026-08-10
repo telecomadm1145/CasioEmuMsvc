@@ -645,9 +645,11 @@ void CodeViewer::Search(bool next) {
 		std::string hex_part;
 		std::string instr_part;
 		if (m_emu->chipset.epscpu) {
-			char word[5]{};
-			std::snprintf(word, sizeof(word), "%04X", m_emu->chipset.epscpu->ReadCodeWord(ce.offset));
-			hex_part = word;
+			if (search_mode == 0) {
+				char word[5]{};
+				std::snprintf(word, sizeof(word), "%04X", m_emu->chipset.epscpu->ReadCodeWord(ce.offset));
+				hex_part = word;
+			}
 			instr_part = haystack;
 		}
 		else {

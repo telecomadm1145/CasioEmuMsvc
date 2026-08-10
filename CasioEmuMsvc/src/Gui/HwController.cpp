@@ -163,8 +163,14 @@ void HwController::RenderCore() {
 		m_emu->SetPaused(true);
 		auto lg = std::lock_guard(m_emu->access_mx);
 		std::string error;
-		if (m_emu->chipset.ReloadRom(error) && m_emu->chipset.epscpu && code_viewer)
-			code_viewer->PrepareDisasm();
+		if (m_emu->chipset.ReloadRom(error)) {
+			if (m_emu->chipset.epscpu && code_viewer)
+				code_viewer->PrepareDisasm();
+		}
+		else {
+			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+				"HwController.HotReload"_lc, error.c_str(), window);
+		}
 		m_emu->SetPaused(was_paused);
 	}
 }

@@ -129,14 +129,22 @@ class PluginApi_Impl : public PluginApi {
 			me_mmu->WriteData(addr, dat);
 		}
 		uint16_t ReadCode(size_t addr) override {
-			if (auto* eps = m_emu->chipset.epscpu)
-				return eps->ReadCodeWord(static_cast<uint32_t>(addr));
+			if (auto* eps = m_emu->chipset.epscpu) {
+				/* IMMU addresses are bytes on the legacy path; the EPS core is
+				 * word-addressed. */
+				return eps->ReadCodeWord(static_cast<uint32_t>(addr >> 1));
+			}
 			return me_mmu->ReadCode(addr);
 		}
 		void WriteCode(size_t addr, uint8_t dat) override {
 			if (auto* eps = m_emu->chipset.epscpu) {
-				const uint32_t word_address = static_cast<uint32_t>(addr);
-				const uint16_t word = static_cast<uint16_t>((eps->ReadCodeWord(word_address) & 0xff00u) | dat);
+				const uint32_t word_address = static_cast<uint32_t>(addr >> 1);
+				uint16_t word = eps->ReadCodeWord(word_address);
+				/* Match EPS_ROM_Hex / IDebugger_Impl::WriteCode: even byte is the
+				 * high half, odd byte is the low half. */
+				word = (addr & 1)
+					? static_cast<uint16_t>((word & 0xff00u) | dat)
+					: static_cast<uint16_t>((word & 0x00ffu) | (static_cast<uint16_t>(dat) << 8));
 				if (!eps->WriteCodeWord(word_address, word))
 					return;
 				eps->WriteRomImageWord(m_emu->chipset.rom_data, word_address, word);
@@ -307,6 +315,15 @@ class PluginApi_Impl : public PluginApi {
 				if (reg.Name == normalized) {
 					value = reg.Value;
 					bitWidth = reg.BitWidth;
+					return true;
+				}
+			}
+			if (auto* eps = m_emu->chipset.epscpu) {
+				/* Accept the same writable aliases (psw/sp/dsr) for reads. */
+				uint8_t address = 0;
+				if (Eps6800RegisterAddress(normalized, address)) {
+					value = eps->ReadDebugMemory(address);
+					bitWidth = 8;
 					return true;
 				}
 			}
@@ -533,7 +550,8 @@ class PluginApi_Impl : public PluginApi {
 			std::vector<DebugStackFrameInfo> result;
 			if (auto* eps = m_emu->chipset.epscpu) {
 				const auto snapshot = eps->DebugSnapshot();
-				for (size_t i = 0; i < snapshot.stack_pointer; ++i) {
+				/* Innermost frame first, matching the legacy stack walk. */
+				for (size_t i = snapshot.stack_pointer; i-- > 0;) {
 					const uint32_t pc = snapshot.stack[i];
 					result.push_back({pc, 0, static_cast<uint32_t>(i), 0, 0, false, false, lookup_symbol(pc, g_labels)});
 				}
@@ -858,7 +876,10 @@ class PluginApi_Impl : public PluginApi {
 		}
 	} hooks_impl;
 	int GetVersion() override {
-		return 1;
+		/* v2: IDebugger::AddMemoryBreakpoint gained the extended parameters and
+		 * DebugMemoryBreakpointInfo grew; plugins built against v1 headers must
+		 * be rebuilt. */
+		return 2;
 	}
 	void AddWindow(UIWindow* wnd) override {
 		windows.push_back(wnd);
