@@ -511,20 +511,40 @@ int main(int argc, char** argv) {
 	}
 
 	float previous_alpha = -1.0f;
-	for (uint8_t contrast = 0; contrast <= casioemu::EPS6800_CONTRAST_MAX; ++contrast) {
-		const float mapped = casioemu::Eps6800AsEspContrast(contrast);
+	int previous_rendered_alpha = -1;
+	for (uint8_t contrast = 0; contrast <= casioemu::EPS6800_EFFECTIVE_CONTRAST_MAX; ++contrast) {
 		const float alpha = casioemu::Eps6800ActiveAlpha(contrast);
-		const float expected = std::max(0.0f, -240.0f + mapped * 28.0f - 3.0f * 8.0f);
-		if (std::abs(alpha - expected) > 0.001f ||
-			(contrast == casioemu::EPS6800_CONTRAST_MAX &&
-				std::abs(mapped - 31.0f) > 0.001f) ||
-			(contrast != 0 && alpha < previous_alpha)) {
+		const int rendered_alpha = std::clamp(static_cast<int>(alpha), 0, 255);
+		if (alpha < 0.0f || alpha > casioemu::LCD_ALPHA_MAX ||
+			(contrast == casioemu::EPS6800_LAST_UNCLIPPED_CONTRAST &&
+				std::abs(alpha - (-240.0f + static_cast<float>(contrast) * 28.0f - 3.0f * 8.0f)) > 0.001f) ||
+			(contrast != 0 &&
+				(alpha <= previous_alpha || rendered_alpha <= previous_rendered_alpha))) {
 			std::cerr << "LCD contrast curve regression\n";
 			return 1;
 		}
 		previous_alpha = alpha;
+		previous_rendered_alpha = rendered_alpha;
 	}
-	if (!(casioemu::Eps6800InactiveAlpha(8) < casioemu::Eps6800ActiveAlpha(8))) {
+	if (std::abs(casioemu::Eps6800ActiveAlpha(casioemu::EPS6800_EFFECTIVE_CONTRAST_MAX) -
+		casioemu::LCD_ALPHA_MAX) > 0.001f ||
+		static_cast<int>(casioemu::Eps6800ActiveAlpha(0x14)) ==
+			static_cast<int>(casioemu::Eps6800ActiveAlpha(0x15))) {
+		std::cerr << "LCD effective contrast endpoints regression\n";
+		return 1;
+	}
+	const auto BlendBlackOverDiagnosticBackground = [](uint8_t contrast) {
+		constexpr int background = 0x7b;
+		const int alpha = std::clamp(
+			static_cast<int>(casioemu::Eps6800ActiveAlpha(contrast)), 0, 255);
+		return (background * (255 - alpha) + 127) / 255;
+	};
+	if (BlendBlackOverDiagnosticBackground(0x14) ==
+		BlendBlackOverDiagnosticBackground(0x15)) {
+		std::cerr << "LCD 14h/15h rendered contrast collision\n";
+		return 1;
+	}
+	if (!(casioemu::Eps6800InactiveAlpha(0x11) < casioemu::Eps6800ActiveAlpha(0x11))) {
 		std::cerr << "LCD inactive-pixel contrast regression\n";
 		return 1;
 	}
@@ -532,17 +552,34 @@ int main(int argc, char** argv) {
 	casioemu::ePSCPU register_machine;
 	register_machine.Reset();
 	std::array<uint8_t, kLcdSize> register_lcd{};
+	casioemu::Eps6800LcdControl control{};
 	for (uint8_t contrast = 0; contrast <= casioemu::EPS6800_CONTRAST_MAX; ++contrast) {
 		const uint8_t lcdarh = static_cast<uint8_t>((contrast << 4) | 0x03);
+		register_machine.WriteByte(0x15, static_cast<uint8_t>(contrast << 1));
 		register_machine.WriteByte(0x23, lcdarh);
 		register_machine.WriteByte(0x2e, 0x20);
-		casioemu::Eps6800LcdControl control{};
 		register_machine.CopyLcd(register_lcd.data(), register_lcd.size(), &control);
 		if (control.lcdarh != lcdarh || control.lcdcon != 0x20 ||
-			control.contrast != contrast || !control.visible()) {
+			control.contrast != contrast || control.charge_pump != 0 ||
+			control.requested_contrast != static_cast<uint8_t>(contrast << 1) ||
+			control.effective_contrast != static_cast<uint8_t>(contrast << 1) || !control.visible()) {
 			std::cerr << "LCD control decode mismatch\n";
 			return 1;
 		}
+		register_machine.WriteByte(0x15, static_cast<uint8_t>((contrast << 1) | 1));
+		register_machine.CopyLcd(register_lcd.data(), register_lcd.size(), &control);
+		if (control.requested_contrast != static_cast<uint8_t>((contrast << 1) | 1) ||
+			control.effective_contrast != static_cast<uint8_t>((contrast << 1) | 1)) {
+			std::cerr << "LCD half-step contrast decode mismatch\n";
+			return 1;
+		}
+	}
+	register_machine.WriteByte(0x15, 0xff);
+	register_machine.WriteByte(0x23, 0x83);
+	register_machine.CopyLcd(register_lcd.data(), register_lcd.size(), &control);
+	if (control.effective_contrast != 0x11) {
+		std::cerr << "LCD contrast fallback mismatch\n";
+		return 1;
 	}
 	register_machine.WriteByte(0x2e, 0x60);
 	if (CaptureControl(register_machine).visible()) {
@@ -691,7 +728,9 @@ int main(int argc, char** argv) {
 	Boot(lcd_control_machine);
 	const auto boot_control = CaptureControl(lcd_control_machine);
 	if (boot_control.lcdarh != 0x83 || boot_control.lcdcon != 0xa1 ||
-		boot_control.contrast != 8 || !boot_control.visible()) {
+		boot_control.contrast != 8 || boot_control.charge_pump != 1 ||
+		boot_control.requested_contrast != 0x11 ||
+		boot_control.effective_contrast != 0x11 || !boot_control.visible()) {
 		std::cerr << "HP 300S+ boot LCD control mismatch\n";
 		return 1;
 	}
@@ -717,12 +756,13 @@ int main(int argc, char** argv) {
 	Tap(contrast_machine, 48);
 	Tap(contrast_machine, 48);
 	const auto adjusted_control = CaptureControl(contrast_machine);
-	if (adjusted_control.contrast <= boot_control.contrast || !adjusted_control.visible()) {
+	if (adjusted_control.effective_contrast <= boot_control.effective_contrast ||
+		!adjusted_control.visible()) {
 		std::cerr << "HP 300S+ contrast menu did not increase LCD contrast\n";
 		return 1;
 	}
 
 	std::cout << " lcd_control=ok contrast=0x"
-		<< static_cast<unsigned>(adjusted_control.contrast) << "\n";
+		<< static_cast<unsigned>(adjusted_control.effective_contrast) << "\n";
 	return 0;
 }

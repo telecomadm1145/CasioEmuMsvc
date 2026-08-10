@@ -5,6 +5,7 @@
  * and is licensed under GPL-3.0-or-later, matching this project.
  */
 #include "ePSCpu.h"
+#include "Eps6800Display.h"
 
 #include "EPS6800Core/eps6800.h"
 #include "EPS6800Core/machine.h"
@@ -362,6 +363,10 @@ namespace casioemu {
 			control->lcdcon = raw_control.lcdcon;
 			control->contrast = static_cast<uint8_t>(
 				(raw_control.lcdarh & MASK_LCD_CONTRAST) >> SHIFT_LCD_CONTRAST);
+			control->charge_pump = static_cast<uint8_t>(raw_control.lcdcon & MASK_LCD_CHARGE_PUMP);
+			control->requested_contrast = machine_state_debug_read_byte(state_, 0x15);
+			control->effective_contrast = Eps6800EffectiveContrast(
+				control->contrast, control->requested_contrast);
 			control->display_on = (raw_control.lcdcon & BIT_LCD_ON) != 0;
 			control->blanked = (raw_control.lcdcon & BIT_LCD_BLANK) != 0;
 		}
