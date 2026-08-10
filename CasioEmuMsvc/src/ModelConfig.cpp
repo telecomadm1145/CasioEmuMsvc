@@ -270,14 +270,6 @@ namespace casioemu {
 						model.extra[key] = std::move(item);
 				}
 			}
-			if (value.contains("is_unpacked_nibbles")) {
-				if (!value.at("is_unpacked_nibbles").is_boolean())
-					throw std::runtime_error("config.json field is_unpacked_nibbles must be a boolean.");
-				if (value.at("is_unpacked_nibbles").get<bool>())
-					model.extra["is_unpacked_nibbles"] = "1";
-				else
-					model.extra.erase("is_unpacked_nibbles");
-			}
 			if (value.contains("buttons")) {
 				if (!model.board_path.empty()) {
 					if (!model.buttons.empty())
@@ -334,13 +326,8 @@ namespace casioemu {
 			value["screen_height"] = model.screen_height;
 			value["screen_scale_y"] = model.screen_scale_y;
 		}
-		auto extra = model.extra;
-		if (auto it = extra.find("is_unpacked_nibbles"); it != extra.end()) {
-			value["is_unpacked_nibbles"] = it->second != "0" && it->second != "false";
-			extra.erase(it);
-		}
-		if (!extra.empty())
-			value["extra"] = std::move(extra);
+		if (!model.extra.empty())
+			value["extra"] = model.extra;
 
 		if (model.board_path.empty()) {
 			value["buttons"] = json::array();

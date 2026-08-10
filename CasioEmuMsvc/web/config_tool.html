@@ -441,9 +441,6 @@
     if (r.remaining() > 0) model.LARGE_model = r.bool();
     if (r.remaining() > 0) model.ml620_mirroring = r.bool();
     if (r.remaining() > 0) model.extra = r.map(() => r.string());
-    model["is_unpacked_nibbles"] = model.extra["is_unpacked_nibbles"] !== undefined &&
-      model.extra["is_unpacked_nibbles"] !== "0" && model.extra["is_unpacked_nibbles"] !== "false";
-    delete model.extra["is_unpacked_nibbles"];
     model._trailing_bytes = r.remaining();
     return model;
   }
@@ -468,12 +465,7 @@
     w.bool(model.u16_mode ?? defaultU16Mode(model));
     w.bool(model.LARGE_model ?? defaultLargeModel(model));
     w.bool(model.ml620_mirroring ?? defaultMl620Mirroring(model));
-    const extra = { ...(model.extra ?? {}) };
-    if (model["is_unpacked_nibbles"])
-	  extra["is_unpacked_nibbles"] = "1";
-    else
-	  delete extra["is_unpacked_nibbles"];
-    w.map(extra, value => w.string(value));
+    w.map(model.extra ?? {}, value => w.string(value));
     return w.finish();
   }
 
@@ -605,7 +597,6 @@
       interface_path: "interface.png",
       model_name: "",
       rom_path: "rom.bin",
-      is_unpacked_nibbles: false,
       flash_path: "",
       enable_new_screen: false,
       is_sample_rom: false,
