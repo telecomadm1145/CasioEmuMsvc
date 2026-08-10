@@ -17,6 +17,9 @@ struct Rect {
 #endif
 };
 namespace casioemu {
+	inline constexpr int BUTTON_KIKO_RESET = 0xFE;
+	inline constexpr int BUTTON_KIKO_POWER = 0xFF;
+
 	enum HardwareId {
 		HW_MIN = 3,
 		HW_ES_PLUS = 3,

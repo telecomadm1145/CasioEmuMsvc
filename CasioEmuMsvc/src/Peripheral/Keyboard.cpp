@@ -67,7 +67,8 @@ namespace casioemu {
 			enum ButtonType {
 				BT_NONE,
 				BT_BUTTON,
-				BT_POWER
+				BT_POWER,
+				BT_RESET
 			} type{};
 			SDL_Rect rect{};
 			SDL_Rect shape_rect{};
@@ -166,7 +167,8 @@ namespace casioemu {
 				PressButtonByCode(code);
 			} else {
 				int button_index;
-				if (code == 0xFF) button_index = 63;
+				if (code == BUTTON_KIKO_POWER) button_index = 63;
+				else if (code == BUTTON_KIKO_RESET) button_index = 62;
 				else button_index = ((code >> 1) & 0x38) | (code & 0x07);
 				if (button_index < 64) {
 					auto& button = buttons[button_index];
@@ -179,7 +181,8 @@ namespace casioemu {
 		}
 		void BindKeycode(int keycode, uint8_t code) override {
 			int button_index;
-			if (code == 0xFF) button_index = 63;
+			if (code == BUTTON_KIKO_POWER) button_index = 63;
+			else if (code == BUTTON_KIKO_RESET) button_index = 62;
 			else button_index = ((code >> 1) & 0x38) | (code & 0x07);
 			if (button_index >= 0 && button_index < 64) {
 				keyboard_map[static_cast<SDL_Keycode>(keycode)] = static_cast<size_t>(button_index);
@@ -452,8 +455,11 @@ namespace casioemu {
 		for (auto& btn : emulator.ModelDefinition.buttons) {
 			uint8_t code = btn.kiko;
 			size_t button_ix;
-			if (code == 0xFF) {
+			if (code == BUTTON_KIKO_POWER) {
 				button_ix = 63;
+			}
+			else if (code == BUTTON_KIKO_RESET) {
+				button_ix = 62;
 			}
 			else {
 				if (emulator.hardware_id == HW_TI) {
@@ -512,8 +518,10 @@ namespace casioemu {
 			Button& button = buttons[button_ix];
 			button = {};
 
-			if (code == 0xFF)
+			if (code == BUTTON_KIKO_POWER)
 				button.type = Button::BT_POWER;
+			else if (code == BUTTON_KIKO_RESET)
+				button.type = Button::BT_RESET;
 			else
 				button.type = Button::BT_BUTTON;
 			button.rect = btn.rect;
@@ -546,6 +554,16 @@ namespace casioemu {
 		keyboard_out_mask = 0;
 		keyboard_in_last = 0xFF;
 		input_filter_last = 0;
+
+		if (emulator.hardware_id == HW_EPS6800) {
+			// A RESET contact releases the physical keyboard.  Keep the UI
+			// state in sync with the EPS core, including right-click latches.
+			for (auto& button : buttons) {
+				button.pressed = false;
+				button.stuck = false;
+				button.pressingFingerId = -1;
+			}
+		}
 
 		if (!real_hardware) {
 			keyboard_in_emu = 0;
@@ -938,6 +956,21 @@ namespace casioemu {
 			button.pressingFingerId = fingerId; // Assign current finger, or -1 for mouse/key
 		}
 
+		if (button.type == Button::BT_RESET) {
+			if (button.pressed && !old_pressed_state) {
+				// Chipset reset clears the keyboard peripheral and its UI state.
+				// Restore only the held RESET contact afterwards so its normal
+				// pressed overlay remains visible until mouse/finger release.
+				const bool reset_stuck = button.stuck;
+				const SDL_FingerID reset_finger_id = button.pressingFingerId;
+				emulator.chipset.Reset();
+				button.pressed = true;
+				button.stuck = reset_stuck;
+				button.pressingFingerId = reset_finger_id;
+			}
+			return;
+		}
+
 		if (button.type == Button::BT_POWER && button.pressed && !old_pressed_state &&
 			emulator.hardware_id != HW_EPS6800) {
 			if (!(emulator.hardware_id == HW_CLASSWIZ && (emulator.chipset.data_FCON & 0x03) == 0x03)) {
@@ -1020,9 +1053,12 @@ namespace casioemu {
 	}
 
 	void Keyboard::PressButtonByCode(uint8_t code) {
-		if (code == 0xFF) {
+		if (code == BUTTON_KIKO_POWER) {
 			// Assuming POWER button is at index 63, not passing fingerId (treat as system event)
 			PressButton(buttons[63], false, 0);
+		}
+		else if (code == BUTTON_KIKO_RESET) {
+			PressButton(buttons[62], false, 0);
 		}
 		else {
 			int button_index = ((code >> 1) & 0x38) | (code & 0x07);

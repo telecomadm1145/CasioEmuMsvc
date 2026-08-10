@@ -125,6 +125,7 @@ enum {
 };
 static const uint32_t CPU_PC_HIGH_BITS_MASK = 0xFFFF0000;
 static const uint32_t CPU_PC_HIGH_13_BITS_MASK = 0xFFFFE000;
+static const uint32_t CPU_TABPTR_MASK = 0x0001FFFF;
 enum {
 	CPU_PC_LOW_13_BITS_MASK = 0x1FFF,
 	CPU_LONG_BRANCH_ADDRESS_MASK = 0x0001FFFF,
@@ -256,11 +257,12 @@ static uint32_t cpu_read_tabptr_state(struct cpu_state *state) {
 	uint32_t tabptr = (uint32_t)cpu_bus_read_internal(state, REG_TABPTRH) << CPU_PC_HIGH_SHIFT;
 	tabptr |= (uint32_t)cpu_bus_read_internal(state, REG_TABPTRM) << CPU_PC_MID_SHIFT;
 	tabptr |= (uint32_t)cpu_bus_read_internal(state, REG_TABPTRL);
-	return tabptr;
+	return tabptr & CPU_TABPTR_MASK;
 }
 
 static void cpu_write_tabptr_state(struct cpu_state *state, uint32_t tabptr) {
-	cpu_bus_write_internal(state, REG_TABPTRH, (tabptr >> CPU_PC_HIGH_SHIFT) & CPU_BYTE_MASK);
+	tabptr &= CPU_TABPTR_MASK;
+	cpu_bus_write_internal(state, REG_TABPTRH, (tabptr >> CPU_PC_HIGH_SHIFT) & MASK_TABPTRH);
 	cpu_bus_write_internal(state, REG_TABPTRM, (tabptr >> CPU_PC_MID_SHIFT) & CPU_BYTE_MASK);
 	cpu_bus_write_internal(state, REG_TABPTRL, tabptr & CPU_BYTE_MASK);
 }
@@ -564,13 +566,17 @@ void cpu_interrupt_state(struct cpu_state *state, uint8_t int_level) {
 }
 
 void cpu_wake_state(struct cpu_state *state, uint8_t source) {
-	if (state->sleep_repeat_pc && ((source == WAKE_PAINT) || (source == WAKE_ON))) {
+	bool timer_idle_wake = (source == WAKE_TIMER) && (state->mode == CPU_MODE_IDLE);
+	if (state->sleep_repeat_pc &&
+		((source == WAKE_PAINT) || (source == WAKE_ON) || timer_idle_wake)) {
 		state->sleep_repeat_pc = false;
 		state->pc += 1;
 		cpu_write_pc_registers_state(state);
 	}
-	if ((source == WAKE_PAINT) || (source == WAKE_ON) || ((source == WAKE_TIMER) && (state->mode == CPU_MODE_IDLE))) {
-		state->mode = CPU_MODE_FAST;
+	if ((source == WAKE_PAINT) || (source == WAKE_ON) || timer_idle_wake) {
+		state->mode = (cpu_bus_read_internal(state, REG_CPUCON) & BIT_MS0)
+			? CPU_MODE_FAST
+			: CPU_MODE_SLOW;
 	}
 }
 
@@ -747,6 +753,8 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
 		case CPU_OPCODE_UNIMPLEMENTED:
 			break;
 		case CPU_OPCODE_SLEEP:
+			temp8_1 = cpu_bus_read_internal(state, REG_CPUCON);
+			state->mode = (temp8_1 & BIT_MS1) ? CPU_MODE_IDLE : CPU_MODE_SLEEP;
 			state->sleep_repeat_pc = true;
 			newpc = state->pc;
 			break;
@@ -798,10 +806,10 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                              break;
                 case CPU_OPCODE_TBPTM_IMM: cpu_bus_write_internal(state, REG_TABPTRM, imm8_1);
                              break;
-                case CPU_OPCODE_TBPTH_IMM: cpu_bus_write_internal(state, REG_TABPTRH, imm8_1);
+				case CPU_OPCODE_TBPTH_IMM: cpu_bus_write_internal(state, REG_TABPTRH, imm8_1 & MASK_TABPTRH);
                              break;
-                case CPU_OPCODE_TBRD_A_R: temp32 = cpu_read_tabptr_state(state);
-                             temp32 += cpu_bus_read_internal(state, REG_ACC);
+				case CPU_OPCODE_TBRD_A_R: temp32 = cpu_read_tabptr_state(state);
+							 temp32 = (temp32 + cpu_bus_read_internal(state, REG_ACC)) & CPU_TABPTR_MASK;
                              cpu_bus_write(state, imm8_1, cpu_read_rom_byte_state(state, temp32));
                              cpu_bus_post_id(state, imm8_1);
                              break;

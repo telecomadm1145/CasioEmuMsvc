@@ -372,6 +372,9 @@ uint8_t mmio_read_byte_state(struct mmio_state *state, uint8_t addr) {
 }
 
 void mmio_write_byte_internal_state(struct mmio_state *state, uint8_t addr, uint8_t byte) {
+	if (addr == REG_TABPTRH) {
+		byte &= MASK_TABPTRH;
+	}
 	state->regs[addr] = byte;
 }
 
@@ -490,6 +493,9 @@ void mmio_write_byte_state(struct mmio_state *state, uint8_t addr, uint8_t byte)
 		state->ram_wbk[mmio_wbk_index(addr)] = byte;
 	}
 	else {
+		if (addr == REG_TABPTRH) {
+			byte &= MASK_TABPTRH;
+		}
 		if (addr != REG_LCDDAT) {
 			state->regs[addr] = byte; /* Do all write. */
 		}

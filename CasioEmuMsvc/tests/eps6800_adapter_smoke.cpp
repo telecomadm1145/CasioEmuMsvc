@@ -88,11 +88,16 @@ namespace {
 	bool KeyboardMatrixSmoke() {
 		constexpr uint8_t kPortA = 0x31;
 		constexpr uint8_t kDirectionA = 0x33;
+		constexpr uint8_t kPaInterruptEnable = 0x35;
+		constexpr uint8_t kPaInterruptStatus = 0x36;
 		constexpr uint8_t kPortB = 0x37;
 		constexpr uint8_t kDirectionB = 0x39;
+		constexpr uint8_t kCpuControl = 0x20;
+		constexpr uint8_t kGlobalInterruptEnable = 0x04;
+		constexpr uint8_t kOnMask = 0x80;
 
-		const auto Scan = [&](std::initializer_list<uint8_t> keys, uint8_t selected_pb,
-			bool on = false) {
+		const auto Scan = [&](std::initializer_list<uint8_t> keys, uint8_t selected_pb_mask,
+			bool on = false, uint8_t firmware_ram_40 = 0) {
 			casioemu::ePSCPU machine;
 			std::vector<uint8_t> rom(0x20000, 0);
 			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedBigEndian))
@@ -100,7 +105,8 @@ namespace {
 			machine.Reset();
 			machine.WriteByte(kDirectionA, 0xff); // PA inputs with pull-ups.
 			machine.WriteByte(kDirectionB, 0x00); // PB scan outputs.
-			machine.WriteByte(kPortB, static_cast<uint8_t>(~(1u << selected_pb)));
+			machine.WriteByte(kPortB, static_cast<uint8_t>(~selected_pb_mask));
+			machine.WriteByte(0x40, firmware_ram_40);
 			for (const auto key : keys)
 				machine.KeyDown(key);
 			if (on)
@@ -110,13 +116,151 @@ namespace {
 			return machine.ReadByte(kPortA);
 		};
 
+		const auto OnInterrupt = [&]() {
+			casioemu::ePSCPU machine;
+			std::vector<uint8_t> rom(0x20000, 0);
+			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedBigEndian))
+				return false;
+			machine.Reset();
+			machine.WriteByte(kDirectionA, 0xff);
+			machine.WriteByte(kPaInterruptEnable, kOnMask);
+			machine.WriteByte(kCpuControl, kGlobalInterruptEnable);
+			machine.OnDown();
+			for (int i = 0; i < 1100; ++i)
+				machine.Next();
+			return (machine.ReadByte(kPaInterruptStatus) & kOnMask) != 0;
+		};
+		const auto KeyEnableWake = [&]() {
+			casioemu::ePSCPU machine;
+			std::vector<uint8_t> rom(0x20000, 0);
+			SetPackedRomWord(rom, 0, 0x0002); // SLEEP
+			SetPackedRomWord(rom, 1, 0x4e5a); // MOV A,#5Ah after wake
+			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedBigEndian))
+				return false;
+			machine.Reset();
+			machine.WriteByte(0x30, 0x80); // STBCON.KE enables PA0-PA6 key wake.
+			machine.WriteByte(kDirectionA, 0xff);
+			machine.WriteByte(kDirectionB, 0x80);
+			machine.WriteByte(kPortB, 0x00);
+			machine.Next();
+			if ((machine.PC() >> 1) != 0)
+				return false;
+			machine.KeyDown(0);
+			for (int i = 0; i < 1100; ++i)
+				machine.Next();
+			return (machine.PC() >> 1) != 0;
+		};
+
+		constexpr uint8_t kPb0 = 1u << 0;
+		constexpr uint8_t kPb1 = 1u << 1;
+		constexpr uint8_t kPb5 = 1u << 5;
 		return
-			Scan({0, 1}, 0) == 0xfc &&                 // same PB row
-			Scan({0, 8}, 0) == 0xfe &&                 // same PA column, PB0
-			Scan({0, 8}, 1) == 0xfe &&                 // same PA column, PB1
-			Scan({0, 1, 8}, 1) == 0xfc &&              // 3-key rectangle ghosts PA1
-			Scan({0, 1, 8, 9}, 1) == 0xfc &&           // four physical corners
-			Scan({0}, 0, true) == 0x7e;                // independent ON plus matrix key
+			Scan({0, 1}, kPb0) == 0xfc &&                 // same PB row
+			Scan({0, 8}, kPb0) == 0xfe &&                 // same PA column, PB0
+			Scan({0, 8}, kPb1) == 0xfe &&                 // same PA column, PB1
+			Scan({0, 1, 8}, kPb1) == 0xfc &&              // 3-key rectangle ghosts PA1
+			Scan({0, 1, 8, 9}, kPb1) == 0xfc &&           // four physical corners
+			Scan({0}, kPb0, true) == 0x7e &&              // independent ON plus matrix key
+			Scan({}, kPb0, true) == 0x7f &&               // ON is independent of PB0
+			Scan({}, kPb5, true) == 0x7f &&               // ON is independent of PB5
+			Scan({3, 46}, kPb0 | kPb5, true) == 0x37 &&   // SHIFT+7+ON, paired rows
+			Scan({3, 46}, kPb5, true) == 0x3f &&          // SHIFT+ON
+			Scan({3, 46}, kPb0, true) == 0x77 &&          // 7+ON
+			Scan({0}, kPb0, false, 0x10) == 0xfe &&       // firmware RAM 40h is not scan state
+			OnInterrupt() &&
+			KeyEnableWake();
+	}
+
+	bool TimerSmoke() {
+		constexpr uint8_t kInterruptStatus = 0x24;
+		constexpr uint8_t kTimer0Control = 0x25;
+		constexpr uint8_t kTimer0ReloadLow = 0x26;
+		constexpr uint8_t kTimer0ReloadHigh = 0x27;
+		constexpr uint8_t kTimer0Enable = 0x08;
+		constexpr uint8_t kTimer0Flag = 0x01;
+
+		casioemu::ePSCPU machine;
+		std::vector<uint8_t> rom(0x20000, 0);
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedBigEndian))
+			return false;
+		machine.Reset();
+		machine.WriteByte(kTimer0ReloadLow, 0x02);
+		machine.WriteByte(kTimer0ReloadHigh, 0x00);
+		machine.WriteByte(kTimer0Control, kTimer0Enable);
+		for (int i = 0; i < 100; ++i)
+			machine.Next();
+		if ((machine.ReadByte(kInterruptStatus) & kTimer0Flag) == 0)
+			return false;
+
+		casioemu::ePSCPU idle_machine;
+		std::vector<uint8_t> idle_rom(0x20000, 0);
+		SetPackedRomWord(idle_rom, 0, 0x0002); // SLEP
+		SetPackedRomWord(idle_rom, 1, 0x4e5a); // MOV A,#5Ah after Timer1 wake
+		if (!idle_machine.LoadRom(idle_rom, casioemu::Eps6800RomFormat::PackedBigEndian))
+			return false;
+		idle_machine.Reset();
+		idle_machine.WriteByte(0x20, 0x03); // CPUCON.MS1 selects Idle on SLEP.
+		idle_machine.WriteByte(0x2b, 0x01); // Timer1 reload.
+		idle_machine.WriteByte(0x2a, 0x88); // T1WKEN | T1EN.
+		idle_machine.Next();
+		if ((idle_machine.PC() >> 1) != 0)
+			return false;
+		for (int i = 0; i < 20; ++i)
+			idle_machine.Next();
+		return (idle_machine.PC() >> 1) != 0;
+	}
+
+	bool TablePointerSmoke() {
+		constexpr uint8_t kAccumulator = 0x0a;
+		constexpr uint8_t kTablePointerLow = 0x0b;
+		constexpr uint8_t kTablePointerMid = 0x0c;
+		constexpr uint8_t kTablePointerHigh = 0x0d;
+		constexpr uint8_t kChecksumHigh = 0x57;
+		constexpr uint8_t kChecksumLow = 0x58;
+
+		casioemu::ePSCPU machine;
+		std::vector<uint8_t> rom(0x20000, 0);
+		SetPackedRomWord(rom, 0, 0x2d80); // TBRD 1,80h: read then increment TABPTR.
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedBigEndian))
+			return false;
+		machine.Reset();
+		machine.WriteByte(kTablePointerLow, 0xff);
+		machine.WriteByte(kTablePointerMid, 0xff);
+		machine.WriteByte(kTablePointerHigh, 0xff);
+		if (machine.ReadByte(kTablePointerHigh) != 0x01)
+			return false;
+		machine.Next();
+		if (machine.ReadByte(kTablePointerLow) != 0 ||
+			machine.ReadByte(kTablePointerMid) != 0 ||
+			machine.ReadByte(kTablePointerHigh) != 0)
+			return false;
+
+		casioemu::ePSCPU arithmetic_machine;
+		std::vector<uint8_t> arithmetic_rom(0x20000, 0);
+		SetPackedRomWord(arithmetic_rom, 0, 0x1158); // ADD 58h,A
+		SetPackedRomWord(arithmetic_rom, 1, 0x240a); // CLR A; carry must be preserved.
+		SetPackedRomWord(arithmetic_rom, 2, 0x1357); // ADC 57h,A
+		if (!arithmetic_machine.LoadRom(arithmetic_rom, casioemu::Eps6800RomFormat::PackedBigEndian))
+			return false;
+		arithmetic_machine.Reset();
+		for (unsigned low = 0; low <= 0xff; ++low) {
+			for (unsigned byte = 0; byte <= 0xff; ++byte) {
+				arithmetic_machine.WriteByte(kChecksumLow, static_cast<uint8_t>(low));
+				arithmetic_machine.WriteByte(kChecksumHigh, 0);
+				arithmetic_machine.WriteByte(kAccumulator, static_cast<uint8_t>(byte));
+				arithmetic_machine.SetPC(0);
+				arithmetic_machine.Next();
+				arithmetic_machine.Next();
+				arithmetic_machine.Next();
+				const unsigned expected = low + byte;
+				if (arithmetic_machine.ReadByte(kChecksumLow) != (expected & 0xff) ||
+					arithmetic_machine.ReadByte(kChecksumHigh) != (expected >> 8))
+					return false;
+			}
+		}
+		return machine.ReadByte(kTablePointerLow) == 0 &&
+			machine.ReadByte(kTablePointerMid) == 0 &&
+			machine.ReadByte(kTablePointerHigh) == 0;
 	}
 
 	bool HookAndRamSmoke() {
@@ -331,6 +475,14 @@ int main(int argc, char** argv) {
 		std::cerr << "EPS6800 keyboard matrix/ghosting regression\n";
 		return 1;
 	}
+	if (!TimerSmoke()) {
+		std::cerr << "EPS6800 timer regression\n";
+		return 1;
+	}
+	if (!TablePointerSmoke()) {
+		std::cerr << "EPS6800 table pointer width regression\n";
+		return 1;
+	}
 	if (!HookAndRamSmoke()) {
 		std::cerr << "EPS6800 hook/RAM persistence regression\n";
 		return 1;
@@ -497,7 +649,39 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
-	std::cout << " snapshot=ok status_map=ok keyboard_matrix=ok debugger=ok hooks=ok ram=ok";
+	casioemu::ePSCPU diagnostic_machine;
+	if (!diagnostic_machine.LoadRom(rom, casioemu::Eps6800RomFormat::UnpackedNibbles)) {
+		std::cerr << "Diagnostic ROM load failed\n";
+		return 2;
+	}
+	Boot(diagnostic_machine);
+	bool diagnostic_armed = false;
+	diagnostic_machine.SetDebugHooks(
+		[&](uint32_t pc_before, uint32_t, uint8_t) {
+			// ROM 0x01D8 stores mode 1 after all three SHIFT+7+ON
+			// electrical scans have matched.
+			diagnostic_armed |= pc_before == 0x01d8;
+			return false;
+		},
+		{}, {}, {});
+	diagnostic_machine.KeyDown(46); // SHIFT: PB5-PA6
+	diagnostic_machine.KeyDown(3);  // 7: PB0-PA3
+	for (int i = 0; i < 4; ++i)
+		diagnostic_machine.RunFrame();
+	diagnostic_machine.OnDown();
+	for (int i = 0; i < 12; ++i)
+		diagnostic_machine.RunFrame();
+	diagnostic_machine.OnUp();
+	diagnostic_machine.KeyUp(3);
+	diagnostic_machine.KeyUp(46);
+	for (int i = 0; i < 12; ++i)
+		diagnostic_machine.RunFrame();
+	if (!diagnostic_armed) {
+		std::cerr << "HP 300S+ ROM did not accept SHIFT+7+ON diagnostic entry\n";
+		return 1;
+	}
+
+	std::cout << " snapshot=ok status_map=ok keyboard_matrix=ok diagnostic=ok debugger=ok hooks=ok ram=ok";
 
 	casioemu::ePSCPU lcd_control_machine;
 	if (!lcd_control_machine.LoadRom(rom, casioemu::Eps6800RomFormat::UnpackedNibbles)) {

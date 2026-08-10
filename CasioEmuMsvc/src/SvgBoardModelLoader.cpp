@@ -583,8 +583,15 @@ namespace casioemu {
 				button.svg_shape = mapper.WrapShape(shape);
 				button.svg_defs = defs;
 				if (ki_mask == 0 && ko_mask == 0) {
-					button.kiko = 0xff;
+					button.kiko = BUTTON_KIKO_POWER;
 					button.keyname = "Escape";
+				}
+				else if (ki_mask == 256 && ko_mask == 256) {
+					// A calculator reset contact is not part of the 8x8 keyboard
+					// matrix.  Values outside the matrix range provide an explicit
+					// SVG sentinel while preserving the existing data-ki/data-ko
+					// model format.
+					button.kiko = BUTTON_KIKO_RESET;
 				}
 				else {
 					const int ki = MaskToIndex(ki_mask);

@@ -15,10 +15,9 @@ void kbd_connect_bus_state(struct kbd_state *state, struct cpu_state *cpu, struc
 enum {
 	KEY_PRESS_DELAY_CYCLES = 1000,
 	KEY_RELEASE_HOLD_CYCLES = 1000,
-	KEY_SCAN_BUSY_ADDR = KBD_REG_COUNT,
-	KEY_SCAN_BUSY_MASK = 0x10,
 	KBD_MATRIX_IDLE = 0xff,
 	KBD_ON_COLUMN_MASK = 0x80,
+	KBD_KEY_COLUMNS_MASK = 0x7f,
 	KBD_INVALID_READ_VALUE = 0xff,
 	KBD_DCR_RESET = 0xff
 };
@@ -116,13 +115,16 @@ static uint8_t kbd_active_column_mask(const struct kbd_state *state) {
 static void kbd_trigger_press(struct kbd_state *state, uint8_t mask) {
 	uint8_t interrupt_mask = mask & state->reg[REG_PAINTEN];
 	uint8_t wake_mask = mask & state->reg[REG_PAWAKE];
+	uint8_t key_wake_mask = (state->reg[REG_STBCON] & BIT_KEY_INPUT_ENABLE)
+		? (mask & KBD_KEY_COLUMNS_MASK)
+		: 0;
 
 	if (interrupt_mask && (kbd_bus_read_internal(state, REG_CPUCON) & BIT_GLINT)) {
 		state->reg[REG_PAINTSTA] |= interrupt_mask;
 		kbd_bus_write_internal(state, REG_PAINTSTA, state->reg[REG_PAINTSTA]);
 		kbd_cpu_interrupt(state, INT_LEVEL1_PAINT);
 	}
-	else if (wake_mask) {
+	else if (wake_mask || key_wake_mask) {
 		kbd_cpu_wake(state, WAKE_PAINT);
 	}
 }
@@ -157,16 +159,13 @@ static bool kbd_countdown_elapsed(uint16_t *counter, uint32_t cycles) {
 	return false;
 }
 
-static bool kbd_scan_busy(struct kbd_state *state) {
-	return (kbd_bus_read_internal(state, KEY_SCAN_BUSY_ADDR) & KEY_SCAN_BUSY_MASK) != 0;
-}
-
 static void kbd_process_pending_press(struct kbd_state *state) {
 	uint8_t active_mask = kbd_active_column_mask(state);
 	uint8_t ready_mask;
 
 	state->pending_press_mask &= active_mask;
-	ready_mask = state->pending_press_mask & (state->reg[REG_PAINTEN] | state->reg[REG_PAWAKE]);
+	ready_mask = state->pending_press_mask & (state->reg[REG_PAINTEN] | state->reg[REG_PAWAKE] |
+		((state->reg[REG_STBCON] & BIT_KEY_INPUT_ENABLE) ? KBD_KEY_COLUMNS_MASK : 0));
 	if (!ready_mask || !kbd_cpu_is_sleep_repeating(state)) {
 		return;
 	}
@@ -220,6 +219,7 @@ void kbd_write_byte_state(struct kbd_state *state, uint8_t addr, uint8_t byte) {
 			break;
 		case REG_DCRA:
 		case REG_DCRB:
+		case REG_STBCON:
 		case REG_PAINTEN:
 		case REG_PAWAKE:
 			kbd_process_pending_press(state);
@@ -287,7 +287,14 @@ static void kbd_process_pending_on_press(struct kbd_state *state, uint32_t cycle
 	if (state->on_pending_down) {
 		if (kbd_countdown_elapsed(&state->on_press_cycles, cycles)) {
 			state->on_pressed = true;
+			/*
+			 * ON is the independent active-low PA7 input, not a matrix
+			 * switch.  It wakes the CPU and also follows the normal PA
+			 * interrupt path so firmware can distinguish plain ON from
+			 * held-key combinations such as SHIFT+7+ON.
+			 */
 			kbd_cpu_wake(state, WAKE_ON);
+			kbd_trigger_press(state, KBD_ON_COLUMN_MASK);
 			state->on_pending_down = false;
 		}
 	}
@@ -303,8 +310,7 @@ static void kbd_process_pending_on_release(struct kbd_state *state) {
 static void kbd_process_pending_key_press(
 	struct kbd_state *state,
 	uint8_t key,
-	uint32_t cycles,
-	bool scan_busy
+	uint32_t cycles
 ) {
 	if (!state->key_pending_down[key]) {
 		return;
@@ -312,11 +318,6 @@ static void kbd_process_pending_key_press(
 
 	if (cycles < state->key_press_cycles[key]) {
 		kbd_countdown_elapsed(&state->key_press_cycles[key], cycles);
-		return;
-	}
-
-	/* Avoid changing the matrix while firmware is actively sampling it. */
-	if (scan_busy) {
 		return;
 	}
 
@@ -328,11 +329,11 @@ static void kbd_process_pending_key_press(
 	}
 }
 
-static void kbd_process_pending_key_presses(struct kbd_state *state, uint32_t cycles, bool scan_busy) {
+static void kbd_process_pending_key_presses(struct kbd_state *state, uint32_t cycles) {
 	int key;
 
 	for (key = 0; key < KBD_KEY_COUNT; key++) {
-		kbd_process_pending_key_press(state, (uint8_t)key, cycles, scan_busy);
+		kbd_process_pending_key_press(state, (uint8_t)key, cycles);
 	}
 }
 
@@ -355,11 +356,9 @@ static void kbd_process_pending_key_releases(struct kbd_state *state, uint32_t c
 }
 
 void kbd_tick_state(struct kbd_state *state, uint32_t cycles) {
-	bool scan_busy = kbd_scan_busy(state);
-
 	kbd_process_pending_on_press(state, cycles);
 	kbd_process_pending_on_release(state);
-	kbd_process_pending_key_presses(state, cycles, scan_busy);
+	kbd_process_pending_key_presses(state, cycles);
 	kbd_process_pending_press(state);
 	kbd_process_pending_key_releases(state, cycles);
 	kbd_process_pending_press(state);

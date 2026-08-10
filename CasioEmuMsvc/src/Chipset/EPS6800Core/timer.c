@@ -34,6 +34,10 @@ static void timer_cpu_interrupt(struct timer_state *state, uint8_t int_level) {
 	cpu_interrupt_state(state->cpu, int_level);
 }
 
+static void timer_cpu_wake(struct timer_state *state, uint8_t wake_source) {
+	cpu_wake_state(state->cpu, wake_source);
+}
+
 static void timer_signal_interrupt(struct timer_state *state, uint8_t flag, uint8_t control, uint8_t enable_bit) {
 	state->reg[REG_INTSTA] |= flag;
 	timer_bus_write_internal(state, REG_INTSTA, state->reg[REG_INTSTA]);
@@ -186,6 +190,9 @@ void timer_tick_state(struct timer_state *state, uint32_t cycles) {
 	if (timer_enabled(state->reg[REG_TR1CON], BIT_T1EN)) {
 		if (timer_tick_counter(&state->t1psc, state->t1prl, &state->t1cnt, state->t1crl, cycles)) {
 			timer_signal_interrupt(state, BIT_TMR1I, state->reg[REG_TR1CON], BIT_TMR1IE);
+			if (state->reg[REG_TR1CON] & BIT_T1WKEN) {
+				timer_cpu_wake(state, WAKE_TIMER);
+			}
 		}
 	}
 
