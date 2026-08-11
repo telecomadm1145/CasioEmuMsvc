@@ -5,16 +5,12 @@
 
 enum {
 	ROM_BYTES_PER_WORD = 2,
-	ROM_HIGH_BYTE_OFFSET = 0,
-	ROM_LOW_BYTE_OFFSET = 1
+	ROM_LOW_BYTE_OFFSET = 0,
+	ROM_HIGH_BYTE_OFFSET = 1
 };
 
 static size_t rom_word_offset(uint32_t addr) {
 	return (size_t)addr * ROM_BYTES_PER_WORD;
-}
-
-static uint16_t rom_pack_word(uint8_t high, uint8_t low) {
-	return (uint16_t)((high << 8) | low);
 }
 
 static void rom_clear(struct rom_state *state) {
@@ -42,7 +38,8 @@ uint16_t rom_read_word(const struct rom_state *state, uint32_t addr) {
 
 	if (addr < ROM_MAX_WORDS) {
 		offset = rom_word_offset(addr);
-		return rom_pack_word(state->data[offset + ROM_HIGH_BYTE_OFFSET], state->data[offset + ROM_LOW_BYTE_OFFSET]);
+		return (uint16_t)(state->data[offset + ROM_LOW_BYTE_OFFSET] |
+			((uint16_t)state->data[offset + ROM_HIGH_BYTE_OFFSET] << 8));
 	}
 
 	return 0;
@@ -56,8 +53,8 @@ bool rom_write_word(struct rom_state *state, uint32_t addr, uint16_t word) {
 	}
 
 	offset = rom_word_offset(addr);
-	state->data[offset + ROM_HIGH_BYTE_OFFSET] = (uint8_t)(word >> 8);
 	state->data[offset + ROM_LOW_BYTE_OFFSET] = (uint8_t)word;
+	state->data[offset + ROM_HIGH_BYTE_OFFSET] = (uint8_t)(word >> 8);
 	return true;
 }
 

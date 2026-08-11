@@ -24,7 +24,7 @@ namespace casioemu {
 	class MMU;
 
 	enum class Eps6800RomFormat : uint8_t {
-		PackedBigEndian,
+		PackedLittleEndian,
 		UnpackedNibbles
 	};
 
@@ -142,7 +142,7 @@ namespace casioemu {
 		bool trace_enabled_{};
 		size_t trace_capacity_{4096};
 		std::deque<Eps6800TraceEntry> trace_buffer_;
-		Eps6800RomFormat rom_format_{Eps6800RomFormat::PackedBigEndian};
+		Eps6800RomFormat rom_format_{Eps6800RomFormat::PackedLittleEndian};
 		std::function<bool(uint32_t, uint32_t, uint8_t)> instruction_hook_;
 		std::function<void(uint32_t, uint32_t, bool, uint32_t, const std::string&)> function_hook_;
 		std::function<bool(uint32_t, uint8_t&, bool)> memory_hook_;

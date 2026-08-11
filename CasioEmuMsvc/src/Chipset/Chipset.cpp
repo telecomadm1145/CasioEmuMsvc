@@ -631,7 +631,7 @@ namespace casioemu {
 			const bool is_unpacked_nibbles = unpacked_entry != emulator.ModelDefinition.extra.end() &&
 				unpacked_entry->second != "0" && unpacked_entry->second != "false";
 			const auto rom_format = is_unpacked_nibbles ? Eps6800RomFormat::UnpackedNibbles :
-				Eps6800RomFormat::PackedBigEndian;
+				Eps6800RomFormat::PackedLittleEndian;
 			if (!epscpu || !epscpu->LoadRom(rom_data, rom_format))
 				PANIC("Invalid EPS6800 ROM for configured format %s\n", Eps6800RomFormatName(rom_format));
 		#ifndef CASIOEMU_DISABLE_RAM_IMAGE

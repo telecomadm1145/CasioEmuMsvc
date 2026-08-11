@@ -14,7 +14,7 @@
 #include <vector>
 
 namespace {
-	constexpr size_t kRomSize = 0x40000;
+	constexpr size_t kRomSize = 0x20000;
 	constexpr size_t kLcdSize = casioemu::EPS6800_LCD_RAW_SIZE;
 
 	uint32_t Fnv1a(const uint8_t* data, size_t size) {
@@ -75,8 +75,8 @@ namespace {
 
 	void SetPackedRomWord(std::vector<uint8_t>& rom, uint32_t address, uint16_t word) {
 		const size_t offset = static_cast<size_t>(address) * 2;
-		rom[offset] = static_cast<uint8_t>(word >> 8);
-		rom[offset + 1] = static_cast<uint8_t>(word);
+		rom[offset] = static_cast<uint8_t>(word);
+		rom[offset + 1] = static_cast<uint8_t>(word >> 8);
 	}
 
 	bool Check(bool condition, const char* label, int line) {
@@ -100,7 +100,7 @@ namespace {
 			bool on = false, uint8_t firmware_ram_40 = 0) {
 			casioemu::ePSCPU machine;
 			std::vector<uint8_t> rom(0x20000, 0);
-			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedBigEndian))
+			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
 				return static_cast<uint8_t>(0);
 			machine.Reset();
 			machine.WriteByte(kDirectionA, 0xff); // PA inputs with pull-ups.
@@ -119,7 +119,7 @@ namespace {
 		const auto OnInterrupt = [&]() {
 			casioemu::ePSCPU machine;
 			std::vector<uint8_t> rom(0x20000, 0);
-			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedBigEndian))
+			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
 				return false;
 			machine.Reset();
 			machine.WriteByte(kDirectionA, 0xff);
@@ -135,7 +135,7 @@ namespace {
 			std::vector<uint8_t> rom(0x20000, 0);
 			SetPackedRomWord(rom, 0, 0x0002); // SLEEP
 			SetPackedRomWord(rom, 1, 0x4e5a); // MOV A,#5Ah after wake
-			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedBigEndian))
+			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
 				return false;
 			machine.Reset();
 			machine.WriteByte(0x30, 0x80); // STBCON.KE enables PA0-PA6 key wake.
@@ -181,7 +181,7 @@ namespace {
 
 		casioemu::ePSCPU machine;
 		std::vector<uint8_t> rom(0x20000, 0);
-		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedBigEndian))
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
 			return false;
 		machine.Reset();
 		machine.WriteByte(kTimer0ReloadLow, 0x02);
@@ -196,7 +196,7 @@ namespace {
 		std::vector<uint8_t> idle_rom(0x20000, 0);
 		SetPackedRomWord(idle_rom, 0, 0x0002); // SLEP
 		SetPackedRomWord(idle_rom, 1, 0x4e5a); // MOV A,#5Ah after Timer1 wake
-		if (!idle_machine.LoadRom(idle_rom, casioemu::Eps6800RomFormat::PackedBigEndian))
+		if (!idle_machine.LoadRom(idle_rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
 			return false;
 		idle_machine.Reset();
 		idle_machine.WriteByte(0x20, 0x03); // CPUCON.MS1 selects Idle on SLEP.
@@ -221,7 +221,7 @@ namespace {
 		casioemu::ePSCPU machine;
 		std::vector<uint8_t> rom(0x20000, 0);
 		SetPackedRomWord(rom, 0, 0x2d80); // TBRD 1,80h: read then increment TABPTR.
-		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedBigEndian))
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
 			return false;
 		machine.Reset();
 		machine.WriteByte(kTablePointerLow, 0xff);
@@ -240,7 +240,7 @@ namespace {
 		SetPackedRomWord(arithmetic_rom, 0, 0x1158); // ADD 58h,A
 		SetPackedRomWord(arithmetic_rom, 1, 0x240a); // CLR A; carry must be preserved.
 		SetPackedRomWord(arithmetic_rom, 2, 0x1357); // ADC 57h,A
-		if (!arithmetic_machine.LoadRom(arithmetic_rom, casioemu::Eps6800RomFormat::PackedBigEndian))
+		if (!arithmetic_machine.LoadRom(arithmetic_rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
 			return false;
 		arithmetic_machine.Reset();
 		for (unsigned low = 0; low <= 0xff; ++low) {
@@ -272,7 +272,7 @@ namespace {
 		SetPackedRomWord(rom, 4, 0x2bfe); // RET
 
 		casioemu::ePSCPU machine;
-		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedBigEndian))
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
 			return false;
 		int instructions = 0;
 		int calls = 0;
@@ -346,9 +346,9 @@ namespace {
 		std::vector<uint8_t> packed_rom(0x20000, 0);
 		SetPackedRomWord(packed_rom, 2, 0xe004);
 		casioemu::ePSCPU packed_machine;
-		if (!Check(packed_machine.LoadRom(packed_rom, casioemu::Eps6800RomFormat::PackedBigEndian) &&
+		if (!Check(packed_machine.LoadRom(packed_rom, casioemu::Eps6800RomFormat::PackedLittleEndian) &&
 				packed_machine.ReadCodeWord(2) == 0xe004 &&
-				!packed_machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedBigEndian),
+				!packed_machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian),
 				"packed ROM load/word decode/reject mismatch", __LINE__))
 			return false;
 
@@ -556,7 +556,7 @@ int main(int argc, char** argv) {
 	}
 
 	casioemu::ePSCPU machine;
-	if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::UnpackedNibbles)) {
+	if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian)) {
 		std::cerr << "ROM load failed\n";
 		return 2;
 	}
@@ -617,7 +617,7 @@ int main(int argc, char** argv) {
 	bool rom_load_failed = false;
 	const auto Scenario = [&](std::initializer_list<uint8_t> keys) {
 		casioemu::ePSCPU scenario_machine;
-		if (!scenario_machine.LoadRom(rom, casioemu::Eps6800RomFormat::UnpackedNibbles)) {
+		if (!scenario_machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian)) {
 			rom_load_failed = true;
 			return Capture(scenario_machine);
 		}
@@ -650,7 +650,7 @@ int main(int argc, char** argv) {
 	}
 
 	casioemu::ePSCPU diagnostic_machine;
-	if (!diagnostic_machine.LoadRom(rom, casioemu::Eps6800RomFormat::UnpackedNibbles)) {
+	if (!diagnostic_machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian)) {
 		std::cerr << "Diagnostic ROM load failed\n";
 		return 2;
 	}
@@ -684,7 +684,7 @@ int main(int argc, char** argv) {
 	std::cout << " snapshot=ok status_map=ok keyboard_matrix=ok diagnostic=ok debugger=ok hooks=ok ram=ok";
 
 	casioemu::ePSCPU lcd_control_machine;
-	if (!lcd_control_machine.LoadRom(rom, casioemu::Eps6800RomFormat::UnpackedNibbles)) {
+	if (!lcd_control_machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian)) {
 		std::cerr << "ROM load failed\n";
 		return 2;
 	}
@@ -704,7 +704,7 @@ int main(int argc, char** argv) {
 	}
 
 	casioemu::ePSCPU contrast_machine;
-	if (!contrast_machine.LoadRom(rom, casioemu::Eps6800RomFormat::UnpackedNibbles)) {
+	if (!contrast_machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian)) {
 		std::cerr << "ROM load failed\n";
 		return 2;
 	}

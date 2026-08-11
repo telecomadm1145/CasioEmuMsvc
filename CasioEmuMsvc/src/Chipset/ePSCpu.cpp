@@ -35,10 +35,17 @@ namespace {
 			source.size() / kUnpackedBytesPerWord > kMaximumRomWords)
 			return false;
 		packed.resize(source.size() / 2);
-		for (size_t i = 0; i < source.size(); i += 2) {
-			if (source[i] > 0x0f || source[i + 1] > 0x0f)
+		for (size_t source_offset = 0, packed_offset = 0;
+			source_offset < source.size(); source_offset += kUnpackedBytesPerWord,
+			packed_offset += kPackedBytesPerWord) {
+			const auto nibble0 = source[source_offset];
+			const auto nibble1 = source[source_offset + 1];
+			const auto nibble2 = source[source_offset + 2];
+			const auto nibble3 = source[source_offset + 3];
+			if (nibble0 > 0x0f || nibble1 > 0x0f || nibble2 > 0x0f || nibble3 > 0x0f)
 				return false;
-			packed[i / 2] = static_cast<unsigned char>((source[i] << 4) | source[i + 1]);
+			packed[packed_offset] = static_cast<unsigned char>((nibble2 << 4) | nibble3);
+			packed[packed_offset + 1] = static_cast<unsigned char>((nibble0 << 4) | nibble1);
 		}
 		return true;
 	}
@@ -86,8 +93,8 @@ namespace {
 namespace casioemu {
 	const char* Eps6800RomFormatName(Eps6800RomFormat format) {
 		switch (format) {
-		case Eps6800RomFormat::PackedBigEndian:
-			return "packed-big-endian";
+		case Eps6800RomFormat::PackedLittleEndian:
+			return "packed-little-endian";
 		case Eps6800RomFormat::UnpackedNibbles:
 			return "unpacked-nibbles";
 		}
@@ -157,8 +164,8 @@ namespace casioemu {
 		const size_t offset = static_cast<size_t>(word_address) * kPackedBytesPerWord;
 		if (offset + 1 >= rom.size())
 			return false;
-		rom[offset] = static_cast<unsigned char>(value >> 8);
-		rom[offset + 1] = static_cast<unsigned char>(value);
+		rom[offset] = static_cast<unsigned char>(value);
+		rom[offset + 1] = static_cast<unsigned char>(value >> 8);
 		return true;
 	}
 
