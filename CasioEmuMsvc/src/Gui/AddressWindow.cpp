@@ -143,6 +143,21 @@ private:
 				}
 			}
 		});
+		SetupHook(on_eps_memory_write, [this](MemoryEventArgs& args) {
+			std::lock_guard lock(addresses_mutex);
+			for (const auto& info : addresses)
+				if (info.locked && info.address == args.offset)
+					args.handled = true;
+		});
+		SetupHook(on_eps_memory_read, [this](MemoryEventArgs& args) {
+			std::lock_guard lock(addresses_mutex);
+			for (const auto& info : addresses) {
+				if (info.locked && info.address == args.offset) {
+					args.value = info.value;
+					args.handled = true;
+				}
+			}
+		});
 	}
 };
 

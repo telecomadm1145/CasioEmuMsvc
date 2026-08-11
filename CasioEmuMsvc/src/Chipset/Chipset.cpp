@@ -38,6 +38,7 @@
 #include <iostream>
 
 namespace casioemu {
+	constexpr uint32_t EPS_RAM_SAVE_INTERVAL_MS = 10 * 1000;
 	void* Chipset::QueryInterface(const char* name) {
 		auto d = (void*)0;
 		for (auto& phe : peripherals) {
@@ -49,6 +50,41 @@ namespace casioemu {
 	Chipset::Chipset(Emulator& _emulator) : emulator(_emulator), cpu(*new CPU(emulator)), mmu(*new MMU(emulator)) {
 		tiDiagMode = false;
 		tiKey = 0;
+	}
+
+	void Chipset::SetupEpsCpu() {
+		epscpu = new ePSCPU();
+		epscpu->SetDebugHooks(
+			[](uint32_t pc_before, uint32_t pc_after, uint8_t stack_pointer) {
+				InstructionEventArgs args{pc_before, pc_after};
+				args.stack_pointer = stack_pointer;
+				RaiseEvent(on_eps_instruction, args);
+				return args.should_break;
+			},
+			[](uint32_t pc, uint32_t lr, bool call, uint32_t accumulator, const std::string& backtrace) {
+				EpsFunctionEventArgs args{{pc, lr}, accumulator, backtrace};
+				if (call) {
+					RaiseEvent(on_eps_call_function, args);
+				}
+				else {
+					RaiseEvent(on_eps_function_return, args);
+				}
+			},
+			[](uint32_t address, uint8_t& value, bool write) {
+				MemoryEventArgs args{address, false, value};
+				if (write) {
+					RaiseEvent(on_eps_memory_write, args);
+				}
+				else {
+					RaiseEvent(on_eps_memory_read, args);
+				}
+				value = args.value;
+				return args.handled;
+			},
+			[this](uint8_t index) {
+				InterruptEventArgs args{index};
+				RaiseEvent(on_eps_interrupt, *this, args);
+			});
 	}
 
 	void Chipset::Setup() {
@@ -79,19 +115,75 @@ namespace casioemu {
 				mmu.GenerateSegmentDispatch(segment_index);
 		}
 		else {
-			epscpu = new ePSCPU(mmu);
-			mmu.GenerateSegmentDispatch(0);
+			SetupEpsCpu();
 		}
 		ConstructPeripherals();
 	}
 
 	Chipset::~Chipset() {
+		if (eps_ram_save_timer_id) {
+			SDL_RemoveTimer(eps_ram_save_timer_id);
+			eps_ram_save_timer_id = 0;
+		}
+		PersistEpsRam();
 		DestructPeripherals();
-		DestructClockGenerator();
-		DestructInterruptSFR();
-		delete epscpu;
+		if (emulator.hardware_id != HW_EPS6800) {
+			DestructClockGenerator();
+			DestructInterruptSFR();
+		}
+		{
+			/* SDL_RemoveTimer does not wait for a callback that is already
+			 * running; acquire the save mutex so an in-flight PersistEpsRam can
+			 * never outlive epscpu. */
+			const std::lock_guard lock(eps_ram_save_mutex);
+			delete epscpu;
+			epscpu = nullptr;
+		}
 		delete& mmu;
 		delete& cpu;
+	}
+
+	void Chipset::PersistEpsRam() {
+	#ifdef CASIOEMU_DISABLE_RAM_IMAGE
+		return;
+	#else
+		const std::lock_guard lock(eps_ram_save_mutex);
+		if (!epscpu)
+			return;
+		try {
+			emulator.WriteModelSessionResource("ram.dmp", epscpu->ExportRam());
+			logger::Info("[EPS6800][Info] RAM image saved to ram.dmp\n");
+		}
+		catch (const std::exception& error) {
+			logger::Info("[EPS6800][Warn] Failed to save RAM image: %s\n", error.what());
+		}
+	#endif
+	}
+
+	bool Chipset::ReloadRom(std::string& error) {
+		std::vector<unsigned char> data;
+		try {
+			data = emulator.ReadModelResource(emulator.ModelDefinition.rom_path);
+		}
+		catch (const std::exception&) {
+			error = "Failed to open ROM file";
+			return false;
+		}
+
+		if (epscpu) {
+			if (!epscpu->LoadRom(data, epscpu->RomFormat())) {
+				error = "Invalid EPS6800 ROM image";
+				return false;
+			}
+			rom_data = std::move(data);
+		}
+		else {
+			std::copy_n(data.begin(), std::min(data.size(), rom_data.size()), rom_data.begin());
+		}
+
+		Reset();
+		error.clear();
+		return true;
 	}
 
 	void Chipset::ConstructInterruptSFR() {
@@ -448,7 +540,6 @@ namespace casioemu {
 
 	void Chipset::ConstructPeripherals() {
 		if (emulator.hardware_id == HW_EPS6800) {
-			peripherals.push_front(CreateBatteryBackedRAM(emulator));
 			peripherals.push_front(CreateScreen(emulator));
 			peripherals.push_front(CreateKeyboard(emulator));
 			return;
@@ -535,11 +626,41 @@ namespace casioemu {
 		catch (const std::exception& error) {
 			PANIC("Failed to read ROM: %s\n", error.what());
 		}
-		if (epscpu) {
-			if (rom_data.size() < 0x40000) {
-				PANIC("EPS ROM is smaller than 0x40000 bytes\n");
+		if (emulator.hardware_id == HW_EPS6800) {
+			const auto unpacked_entry = emulator.ModelDefinition.extra.find("is_unpacked_nibbles");
+			const bool is_unpacked_nibbles = unpacked_entry != emulator.ModelDefinition.extra.end() &&
+				unpacked_entry->second != "0" && unpacked_entry->second != "false";
+			const auto rom_format = is_unpacked_nibbles ? Eps6800RomFormat::UnpackedNibbles :
+				Eps6800RomFormat::PackedBigEndian;
+			if (!epscpu || !epscpu->LoadRom(rom_data, rom_format))
+				PANIC("Invalid EPS6800 ROM for configured format %s\n", Eps6800RomFormatName(rom_format));
+		#ifndef CASIOEMU_DISABLE_RAM_IMAGE
+			if (emulator.HasModelResource("ram.dmp")) {
+				try {
+					const auto saved_ram = emulator.ReadModelResource("ram.dmp");
+					if (!epscpu->ImportRam(saved_ram))
+						logger::Info("[EPS6800][Warn] Ignoring ram.dmp with size %zu (expected 8192 or 8219)\n", saved_ram.size());
+					else
+						logger::Info("[EPS6800][Info] RAM image loaded from ram.dmp\n");
+				}
+				catch (const std::exception& error) {
+					logger::Info("[EPS6800][Warn] Failed to load RAM image: %s\n", error.what());
+				}
 			}
-			std::copy(rom_data.begin(), rom_data.begin() + 0x40000, epscpu->Rom);
+			eps_ram_save_timer_id = SDL_AddTimer(
+				EPS_RAM_SAVE_INTERVAL_MS,
+				[](Uint32 interval, void* param) -> Uint32 {
+					static_cast<Chipset*>(param)->PersistEpsRam();
+					return interval;
+				},
+				this);
+		#endif
+			for (auto& peripheral : peripherals)
+				peripheral->Initialise();
+			// The EPS core owns CPU-visible memory, but the debugger and plugins
+			// still discover their memory bridge through the project MMU object.
+			mmu.SetupInternals();
+			return;
 		}
 		if (emulator.hardware_id == HW_FX_5800P) {
 			if (emulator.ModelDefinition.flash_path.empty()) {
@@ -591,6 +712,15 @@ namespace casioemu {
 	}
 
 	void Chipset::Reset() {
+		if (emulator.hardware_id == HW_EPS6800) {
+			RaiseEvent(on_reset, *this);
+			for (auto& peripheral : peripherals)
+				peripheral->Reset();
+			epscpu->Reset();
+			run_mode = RM_RUN;
+			emulator.qr_code.Reset(false);
+			return;
+		}
 		ResetInterruptSFR();
 		isMIBlocked = false;
 
@@ -603,10 +733,7 @@ namespace casioemu {
 
 		for (auto& peripheral : peripherals)
 			peripheral->Reset();
-		if (emulator.hardware_id != HW_EPS6800)
-			cpu.Reset();
-		else
-			epscpu->Reset();
+		cpu.Reset();
 
 		interrupts_active[INT_RESET] = true;
 		pending_interrupt_count = 1;
@@ -879,6 +1006,11 @@ namespace casioemu {
 	}
 
 	void Chipset::Tick() {
+		if (emulator.hardware_id == HW_EPS6800) {
+			if (run_mode == RM_RUN && RunEpsFrame())
+				emulator.SetPaused(true);
+			return;
+		}
 		// * TODO: decrement delay counter, return if it's not 0
 
 		if (real_hardware) {
@@ -929,18 +1061,19 @@ namespace casioemu {
 				peripheral->TickAfterInterrupts();
 		}
 
-		if (run_mode == RM_RUN && SYSCLKTick) {
-			if (emulator.hardware_id != HW_EPS6800)
-				cpu.Next();
-			else {
-				epscpu->Next();
-			}
-		}
+		if (run_mode == RM_RUN && SYSCLKTick)
+			cpu.Next();
 
 		LSCLKTick = false;
 		LTBCReset = false;
 		HSCLKTick = false;
 		SYSCLKTick = false;
+	}
+
+	bool Chipset::RunEpsFrame() {
+		if (emulator.hardware_id == HW_EPS6800 && run_mode == RM_RUN && epscpu)
+			return epscpu->RunFrame();
+		return false;
 	}
 
 	void Chipset::EmulatorTick() {
@@ -962,6 +1095,10 @@ namespace casioemu {
 	}
 
 	void Chipset::SaveStateAll(std::ostream& os) {
+		if (emulator.hardware_id == HW_EPS6800) {
+			epscpu->SaveState(os);
+			return;
+		}
 		for (auto& peripheral : peripherals)
 			peripheral->SaveState(os);
 		Binary::Write(os, cpu.reg_r);
@@ -978,6 +1115,10 @@ namespace casioemu {
 	}
 
 	void Chipset::LoadStateAll(std::istream& is) {
+		if (emulator.hardware_id == HW_EPS6800) {
+			epscpu->LoadState(is);
+			return;
+		}
 		for (auto& peripheral : peripherals)
 			peripheral->LoadState(is);
 		Binary::Read(is, cpu.reg_r);

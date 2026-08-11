@@ -9,6 +9,7 @@
 #include <SDL.h>
 #include <forward_list>
 #include <iosfwd>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -51,6 +52,7 @@ namespace casioemu {
 
 		void ConstructPeripherals();
 		void DestructPeripherals();
+		void SetupEpsCpu();
 
 		void ConstructClockGenerator();
 		void GenerateTickForClock();
@@ -73,6 +75,9 @@ namespace casioemu {
 		int LSCLKFreqAddition{};
 
 		bool real_hardware;
+		SDL_TimerID eps_ram_save_timer_id{};
+		/* Serializes PersistEpsRam against ~Chipset deleting epscpu. */
+		std::mutex eps_ram_save_mutex;
 
 	public:
 		void* QueryInterface(const char* name);
@@ -90,12 +95,12 @@ namespace casioemu {
 
 		bool remap = false;
 
-		InterruptSource* MaskableInterrupts;
+		InterruptSource* MaskableInterrupts = nullptr;
 		size_t EffectiveMICount;
 
 		// Reserve these pointers to make it easy for other peripherals to input to pins.
-		IOPorts* ioport;
-		ExternalInterrupts* EXIhandle;
+		IOPorts* ioport = nullptr;
+		ExternalInterrupts* EXIhandle = nullptr;
 
 		bool WDT_enabled = false;
 
@@ -165,11 +170,14 @@ namespace casioemu {
 		void RemovePortInput(int, int);
 
 		void Tick();
+		bool RunEpsFrame();
 		void EmulatorTick();
 		void Frame();
 		void UIEvent(SDL_Event event);
 		void SaveStateAll(std::ostream& os);
 		void LoadStateAll(std::istream& is);
+		void PersistEpsRam();
+		bool ReloadRom(std::string& error);
 
 		template <typename T>
 		T* QueryInterface() {

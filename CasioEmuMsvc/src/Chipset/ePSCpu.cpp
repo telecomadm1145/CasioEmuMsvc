@@ -1,3542 +1,731 @@
+/*
+ * EPS6800 machine adapter for CasioEmuMsvc.
+ *
+ * The machine implementation in EPS6800Core is derived from eps-emu-0601
+ * and is licensed under GPL-3.0-or-later, matching this project.
+ */
 #include "ePSCpu.h"
-#include "MMU.hpp"
-#include <array>
 
-using WCHAR = char;
+#include "EPS6800Core/eps6800.h"
+#include "EPS6800Core/machine.h"
+#include "EPS6800Core/machine_debug.h"
+#include "EPS6800Core/machine_internal.h"
+#include "EPS6800Core/machine_io.h"
+#include "EPS6800Core/machine_rom.h"
+#include "EPS6800Core/machine_snapshot.h"
 
-#define ___security_check_cookie_4(...)
-#define debug_printf2(x, ...) debug_printf(__VA_ARGS__)
+#include <algorithm>
+#include <istream>
+#include <limits>
+#include <ostream>
+#include <sstream>
+#include <stdexcept>
+#include <vector>
 
-static char Sfr_in_str[128][20]{
-	"INDF0",
-	"FSR0",
-	"BSR",
+namespace {
+	constexpr uint32_t kSnapshotMagic = 0x31535045; // "EPS1", little-endian
+	constexpr uint32_t kMaximumSnapshotSize = 1024 * 1024;
+	constexpr size_t kPackedBytesPerWord = 2;
+	constexpr size_t kUnpackedBytesPerWord = 4;
+	constexpr size_t kMaximumRomWords = 96 * 1024;
 
-	"INDF1",
-	"FSR1",
-	"BSR1",
-
-	"STKPTR",
-
-	"PCL",
-	"PCM",
-	"PCH",
-
-	"ACC",
-
-	"TABPTRL",
-	"TABPTRM",
-	"TABPTRH",
-
-	"LCDDATA",
-
-	"STATUS",
-
-	"INDF2",
-	"FSR2",
-	"BSR2",
-};
-
-inline byte* casioemu::ePSCPU::reg(byte param_1) {
-	uint uVar1;
-	byte* pbVar2;
-	uVar1 = (uint)param_1;
-	switch (uVar1) {
-	case 0x0:
-		if ((BSR == 0x0) && (FSR < 0x80)) {
-			pbVar2 = &EmuMem + FSR;
+	bool ConvertUnpackedNibbles(const std::vector<unsigned char>& source,
+		std::vector<unsigned char>& packed) {
+		if (source.empty() || source.size() % kUnpackedBytesPerWord != 0 ||
+			source.size() / kUnpackedBytesPerWord > kMaximumRomWords)
+			return false;
+		packed.resize(source.size() / 2);
+		for (size_t i = 0; i < source.size(); i += 2) {
+			if (source[i] > 0x0f || source[i + 1] > 0x0f)
+				return false;
+			packed[i / 2] = static_cast<unsigned char>((source[i] << 4) | source[i + 1]);
 		}
-		else {
-			pbVar2 = &EmuMem + (uint)FSR + (uint)BSR * 0x80;
-		}
-		return pbVar2;
-	case 0x3:
-		FSR1 |= 0x80;
-		pbVar2 = &EmuMem + (uint)FSR1 + (uint)BSR1 * 0x80;
-		return pbVar2;
-	case 0xe:
-		pbVar2 = &VRam + (uint)LCDARL + (LCDARH & 0x3) * 0x60;
-		return pbVar2;
-	case 0x10:
-		FSR2 |= 0x80;
-		pbVar2 = &EmuMem + (uint)FSR2 + (uint)BSR2 * 0x80;
-		return pbVar2;
+		return true;
 	}
-	if (0x7f < param_1) {
-		pbVar2 = &EmuMem + uVar1 + (uint)BSR * 0x80;
-		return pbVar2;
+
+	machine_state* CreateMachineOrThrow() {
+		auto* state = machine_state_create();
+		if (!state)
+			throw std::runtime_error("Failed to create EPS6800 machine state");
+		return state;
 	}
-	// this isn't present in original HP300S+ emulator, idk will it be useful or not.
-	if (STATUS & 0x80) {
-		if (param_1 >= 0x25u && param_1 <= 0x3Fu)
-			return &wbk[param_1 - 0x25u];
+
+	bool IsEpsCallInstruction(uint16_t word) {
+		return (word & 0xf000u) == 0x3000u || // S0CALL
+			(word & 0xe000u) == 0xe000u || // SCALL
+			(word & 0xfff0u) == 0x0030u; // LCALL
 	}
-	pbVar2 = &EmuMem + uVar1;
-	return pbVar2;
+
+	bool IsEpsReturnInstruction(uint16_t word) {
+		return word == 0x2bfeu || word == 0x2bffu;
+	}
+
+	uint8_t EpsInstructionWords(uint16_t word) {
+		if ((word & 0xfff0u) == 0x0020u || (word & 0xfff0u) == 0x0030u)
+			return 2;
+		const uint8_t high = static_cast<uint8_t>(word >> 8);
+		if ((high >= 0x50 && high <= 0x51) ||
+			(high >= 0x55 && high <= 0x67) ||
+			(high >= 0x47 && high <= 0x49))
+			return 2;
+		return 1;
+	}
+
+	uint8_t EpsInstructionCycles(uint16_t word) {
+		const uint8_t high = static_cast<uint8_t>(word >> 8);
+		if ((word & 0xfff0u) == 0x0020u || (word & 0xfff0u) == 0x0030u ||
+			(high >= 0x2c && high <= 0x2f) ||
+			(high >= 0x50 && high <= 0x51) ||
+			(high >= 0x55 && high <= 0x67) ||
+			(high >= 0x47 && high <= 0x49))
+			return 2;
+		return 1;
+	}
 }
 
-inline void casioemu::ePSCPU::post_pid(char param_1) {
-	byte bVar1;
+namespace casioemu {
+	const char* Eps6800RomFormatName(Eps6800RomFormat format) {
+		switch (format) {
+		case Eps6800RomFormat::PackedBigEndian:
+			return "packed-big-endian";
+		case Eps6800RomFormat::UnpackedNibbles:
+			return "unpacked-nibbles";
+		}
+		return "unknown";
+	}
 
-	if (param_1 == '\0') {
-		if (((POST_ID & 0x1) != 0x0) && ((POST_ID & 0x10) != 0x0)) {
-			FSR += '\x01';
-		}
-		if (((POST_ID & 0x1) == 0x1) && ((POST_ID & 0x10) == 0x0)) {
-			FSR += -0x1;
-			return;
-		}
+	ePSCPU::ePSCPU()
+		: state_(CreateMachineOrThrow()) {
+		machine_state_debug_set_memory_access_callback(state_, &ePSCPU::MemoryAccessThunk, this);
 	}
-	else if (param_1 == '\x03') {
-		bVar1 = POST_ID >> 0x1 & 0x1;
-		if (((bVar1 != 0x0) && ((POST_ID & 0x20) != 0x0)) && (FSR1 += '\x01', FSR1 == '\0')) {
-			BSR1 += '\x01';
-			FSR1 = -0x80;
-		}
-		if (((bVar1 == 0x1) && ((POST_ID & 0x20) == 0x0)) && (FSR1 += -0x1, FSR1 == '\x7f')) {
-			FSR1 = 0xff;
-			BSR1 += -0x1;
-			return;
-		}
-	}
-	else if (param_1 == '\x10') {
-		bVar1 = POST_ID >> 0x3 & 0x1;
-		if (((bVar1 != 0x0) && ((char)POST_ID < '\0')) && (FSR2 += '\x01', FSR2 == '\0')) {
-			BSR2 += '\x01';
-			FSR2 = -0x80;
-		}
-		if (((bVar1 == 0x1) && ((char)POST_ID >= 0)) && (FSR2 += -0x1, FSR2 == '\x7f')) {
-			FSR2 = 0xff;
-			BSR2 += -0x1;
-			return;
-		}
-	}
-	else if (param_1 == '\x0e') {
-		bVar1 = POST_ID >> 0x2 & 0x1;
-		if (((bVar1 != 0x0) && ((POST_ID & 0x40) != 0x0)) && (LCDARL += '\x01', LCDARL == 'a')) {
-			LCDARL = '\0';
-		}
-		if (((bVar1 == 0x1) && ((POST_ID & 0x40) == 0x0)) && (LCDARL += -0x1, LCDARL == 0xff)) {
-			LCDARL = 'a';
-		}
-	}
-	return;
-}
 
-inline void casioemu::ePSCPU::auto_carry(char param_1) {
-	if (param_1 == '\a') {
-		if ((STATUS & 0x1) != 0x0) {
-			PCM += '\x01';
-			return;
-		}
+	ePSCPU::~ePSCPU() {
+		machine_state_destroy(state_);
 	}
-	else if (param_1 == '\b') {
-		if ((STATUS & 0x1) != 0x0) {
-			PCH += '\x01';
-			return;
-		}
-	}
-	else if (param_1 == '\v') {
-		if ((STATUS & 0x1) != 0x0) {
-			TABPTRM += '\x01';
-			return;
-		}
-	}
-	else if (param_1 == '\f') {
-		if ((STATUS & 0x1) != 0x0) {
-			TABPTRH += '\x01';
-			return;
-		}
-	}
-	else if (param_1 == '\x01') {
-		if ((STATUS & 0x1) != 0x0) {
-			BSR += '\x01';
-			return;
-		}
-	}
-	else if (param_1 == '\x04') {
-		if ((STATUS & 0x1) != 0x0) {
-			BSR1 += '\x01';
-			FSR1 |= 0x80;
-			return;
-		}
-	}
-	else if ((param_1 == '\x11') && ((STATUS & 0x1) != 0x0)) {
-		BSR2 += '\x01';
-		FSR2 |= 0x80;
-	}
-	return;
-}
 
-inline void casioemu::ePSCPU::auto_borrow(char param_1)
+	bool ePSCPU::LoadRom(const std::vector<unsigned char>& rom, Eps6800RomFormat format) {
+		const std::lock_guard lock(state_mutex_);
+		const unsigned char* data = rom.data();
+		size_t size = rom.size();
+		std::vector<unsigned char> packed;
+		if (format == Eps6800RomFormat::UnpackedNibbles) {
+			if (!ConvertUnpackedNibbles(rom, packed))
+				return false;
+			data = packed.data();
+			size = packed.size();
+		}
+		else if (rom.empty() || rom.size() % kPackedBytesPerWord != 0 ||
+			rom.size() / kPackedBytesPerWord > kMaximumRomWords) {
+			return false;
+		}
+		if (!machine_state_load_rom_image(state_, data, size))
+			return false;
+		rom_format_ = format;
+		return true;
+	}
 
-{
-	char cVar1;
+	Eps6800RomFormat ePSCPU::RomFormat() const {
+		const std::lock_guard lock(state_mutex_);
+		return rom_format_;
+	}
 
-	if (param_1 == '\a') {
-		if ((STATUS & 0x1) == 0x0) {
-			PCM += -0x1;
-			return;
-		}
+	void ePSCPU::SetDebugHooks(
+		std::function<bool(uint32_t, uint32_t, uint8_t)> instruction,
+		std::function<void(uint32_t, uint32_t, bool, uint32_t, const std::string&)> function,
+		std::function<bool(uint32_t, uint8_t&, bool)> memory,
+		std::function<void(uint8_t)> interrupt) {
+		const std::lock_guard lock(state_mutex_);
+		instruction_hook_ = std::move(instruction);
+		function_hook_ = std::move(function);
+		memory_hook_ = std::move(memory);
+		interrupt_hook_ = std::move(interrupt);
 	}
-	else if (param_1 == '\v') {
-		if ((STATUS & 0x1) == 0x0) {
-			TABPTRM += -0x2;
-			return;
+
+	bool ePSCPU::WriteRomImageWord(std::vector<unsigned char>& rom, uint32_t word_address,
+		uint16_t value) const {
+		const std::lock_guard lock(state_mutex_);
+		if (rom_format_ == Eps6800RomFormat::UnpackedNibbles) {
+			const size_t offset = static_cast<size_t>(word_address) * kUnpackedBytesPerWord;
+			if (offset + 3 >= rom.size())
+				return false;
+			rom[offset] = static_cast<unsigned char>((value >> 12) & 0x0f);
+			rom[offset + 1] = static_cast<unsigned char>((value >> 8) & 0x0f);
+			rom[offset + 2] = static_cast<unsigned char>((value >> 4) & 0x0f);
+			rom[offset + 3] = static_cast<unsigned char>(value & 0x0f);
+			return true;
 		}
+		const size_t offset = static_cast<size_t>(word_address) * kPackedBytesPerWord;
+		if (offset + 1 >= rom.size())
+			return false;
+		rom[offset] = static_cast<unsigned char>(value >> 8);
+		rom[offset + 1] = static_cast<unsigned char>(value);
+		return true;
 	}
-	else if (param_1 == '\f') {
-		if ((STATUS & 0x1) == 0x0) {
-			TABPTRH += -0x1;
-			return;
+
+	void ePSCPU::Reset() {
+		const std::lock_guard lock(state_mutex_);
+		machine_state_reset(state_);
+		debug_run_mode_ = DebugRunMode::Continue;
+		honor_execution_breakpoints_ = true;
+		honor_memory_breakpoints_ = true;
+		last_debug_stop_ = {};
+		instruction_count_ = 0;
+		cycle_count_ = 0;
+		trace_buffer_.clear();
+		memory_break_pending_ = false;
+	}
+
+	void ePSCPU::Next() {
+		const std::lock_guard lock(state_mutex_);
+		RunInstructionLocked(true);
+	}
+
+	bool ePSCPU::RunFrame() {
+		const std::lock_guard lock(state_mutex_);
+		constexpr uint32_t kActiveInstructions = 2000;
+		constexpr uint32_t kFrameInstructions = 4000;
+		for (uint32_t i = 0; i < kFrameInstructions; ++i) {
+			if (RunInstructionLocked(i < kActiveInstructions))
+				return true;
 		}
+		return false;
 	}
-	else if (param_1 == '\x01') {
-		if (((STATUS & 0x1) == 0x0) && (BSR += -0x1, BSR != '\0')) {
-			FSR |= 0x80;
-			return;
+
+	bool ePSCPU::RunInstructionLocked(bool tick_timer) {
+		memory_break_pending_ = false;
+		const uint32_t pc_before = state_->cpu.pc;
+		const uint8_t stack_pointer_before = state_->mmio.regs[REG_STKPTR] & 0x1f;
+		const uint8_t interrupt_pending = state_->cpu.int_pending;
+		const uint32_t instruction = machine_state_debug_fetch_instruction(state_, pc_before);
+		const uint16_t word = static_cast<uint16_t>(instruction >> 16);
+		machine_state_advance_cycles(state_, 1, tick_timer);
+		++instruction_count_;
+
+		const uint32_t pc_after = state_->cpu.pc;
+		uint8_t elapsed_cycles = EpsInstructionCycles(word);
+		if (elapsed_cycles == 1 && pc_after != pc_before + EpsInstructionWords(word))
+			elapsed_cycles = 2; // ePS6800 control-flow / PC-write penalty.
+		cycle_count_ += elapsed_cycles;
+		const uint8_t stack_pointer_after = state_->mmio.regs[REG_STKPTR] & 0x1f;
+		RecordTraceLocked(pc_before, instruction, pc_after);
+		if (function_hook_ && IsEpsCallInstruction(word)) {
+			function_hook_(pc_after, pc_before + EpsInstructionWords(word), true,
+				state_->mmio.regs[REG_ACC], BacktraceLocked());
 		}
+		else if (function_hook_ && IsEpsReturnInstruction(word)) {
+			function_hook_(pc_after, pc_after, false, state_->mmio.regs[REG_ACC], BacktraceLocked());
+		}
+		if (interrupt_hook_ && interrupt_pending && stack_pointer_after > stack_pointer_before) {
+			interrupt_hook_((interrupt_pending & INT_LEVEL4_TIMINT) ? 4 : 1);
+		}
+
+		Eps6800DebugStopReason reason = Eps6800DebugStopReason::None;
+		if (instruction_hook_ && instruction_hook_(pc_before, pc_after, stack_pointer_after))
+			reason = Eps6800DebugStopReason::Hook;
+		if (reason == Eps6800DebugStopReason::None && !ShouldStopLocked(pc_after, stack_pointer_after, reason))
+			return false;
+		RecordStopLocked(reason, pc_after);
+		debug_run_mode_ = DebugRunMode::Continue;
+		return true;
 	}
-	else {
-		if (param_1 == '\x04') {
-			if ((STATUS & 0x1) != 0x0) {
-				return;
+
+	bool ePSCPU::ShouldStopLocked(uint32_t pc_after, uint8_t stack_pointer_after,
+		Eps6800DebugStopReason& reason) {
+		if (memory_break_pending_) {
+			reason = Eps6800DebugStopReason::MemoryBreakpoint;
+			return true;
+		}
+		switch (debug_run_mode_) {
+		case DebugRunMode::StepInto:
+			reason = Eps6800DebugStopReason::Step;
+			return true;
+		case DebugRunMode::StepOver:
+			if (pc_after == debug_target_pc_ && stack_pointer_after <= debug_target_stack_pointer_) {
+				reason = Eps6800DebugStopReason::StepOver;
+				return true;
 			}
-			BSR1 += -0x1;
-			cVar1 = BSR1;
-		}
-		else {
-			if (param_1 != '\x11') {
-				return;
+			break;
+		case DebugRunMode::StepOut:
+			if (pc_after == debug_target_pc_ && stack_pointer_after <= debug_target_stack_pointer_) {
+				reason = Eps6800DebugStopReason::StepOut;
+				return true;
 			}
-			if ((STATUS & 0x1) != 0x0) {
-				return;
+			break;
+		case DebugRunMode::RunToAddress:
+			if (pc_after == debug_target_pc_) {
+				reason = Eps6800DebugStopReason::RunToAddress;
+				return true;
 			}
-			BSR2 += -0x1;
-			cVar1 = BSR2;
-		}
-		if (cVar1 != '\0') {
-			FSR1 |= 0x80;
-		}
-	}
-	return;
-}
-namespace detail {
-
-	using casioemu::ePSCPU;
-
-	//--------------------------------------------------------------
-	// ָ����ڵ�
-	//--------------------------------------------------------------
-	struct InstTbl {
-		/* �ӱ����죺depth = 0 ��ʾ�������²�� */
-		constexpr InstTbl(const InstTbl (*next)[16]) noexcept
-			: next(next), depth(0) {}
-
-		/* Ҷ�ڵ㹹�죺depth = 0xFF ��ʾ���˽�����handler Ϊ����ָ�� */
-		constexpr InstTbl(ePSCPU::OP_Handler op) noexcept
-			: handler(op), depth(0xFF) {}
-
-		/* Ĭ�Ϲ��죺δָ֪�� */
-		constexpr InstTbl() noexcept
-			: handler(&ePSCPU::OP_UD), depth(0xFF) {}
-
-		union {
-			const InstTbl (*next)[16];
-			ePSCPU::OP_Handler handler;
-		};
-		std::uint8_t depth;
-	};
-
-	//--------------------------------------------------------------
-	// 000_ : �����ӱ�
-	//--------------------------------------------------------------
-	inline constexpr InstTbl TB_000_[16]{
-		&ePSCPU::OP_NOP, &ePSCPU::OP_WDTC, &ePSCPU::OP_SLEP};
-
-	//--------------------------------------------------------------
-	// 00__ : �����ӱ�
-	//--------------------------------------------------------------
-	inline constexpr InstTbl TB_00__[16]{
-		&TB_000_,
-		{},
-		&ePSCPU::OP_LJMP,
-		&ePSCPU::OP_LCALL,
-	};
-
-	//--------------------------------------------------------------
-	// 0___ : һ���ӱ�
-	//--------------------------------------------------------------
-	inline constexpr InstTbl TB_0___[16]{
-		/* 0x0 */ &TB_00__, &ePSCPU::OP_SFR4, &ePSCPU::OP_OR_A, &ePSCPU::OP_OR_R,
-		/* 0x4 */ &ePSCPU::OP_AND_A, &ePSCPU::OP_AND_r, &ePSCPU::OP_XOR_A, &ePSCPU::OP_XOR_r,
-		/* 0x8 */ &ePSCPU::OP_COMA, &ePSCPU::OP_COM, &ePSCPU::OP_RRCA, &ePSCPU::OP_RRC,
-		/* 0xC */ &ePSCPU::OP_RLCA, &ePSCPU::OP_RLC, &ePSCPU::OP_SWAPA, &ePSCPU::OP_SWAP};
-
-	//--------------------------------------------------------------
-	// 1___ : һ���ӱ�
-	//--------------------------------------------------------------
-	inline constexpr InstTbl TB_1___[16]{
-		&ePSCPU::OP_ADD_A, &ePSCPU::OP_ADD_r, &ePSCPU::OP_ADC_A, &ePSCPU::OP_ADC_r,
-		&ePSCPU::OP_ADDDC_A, &ePSCPU::OP_ADDDC_r, &ePSCPU::OP_SUB_A, &ePSCPU::OP_SUB_r,
-		&ePSCPU::OP_SUBB_A, &ePSCPU::OP_SUBB_r, &ePSCPU::OP_SUBDB_A, &ePSCPU::OP_SUBDB_r,
-		&ePSCPU::OP_INCA, &ePSCPU::OP_INC, &ePSCPU::OP_DECA, &ePSCPU::OP_DEC};
-
-	//--------------------------------------------------------------
-	// 2B__ : �����ӱ� (2Bxx)
-	//--------------------------------------------------------------
-	inline constexpr InstTbl TB_2B__[16]{
-		{}, {}, {}, {}, {}, {}, {}, {},
-		{}, {}, {}, {}, {}, {}, &ePSCPU::OP_RETI, &ePSCPU::OP_RET};
-
-	//--------------------------------------------------------------
-	// 2___ : һ���ӱ�
-	//--------------------------------------------------------------
-	inline constexpr InstTbl TB_2___[16]{
-		&ePSCPU::OP_MOV_A, &ePSCPU::OP_MOV_r, &ePSCPU::OP_SHRA, &ePSCPU::OP_SHLA,
-		&ePSCPU::OP_CLR, &ePSCPU::OP_TEST, &ePSCPU::OP_MOVL_r, &ePSCPU::OP_RPT,
-		&ePSCPU::OP_MOVH_r, &ePSCPU::OP_MOVL_A, &ePSCPU::OP_MOVH_A, &TB_2B__,
-		&ePSCPU::OP_TBRD, &ePSCPU::OP_TBRD, &ePSCPU::OP_TBRD, &ePSCPU::OP_TBRD_A};
-
-	//--------------------------------------------------------------
-	// 4___ : һ���ӱ�
-	//--------------------------------------------------------------
-	inline constexpr InstTbl TB_4___[16]{
-		&ePSCPU::OP_TBPTRL, &ePSCPU::OP_TBPTRM, &ePSCPU::OP_TBPTRH, &ePSCPU::OP_BANK,
-		&ePSCPU::OP_OR_k, &ePSCPU::OP_AND_k, &ePSCPU::OP_XOR_k, &ePSCPU::OP_JGE_A_k,
-		&ePSCPU::OP_JLE_A_k, &ePSCPU::OP_JE_A_k, &ePSCPU::OP_ADD_k, &ePSCPU::OP_ADC_k,
-		&ePSCPU::OP_SUB_k, &ePSCPU::OP_SUBB_k, &ePSCPU::OP_MOV_k, &ePSCPU::OP_SFL4};
-
-	//--------------------------------------------------------------
-	// 5___ : һ���ӱ�
-	//--------------------------------------------------------------
-	inline constexpr InstTbl TB_5___[16]{
-		&ePSCPU::OP_JDNZ_A, &ePSCPU::OP_JDNZ_r, &ePSCPU::OP_EXL_r, &ePSCPU::OP_EXH_r,
-		&ePSCPU::OP_EX_r, &ePSCPU::OP_JGE_A_r, &ePSCPU::OP_JLE_A_r, &ePSCPU::OP_JE_A_r,
-		&ePSCPU::OP_JBC, &ePSCPU::OP_JBC, &ePSCPU::OP_JBC, &ePSCPU::OP_JBC,
-		&ePSCPU::OP_JBC, &ePSCPU::OP_JBC, &ePSCPU::OP_JBC, &ePSCPU::OP_JBC};
-
-	//--------------------------------------------------------------
-	// 6___ : һ���ӱ�
-	//--------------------------------------------------------------
-	inline constexpr InstTbl TB_6___[16]{
-		/* 0x0-0x7 JBS */ &ePSCPU::OP_JBS, &ePSCPU::OP_JBS, &ePSCPU::OP_JBS, &ePSCPU::OP_JBS,
-		&ePSCPU::OP_JBS, &ePSCPU::OP_JBS, &ePSCPU::OP_JBS, &ePSCPU::OP_JBS,
-
-		/* 0x8-0xF BC  */ &ePSCPU::OP_BC, &ePSCPU::OP_BC, &ePSCPU::OP_BC, &ePSCPU::OP_BC,
-		&ePSCPU::OP_BC, &ePSCPU::OP_BC, &ePSCPU::OP_BC, &ePSCPU::OP_BC};
-
-	//--------------------------------------------------------------
-	// 7___ : һ���ӱ�
-	//--------------------------------------------------------------
-	inline constexpr InstTbl TB_7___[16]{
-		/* 0x0-0x7 BS  */ &ePSCPU::OP_BS, &ePSCPU::OP_BS, &ePSCPU::OP_BS, &ePSCPU::OP_BS,
-		&ePSCPU::OP_BS, &ePSCPU::OP_BS, &ePSCPU::OP_BS, &ePSCPU::OP_BS,
-
-		/* 0x8-0xF BTG */ &ePSCPU::OP_BTG, &ePSCPU::OP_BTG, &ePSCPU::OP_BTG, &ePSCPU::OP_BTG,
-		&ePSCPU::OP_BTG, &ePSCPU::OP_BTG, &ePSCPU::OP_BTG, &ePSCPU::OP_BTG};
-
-	//--------------------------------------------------------------
-	// ���������ұ�
-	//--------------------------------------------------------------
-	inline constexpr InstTbl main_lookup_tbl[16]{
-		&TB_0___, &TB_1___, &TB_2___, &ePSCPU::OP_S0CALL,
-		&TB_4___, &TB_5___, &TB_6___, &TB_7___,
-		&ePSCPU::OP_MOVRP, &ePSCPU::OP_MOVRP, &ePSCPU::OP_MOVPR, &ePSCPU::OP_MOVPR,
-		&ePSCPU::OP_SJMP, &ePSCPU::OP_SJMP, &ePSCPU::OP_SCALL, &ePSCPU::OP_SCALL};
-
-} // namespace detail
-
-void casioemu::ePSCPU::Next() {
-	if (run_stat > ST_SLEEP)
-		return;
-	Timer0Next();
-	if (run_stat > ST_FAST)
-		return;
-	detail::InstTbl cur = &detail::main_lookup_tbl;
-	auto p = Rom + (PC() << 1);
-	auto ptr = p;
-	do {
-		cur = (*cur.next)[*(ptr++)];
-	} while (cur.depth != 0xff);
-	(this->*(cur.handler))(p);
-}
-
-void casioemu::ePSCPU::Reset() {
-	run_stat = ST_SLOW;
-	memset(regs, 0, 0x80);
-	memset(ram, 0, 0x80 * 64);
-	memset(stackram, 0, sizeof(stackram));
-	memset(vram, 0, 0x60 * 4);
-	INDF0 = INDF1 = INDF2 = 1;
-	FSR1 = FSR2 = 0x80;
-	// STATUS = 0xc0;
-	POST_ID = 0x70;
-	DCRA = DCRB = 0xff;
-	DCRC = 0xf;
-	DCRDE = 0x33;
-	RepeatCount = 0;
-	CycleCounter = 0;
-	InstFlags = 0;
-}
-
-// Port����
-inline void casioemu::ePSCPU::InvalidateTimerSetting(uint32_t idx) {
-}
-
-inline void casioemu::ePSCPU::UpdateTimerSetting(uint32_t idx) {
-}
-
-inline void casioemu::ePSCPU::InvalidatePORTA() {
-	if (portacalc)
-		portacalc();
-}
-
-void casioemu::ePSCPU::RaisePAINT(int source) {
-	if (CPUCON & 0b100) { // GLINT = 1
-		// CPUCON &= ~0b100; // GLINT = 0
-		run_stat = ST_SLOW;
-		*(ushort*)(&StackRam + (uint)STKPTR * 0x2) = (ushort)PCM * 0x100 + (ushort)PCL + 0x2;
-		CycleCounter += 0x2;
-		PCL = 2;
-		PCM = 0;
-		PCH = 0;
-		STKPTR = STKPTR + 0x1 & 0x1f;
-	}
-}
-
-void casioemu::ePSCPU::RaiseTMINT(int source) {
-	if (CPUCON & 0b100) {	   // GLINT = 1
-		INTSTA |= 1 << source; // Timer Interrupt Status Register.
-		// CPUCON &= ~0b100;	   // GLINT = 0
-		// run_stat = ST_SLOW;
-		*(ushort*)(&StackRam + (uint)STKPTR * 0x2) = (ushort)PCM * 0x100 + (ushort)PCL + 0x2;
-		CycleCounter += 0x2;
-		PCL = 8;
-		PCM = 0;
-		PCH = 0;
-		STKPTR = STKPTR + 0x1 & 0x1f;
-	}
-}
-
-void casioemu::ePSCPU::Timer0Next() {
-	{
-		auto& timer0cnt = *(ushort*)&T0CL;
-		auto& timer0reload = *(ushort*)&TRL0L;
-		auto prescale = TR0CON & 0b11;
-		if (TR0CON & 0b100000) // Event counter mode
-			return;			   // we don't impl that.
-
-		if (TR0CON & 0b100) { // ����ģʽ
-		}
-		else { // ����ģʽ...
+			break;
+		case DebugRunMode::Continue:
+			break;
 		}
 
-		if (TR0CON & 0b1000) // T0EN
-		{
-			if (t0tick++ > (1 << (prescale * 2))) {
-				if (!(timer0cnt--)) {
-					timer0cnt = timer0reload;					   // ���������
-					if (TR0CON & 0b10000 && (run_stat <= ST_FAST)) // TMR0IE
-					{
-						RaiseTMINT(0);
-					}
+		if (honor_execution_breakpoints_) {
+			if (auto it = execution_breakpoints_.find(pc_after);
+				it != execution_breakpoints_.end() && it->second.enabled) {
+				++it->second.hit_count;
+				if (it->second.hit_count > it->second.skip_count) {
+					reason = Eps6800DebugStopReason::ExecutionBreakpoint;
+					return true;
 				}
-				t0tick = 0;
 			}
 		}
+		return false;
 	}
-	{
-		auto prescale = TR1CON & 0b11;
 
-		if (TR1CON & 0b1000) // T1EN
-		{
-			if (t1_pre++ > 64) // ����
-			{
-				if (t1tick++ > (1 << (prescale * 2 + 1))) {
-					if (!(t1tick2--)) {
-						t1tick2 = TRL1;									// ���������
-						if (run_stat <= ST_FAST || TR1CON & 0b10000000) // ���ѹ���
-							if (TR1CON & 0b10000)						// TMR1IE
-							{
-								if (TR1CON & 0b10000000)
-									run_stat = ST_SLOW;
-								RaiseTMINT(1);
-							}
-					}
-					t1tick = 0;
-				}
-				t1_pre = 0;
+	void ePSCPU::RecordStopLocked(Eps6800DebugStopReason reason, uint32_t pc) {
+		last_debug_stop_.reason = reason;
+		last_debug_stop_.program_counter = pc;
+		last_debug_stop_.instruction_count = instruction_count_;
+		last_debug_stop_.cycle_count = cycle_count_;
+		if (reason == Eps6800DebugStopReason::MemoryBreakpoint) {
+			last_debug_stop_.memory_address = pending_memory_address_;
+			last_debug_stop_.memory_value = pending_memory_value_;
+			last_debug_stop_.memory_write = pending_memory_write_;
+		}
+	}
+
+	bool ePSCPU::MemoryAccessThunk(void* user, uint32_t address, uint8_t* value, bool write, bool before) {
+		return user && value
+			? static_cast<ePSCPU*>(user)->OnMemoryAccessLocked(address, *value, write, before)
+			: false;
+	}
+
+	bool ePSCPU::OnMemoryAccessLocked(uint32_t address, uint8_t& value, bool write, bool before) {
+		if (before)
+			return memory_hook_ ? memory_hook_(address, value, write) : false;
+		for (auto& breakpoint : memory_breakpoints_) {
+			if (!breakpoint.enabled || breakpoint.address != address || breakpoint.write != write)
+				continue;
+			if (breakpoint.compare_data && ((value & breakpoint.mask) != (breakpoint.data & breakpoint.mask)))
+				continue;
+			++breakpoint.hit_count;
+			memory_breakpoint_hits_.push_back({state_->cpu.pc, address, value, write, instruction_count_ + 1});
+			if (memory_breakpoint_hits_.size() > 4096)
+				memory_breakpoint_hits_.pop_front();
+			if (breakpoint.break_when_hit && honor_memory_breakpoints_ &&
+				breakpoint.hit_count > breakpoint.skip_count && !memory_break_pending_) {
+				memory_break_pending_ = true;
+				pending_memory_address_ = address;
+				pending_memory_value_ = value;
+				pending_memory_write_ = write;
 			}
 		}
+		return false;
 	}
-}
 
-inline void casioemu::ePSCPU::OP_NOP(byte* param_1) {
-	int iVar1;
-	do {
-		Sleep(0x0);
-		CycleCounter += 0x1;
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar1;
-	PCM = (char)((uint)iVar1 >> 0x8);
-	PCH = (char)((uint)iVar1 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_WDTC(byte* param_1) {
-	int iVar1;
-	STATUS |= 0xc0;
-	// RepeatCount = 0; // RPT WDTC��ʲô����
-	CycleCounter += 0x1;
-	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar1;
-	PCM = (char)((uint)iVar1 >> 0x8);
-	PCH = (char)((uint)iVar1 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_SLEP(byte* param_1) {
-	run_stat = ((CPUCON & 0x2) != 0x2) ? ST_SLEEP : ST_STOP;
-	if (run_stat == ST_SLEEP) {
-		debug_printf("entering SLEEP mode!!!\n");
+	void ePSCPU::RecordTraceLocked(uint32_t pc_before, uint32_t instruction, uint32_t pc_after) {
+		if (!trace_enabled_ || trace_capacity_ == 0)
+			return;
+		Eps6800TraceEntry entry{};
+		entry.program_counter = pc_before;
+		entry.instruction = instruction;
+		entry.next_program_counter = pc_after;
+		entry.stack_pointer = state_->mmio.regs[REG_STKPTR] & 0x1f;
+		entry.accumulator = state_->mmio.regs[REG_ACC];
+		entry.status = state_->cpu.status;
+		entry.instruction_count = instruction_count_;
+		entry.cycle_count = cycle_count_;
+		if (trace_buffer_.size() >= trace_capacity_)
+			trace_buffer_.pop_front();
+		trace_buffer_.push_back(entry);
 	}
-	else if (run_stat == ST_STOP) {
-		debug_printf("entering STOP mode!!!\n");
+
+	void ePSCPU::KeyDown(uint8_t matrix_index) {
+		const std::lock_guard lock(state_mutex_);
+		machine_state_keydown(state_, matrix_index);
 	}
-	Sleep(0x1);
-	// RepeatCount = 0; // RPT SLEP��ʲô����
-	CycleCounter += 0x1;
-	int iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar1;
-	PCM = (char)((uint)iVar1 >> 0x8);
-	PCH = (char)((uint)iVar1 >> 0x10);
-	return;
-}
 
-inline void casioemu::ePSCPU::OP_BANK(byte* param_1) {
-	int iVar1;
-
-	BSR = *(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3);
-	CycleCounter += 0x1;
-	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar1;
-	PCM = (char)((uint)iVar1 >> 0x8);
-	PCH = (char)((uint)iVar1 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_S0CALL(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	int iVar4;
-
-	bVar1 = *(byte*)(param_1 + 0x1);
-	bVar2 = *(byte*)(param_1 + 0x2);
-	bVar3 = *(byte*)(param_1 + 0x3);
-	*(ushort*)(&StackRam + (uint)STKPTR * 0x2) = (ushort)PCM * 0x100 + (ushort)PCL + 0x1;
-	CycleCounter += 0x1;
-	iVar4 = ((uint)bVar1 << 0x4 | (uint)bVar2) << 0x4;
-	PCL = (byte)iVar4 | bVar3;
-	STKPTR = STKPTR + 0x1 & 0x1f;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = 0x0;
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_SCALL(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte bVar4;
-	int iVar5;
-
-	bVar1 = *param_1;
-	bVar2 = param_1[0x1];
-	bVar3 = param_1[0x2];
-	bVar4 = param_1[0x3];
-	*(ushort*)(&StackRam + (uint)STKPTR * 0x2) = (ushort)PCM * 0x100 + (ushort)PCL + 0x1;
-	CycleCounter += 0x1;
-	iVar5 = ((((uint)bVar1 << 0x4 | (uint)bVar2) & 0x1f) << 0x4 | (uint)bVar3) << 0x4;
-	PCL = (byte)iVar5 | bVar4;
-	STKPTR = STKPTR + 0x1 & 0x1f;
-	PCM = PCM & 0xe0 | (byte)((uint)iVar5 >> 0x8);
-	PCH = 0x0;
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_LCALL(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte bVar4;
-	int iVar5;
-
-	bVar1 = *(byte*)(param_1 + 0x4);
-	bVar2 = *(byte*)(param_1 + 0x5);
-	bVar3 = *(byte*)(param_1 + 0x6);
-	bVar4 = *(byte*)(param_1 + 0x7);
-	*(ushort*)(&StackRam + (uint)STKPTR * 0x2) = (ushort)PCM * 0x100 + (ushort)PCL + 0x2;
-	CycleCounter += 0x2;
-	iVar5 = (((uint)bVar1 << 0x4 | (uint)bVar2) << 0x4 | (uint)bVar3) << 0x4;
-	PCL = (byte)iVar5 | bVar4;
-	STKPTR = STKPTR + 0x1 & 0x1f;
-	PCM = (char)((uint)iVar5 >> 0x8);
-	PCH = (char)((uint)iVar5 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_RET(byte* param_1)
-
-{
-	undefined2 uVar1;
-
-	STKPTR = STKPTR - 0x1 & 0x1f;
-	uVar1 = *(undefined2*)(&StackRam + (uint)STKPTR * 0x2);
-	*(undefined2*)(&StackRam + (uint)STKPTR * 0x2) = 0x0;
-	CycleCounter += 0x1;
-	PCL = (char)uVar1;
-	PCM = (char)((ushort)uVar1 >> 0x8);
-	PCH = 0x0;
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_RETI(byte* param_1) {
-	ushort uVar1;
-	WCHAR local_204[0x100];
-	uint local_4;
-	STKPTR = STKPTR - 0x1 & 0x1f;
-	uVar1 = *(ushort*)(&StackRam + (uint)STKPTR * 0x2);
-	*(undefined2*)(&StackRam + (uint)STKPTR * 0x2) = 0x0;
-	CPUCON |= 0x4;
-	PCL = (undefined)uVar1;
-	PCH = 0x0;
-	PCM = (undefined)(uVar1 >> 0x8);
-	DAT_004202b7 = 0x0;
-	debug_printf(L"RETI pc %x\n", (uint)uVar1);
-	CycleCounter += 0x1;
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_SJMP(byte* param_1)
-
-{
-	int iVar1;
-
-	CycleCounter += 0x1;
-	iVar1 = ((((uint)*param_1 << 0x4 | (uint)param_1[0x1]) & 0x1f) << 0x4 | (uint)param_1[0x2]) << 0x4;
-	PCL = (byte)iVar1 | param_1[0x3];
-	PCM = PCM & 0xe0 | (byte)((uint)iVar1 >> 0x8);
-	PCH = 0x0;
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_LJMP(byte* param_1)
-
-{
-	int iVar1;
-
-	CycleCounter += 0x2;
-	iVar1 = (((uint) * (byte*)(param_1 + 0x4) << 0x4 | (uint) * (byte*)(param_1 + 0x5)) << 0x4 |
-				(uint) * (byte*)(param_1 + 0x6))
-			<< 0x4;
-	PCL = (byte)iVar1 | *(byte*)(param_1 + 0x7);
-	PCM = (char)((uint)iVar1 >> 0x8);
-	PCH = (char)((uint)iVar1 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_JGE_A_k(byte* param_1)
-
-{
-	uint uVar1;
-	uint uVar2;
-
-	if (ACC < (byte)(*(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3))) {
-		uVar2 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x2;
-		PCM = (byte)(uVar2 >> 0x8);
+	void ePSCPU::KeyUp(uint8_t matrix_index) {
+		const std::lock_guard lock(state_mutex_);
+		machine_state_keyup(state_, matrix_index);
 	}
-	else {
-		uVar1 = (((uint) * (byte*)(param_1 + 0x4) << 0x4 | (uint) * (byte*)(param_1 + 0x5)) << 0x4 |
-					(uint) * (byte*)(param_1 + 0x6))
-				<< 0x4;
-		uVar2 = uVar1 | *(byte*)(param_1 + 0x7);
-		PCM = (byte)(uVar1 >> 0x8);
+
+	void ePSCPU::OnDown() {
+		const std::lock_guard lock(state_mutex_);
+		machine_state_ondown(state_);
 	}
-	CycleCounter += 0x2;
-	PCL = (char)uVar2;
-	PCH = (char)(uVar2 >> 0x10);
-	return;
-}
 
-inline void casioemu::ePSCPU::OP_JLE_A_k(byte* param_1)
-
-{
-	uint uVar1;
-	uint uVar2;
-
-	if ((byte)(*(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3)) < ACC) {
-		uVar2 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x2;
-		PCM = (byte)(uVar2 >> 0x8);
+	void ePSCPU::OnUp() {
+		const std::lock_guard lock(state_mutex_);
+		machine_state_onup(state_);
 	}
-	else {
-		uVar1 = (((uint) * (byte*)(param_1 + 0x4) << 0x4 | (uint) * (byte*)(param_1 + 0x5)) << 0x4 |
-					(uint) * (byte*)(param_1 + 0x6))
-				<< 0x4;
-		uVar2 = uVar1 | *(byte*)(param_1 + 0x7);
-		PCM = (byte)(uVar1 >> 0x8);
+
+	size_t ePSCPU::CopyLcd(uint8_t* output, size_t size, Eps6800LcdControl* control) const {
+		const std::lock_guard lock(state_mutex_);
+		machine_lcd_control raw_control{};
+		const auto copied = machine_state_lcd_copy_display(
+			state_, output, size, control ? &raw_control : nullptr);
+		if (control) {
+			control->lcdarh = raw_control.lcdarh;
+			control->lcdcon = raw_control.lcdcon;
+			control->contrast = static_cast<uint8_t>(
+				(raw_control.lcdarh & MASK_LCD_CONTRAST) >> SHIFT_LCD_CONTRAST);
+			control->display_on = (raw_control.lcdcon & BIT_LCD_ON) != 0;
+			control->blanked = (raw_control.lcdcon & BIT_LCD_BLANK) != 0;
+		}
+		return copied;
 	}
-	CycleCounter += 0x2;
-	PCL = (char)uVar2;
-	PCH = (char)(uVar2 >> 0x10);
-	return;
-}
 
-inline void casioemu::ePSCPU::OP_JE_A_k(byte* param_1)
-
-{
-	uint uVar1;
-	uint uVar2;
-
-	if (ACC == (byte)(*(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3))) {
-		uVar1 = (((uint) * (byte*)(param_1 + 0x4) << 0x4 | (uint) * (byte*)(param_1 + 0x5)) << 0x4 |
-					(uint) * (byte*)(param_1 + 0x6))
-				<< 0x4;
-		uVar2 = uVar1 | *(byte*)(param_1 + 0x7);
-		PCM = (byte)(uVar1 >> 0x8);
+	size_t ePSCPU::LcdRawSize() const {
+		return sizeof(state_->lcd.fb);
 	}
-	else {
-		uVar2 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x2;
-		PCM = (byte)(uVar2 >> 0x8);
+
+	uint8_t ePSCPU::ReadByte(uint8_t address) {
+		const std::lock_guard lock(state_mutex_);
+		return machine_state_debug_read_byte(state_, address);
 	}
-	CycleCounter += 0x2;
-	PCL = (char)uVar2;
-	PCH = (char)(uVar2 >> 0x10);
-	return;
-}
 
-inline void casioemu::ePSCPU::OP_MOV_k(byte* param_1)
-
-{
-	int iVar1;
-
-	do {
-		CycleCounter += 0x1;
-		ACC = *(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar1;
-	PCM = (char)((uint)iVar1 >> 0x8);
-	PCH = (char)((uint)iVar1 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_TBPTRL(byte* param_1)
-
-{
-	int iVar1;
-
-	TABPTRL = *(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3);
-	CycleCounter += 0x1;
-	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar1;
-	PCM = (char)((uint)iVar1 >> 0x8);
-	PCH = (char)((uint)iVar1 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_TBPTRM(byte* param_1)
-
-{
-	int iVar1;
-
-	TABPTRM = *(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3);
-	CycleCounter += 0x1;
-	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar1;
-	PCM = (char)((uint)iVar1 >> 0x8);
-	PCH = (char)((uint)iVar1 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_TBPTRH(byte* param_1)
-
-{
-	int iVar1;
-
-	TABPTRH = *(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3);
-	CycleCounter += 0x1;
-	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar1;
-	PCM = (char)((uint)iVar1 >> 0x8);
-	PCH = (char)((uint)iVar1 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_OR_k(byte* param_1)
-
-{
-	int iVar1;
-
-	ACC |= *(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3);
-	if (ACC == 0x0) {
-		STATUS |= 0x4;
+	void ePSCPU::WriteByte(uint8_t address, uint8_t value) {
+		const std::lock_guard lock(state_mutex_);
+		machine_state_debug_write_byte(state_, address, value);
 	}
-	else {
-		STATUS &= 0xfb;
+
+	uint8_t ePSCPU::ReadDebugMemory(uint32_t linear_address) const {
+		const std::lock_guard lock(state_mutex_);
+		return machine_state_debug_peek_memory(state_, linear_address);
 	}
-	CycleCounter += 0x1;
-	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar1;
-	PCM = (char)((uint)iVar1 >> 0x8);
-	PCH = (char)((uint)iVar1 >> 0x10);
-	return;
-}
 
-inline void casioemu::ePSCPU::OP_AND_k(byte* param_1)
-
-{
-	int iVar1;
-
-	ACC &= *(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3);
-	if (ACC == 0x0) {
-		STATUS |= 0x4;
+	bool ePSCPU::WriteDebugMemory(uint32_t linear_address, uint8_t value) {
+		const std::lock_guard lock(state_mutex_);
+		return machine_state_debug_write_memory(state_, linear_address, value);
 	}
-	else {
-		STATUS &= 0xfb;
+
+	uint16_t ePSCPU::ReadCodeWord(uint32_t word_address) const {
+		const std::lock_guard lock(state_mutex_);
+		return machine_state_debug_read_rom_word(state_, word_address);
 	}
-	CycleCounter += 0x1;
-	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar1;
-	PCM = (char)((uint)iVar1 >> 0x8);
-	PCH = (char)((uint)iVar1 >> 0x10);
-	return;
-}
 
-inline void casioemu::ePSCPU::OP_XOR_k(byte* param_1)
-
-{
-	int iVar1;
-
-	ACC ^= *(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3);
-	if (ACC == 0x0) {
-		STATUS |= 0x4;
+	bool ePSCPU::WriteCodeWord(uint32_t word_address, uint16_t value) {
+		const std::lock_guard lock(state_mutex_);
+		return machine_state_debug_write_rom_word(state_, word_address, value);
 	}
-	else {
-		STATUS &= 0xfb;
+
+	uint8_t ePSCPU::ReadLcdMemory(size_t address) const {
+		const std::lock_guard lock(state_mutex_);
+		return address < LcdRawSize() ? state_->lcd.fb[address] : 0xff;
 	}
-	CycleCounter += 0x1;
-	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar1;
-	PCM = (char)((uint)iVar1 >> 0x8);
-	PCH = (char)((uint)iVar1 >> 0x10);
-	return;
-}
 
-inline void casioemu::ePSCPU::OP_ADD_k(byte* param_1)
+	bool ePSCPU::WriteLcdMemory(size_t address, uint8_t value) {
+		const std::lock_guard lock(state_mutex_);
+		if (address >= LcdRawSize())
+			return false;
+		state_->lcd.fb[address] = value;
+		return true;
+	}
 
-{
-	ushort uVar1;
-	int iVar2;
-	byte bVar3;
+	Eps6800DebugSnapshot ePSCPU::DebugSnapshot() const {
+		const std::lock_guard lock(state_mutex_);
+		machine_debug_snapshot raw{};
+		machine_state_debug_get_snapshot(state_, &raw);
+		Eps6800DebugSnapshot result{};
+		result.program_counter = raw.pc;
+		std::copy(std::begin(raw.registers), std::end(raw.registers), result.registers.begin());
+		std::copy(std::begin(raw.wbk_registers), std::end(raw.wbk_registers), result.wbk_registers.begin());
+		std::copy(std::begin(raw.stack), std::end(raw.stack), result.stack.begin());
+		result.stack_pointer = raw.stack_pointer;
+		result.instruction_count = instruction_count_;
+		result.cycle_count = cycle_count_;
+		return result;
+	}
 
-	uVar1 = (ushort)ACC;
-	do {
-		uVar1 = (uVar1 & 0xff) +
-				(ushort)(byte)(*(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3));
-		if ((uVar1 & 0xff00) == 0x0) {
-			bVar3 = STATUS & 0xfe;
-		}
-		else {
-			bVar3 = STATUS | 0x1;
-		}
-		if ((char)uVar1 == '\0') {
-			STATUS = bVar3 | 0x4;
-		}
-		else {
-			STATUS = bVar3 & 0xfb;
-		}
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	ACC = (char)uVar1;
-	iVar2 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar2;
-	PCM = (char)((uint)iVar2 >> 0x8);
-	PCH = (char)((uint)iVar2 >> 0x10);
-	return;
-}
+	std::string ePSCPU::BacktraceLocked() const {
+		std::ostringstream stream;
+		const uint8_t depth = state_->mmio.regs[REG_STKPTR] & 0x1f;
+		stream << "PC=" << std::hex << state_->cpu.pc;
+		for (uint8_t i = depth; i > 0; --i)
+			stream << " <- " << state_->cpu.stack[i - 1];
+		return stream.str();
+	}
 
-inline void casioemu::ePSCPU::OP_ADC_k(byte* param_1)
+	std::string ePSCPU::GetBacktrace() const {
+		const std::lock_guard lock(state_mutex_);
+		return BacktraceLocked();
+	}
 
-{
-	int iVar1;
-	byte bVar2;
-	ushort uVar3;
+	std::vector<uint8_t> ePSCPU::ExportRam() const {
+		const std::lock_guard lock(state_mutex_);
+		std::vector<uint8_t> data;
+		data.reserve(sizeof(state_->mmio.ram) + sizeof(state_->mmio.ram_wbk));
+		data.insert(data.end(), std::begin(state_->mmio.ram), std::end(state_->mmio.ram));
+		data.insert(data.end(), std::begin(state_->mmio.ram_wbk), std::end(state_->mmio.ram_wbk));
+		return data;
+	}
 
-	uVar3 = (ushort)ACC;
-	do {
-		uVar3 = (ushort)(STATUS & 0x1) + (uVar3 & 0xff) +
-				(ushort)(byte)(*(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3));
-		if ((uVar3 & 0xff00) == 0x0) {
-			bVar2 = STATUS & 0xfe;
-		}
-		else {
-			bVar2 = STATUS | 0x1;
-		}
-		if ((char)uVar3 == '\0') {
-			STATUS = bVar2 | 0x4;
-		}
-		else {
-			STATUS = bVar2 & 0xfb;
-		}
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	ACC = (char)uVar3;
-	CycleCounter += 0x1;
-	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar1;
-	PCM = (char)((uint)iVar1 >> 0x8);
-	PCH = (char)((uint)iVar1 >> 0x10);
-	return;
-}
+	bool ePSCPU::ImportRam(const std::vector<uint8_t>& data) {
+		const std::lock_guard lock(state_mutex_);
+		const size_t bank_ram_size = sizeof(state_->mmio.ram);
+		const size_t persistent_ram_size = bank_ram_size + sizeof(state_->mmio.ram_wbk);
+		// Older builds wrote only the banked 8 KiB. Keep those images usable while
+		// including the WBK window in all newly written images.
+		if (data.size() != bank_ram_size && data.size() != persistent_ram_size)
+			return false;
+		std::copy_n(data.begin(), bank_ram_size, std::begin(state_->mmio.ram));
+		if (data.size() == persistent_ram_size)
+			std::copy(data.begin() + bank_ram_size, data.end(), std::begin(state_->mmio.ram_wbk));
+		return true;
+	}
 
-inline void casioemu::ePSCPU::OP_SUB_k(byte* param_1)
+	void ePSCPU::RequestContinue(bool honor_breakpoints) {
+		const std::lock_guard lock(state_mutex_);
+		debug_run_mode_ = DebugRunMode::Continue;
+		honor_execution_breakpoints_ = honor_breakpoints;
+		honor_memory_breakpoints_ = honor_breakpoints;
+		last_debug_stop_ = {};
+	}
 
-{
-	int iVar1;
-	byte bVar2;
-	ushort uVar3;
+	void ePSCPU::RequestStepInto() {
+		const std::lock_guard lock(state_mutex_);
+		debug_run_mode_ = DebugRunMode::StepInto;
+		honor_execution_breakpoints_ = true;
+		honor_memory_breakpoints_ = true;
+		last_debug_stop_ = {};
+	}
 
-	uVar3 = (ushort)ACC;
-	do {
-		uVar3 = (ushort)(byte)(*(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3)) -
-				(uVar3 & 0xff);
-		if ((uVar3 & 0xff00) == 0xff00) {
-			bVar2 = STATUS & 0xfe;
-		}
-		else {
-			bVar2 = STATUS | 0x1;
-		}
-		if ((char)uVar3 == '\0') {
-			STATUS = bVar2 | 0x4;
-		}
-		else {
-			STATUS = bVar2 & 0xfb;
-		}
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	ACC = (char)uVar3;
-	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar1;
-	PCM = (char)((uint)iVar1 >> 0x8);
-	PCH = (char)((uint)iVar1 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_SUBB_k(byte* param_1)
-
-{
-	int iVar1;
-	byte bVar2;
-	ushort uVar3;
-
-	uVar3 = (ushort)ACC;
-	do {
-		uVar3 = ((ushort)(byte)(*(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3)) -
-					(ushort)((STATUS & 0x1) != 0x1)) -
-				(uVar3 & 0xff);
-		if ((uVar3 & 0xff00) == 0xff00) {
-			bVar2 = STATUS & 0xfe;
-		}
-		else {
-			bVar2 = STATUS | 0x1;
-		}
-		if ((char)uVar3 == '\0') {
-			STATUS = bVar2 | 0x4;
-		}
-		else {
-			STATUS = bVar2 & 0xfb;
-		}
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	ACC = (char)uVar3;
-	CycleCounter += 0x1;
-	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar1;
-	PCM = (char)((uint)iVar1 >> 0x8);
-	PCH = (char)((uint)iVar1 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_UD(byte* param_1)
-
-{
-	int iVar1;
-
-	CycleCounter += 0x1;
-	iVar1 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar1;
-	PCM = (char)((uint)iVar1 >> 0x8);
-	PCH = (char)((uint)iVar1 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_RPT(byte* param_1)
-
-{
-	byte* pbVar1;
-	int iVar2;
-
-	pbVar1 = reg(*(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3));
-	CycleCounter += 0x1;
-	RepeatCount = (ushort)*pbVar1;
-	iVar2 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar2;
-	PCM = (char)((uint)iVar2 >> 0x8);
-	PCH = (char)((uint)iVar2 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_TEST(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	bVar2 = *(char*)(param_1 + 0x2) << 0x4;
-	do {
-		pbVar3 = reg(bVar2 | bVar1);
-		if (*pbVar3 == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_JDNZ_A(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte bVar4;
-	byte bVar5;
-	uint uVar6;
-	byte bVar7;
-	byte* pbVar8;
-	uint uVar9;
-	uint uVar10;
-	uint uVar11;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	bVar2 = *(byte*)(param_1 + 0x5);
-	uVar11 = (uint) * (byte*)(param_1 + 0x4) << 0x4;
-	uVar10 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar3 = *(byte*)(param_1 + 0x7);
-	bVar5 = (byte)uVar10;
-	bVar4 = *(byte*)(param_1 + 0x6);
-	uVar10 = uVar10 & 0xff | (uint)bVar1;
-	do {
-		pbVar8 = reg(bVar5 | bVar1);
-		bVar7 = *pbVar8 - 0x1;
-		ACC = bVar7;
-		debug_printf("JDNZ A=%x r=%x(%s) addr0x%x", (uint)bVar7, uVar10, Sfr_in_str + uVar10,
-			((uVar11 | bVar2) << 0x4 | (uint)bVar4) << 0x4 | (uint)bVar3);
-		if (bVar7 == 0x0) {
-			uVar9 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x2;
-			PCM = (byte)(uVar9 >> 0x8);
-		}
-		else {
-			uVar6 = ((uVar11 | bVar2) << 0x4 | (uint)bVar4) << 0x4;
-			uVar9 = uVar6 | bVar3;
-			PCM = (byte)(uVar6 >> 0x8);
-		}
-		PCL = (byte)uVar9;
-		PCH = (undefined)(uVar9 >> 0x10);
-		post_pid(bVar5 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x2;
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_JDNZ_r(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte bVar4;
-	byte bVar5;
-	byte bVar6;
-	uint uVar7;
-	byte* pbVar8;
-	uint uVar9;
-	uint uVar10;
-	uint uVar11;
-	uint uVar12;
-
-	bVar2 = *(byte*)(param_1 + 0x3);
-	bVar3 = *(byte*)(param_1 + 0x5);
-	uVar11 = (uint) * (byte*)(param_1 + 0x4) << 0x4;
-	uVar10 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar4 = *(byte*)(param_1 + 0x7);
-	bVar5 = *(byte*)(param_1 + 0x6);
-	uVar12 = uVar10 & 0xff | (uint)bVar2;
-	do {
-		bVar6 = (byte)uVar10;
-		pbVar8 = reg(bVar6 | bVar2);
-		bVar1 = *pbVar8;
-		pbVar8 = reg(bVar6 | bVar2);
-		*pbVar8 = bVar1 - 0x1;
-		debug_printf("JDNZ r=0x%x(%s) addr 0x%x", uVar12, Sfr_in_str + uVar12,
-			((uVar11 | bVar3) << 0x4 | (uint)bVar5) << 0x4 | (uint)bVar4);
-		pbVar8 = reg(bVar6 | bVar2);
-		if (*pbVar8 == 0x0) {
-			uVar9 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x2;
-			PCM = (byte)(uVar9 >> 0x8);
-		}
-		else {
-			uVar7 = ((uVar11 | bVar3) << 0x4 | (uint)bVar5) << 0x4;
-			uVar9 = uVar7 | bVar4;
-			PCM = (byte)(uVar7 >> 0x8);
-		}
-		PCL = (byte)uVar9;
-		PCH = (undefined)(uVar9 >> 0x10);
-		post_pid(bVar6 | bVar2);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x2;
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_JGE_A_r(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte bVar4;
-	byte bVar5;
-	uint uVar6;
-	byte* pbVar7;
-	uint uVar8;
-	uint uVar9;
-	uint uVar10;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	bVar2 = *(byte*)(param_1 + 0x5);
-	uVar10 = (uint) * (byte*)(param_1 + 0x4) << 0x4;
-	uVar9 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar3 = *(byte*)(param_1 + 0x7);
-	bVar5 = (byte)uVar9;
-	bVar4 = *(byte*)(param_1 + 0x6);
-	uVar9 = uVar9 & 0xff | (uint)bVar1;
-	do {
-		debug_printf("JGE A=0x%x r=0x%x(%s) 0x%x", (uint)ACC, uVar9, Sfr_in_str + uVar9,
-			((uVar10 | bVar2) << 0x4 | (uint)bVar4) << 0x4 | (uint)bVar3);
-		pbVar7 = reg(bVar5 | bVar1);
-		if (ACC < *pbVar7) {
-			uVar8 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x2;
-			PCM = (byte)(uVar8 >> 0x8);
-		}
-		else {
-			uVar6 = ((uVar10 | bVar2) << 0x4 | (uint)bVar4) << 0x4;
-			uVar8 = uVar6 | bVar3;
-			PCM = (byte)(uVar6 >> 0x8);
-		}
-		PCL = (byte)uVar8;
-		PCH = (undefined)(uVar8 >> 0x10);
-		post_pid(bVar5 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x2;
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_JLE_A_r(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte bVar4;
-	byte bVar5;
-	uint uVar6;
-	byte* pbVar7;
-	uint uVar8;
-	uint uVar9;
-	uint uVar10;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	bVar2 = *(byte*)(param_1 + 0x5);
-	uVar10 = (uint) * (byte*)(param_1 + 0x4) << 0x4;
-	uVar9 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar3 = *(byte*)(param_1 + 0x7);
-	bVar5 = (byte)uVar9;
-	bVar4 = *(byte*)(param_1 + 0x6);
-	uVar9 = uVar9 & 0xff | (uint)bVar1;
-	do {
-		debug_printf("JLE A=0x%x r=0x%x(%s) addr 0x%x", (uint)ACC, uVar9, Sfr_in_str + uVar9,
-			((uVar10 | bVar2) << 0x4 | (uint)bVar4) << 0x4 | (uint)bVar3);
-		pbVar7 = reg(bVar5 | bVar1);
-		if (*pbVar7 < ACC) {
-			uVar8 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x2;
-			PCM = (byte)(uVar8 >> 0x8);
-		}
-		else {
-			uVar6 = ((uVar10 | bVar2) << 0x4 | (uint)bVar4) << 0x4;
-			uVar8 = uVar6 | bVar3;
-			PCM = (byte)(uVar6 >> 0x8);
-		}
-		PCL = (byte)uVar8;
-		PCH = (undefined)(uVar8 >> 0x10);
-		post_pid(bVar5 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x2;
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_JE_A_r(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte bVar4;
-	byte bVar5;
-	uint uVar6;
-	byte* pbVar7;
-	uint uVar8;
-	uint uVar9;
-	uint uVar10;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	bVar2 = *(byte*)(param_1 + 0x5);
-	uVar10 = (uint) * (byte*)(param_1 + 0x4) << 0x4;
-	uVar9 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar3 = *(byte*)(param_1 + 0x7);
-	bVar5 = (byte)uVar9;
-	bVar4 = *(byte*)(param_1 + 0x6);
-	uVar9 = uVar9 & 0xff | (uint)bVar1;
-	do {
-		debug_printf("JE A=0x%x r=0x%x(%s) addr 0x%x", (uint)ACC, uVar9, Sfr_in_str + uVar9,
-			((uVar10 | bVar2) << 0x4 | (uint)bVar4) << 0x4 | (uint)bVar3);
-		pbVar7 = reg(bVar5 | bVar1);
-		if (ACC == *pbVar7) {
-			uVar6 = ((uVar10 | bVar2) << 0x4 | (uint)bVar4) << 0x4;
-			uVar8 = uVar6 | bVar3;
-			PCM = (byte)(uVar6 >> 0x8);
-		}
-		else {
-			uVar8 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x2;
-			PCM = (byte)(uVar8 >> 0x8);
-		}
-		PCL = (byte)uVar8;
-		PCH = (undefined)(uVar8 >> 0x10);
-		post_pid(bVar5 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x2;
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_JBC(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	uint uVar4;
-	uint uVar5;
-	uint uVar6;
-	uint uVar7;
-	undefined auStack_210[0x3];
-	byte local_20d;
-	char(*local_20c)[0x14];
-	undefined4 local_208;
-	WCHAR local_204[0x100];
-	uintptr_t local_4;
-
-	local_4 = g_stack_cookie ^ (uintptr_t)auStack_210;
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar5;
-	local_20d = *(char*)(param_1 + 0x1) - 0x8;
-	uVar7 = uVar5 & 0xff | (uint)bVar1;
-	uVar6 = (((uint) * (byte*)(param_1 + 0x4) << 0x4 | (uint) * (byte*)(param_1 + 0x5)) << 0x4 |
-				(uint) * (byte*)(param_1 + 0x6))
-				<< 0x4 |
-			(uint) * (byte*)(param_1 + 0x7);
-	uVar5 = (uint)local_20d;
-	local_20c = Sfr_in_str + uVar7;
-	do {
-		debug_printf("JBC r=0x%x(%s) b=0x%x addr 0x%x", uVar7, local_20c, uVar5, uVar6);
-		if ((bVar2 | bVar1) == 0x31) {
-			// local_208 = CONCAT31(local_208._1_3_, PORTC | PBCON);
-			InvalidatePORTA();
-			debug_printf("JBC PORTA %x DCRB&PORTB %x DCRA %x", (uint)PACON,
-				(uint)(PORTC & PBCON), (uint)PAWAKE);
-		}
-		pbVar3 = reg(bVar2 | bVar1);
-		uVar4 = uVar6;
-		if ((*pbVar3 >> (local_20d & 0x1f) & 0x1) != 0x0) {
-			uVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x2;
-		}
-		PCL = (byte)uVar4;
-		PCH = (undefined)(uVar4 >> 0x10);
-		PCM = (byte)(uVar4 >> 0x8);
-		if (((bVar2 | bVar1) == 0x43) && (local_20d == 0x0)) {
-			debug_printf2(local_204, L"r43 is %x\n", (uint)gpr_43);
-		}
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x2;
-	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_210);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_JBS(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte bVar4;
-	byte bVar5;
-	byte bVar6;
-	uint uVar7;
-	byte* pbVar8;
-	uint uVar9;
-	uint uVar10;
-	uint uVar11;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	bVar2 = *(byte*)(param_1 + 0x1);
-	uVar10 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar6 = (byte)uVar10;
-	bVar3 = *(byte*)(param_1 + 0x5);
-	uVar11 = (uint) * (byte*)(param_1 + 0x4) << 0x4;
-	bVar4 = *(byte*)(param_1 + 0x6);
-	bVar5 = *(byte*)(param_1 + 0x7);
-	uVar10 = uVar10 & 0xff | (uint)bVar1;
-	do {
-		debug_printf("JBS r=%x(%s) b=%x addr 0x%x", uVar10, Sfr_in_str + uVar10, (uint)bVar2,
-			((uVar11 | bVar3) << 0x4 | (uint)bVar4) << 0x4 | (uint)bVar5);
-		if ((bVar6 | bVar1) == 0x31) {
-			InvalidatePORTA();
-			debug_printf("JBS PORTA %x DCRB&PORTB %x DCRA %x", (uint)PACON,
-				(uint)(PORTC & PBCON), (uint)PAWAKE);
-		}
-		pbVar8 = reg(bVar6 | bVar1);
-		if (((*pbVar8 >> (bVar2 & 0x1f)) & 0x1) == 0x0) {
-			uVar9 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x2;
-			PCM = (byte)(uVar9 >> 0x8);
-		}
-		else {
-			uVar7 = ((uVar11 | bVar3) << 0x4 | (uint)bVar4) << 0x4;
-			uVar9 = uVar7 | bVar5;
-			PCM = (byte)(uVar7 >> 0x8);
-		}
-		PCL = (byte)uVar9;
-		PCH = (undefined)(uVar9 >> 0x10);
-		post_pid(bVar6 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x2;
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_MOV_A(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	byte bVar5;
-	uint uVar6;
-	const char* pcVar7;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar6;
-	bVar5 = bVar2 | bVar1;
-	pbVar3 = reg(bVar2 | bVar1);
-	uVar6 = uVar6 & 0xff | (uint)bVar1;
-	debug_printf("MOV A r=%x(%s) %x", uVar6, Sfr_in_str + uVar6, (uint)*pbVar3);
-	do {
-		if (bVar5 == 0x31) {
-			InvalidatePORTA();
-			debug_printf("MOV A PORTA %x DCRB&PORTB %x DCRA %x", (uint)PACON,
-				(uint)(PORTC & PBCON), (uint)PAWAKE);
-		}
-		else if (bVar5 == 0x3a) {
-			PCCON = 0x0;
-		}
-		pbVar3 = reg(bVar5);
-		ACC = *pbVar3;
-		if (bVar5 == 0x3) {
-			pcVar7 = "MOV A INDF1,BSR1 %x, FSR1 %x,value %x";
-			bVar1 = BSR1;
-			bVar2 = FSR1;
-		LAB_00408f9c:
-			debug_printf(pcVar7, (uint)bVar1, (uint)bVar2, (uint)ACC);
-		}
-		else if ((bVar5 == 0x10) || (bVar5 == 0x11)) {
-			pcVar7 = "MOV A INDF2,BSR2 %x, FSR2 %x,value %x";
-			bVar1 = BSR2;
-			bVar2 = FSR2;
-			goto LAB_00408f9c;
-		}
-		if (ACC == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		post_pid(bVar5);
-		if ((RepeatCount == 0x0) || (RepeatCount += -0x1, RepeatCount == 0x0)) {
-			iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-			PCL = (char)iVar4;
-			CycleCounter += 0x1;
-			PCM = (char)((uint)iVar4 >> 0x8);
-			PCH = (char)((uint)iVar4 >> 0x10);
+	void ePSCPU::RequestStepOver() {
+		const std::lock_guard lock(state_mutex_);
+		const uint32_t pc = state_->cpu.pc;
+		const uint16_t word = machine_state_debug_read_rom_word(state_, pc);
+		last_debug_stop_ = {};
+		honor_execution_breakpoints_ = true;
+		honor_memory_breakpoints_ = true;
+		if (!IsEpsCallInstruction(word)) {
+			debug_run_mode_ = DebugRunMode::StepInto;
 			return;
 		}
-	} while (true);
-}
-
-inline void casioemu::ePSCPU::OP_MOV_r(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	byte bVar5;
-	uint uVar6;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar6;
-	bVar5 = bVar2 | bVar1;
-	uVar6 = uVar6 & 0xff | (uint)bVar1;
-	debug_printf("MOV r=%x(%s) A %x", uVar6, Sfr_in_str + uVar6, (uint)ACC);
-	do {
-		pbVar3 = reg(bVar2 | bVar1);
-		*pbVar3 = ACC;
-		if ((((bVar5 == 0x26) || (bVar5 == 0x27)) || (bVar5 == 0x25)) &&
-			(((uint)TRL0H * 0x100 + (uint)TRL0L != 0x0 && ((TR0CON & 0x8) != 0x0)))) {
-			UpdateTimerSetting(0x0);
-		}
-		if (((bVar5 == 0x2b) || (bVar5 == 0x2a)) &&
-			((TRL1 != '\0' && ((TR1CON & 0x8) != 0x0)))) {
-			UpdateTimerSetting(0x1);
-		}
-		if (bVar5 == 0x3) {
-			debug_printf("MOV r a:INDF1,BSR1 %x, FSR1 %x,value %x", (uint)BSR1, (uint)FSR1, (uint)ACC);
-		}
-		post_pid(bVar2 | bVar1);
-		CycleCounter += 0x1;
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_MOVRP(byte* param_1)
-
-{
-	byte bVar1;
-	uint uVar2;
-	byte* pbVar3;
-	byte bVar4;
-	uint extraout_ECX;
-	uint uVar5;
-	int iVar6;
-	undefined auStack_210[0x3];
-	byte local_20d;
-	uint local_20c;
-	undefined4 local_208;
-	WCHAR local_204[0x100];
-	uintptr_t local_4;
-
-	local_4 = g_stack_cookie ^ (uintptr_t)auStack_210;
-	bVar1 = (*param_1 << 0x4 | param_1[0x1]) + 0x80;
-	local_20c = (uint)(byte)param_1[0x2] << 0x4 | (uint)(byte)param_1[0x3];
-	uVar5 = (uint)bVar1;
-	uVar2 = (uint)(byte)param_1[0x2] << 0x4 & 0xff | (uint)(byte)param_1[0x3];
-	debug_printf("MOVRP p=%x(%s) r=%x(%s)", uVar5, Sfr_in_str + uVar5, uVar2, Sfr_in_str + uVar2);
-	uVar2 = uVar5;
-	do {
-		bVar4 = (byte)uVar2;
-		if (bVar4 == 0x31) {
-			// local_208 = CONCAT31(local_208._1_3_, PORTC | PBCON);
-			InvalidatePORTA();
-			// debug_printf("MOVRP p=%x(%s) PORTA %x DCRB&PORTB %x DCRA %x", uVar5, Sfr_in_str + uVar5,(uint)PACON, (uint)(PORTC & PBCON), (uint)PAWAKE);
-			bVar4 = (byte)local_20c;
-		}
-		pbVar3 = reg(bVar4);
-		local_20d = *pbVar3;
-		pbVar3 = reg(bVar1);
-		*pbVar3 = local_20d;
-		if (bVar1 == 0xe) {
-			// debug_printf("LCDDATA %x ARH(%x) ARL(%x)",
-			//	(uint)(byte)(&VRam)[(uint)LCDARL + (LCDARH & 0x3) * 0x60], (uint)LCDARH,
-			//	(uint)LCDARL);
-		}
-		else if (bVar1 == 0x0) {
-			// debug_printf2(local_204, L"BSR 0 FSR f2, data p %x\n", (uint)DAT_0041e192);
-		}
-		if (((((char)local_20c == '\0') || (bVar1 == 0x0)) || ((char)local_20c == '\x03')) ||
-			(bVar1 == 0x3)) {
-			// debug_printf2(local_204, L"BSR 0 FSR %x, data r %x\n", (uint)FSR, (uint)(byte)(&EmuMem)[FSR]);
-			pbVar3 = reg(bVar1);
-			// debug_printf("MOVRP BSR %x FSR %x,BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,data %x", (uint)BSR, (uint)FSR, (uint)BSR1, (uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)*pbVar3);
-		}
-		post_pid((char)local_20c);
-		post_pid(bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, uVar2 = local_20c, RepeatCount != 0x0));
-	if (bVar1 == 0xe) {
-		InstFlags |= 0x2;
-		uVar2 = 0xf0;
-		iVar6 = 0xa;
-		do {
-			uVar5 = uVar2;
-			// debug_printf("BANK 0 r%x, data %x", uVar2, (uint)(byte)(&EmuMem)[uVar2]);
-			// debug_printf2(local_204, L"BANK 0 r%x, data %x\n", uVar5, (uint)(byte)(&EmuMem)[uVar5]);
-			uVar2 = (uint)(byte)((char)uVar2 + 0x1);
-			iVar6 += -0x1;
-		} while (iVar6 != 0x0);
+		debug_run_mode_ = DebugRunMode::StepOver;
+		debug_target_pc_ = pc + EpsInstructionWords(word);
+		debug_target_stack_pointer_ = state_->mmio.regs[REG_STKPTR] & 0x1f;
 	}
-	CycleCounter += 0x1;
-	iVar6 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCM = (byte)((uint)iVar6 >> 0x8);
-	PCL = (byte)iVar6;
-	PCH = (undefined)((uint)iVar6 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_210);
-	return;
-}
 
-inline void casioemu::ePSCPU::OP_MOVPR(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	uint uVar4;
-	byte* pbVar5;
-	int iVar6;
-	uint uVar7;
-	undefined auStack_20c[0x2];
-	byte local_20a;
-	byte local_209;
-	undefined4 local_208;
-	WCHAR local_204[0x100];
-	uintptr_t local_4;
-
-	local_4 = g_stack_cookie ^ (uintptr_t)auStack_20c;
-	bVar1 = param_1[0x3];
-	bVar2 = (byte)((uint)(byte)param_1[0x2] << 0x4);
-	uVar7 = (uint)(byte)param_1[0x2] << 0x4 & 0xff | (uint)bVar1;
-	local_20a = (*param_1 << 0x4 | param_1[0x1]) + 0x60;
-	uVar4 = (uint)local_20a;
-	debug_printf("MOVPR r=%x(%s) p=%x(%s)", uVar7, Sfr_in_str + uVar7, uVar4, Sfr_in_str + uVar4);
-	while (true) {
-		bVar3 = (byte)uVar4;
-		if ((byte)uVar4 == 0x31) {
-			// local_208 = CONCAT31(local_208._1_3_, PORTC | PBCON);
-			InvalidatePORTA();
-			debug_printf("MOVPR r=%x(%s) PORTA %x DCRB&PORTB %x DCRA %x", uVar7, Sfr_in_str + uVar7,
-				(uint)PACON, (uint)(PORTC & PBCON), (uint)PAWAKE);
-			bVar3 = local_20a;
-		}
-		pbVar5 = reg(bVar3);
-		local_209 = *pbVar5;
-		pbVar5 = reg(bVar2 | bVar1);
-		*pbVar5 = local_209;
-		if (local_20a == 0x3) {
-			debug_printf2(local_204, L"BSR 0 FSR %x, data r %x\n", (uint)FSR, (uint)(byte)(&EmuMem)[FSR]);
-			pbVar5 = reg(0x3);
-			debug_printf("MOVPR r p BSR1 %x,FSR1 %x,data %x", (uint)BSR1, (uint)FSR1, (uint)*pbVar5);
-		}
-		post_pid(bVar2 | bVar1);
-		post_pid(local_20a);
-		if ((RepeatCount == 0x0) || (RepeatCount += -0x1, RepeatCount == 0x0))
-			break;
-		uVar4 = (uint)local_20a;
+	bool ePSCPU::RequestStepOut() {
+		const std::lock_guard lock(state_mutex_);
+		const uint8_t stack_pointer = state_->mmio.regs[REG_STKPTR] & 0x1f;
+		if (stack_pointer == 0)
+			return false;
+		debug_run_mode_ = DebugRunMode::StepOut;
+		debug_target_stack_pointer_ = stack_pointer - 1;
+		debug_target_pc_ = state_->cpu.stack[stack_pointer - 1];
+		honor_execution_breakpoints_ = true;
+		honor_memory_breakpoints_ = true;
+		last_debug_stop_ = {};
+		return true;
 	}
-	CycleCounter += 0x1;
-	iVar6 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (byte)iVar6;
-	PCM = (byte)((uint)iVar6 >> 0x8);
-	PCH = (undefined)((uint)iVar6 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_20c);
-	return;
-}
 
-inline void casioemu::ePSCPU::OP_CLR(byte* param_1)
+	void ePSCPU::RequestRunToAddress(uint32_t word_address) {
+		const std::lock_guard lock(state_mutex_);
+		debug_run_mode_ = DebugRunMode::RunToAddress;
+		debug_target_pc_ = word_address;
+		honor_execution_breakpoints_ = true;
+		honor_memory_breakpoints_ = true;
+		last_debug_stop_ = {};
+	}
 
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	uint uVar5;
+	void ePSCPU::CancelDebugRun() {
+		const std::lock_guard lock(state_mutex_);
+		debug_run_mode_ = DebugRunMode::Continue;
+		last_debug_stop_ = {};
+	}
 
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar5;
-	uVar5 = uVar5 & 0xff | (uint)bVar1;
-	debug_printf("CLR r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-	do {
-		pbVar3 = reg(bVar2 | bVar1);
-		*pbVar3 = 0x0;
-		STATUS |= 0x4;
-		if ((bVar2 | bVar1) == 0x31) {
-			InvalidatePORTA();
-			debug_printf("CLR PORTA %x DCRB&PORTB %x DCRA %x", (uint)PACON,
-				(uint)(PORTC & PBCON), (uint)PAWAKE);
-		}
-		else if ((bVar2 | bVar1) == 0x3) {
-			debug_printf("CLR INDF1 BSR1 %x,FSR1 %x", (uint)BSR1, (uint)FSR1);
-		}
-		post_pid(bVar2 | bVar1);
-		CycleCounter += 0x1;
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
+	void ePSCPU::AddExecutionBreakpoint(uint32_t word_address) {
+		const std::lock_guard lock(state_mutex_);
+		execution_breakpoints_.try_emplace(word_address,
+			Eps6800ExecutionBreakpoint{.address = word_address});
+	}
 
-inline void casioemu::ePSCPU::OP_TBRD(byte* param_1)
+	bool ePSCPU::ConfigureExecutionBreakpoint(const Eps6800ExecutionBreakpoint& breakpoint) {
+		if (breakpoint.address >= 0x10000u)
+			return false;
+		const std::lock_guard lock(state_mutex_);
+		execution_breakpoints_[breakpoint.address] = breakpoint;
+		return true;
+	}
 
-{
-	char cVar1;
-	byte* pbVar2;
-	uint uVar3;
-	int iVar4;
-	int iVar5;
-	uint uVar6;
-	undefined auStack_21c[0x3];
-	byte local_219;
-	int local_218;
-	uint local_214;
-	uint local_210;
-	char(*local_20c)[0x14];
-	uint local_208;
-	WCHAR local_204[0x100];
-	uintptr_t local_4;
+	void ePSCPU::RemoveExecutionBreakpoint(uint32_t word_address) {
+		const std::lock_guard lock(state_mutex_);
+		execution_breakpoints_.erase(word_address);
+	}
 
-	local_4 = g_stack_cookie ^ (uintptr_t)auStack_21c;
-	local_219 = *(char*)(param_1 + 0x1) - 0xc;
-	uVar3 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	local_210 = uVar3 | *(byte*)(param_1 + 0x3);
-	uVar6 = uVar3 & 0xff | (uint) * (byte*)(param_1 + 0x3);
-	uVar3 = ((uint)TABPTRH * 0x100 + (uint)TABPTRM) * 0x100 + (uint)TABPTRL;
-	local_20c = Sfr_in_str + uVar6;
-	local_208 = (uint)local_219;
-	local_218 = uVar3 - 0x1;
-	iVar4 = uVar3 * 0x2 + 0x2;
-	do {
-		iVar5 = iVar4;
-		if ((uVar3 & 0x1) != 0x0) {
-			iVar5 = local_218 * 0x2;
-		}
-		local_214 = (uint) * (byte*)(Rom + 0x1 + iVar5) | (uint) * (byte*)(Rom + iVar5) << 0x4;
-		pbVar2 = reg((byte)local_210);
-		*pbVar2 = (byte)local_214;
-		local_214 = (uint) * (byte*)(Rom + 0x1 + iVar5) | (uint) * (byte*)(Rom + iVar5) << 0x4;
-		cVar1 = (char)local_210;
-		if ((((char)local_210 == '\0') && (BSR == '\0')) && ((byte)(FSR + 0x10) < 0xa)) {
-			debug_printf2(local_204, L"TBRD,BSR 0 FSR %x, data %x\n", (uint)FSR, (uint)(byte)(&EmuMem)[FSR]);
-			cVar1 = (char)local_210;
-		}
-		if (local_219 != 0x0) {
-			if (local_219 == 0x1) {
-				uVar3 += 0x1;
-				iVar4 += 0x2;
-				local_218 += 0x1;
-			}
-			else if (local_219 == 0x2) {
-				uVar3 -= 0x1;
-				iVar4 += -0x2;
-				local_218 += -0x1;
-			}
-		}
-		TABPTRM = (byte)(uVar3 >> 0x8);
-		TABPTRH = (byte)(uVar3 >> 0x10);
-		TABPTRL = (byte)uVar3;
-		debug_printf("TBRD i=%x r=%x(%s) addr %x, value %x", local_208, uVar6, local_20c, uVar3,
-			local_214 & 0xff);
-		if (cVar1 == '\x03') {
-			debug_printf("TBRD BSR1 %x,FSR1 %x ", (uint)BSR1, (uint)FSR1);
-		}
-		post_pid(cVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCM = (byte)((uint)iVar4 >> 0x8);
-	PCL = (byte)iVar4;
-	PCH = (undefined)((uint)iVar4 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_21c);
-	return;
-}
+	void ePSCPU::ClearExecutionBreakpoints() {
+		const std::lock_guard lock(state_mutex_);
+		execution_breakpoints_.clear();
+	}
 
-inline void casioemu::ePSCPU::OP_TBRD_A(byte* param_1)
+	std::vector<uint32_t> ePSCPU::ExecutionBreakpoints() const {
+		const std::lock_guard lock(state_mutex_);
+		std::vector<uint32_t> result;
+		result.reserve(execution_breakpoints_.size());
+		for (const auto& [address, breakpoint] : execution_breakpoints_)
+			result.push_back(address);
+		std::sort(result.begin(), result.end());
+		return result;
+	}
 
-{
-	char cVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	byte bVar5;
-	uint uVar6;
-	uint uVar7;
+	std::vector<Eps6800ExecutionBreakpoint> ePSCPU::ExecutionBreakpointDetails() const {
+		const std::lock_guard lock(state_mutex_);
+		std::vector<Eps6800ExecutionBreakpoint> result;
+		result.reserve(execution_breakpoints_.size());
+		for (const auto& [address, breakpoint] : execution_breakpoints_)
+			result.push_back(breakpoint);
+		std::sort(result.begin(), result.end(), [](const auto& lhs, const auto& rhs) {
+			return lhs.address < rhs.address;
+		});
+		return result;
+	}
 
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar5 = (byte)uVar6 | *(byte*)(param_1 + 0x3);
-	uVar6 = uVar6 & 0xff | (uint) * (byte*)(param_1 + 0x3);
-	uVar7 = ((uint)TABPTRH * 0x100 + (uint)TABPTRM) * 0x100 + (uint)TABPTRL + (uint)ACC;
-	do {
-		iVar4 = uVar7 * 0x2 + 0x2;
-		if ((uVar7 & 0x1) != 0x0) {
-			iVar4 = uVar7 * 0x2 + -0x2;
-		}
-		cVar1 = *(char*)(Rom + iVar4);
-		bVar2 = *(byte*)(Rom + 0x1 + iVar4);
-		pbVar3 = reg(bVar5);
-		*pbVar3 = cVar1 << 0x4 | bVar2;
-		debug_printf("TBRD A=%x r=%x(%s) addr1 %x, addr2 %x, value %x", (uint)ACC, uVar6,
-			Sfr_in_str + uVar6, uVar7, iVar4,
-			(*(byte*)(Rom + iVar4) & 0xf) << 0x4 | (uint) * (byte*)(Rom + 0x1 + iVar4));
-		bVar2 = bVar5;
-		if (bVar5 == 0x3) {
-			debug_printf("TBRD BSR1 %x,FSR1 %x ", (uint)BSR1, (uint)FSR1);
-		}
-		post_pid(bVar2);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_OR_A(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	uint uVar5;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar5;
-	uVar5 = uVar5 & 0xff | (uint)bVar1;
-	do {
-		pbVar3 = reg(bVar2 | bVar1);
-		ACC |= *pbVar3;
-		if (ACC == 0x0) {
-			STATUS |= 0x4;
+	bool ePSCPU::AddMemoryBreakpoint(const Eps6800MemoryBreakpoint& breakpoint) {
+		if (breakpoint.address >= 0x2080u)
+			return false;
+		const std::lock_guard lock(state_mutex_);
+		auto it = std::find_if(memory_breakpoints_.begin(), memory_breakpoints_.end(), [&](const auto& item) {
+			return item.address == breakpoint.address && item.write == breakpoint.write;
+		});
+		if (it == memory_breakpoints_.end()) {
+			memory_breakpoints_.push_back(breakpoint);
 		}
 		else {
-			STATUS &= 0xfb;
-		}
-		debug_printf("OR A r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_OR_R(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	byte bVar5;
-	uint uVar6;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar6;
-	bVar5 = bVar2 | bVar1;
-	uVar6 = uVar6 & 0xff | (uint)bVar1;
-	do {
-		if ((bVar5 == 0x3) || (bVar5 == 0x10)) {
-			pbVar3 = reg(bVar2 | bVar1);
-			debug_printf("OR r: BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,a %x,before data %x,z flag %x", (uint)BSR1,
-				(uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)ACC, (uint)*pbVar3, STATUS >> 0x2 & 0x1);
-		}
-		pbVar3 = reg(bVar2 | bVar1);
-		*pbVar3 = *pbVar3 | ACC;
-		pbVar3 = reg(bVar2 | bVar1);
-		if (*pbVar3 == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		debug_printf("OR r=%x(%s) A %x", uVar6, Sfr_in_str + uVar6, (uint)ACC);
-		if ((bVar5 == 0x3) || (bVar5 == 0x10)) {
-			pbVar3 = reg(bVar2 | bVar1);
-			debug_printf("OR r: BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,a %x,after data %x,z flag %x", (uint)BSR1,
-				(uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)ACC, (uint)*pbVar3, STATUS >> 0x2 & 0x1);
-		}
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	InstFlags |= 0x2;
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_AND_A(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	uint uVar5;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar5;
-	uVar5 = uVar5 & 0xff | (uint)bVar1;
-	debug_printf("AND A r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-	do {
-		pbVar3 = reg(bVar2 | bVar1);
-		ACC &= *pbVar3;
-		if (ACC == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_AND_r(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	byte bVar5;
-	uint uVar6;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar6;
-	bVar5 = bVar2 | bVar1;
-	uVar6 = uVar6 & 0xff | (uint)bVar1;
-	debug_printf("AND r=%x(%s) A", uVar6, Sfr_in_str + uVar6);
-	do {
-		if ((bVar5 == 0x3) || (bVar5 == 0x10)) {
-			pbVar3 = reg(bVar2 | bVar1);
-			debug_printf("AND r: BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,a %x,before data %x,z flag %x", (uint)BSR1, (uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)ACC, (uint)*pbVar3, STATUS >> 0x2 & 0x1);
-		}
-		pbVar3 = reg(bVar2 | bVar1);
-		*pbVar3 = *pbVar3 & ACC;
-		pbVar3 = reg(bVar2 | bVar1);
-		if (*pbVar3 == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		if ((bVar5 == 0x3) || (bVar5 == 0x10)) {
-			pbVar3 = reg(bVar2 | bVar1);
-			debug_printf("AND r: BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,a %x,after data %x,z flag %x", (uint)BSR1,
-				(uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)ACC, (uint)*pbVar3, STATUS >> 0x2 & 0x1);
-		}
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_XOR_A(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	uint uVar5;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar5;
-	uVar5 = uVar5 & 0xff | (uint)bVar1;
-	do {
-		debug_printf("XOR A r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		pbVar3 = reg(bVar2 | bVar1);
-		ACC ^= *pbVar3;
-		if (ACC == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_XOR_r(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	uint uVar5;
-	uint uVar6;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	uVar6 = uVar5 & 0xff | (uint)bVar1;
-	do {
-		debug_printf("XOR r=%x(%s) A", uVar6, Sfr_in_str + uVar6);
-		bVar2 = (byte)uVar5;
-		pbVar3 = reg(bVar2 | bVar1);
-		*pbVar3 = *pbVar3 ^ ACC;
-		pbVar3 = reg(bVar2 | bVar1);
-		if (*pbVar3 == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_COMA(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	uint uVar5;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar5;
-	uVar5 = uVar5 & 0xff | (uint)bVar1;
-	do {
-		pbVar3 = reg(bVar2 | bVar1);
-		ACC = ~*pbVar3;
-		if (ACC == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		debug_printf("COMA r=%x(%s) ", uVar5, Sfr_in_str + uVar5);
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_COM(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte* pbVar4;
-	int iVar5;
-	uint uVar6;
-	uint uVar7;
-
-	bVar2 = *(byte*)(param_1 + 0x3);
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	uVar7 = uVar6 & 0xff | (uint)bVar2;
-	do {
-		bVar3 = (byte)uVar6;
-		pbVar4 = reg(bVar3 | bVar2);
-		bVar1 = *pbVar4;
-		pbVar4 = reg(bVar3 | bVar2);
-		*pbVar4 = ~bVar1;
-		pbVar4 = reg(bVar3 | bVar2);
-		if (*pbVar4 == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		debug_printf("COM r=%x(%s) ", uVar7, Sfr_in_str + uVar7);
-		post_pid(bVar3 | bVar2);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar5;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar5 >> 0x8);
-	PCH = (char)((uint)iVar5 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_INCA(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte* pbVar4;
-	int iVar5;
-	uint uVar6;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar6;
-	uVar6 = uVar6 & 0xff | (uint)bVar1;
-	do {
-		pbVar4 = reg(bVar2 | bVar1);
-		bVar3 = *pbVar4;
-		pbVar4 = reg(bVar2 | bVar1);
-		ACC = (char)(bVar3 + 0x1);
-		if ((((bVar2 | bVar1) == 0x4) || ((bVar2 | bVar1) == 0x11)) && (*pbVar4 == 0xff)) {
-			if (ACC == '\0') {
-				STATUS |= 0x4;
-			}
-			else {
-				STATUS &= 0xfb;
-			}
-		}
-		if ((bVar3 + 0x1 & 0xff00) == 0x0) {
-			bVar3 = STATUS & 0xfe;
-		}
-		else {
-			bVar3 = STATUS | 0x1;
-		}
-		if (ACC == '\0') {
-			STATUS = bVar3 | 0x4;
-		}
-		else {
-			STATUS = bVar3 & 0xfb;
-		}
-		debug_printf("INCA r=%x(%s) ", uVar6, Sfr_in_str + uVar6);
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar5;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar5 >> 0x8);
-	PCH = (char)((uint)iVar5 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_INC(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte* pbVar4;
-	int iVar5;
-	uint extraout_EDX = 0;
-	byte bVar6;
-	uint uVar7;
-	byte local_4;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar7 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar3 = (byte)uVar7;
-	bVar6 = bVar3 | bVar1;
-	uVar7 = uVar7 & 0xff | (uint)bVar1;
-	do {
-		pbVar4 = reg(bVar3 | bVar1);
-		debug_printf("INC r=%x(%s) value %x", uVar7, Sfr_in_str + uVar7, (uint)*pbVar4);
-		pbVar4 = reg(bVar3 | bVar1);
-		bVar2 = *pbVar4;
-		local_4 = (byte)(bVar2 + 0x1);
-		if (bVar6 != 0x13) {
-			pbVar4 = reg(bVar3 | bVar1);
-			*pbVar4 = local_4;
-		}
-		if ((bVar2 + 0x1 & 0xff00) == 0x0) {
-			STATUS &= 0xfe;
-		}
-		else {
-			STATUS |= 0x1;
-		}
-		if (local_4 == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		auto_carry(bVar3 | bVar1);
-		if (bVar6 == 0xa) {
-			debug_printf("INC A %x, i %x ,Z flag %x", (uint)ACC, extraout_EDX & 0xffff, STATUS >> 0x2 & 0x1);
-		}
-		else if (bVar6 == 0x11) {
-			debug_printf("INC FSR2 %x", (uint)FSR2);
-		}
-		post_pid(bVar3 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar5;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar5 >> 0x8);
-	PCH = (char)((uint)iVar5 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_ADD_A(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	ushort uVar5;
-	uint uVar6;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar6;
-	uVar6 = uVar6 & 0xff | (uint)bVar1;
-	do {
-		debug_printf("ADD A r=%x(%s ", uVar6, Sfr_in_str + uVar6);
-		pbVar3 = reg(bVar2 | bVar1);
-		uVar5 = (ushort)ACC;
-		ACC = (byte)(uVar5 + *pbVar3);
-		if ((uVar5 + *pbVar3 & 0xff00) == 0x0) {
-			STATUS &= 0xfe;
-		}
-		else {
-			STATUS |= 0x1;
-		}
-		if (ACC == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_ADD_r(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte* pbVar4;
-	int iVar5;
-	byte bVar6;
-	ushort uVar7;
-	uint uVar8;
-	uint uVar9;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar8 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	uVar9 = uVar8 & 0xff | (uint)bVar1;
-	do {
-		debug_printf("ADD r=%x(%s) A", uVar9, Sfr_in_str + uVar9);
-		bVar3 = (byte)uVar8;
-		pbVar4 = reg(bVar3 | bVar1);
-		bVar2 = *pbVar4;
-		uVar7 = (ushort)ACC;
-		pbVar4 = reg(bVar3 | bVar1);
-		bVar6 = (byte)(bVar2 + uVar7);
-		*pbVar4 = bVar6;
-		if ((bVar2 + uVar7 & 0xff00) == 0x0) {
-			STATUS &= 0xfe;
-		}
-		else {
-			STATUS |= 0x1;
-		}
-		if (bVar6 == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		bVar3 |= bVar1;
-		auto_carry(bVar3);
-		post_pid(bVar3);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar5;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar5 >> 0x8);
-	PCH = (char)((uint)iVar5 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_ADC_A(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	byte bVar5;
-	ushort uVar6;
-	uint uVar7;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar7 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar7;
-	uVar7 = uVar7 & 0xff | (uint)bVar1;
-	do {
-		debug_printf("ADC A r=%x(%s) ", uVar7, Sfr_in_str + uVar7);
-		pbVar3 = reg(bVar2 | bVar1);
-		uVar6 = (ushort)(STATUS & 0x1) + (ushort)*pbVar3 + (ushort)ACC;
-		ACC = (byte)uVar6;
-		if ((uVar6 & 0xff00) == 0x0) {
-			bVar5 = STATUS & 0xfe;
-		}
-		else {
-			bVar5 = STATUS | 0x1;
-		}
-		if (ACC == 0x0) {
-			STATUS = bVar5 | 0x4;
-		}
-		else {
-			STATUS = bVar5 & 0xfb;
-		}
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_ADC_r(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	byte bVar5;
-	ushort uVar6;
-	uint uVar7;
-	uint uVar8;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar7 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	uVar8 = uVar7 & 0xff | (uint)bVar1;
-	do {
-		debug_printf("ADC r=%x(%s) A", uVar8, Sfr_in_str + uVar8);
-		bVar2 = (byte)uVar7;
-		pbVar3 = reg(bVar2 | bVar1);
-		uVar6 = (ushort)(STATUS & 0x1) + (ushort)*pbVar3 + (ushort)ACC;
-		pbVar3 = reg(bVar2 | bVar1);
-		bVar5 = (byte)uVar6;
-		*pbVar3 = bVar5;
-		if ((uVar6 & 0xff00) == 0x0) {
-			STATUS &= 0xfe;
-		}
-		else {
-			STATUS |= 0x1;
-		}
-		if (bVar5 == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		bVar2 |= bVar1;
-		auto_carry(bVar2);
-		post_pid(bVar2);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_DECA(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	uint uVar5;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar5;
-	uVar5 = uVar5 & 0xff | (uint)bVar1;
-	do {
-		pbVar3 = reg(bVar2 | bVar1);
-		ACC = (char)(*pbVar3 - 0x1);
-		if ((*pbVar3 - 0x1 & 0xff00) == 0xff00) {
-			STATUS &= 0xfe;
-		}
-		else {
-			STATUS |= 0x1;
-		}
-		if (ACC == '\0') {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		debug_printf("DECA r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_DEC(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte* pbVar4;
-	int iVar5;
-	byte bVar6;
-	uint uVar7;
-	uint uVar8;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar7 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	uVar8 = uVar7 & 0xff | (uint)bVar1;
-	do {
-		debug_printf("DEC r=%x(%s)", uVar8, Sfr_in_str + uVar8);
-		bVar3 = (byte)uVar7;
-		pbVar4 = reg(bVar3 | bVar1);
-		bVar2 = *pbVar4;
-		pbVar4 = reg(bVar3 | bVar1);
-		bVar6 = (byte)(bVar2 - 0x1);
-		*pbVar4 = bVar6;
-		if ((bVar2 - 0x1 & 0xff00) == 0xff00) {
-			STATUS &= 0xfe;
-		}
-		else {
-			STATUS |= 0x1;
-		}
-		if (bVar6 == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		auto_borrow(bVar3 | bVar1);
-		post_pid(bVar3 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar5;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar5 >> 0x8);
-	PCH = (char)((uint)iVar5 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_SUB_A(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	uint uVar4;
-	int iVar5;
-	uint uVar6;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar6;
-	uVar6 = uVar6 & 0xff | (uint)bVar1;
-	do {
-		if ((bVar2 | bVar1) == 0x11) {
-			debug_printf("SUB A FSR2, A %x FSR2 %x", (uint)ACC, (uint)FSR2);
-		}
-		pbVar3 = reg(bVar2 | bVar1);
-		uVar4 = (uint)(ushort)((ushort)*pbVar3 - (ushort)ACC);
-		ACC = (byte)((ushort)*pbVar3 - (ushort)ACC);
-		if ((uVar4 & 0xff00) == 0xff00) {
-			STATUS &= 0xfe;
-		}
-		else {
-			STATUS |= 0x1;
-		}
-		if (ACC == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		debug_printf("SUB A r=%x(%s)", uVar6, Sfr_in_str + uVar6);
-		if ((bVar2 | bVar1) == 0x11) {
-			debug_printf("SUB A FSR2, after A %x FSR2 %x", uVar4 & 0xff, (uint)FSR2);
-		}
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar5;
-	PCM = (char)((uint)iVar5 >> 0x8);
-	PCH = (char)((uint)iVar5 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_SUB_r(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	ushort uVar4;
-	byte* pbVar5;
-	int iVar6;
-	byte bVar7;
-	uint uVar8;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar8 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar3 = (byte)uVar8;
-	uVar8 = uVar8 & 0xff | (uint)bVar1;
-	do {
-		debug_printf("SUB r=%x(%s) A", uVar8, Sfr_in_str + uVar8);
-		if ((bVar3 | bVar1) == 0x3) {
-			pbVar5 = reg(bVar3 | bVar1);
-			debug_printf("SUB INDF1 A: BSR1 %x,FSR1 %x,before indf1 data %x, a %x", (uint)BSR1, (uint)FSR1,
-				(uint)*pbVar5, (uint)ACC);
-		}
-		pbVar5 = reg(bVar3 | bVar1);
-		bVar2 = *pbVar5;
-		uVar4 = (ushort)ACC;
-		pbVar5 = reg(bVar3 | bVar1);
-		bVar7 = (byte)(bVar2 - uVar4);
-		*pbVar5 = bVar7;
-		if ((bVar2 - uVar4 & 0xff00) == 0xff00) {
-			STATUS &= 0xfe;
-		}
-		else {
-			STATUS |= 0x1;
-		}
-		if (bVar7 == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		auto_borrow(bVar3 | bVar1);
-		if ((bVar3 | bVar1) == 0x3) {
-			pbVar5 = reg(bVar3 | bVar1);
-			debug_printf("SUB INDF1 A: BSR1 %x,FSR1 %x,after indf1 data %x", (uint)BSR1, (uint)FSR1,
-				(uint)*pbVar5);
-		}
-		post_pid(bVar3 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	iVar6 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar6;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar6 >> 0x8);
-	PCH = (char)((uint)iVar6 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_SUBB_A(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	ushort uVar3;
-	byte* pbVar4;
-	int iVar5;
-	byte bVar6;
-	uint uVar7;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar7 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar7;
-	uVar7 = uVar7 & 0xff | (uint)bVar1;
-	do {
-		bVar6 = STATUS & 0x1;
-		debug_printf("SUBB A r=%x(%s)", uVar7, Sfr_in_str + uVar7);
-		pbVar4 = reg(bVar2 | bVar1);
-		uVar3 = ((ushort)*pbVar4 - (ushort)ACC) - (ushort)(bVar6 != 0x1);
-		ACC = (byte)uVar3;
-		if ((uVar3 & 0xff00) == 0xff00) {
-			STATUS &= 0xfe;
-		}
-		else {
-			STATUS |= 0x1;
-		}
-		if (ACC == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar5;
-	PCM = (char)((uint)iVar5 >> 0x8);
-	PCH = (char)((uint)iVar5 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_SUBB_r(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	ushort uVar3;
-	byte* pbVar4;
-	int iVar5;
-	byte bVar6;
-	uint uVar7;
-	uint uVar8;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar7 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	uVar8 = uVar7 & 0xff | (uint)bVar1;
-	do {
-		bVar6 = STATUS & 0x1;
-		debug_printf("SUBB r=%x(%s) A", uVar8, Sfr_in_str + uVar8);
-		bVar2 = (byte)uVar7;
-		pbVar4 = reg(bVar2 | bVar1);
-		uVar3 = ((ushort)*pbVar4 - (ushort)ACC) - (ushort)(bVar6 != 0x1);
-		pbVar4 = reg(bVar2 | bVar1);
-		bVar6 = (byte)uVar3;
-		*pbVar4 = bVar6;
-		if ((uVar3 & 0xff00) == 0xff00) {
-			STATUS &= 0xfe;
-		}
-		else {
-			STATUS |= 0x1;
-		}
-		if (bVar6 == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		auto_borrow(bVar2 | bVar1);
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar5;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar5 >> 0x8);
-	PCH = (char)((uint)iVar5 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_ADDDC_A(byte* param_1)
-
-{
-	byte bVar1;
-	ushort uVar2;
-	byte* pbVar3;
-	int iVar4;
-	ushort uVar5;
-	uint uVar6;
-
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar1 = (byte)uVar6 | *(byte*)(param_1 + 0x3);
-	uVar6 = uVar6 & 0xff | (uint) * (byte*)(param_1 + 0x3);
-	do {
-		debug_printf("ADDDC A r=%x(%s)", uVar6, Sfr_in_str + uVar6);
-		pbVar3 = reg(bVar1);
-		uVar2 = (ushort)(STATUS & 0x1) + (ushort)ACC;
-		uVar5 = uVar2 + *pbVar3;
-		if ((0x9 < ((byte)uVar5 & 0xf)) || (0xf < (ushort)((uVar2 & 0xf) + (*pbVar3 & 0xf)))) {
-			uVar5 += 0x6;
-		}
-		if ((0x90 < (uVar5 & 0xf0)) || (0xff < uVar5)) {
-			uVar5 += 0x60;
-		}
-		ACC = (byte)uVar5;
-		if ((uVar5 & 0xff00) == 0x0) {
-			STATUS &= 0xfe;
-		}
-		else {
-			STATUS |= 0x1;
-		}
-		if (ACC == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		post_pid(bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_ADDDC_r(byte* param_1)
-
-{
-	char cVar1;
-	byte* pbVar2;
-	uint uVar3;
-	int iVar4;
-	byte bVar5;
-	uint uVar6;
-	uint uVar7;
-	uint uVar8;
-	uint local_208;
-	WCHAR local_204[0x100];
-	uintptr_t local_4;
-
-	local_4 = g_stack_cookie ^ (uintptr_t)&local_208;
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	local_208 = uVar6 | *(byte*)(param_1 + 0x3);
-	uVar6 = uVar6 & 0xff | (uint) * (byte*)(param_1 + 0x3);
-	do {
-		debug_printf("ADDDC r=%x(%s) A", uVar6, Sfr_in_str + uVar6);
-		pbVar2 = reg(uVar6);
-		uVar7 = (uint)*pbVar2;
-		uVar3 = (uint)(ushort)((ushort)(STATUS & 0x1) + (ushort)ACC);
-		uVar8 = uVar3 + uVar7;
-		if ((0x9 < ((byte)uVar8 & 0xf)) || (0xf < (uVar3 & 0xf) + (uVar7 & 0xf))) {
-			uVar8 += 0x6;
-		}
-		if ((0x90 < (uVar8 & 0xf0)) || (0xff < (ushort)uVar8)) {
-			uVar8 += 0x60;
-		}
-		pbVar2 = reg((byte)local_208);
-		*pbVar2 = (byte)uVar8;
-		if ((uVar8 & 0xff00) == 0x0) {
-			bVar5 = STATUS & 0xfe;
-		}
-		else {
-			bVar5 = STATUS | 0x1;
-		}
-		if ((byte)uVar8 == 0x0) {
-			STATUS = bVar5 | 0x4;
-		}
-		else {
-			STATUS = bVar5 & 0xfb;
-		}
-		cVar1 = (byte)local_208;
-		if ((((byte)local_208 == '\0') && (BSR == '\0')) && ((byte)(FSR + 0x10) < 0xa)) {
-			debug_printf2(local_204, L"ADDDC R A %x,c %x,temp %x,BSR 0 FSR %x, data %x\n", (uint)ACC,
-				STATUS & 0x1, uVar7, (uint)FSR, (uint)(byte)(&EmuMem)[FSR]);
-		}
-		post_pid(cVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (byte)iVar4;
-	PCM = (byte)((uint)iVar4 >> 0x8);
-	PCH = (undefined)((uint)iVar4 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uintptr_t)&local_208);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_SUBDB_A(byte* param_1)
-
-{
-	byte bVar1;
-	byte* pbVar2;
-	int iVar3;
-	ushort uVar4;
-	ushort uVar5;
-
-	bVar1 = *(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3);
-	do {
-		pbVar2 = reg(bVar1);
-		uVar4 = (0x9a - (ushort)((STATUS & 0x1) != 0x1)) - (ushort)ACC;
-		uVar5 = uVar4 + *pbVar2;
-		if ((0x9 < ((byte)uVar5 & 0xf)) || (0xf < (ushort)((uVar4 & 0xf) + (*pbVar2 & 0xf)))) {
-			uVar5 += 0x6;
-		}
-		if ((0x90 < (uVar5 & 0xf0)) || (0xff < uVar5)) {
-			uVar5 += 0x60;
-		}
-		ACC = (byte)uVar5;
-		if ((uVar5 & 0xff00) == 0x0) {
-			STATUS &= 0xfe;
-		}
-		else {
-			STATUS |= 0x1;
-		}
-		if (ACC == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		post_pid(bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	iVar3 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar3;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar3 >> 0x8);
-	PCH = (char)((uint)iVar3 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_SUBDB_r(byte* param_1)
-
-{
-	byte* pbVar1;
-	int iVar2;
-	byte bVar3;
-	ushort uVar4;
-	ushort uVar5;
-
-	bVar3 = *(char*)(param_1 + 0x2) << 0x4 | *(byte*)(param_1 + 0x3);
-	do {
-		pbVar1 = reg(bVar3);
-		uVar4 = (0x9a - (ushort)((STATUS & 0x1) != 0x1)) - (ushort)ACC;
-		uVar5 = uVar4 + *pbVar1;
-		if ((0x9 < ((byte)uVar5 & 0xf)) || (0xf < (ushort)((uVar4 & 0xf) + (*pbVar1 & 0xf)))) {
-			uVar5 += 0x6;
-		}
-		if ((0x90 < (uVar5 & 0xf0)) || (0xff < uVar5)) {
-			uVar5 += 0x60;
-		}
-		pbVar1 = reg(bVar3);
-		*pbVar1 = (byte)uVar5;
-		if ((uVar5 & 0xff00) == 0x0) {
-			STATUS &= 0xfe;
-		}
-		else {
-			STATUS |= 0x1;
-		}
-		if ((byte)uVar5 == 0x0) {
-			STATUS |= 0x4;
-		}
-		else {
-			STATUS &= 0xfb;
-		}
-		post_pid(bVar3);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	iVar2 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar2;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar2 >> 0x8);
-	PCH = (char)((uint)iVar2 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_RRCA(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	uint uVar5;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar5;
-	uVar5 = uVar5 & 0xff | (uint)bVar1;
-	do {
-		pbVar3 = reg(bVar2 | bVar1);
-		ACC = STATUS << 0x7 | *pbVar3 >> 0x1;
-		STATUS ^= (STATUS ^ *pbVar3) & 0x1;
-		debug_printf("RRCA r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		post_pid(bVar2 | bVar1);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_RRC(byte* param_1)
-
-{
-	byte bVar1;
-	byte* pbVar2;
-	int iVar3;
-	byte bVar4;
-	uint uVar5;
-	byte bVar6;
-
-	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar4 = (byte)uVar5 | *(byte*)(param_1 + 0x3);
-	uVar5 = uVar5 & 0xff | (uint) * (byte*)(param_1 + 0x3);
-	do {
-		pbVar2 = reg(bVar4);
-		bVar1 = *pbVar2;
-		bVar6 = STATUS << 0x7;
-		pbVar2 = reg(bVar4);
-		*pbVar2 = bVar6 | bVar1 >> 0x1;
-		STATUS ^= (STATUS ^ bVar1) & 0x1;
-		debug_printf("RRC r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		post_pid(bVar4);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	iVar3 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar3;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar3 >> 0x8);
-	PCH = (char)((uint)iVar3 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_RLCA(byte* param_1)
-
-{
-	byte bVar1;
-	byte* pbVar2;
-	int iVar3;
-	uint uVar4;
-
-	uVar4 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar1 = (byte)uVar4 | *(byte*)(param_1 + 0x3);
-	uVar4 = uVar4 & 0xff | (uint) * (byte*)(param_1 + 0x3);
-	do {
-		pbVar2 = reg(bVar1);
-		ACC = STATUS & 0x1 | *pbVar2 * '\x02';
-		STATUS = STATUS & 0xfe | *pbVar2 >> 0x7;
-		debug_printf("RLCA r=%x(%s)", uVar4, Sfr_in_str + uVar4);
-		post_pid(bVar1);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	iVar3 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar3;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar3 >> 0x8);
-	PCH = (char)((uint)iVar3 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_RLC(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte bVar4;
-	byte* pbVar5;
-	int iVar6;
-	byte bVar7;
-	uint uVar8;
-
-	bVar2 = *(byte*)(param_1 + 0x3);
-	uVar8 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar3 = (byte)uVar8;
-	bVar7 = bVar3 | bVar2;
-	uVar8 = uVar8 & 0xff | (uint)bVar2;
-	do {
-		if ((bVar7 == 0x3) || (bVar7 == 0x10)) {
-			pbVar5 = reg(bVar3 | bVar2);
-			debug_printf("RLC r: BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,before data %x, c flag %x", (uint)BSR1,
-				(uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)*pbVar5, STATUS & 0x1);
-		}
-		pbVar5 = reg(bVar3 | bVar2);
-		bVar1 = *pbVar5;
-		bVar4 = STATUS & 0x1;
-		pbVar5 = reg(bVar3 | bVar2);
-		*pbVar5 = bVar4 | bVar1 * '\x02';
-		STATUS = STATUS & 0xfe | bVar1 >> 0x7;
-		if ((bVar7 == 0x3) || (bVar7 == 0x10)) {
-			pbVar5 = reg(bVar3 | bVar2);
-			debug_printf("RLC r: BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,after data %x,c flag %x", (uint)BSR1,
-				(uint)FSR1, (uint)BSR2, (uint)FSR2, (uint)*pbVar5, STATUS & 0x1);
-		}
-		debug_printf("RLC r=%x(%s)", uVar8, Sfr_in_str + uVar8);
-		post_pid(bVar3 | bVar2);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	iVar6 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar6;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar6 >> 0x8);
-	PCH = (char)((uint)iVar6 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_SHRA(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	uint uVar5;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar5;
-	uVar5 = uVar5 & 0xff | (uint)bVar1;
-	do {
-		pbVar3 = reg(bVar2 | bVar1);
-		ACC = STATUS << 0x7 | *pbVar3 >> 0x1;
-		debug_printf("SHRA r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		post_pid(bVar2 | bVar1);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_SHLA(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	uint uVar5;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar5;
-	uVar5 = uVar5 & 0xff | (uint)bVar1;
-	do {
-		pbVar3 = reg(bVar2 | bVar1);
-		ACC = STATUS & 0x1 | *pbVar3 * '\x02';
-		debug_printf("SHLA r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		post_pid(bVar2 | bVar1);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_EX_r(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	uint uVar4;
-	byte* pbVar5;
-	int iVar6;
-	uint uVar7;
-
-	bVar2 = *(byte*)(param_1 + 0x3);
-	uVar7 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	uVar4 = uVar7 & 0xff | (uint)bVar2;
-	debug_printf("EX r=%x(%s)", uVar4, Sfr_in_str + uVar4);
-	do {
-		bVar3 = (byte)uVar7;
-		pbVar5 = reg(bVar3 | bVar2);
-		bVar1 = *pbVar5;
-		pbVar5 = reg(bVar3 | bVar2);
-		*pbVar5 = ACC;
-		ACC = bVar1;
-		post_pid(bVar3 | bVar2);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	iVar6 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar6;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar6 >> 0x8);
-	PCH = (char)((uint)iVar6 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_BC(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	byte bVar5;
-	uint uVar6;
-	uint uVar7;
-	undefined auStack_20c[0x2];
-	byte local_20a;
-	byte local_209;
-	undefined4 local_208;
-	WCHAR local_204[0x100];
-	uintptr_t local_4;
-
-	local_4 = g_stack_cookie ^ (uintptr_t)auStack_20c;
-	bVar1 = *(byte*)(param_1 + 0x3);
-	local_20a = *(char*)(param_1 + 0x1) - 0x8;
-	uVar7 = (uint)local_20a;
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar6;
-	bVar5 = bVar2 | bVar1;
-	uVar6 = uVar6 & 0xff | (uint)bVar1;
-	local_209 = ~('\x01' << (local_20a & 0x1f));
-	do {
-		pbVar3 = reg(bVar2 | bVar1);
-		*pbVar3 = *pbVar3 & local_209;
-		if (bVar5 == 0x31) {
-			// local_208 = CONCAT31(local_208._1_3_, PORTC | PBCON);
-			InvalidatePORTA();
-			debug_printf("BC PORTA %x DCRB&PORTB %x DCRA %x", (uint)PACON,
-				(uint)(PORTC & PBCON), (uint)PAWAKE);
-		}
-		else if (bVar5 == 0x43) {
-			if (local_20a == 0x0) {
-				debug_printf2(local_204, L"bit clear of r43 %x\n", (uint)gpr_43);
-			}
-		}
-		else if ((bVar5 == 0x20) && (local_20a == 0x1)) {
-			InvalidateTimerSetting(0x0);
-			InvalidateTimerSetting(0x1);
-			InvalidateTimerSetting(0x2);
-		}
-		debug_printf("BC r(b) r=%x(%s) b=%x", uVar6, Sfr_in_str + uVar6, uVar7);
-		post_pid(bVar2 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCM = (byte)((uint)iVar4 >> 0x8);
-	PCL = (byte)iVar4;
-	PCH = (undefined)((uint)iVar4 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_20c);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_BS(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte* pbVar4;
-	int iVar5;
-	byte bVar6;
-	uint uVar7;
-	undefined auStack_210[0x3];
-	byte local_20d;
-	uint local_20c;
-	undefined4 local_208;
-	WCHAR local_204[0x100];
-	uintptr_t local_4;
-
-	local_4 = g_stack_cookie ^ (uintptr_t)auStack_210;
-	bVar1 = *(byte*)(param_1 + 0x3);
-	bVar2 = *(byte*)(param_1 + 0x1);
-	uVar7 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar3 = (byte)uVar7;
-	bVar6 = bVar3 | bVar1;
-	local_20d = '\x01' << (bVar2 & 0x1f);
-	uVar7 = uVar7 & 0xff | (uint)bVar1;
-	local_20c = (uint)bVar2;
-	do {
-		pbVar4 = reg(bVar3 | bVar1);
-		*pbVar4 = *pbVar4 | local_20d;
-		if (bVar6 == 0x31) {
-			// local_208 = CONCAT31(local_208._1_3_, PORTC | PBCON);
-			InvalidatePORTA();
-			debug_printf("BS PORTA %x DCRB&PORTB %x DCRA %x", (uint)PACON,
-				(uint)(PORTC & PBCON), (uint)PAWAKE);
-		}
-		else {
-			if ((bVar6 == 0x3) || (bVar6 == 0x10)) {
-				pbVar4 = reg(bVar3 | bVar1);
-				debug_printf("BS r: BSR1 %x,FSR1 %x,BSR2 %x,FSR2 %x,after data %x", (uint)BSR1, (uint)FSR1,
-					(uint)BSR2, (uint)FSR2, (uint)*pbVar4);
-			}
-			if ((bVar6 == 0x2a) && ((TR1CON & 0x8) != 0x0)) {
-				UpdateTimerSetting(0x1);
-			}
-		}
-		debug_printf("BS r(b) r=%x(%s) b=%x", uVar7, Sfr_in_str + uVar7, (uint)bVar2);
-		if (bVar6 == 0x2a) {
-			if ((char)local_20c == '\x04') {
-				debug_printf("TR1CON is %x", (uint)TR1CON);
-			}
-		}
-		else if ((bVar6 == 0x43) && ((char)local_20c == '\0')) {
-			debug_printf2(local_204, L"bit set of r43 %x\n", (uint)gpr_43);
-		}
-		post_pid(bVar3 | bVar1);
-	} while ((RepeatCount != 0x0) && (RepeatCount += -0x1, RepeatCount != 0x0));
-	CycleCounter += 0x1;
-	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCM = (byte)((uint)iVar5 >> 0x8);
-	PCL = (byte)iVar5;
-	PCH = (undefined)((uint)iVar5 >> 0x10);
-	___security_check_cookie_4(local_4 ^ (uintptr_t)auStack_210);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_BTG(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte* pbVar4;
-	int iVar5;
-	uint uVar6;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	bVar3 = *(char*)(param_1 + 0x1) - 0x8;
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar6;
-	uVar6 = uVar6 & 0xff | (uint)bVar1;
-	do {
-		pbVar4 = reg(bVar2 | bVar1);
-		*pbVar4 = *pbVar4 ^ '\x01' << (bVar3 & 0x1f);
-		debug_printf("BTG r(b) r=%x(%s) b=%x", uVar6, Sfr_in_str + uVar6, (uint)bVar3);
-		post_pid(bVar2 | bVar1);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar5;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar5 >> 0x8);
-	PCH = (char)((uint)iVar5 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_EXL_r(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte* pbVar4;
-	int iVar5;
-	byte bVar6;
-	uint uVar7;
-
-	uVar7 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar3 = (byte)uVar7 | *(byte*)(param_1 + 0x3);
-	uVar7 = uVar7 & 0xff | (uint) * (byte*)(param_1 + 0x3);
-	do {
-		pbVar4 = reg(bVar3);
-		bVar1 = *pbVar4;
-		pbVar4 = reg(bVar3);
-		bVar6 = *pbVar4 ^ ACC;
-		bVar2 = *pbVar4;
-		pbVar4 = reg(bVar3);
-		*pbVar4 = bVar6 & 0xf ^ bVar2;
-		ACC = ACC & 0xf0 | bVar1 & 0xf;
-		debug_printf("EXL r=%x(%s)", uVar7, Sfr_in_str + uVar7);
-		post_pid(bVar3);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar5;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar5 >> 0x8);
-	PCH = (char)((uint)iVar5 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_EXH_r(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	byte bVar5;
-	byte bVar6;
-	uint uVar7;
-
-	uVar7 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar5 = (byte)uVar7 | *(byte*)(param_1 + 0x3);
-	uVar7 = uVar7 & 0xff | (uint) * (byte*)(param_1 + 0x3);
-	do {
-		pbVar3 = reg(bVar5);
-		bVar1 = *pbVar3;
-		pbVar3 = reg(bVar5);
-		bVar2 = *pbVar3;
-		bVar6 = ACC << 0x4;
-		pbVar3 = reg(bVar5);
-		*pbVar3 = bVar6 | bVar2 & 0xf;
-		ACC = ACC & 0xf0 | bVar1 >> 0x4;
-		debug_printf("EXH r=%x(%s)", uVar7, Sfr_in_str + uVar7);
-		post_pid(bVar5);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_MOVL_r(byte* param_1)
-
-{
-	byte bVar1;
-	byte* pbVar2;
-	int iVar3;
-	byte bVar4;
-	uint uVar5;
-	byte bVar6;
-
-	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar4 = (byte)uVar5 | *(byte*)(param_1 + 0x3);
-	uVar5 = uVar5 & 0xff | (uint) * (byte*)(param_1 + 0x3);
-	do {
-		pbVar2 = reg(bVar4);
-		bVar6 = *pbVar2 ^ ACC;
-		bVar1 = *pbVar2;
-		pbVar2 = reg(bVar4);
-		*pbVar2 = bVar6 & 0xf ^ bVar1;
-		debug_printf("MOVL r=%x(%s) A", uVar5, Sfr_in_str + uVar5);
-		post_pid(bVar4);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	iVar3 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar3;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar3 >> 0x8);
-	PCH = (char)((uint)iVar3 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_MOVH_r(byte* param_1)
-
-{
-	byte bVar1;
-	byte* pbVar2;
-	int iVar3;
-	byte bVar4;
-	byte bVar5;
-	uint uVar6;
-
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar4 = (byte)uVar6 | *(byte*)(param_1 + 0x3);
-	uVar6 = uVar6 & 0xff | (uint) * (byte*)(param_1 + 0x3);
-	do {
-		pbVar2 = reg(bVar4);
-		bVar1 = *pbVar2;
-		bVar5 = ACC << 0x4;
-		pbVar2 = reg(bVar4);
-		*pbVar2 = bVar1 & 0xf | bVar5;
-		debug_printf("MOVH r=%x(%s) A", uVar6, Sfr_in_str + uVar6);
-		post_pid(bVar4);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	iVar3 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar3;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar3 >> 0x8);
-	PCH = (char)((uint)iVar3 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_MOVL_A(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	uint uVar5;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar5;
-	uVar5 = uVar5 & 0xff | (uint)bVar1;
-	do {
-		pbVar3 = reg(bVar2 | bVar1);
-		ACC = *pbVar3 & 0xf;
-		debug_printf("MOVL A r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		post_pid(bVar2 | bVar1);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_MOVH_A(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	uint uVar5;
-
-	bVar1 = *(byte*)(param_1 + 0x3);
-	uVar5 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar2 = (byte)uVar5;
-	uVar5 = uVar5 & 0xff | (uint)bVar1;
-	do {
-		pbVar3 = reg(bVar2 | bVar1);
-		ACC = *pbVar3 >> 0x4;
-		debug_printf("MOVH A r=%x(%s)", uVar5, Sfr_in_str + uVar5);
-		post_pid(bVar2 | bVar1);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	CycleCounter += 0x1;
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_SFR4(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte* pbVar3;
-	int iVar4;
-	byte bVar5;
-	uint uVar6;
-
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar5 = (byte)uVar6 | *(byte*)(param_1 + 0x3);
-	uVar6 = uVar6 & 0xff | (uint) * (byte*)(param_1 + 0x3);
-	do {
-		bVar2 = ACC;
-		pbVar3 = reg(bVar5);
-		ACC ^= (*pbVar3 ^ ACC) & 0xf;
-		pbVar3 = reg(bVar5);
-		bVar1 = *pbVar3;
-		pbVar3 = reg(bVar5);
-		*pbVar3 = bVar1 >> 0x4;
-		pbVar3 = reg(bVar5);
-		bVar1 = *pbVar3;
-		pbVar3 = reg(bVar5);
-		*pbVar3 = bVar2 << 0x4 | bVar1 & 0xf;
-		debug_printf("SFR4 r=%x(%s)", uVar6, Sfr_in_str + uVar6);
-		post_pid(bVar5);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	iVar4 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar4;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar4 >> 0x8);
-	PCH = (char)((uint)iVar4 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_SFL4(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte* pbVar4;
-	int iVar5;
-	uint uVar6;
-	uint uVar7;
-	byte local_1;
-
-	bVar2 = *(byte*)(param_1 + 0x3);
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	uVar7 = uVar6 & 0xff | (uint)bVar2;
-	do {
-		bVar3 = (byte)uVar6;
-		local_1 = ACC & 0xf;
-		pbVar4 = reg(bVar3 | bVar2);
-		ACC = *pbVar4 >> 0x4 | ACC & 0xf0;
-		pbVar4 = reg(bVar3 | bVar2);
-		bVar1 = *pbVar4;
-		pbVar4 = reg(bVar3 | bVar2);
-		*pbVar4 = bVar1 << 0x4;
-		pbVar4 = reg(bVar3 | bVar2);
-		bVar1 = *pbVar4;
-		pbVar4 = reg(bVar3 | bVar2);
-		*pbVar4 = bVar1 & 0xf0 | local_1;
-		debug_printf("SFL4 r=%x(%s)", uVar7, Sfr_in_str + uVar7);
-		post_pid(bVar3 | bVar2);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar5;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar5 >> 0x8);
-	PCH = (char)((uint)iVar5 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_SWAP(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte* pbVar4;
-	int iVar5;
-	uint uVar6;
-
-	bVar2 = *(byte*)(param_1 + 0x3);
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	bVar3 = (byte)uVar6;
-	pbVar4 = reg(bVar3 | bVar2);
-	bVar1 = *pbVar4;
-	uVar6 = uVar6 & 0xff | (uint)bVar2;
-	do {
-		pbVar4 = reg(bVar3 | bVar2);
-		*pbVar4 = bVar1 << 0x4 | bVar1 >> 0x4;
-		debug_printf("SWAP r=%x(%s)", uVar6, Sfr_in_str + uVar6);
-		post_pid(bVar3 | bVar2);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar5;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar5 >> 0x8);
-	PCH = (char)((uint)iVar5 >> 0x10);
-	return;
-}
-
-inline void casioemu::ePSCPU::OP_SWAPA(byte* param_1)
-
-{
-	byte bVar1;
-	byte bVar2;
-	byte bVar3;
-	byte* pbVar4;
-	int iVar5;
-	uint uVar6;
-	uint uVar7;
-
-	bVar2 = *(byte*)(param_1 + 0x3);
-	uVar6 = (uint) * (byte*)(param_1 + 0x2) << 0x4;
-	uVar7 = uVar6 & 0xff | (uint)bVar2;
-	do {
-		bVar3 = (byte)uVar6;
-		pbVar4 = reg(bVar3 | bVar2);
-		bVar1 = *pbVar4;
-		pbVar4 = reg(bVar3 | bVar2);
-		ACC = *pbVar4 << 0x4 | bVar1 >> 0x4;
-		debug_printf("SWAPA r=%x(%s)", uVar7, Sfr_in_str + uVar7);
-		post_pid(bVar3 | bVar2);
-		if (RepeatCount == 0x0)
-			break;
-		RepeatCount += -0x1;
-	} while (RepeatCount != 0x0);
-	iVar5 = (ushort)((ushort)PCM * 0x100 + (ushort)PCL) + 0x1;
-	PCL = (char)iVar5;
-	CycleCounter += 0x1;
-	PCM = (char)((uint)iVar5 >> 0x8);
-	PCH = (char)((uint)iVar5 >> 0x10);
-	return;
-}
+			/* Preserve the running hit/skip progress when an existing
+			 * breakpoint is reconfigured. */
+			const uint64_t preserved_hit_count = it->hit_count;
+			*it = breakpoint;
+			it->hit_count = preserved_hit_count;
+		}
+		++memory_breakpoint_version_;
+		return true;
+	}
+
+	bool ePSCPU::RemoveMemoryBreakpoint(uint32_t address, bool write) {
+		const std::lock_guard lock(state_mutex_);
+		auto it = std::find_if(memory_breakpoints_.begin(), memory_breakpoints_.end(), [&](const auto& item) {
+			return item.address == address && item.write == write;
+		});
+		if (it == memory_breakpoints_.end())
+			return false;
+		memory_breakpoints_.erase(it);
+		++memory_breakpoint_version_;
+		return true;
+	}
+
+	void ePSCPU::ClearMemoryBreakpoints() {
+		const std::lock_guard lock(state_mutex_);
+		memory_breakpoints_.clear();
+		memory_break_pending_ = false;
+		++memory_breakpoint_version_;
+	}
+
+	std::vector<Eps6800MemoryBreakpoint> ePSCPU::MemoryBreakpoints() const {
+		const std::lock_guard lock(state_mutex_);
+		return memory_breakpoints_;
+	}
+
+	uint64_t ePSCPU::MemoryBreakpointsVersion() const {
+		const std::lock_guard lock(state_mutex_);
+		return memory_breakpoint_version_;
+	}
+
+	std::vector<Eps6800MemoryBreakpointHit> ePSCPU::MemoryBreakpointHits(uint32_t address, bool write) const {
+		const std::lock_guard lock(state_mutex_);
+		std::vector<Eps6800MemoryBreakpointHit> result;
+		for (const auto& hit : memory_breakpoint_hits_) {
+			if (hit.address == address && hit.write == write)
+				result.push_back(hit);
+		}
+		return result;
+	}
+
+	void ePSCPU::ClearMemoryBreakpointHits() {
+		const std::lock_guard lock(state_mutex_);
+		memory_breakpoint_hits_.clear();
+	}
+
+	Eps6800DebugStop ePSCPU::LastDebugStop() const {
+		const std::lock_guard lock(state_mutex_);
+		return last_debug_stop_;
+	}
+
+	void ePSCPU::EnableTrace(bool enabled) {
+		const std::lock_guard lock(state_mutex_);
+		trace_enabled_ = enabled;
+	}
+
+	void ePSCPU::ClearTrace() {
+		const std::lock_guard lock(state_mutex_);
+		trace_buffer_.clear();
+	}
+
+	void ePSCPU::SetTraceCapacity(size_t capacity) {
+		const std::lock_guard lock(state_mutex_);
+		trace_capacity_ = capacity;
+		while (trace_buffer_.size() > trace_capacity_)
+			trace_buffer_.pop_front();
+	}
+
+	std::vector<Eps6800TraceEntry> ePSCPU::TraceBuffer() const {
+		const std::lock_guard lock(state_mutex_);
+		return {trace_buffer_.begin(), trace_buffer_.end()};
+	}
+
+	uint32_t ePSCPU::PC() const {
+		return ProgramCounter() << 1;
+	}
+
+	uint32_t ePSCPU::ProgramCounter() const {
+		const std::lock_guard lock(state_mutex_);
+		return state_->cpu.pc;
+	}
+
+	void ePSCPU::SetPC(uint32_t word_address) {
+		const std::lock_guard lock(state_mutex_);
+		state_->cpu.pc = word_address & 0x00ffffffu;
+		state_->mmio.regs[REG_PCL] = static_cast<uint8_t>(state_->cpu.pc);
+		state_->mmio.regs[REG_PCM] = static_cast<uint8_t>(state_->cpu.pc >> 8);
+		state_->mmio.regs[REG_PCH] = static_cast<uint8_t>(state_->cpu.pc >> 16);
+	}
+
+	void ePSCPU::SaveState(std::ostream& stream) const {
+		size_t size = 0;
+		machine_snapshot* snapshot = nullptr;
+		{
+			const std::lock_guard lock(state_mutex_);
+			snapshot = machine_state_save_snapshot(state_, &size);
+		}
+		if (!snapshot || size > std::numeric_limits<uint32_t>::max()) {
+			machine_snapshot_free(snapshot);
+			throw std::runtime_error("Failed to capture EPS6800 snapshot");
+		}
+
+		const void* data = machine_snapshot_data(snapshot, &size);
+		const uint32_t encoded_size = static_cast<uint32_t>(size);
+		stream.write(reinterpret_cast<const char*>(&kSnapshotMagic), sizeof(kSnapshotMagic));
+		stream.write(reinterpret_cast<const char*>(&encoded_size), sizeof(encoded_size));
+		stream.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(size));
+		machine_snapshot_free(snapshot);
+		if (!stream)
+			throw std::runtime_error("Failed to write EPS6800 snapshot");
+	}
+
+	void ePSCPU::LoadState(std::istream& stream) {
+		uint32_t magic = 0;
+		uint32_t size = 0;
+		stream.read(reinterpret_cast<char*>(&magic), sizeof(magic));
+		stream.read(reinterpret_cast<char*>(&size), sizeof(size));
+		if (!stream || magic != kSnapshotMagic || size == 0 || size > kMaximumSnapshotSize)
+			throw std::runtime_error("Invalid EPS6800 snapshot header");
+
+		std::vector<uint8_t> data(size);
+		stream.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(data.size()));
+		if (!stream)
+			throw std::runtime_error("Truncated EPS6800 snapshot");
+
+		machine_snapshot* snapshot = machine_snapshot_from_data(data.data(), data.size());
+		if (!snapshot)
+			throw std::runtime_error("Invalid EPS6800 snapshot payload");
+		{
+			const std::lock_guard lock(state_mutex_);
+			machine_state_load_snapshot(state_, snapshot);
+			machine_state_debug_set_memory_access_callback(state_, &ePSCPU::MemoryAccessThunk, this);
+		}
+		machine_snapshot_free(snapshot);
+	}
+} // namespace casioemu

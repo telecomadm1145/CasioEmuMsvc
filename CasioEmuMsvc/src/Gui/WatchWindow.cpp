@@ -19,19 +19,22 @@
 void WatchWindow::PrepareRX() {
 	auto eps = m_emu->chipset.epscpu;
 	if (eps) {
-        snprintf(reg_pc, sizeof(reg_pc), "%05x", eps->PC() >> 1);
-		if (eps->FSR & 0x80) {
-            snprintf(reg_lr, sizeof(reg_lr), "%05x", (uint32_t)((eps->BSR << 7) | (eps->FSR & 0x7f)));
-		}
-		else {
-            snprintf(reg_lr, sizeof(reg_lr), "%02x(SFR)", (uint32_t)((eps->FSR & 0x7f)));
-		}
-        snprintf(reg_ea, sizeof(reg_ea), "%05x", (uint32_t)((eps->BSR1 << 7) | (eps->FSR1 & 0x7f)));
-        snprintf(reg_ex1, sizeof(reg_ex1), "%05x", (uint32_t)((eps->BSR2 << 7) | (eps->FSR2 & 0x7f)));
-        snprintf(reg_ex2, sizeof(reg_ex2), "%05x", (uint32_t)(((eps->LCDARH & 0x03) * 0x60) | eps->LCDARL));
-        snprintf(reg_sp, sizeof(reg_sp), "%04x", eps->STKPTR << 1);
-        snprintf(reg_psw, sizeof(reg_psw), "%02x", eps->STATUS);
-        snprintf(reg_dsr, sizeof(reg_dsr), "%02x", eps->BSR);
+		const auto snapshot = eps->DebugSnapshot();
+		const auto& regs = snapshot.registers;
+		snprintf(reg_pc, sizeof(reg_pc), "%05x", snapshot.program_counter);
+		const auto format_indirect = [](uint8_t fsr, uint8_t bsr, char* out, size_t out_size) {
+			if (fsr & 0x80)
+				snprintf(out, out_size, "%05x", (uint32_t)((bsr << 7) | (fsr & 0x7f)));
+			else
+				snprintf(out, out_size, "%02x(SFR)", (uint32_t)(fsr & 0x7f));
+		};
+		format_indirect(regs[0x01], regs[0x02], reg_lr, sizeof(reg_lr));
+		format_indirect(regs[0x04], regs[0x05], reg_ea, sizeof(reg_ea));
+		format_indirect(regs[0x11], regs[0x12], reg_ex1, sizeof(reg_ex1));
+		snprintf(reg_ex2, sizeof(reg_ex2), "%05x", (uint32_t)(((regs[0x23] & 0x03) * 0x60) + regs[0x22]));
+		snprintf(reg_sp, sizeof(reg_sp), "%04x", snapshot.stack_pointer);
+		snprintf(reg_psw, sizeof(reg_psw), "%02x", regs[0x0f]);
+		snprintf(reg_dsr, sizeof(reg_dsr), "%02x", regs[0x02]);
 	}
 	else {
 		for (int i = 0; i < 16; i++) {
@@ -104,6 +107,43 @@ void WatchWindow::ShowRX() {
 }
 void WatchWindow::ModRX() {
 	char id[10];
+	if (m_emu->chipset.epscpu) {
+		auto edit_sfr = ([&](char* ptr, const char* label, int i, int width) {
+			ImGui::TextColored(~UIHelpers::kColorSuccess, "%s", label);
+			ImGui::SameLine();
+			snprintf(id, sizeof(id), "##epssfr%d", i);
+			ImGui::SetNextItemWidth(char_width * width + 5);
+			ImGui::InputText(id, ptr, width + 1, ImGuiInputTextFlags_CharsHexadecimal);
+		});
+		edit_sfr(reg_pc, "PC: ", 1, 6);
+		ImGui::SameLine();
+		const auto snapshot = m_emu->chipset.epscpu->DebugSnapshot();
+		const auto& regs = snapshot.registers;
+		const auto show_indirect = [&](const char* label, int id, char* ptr, uint8_t fsr) {
+			if (regs[fsr] & 0x80) {
+				edit_sfr(ptr, label, id, 6);
+				return;
+			}
+			ImGui::TextColored(~UIHelpers::kColorSuccess, "%s", label);
+			ImGui::SameLine();
+			ImGui::TextUnformatted(ptr);
+		};
+		show_indirect("INDF0: ", 2, reg_lr, 0x01);
+		ImGui::SameLine();
+		show_indirect("INDF1: ", 3, reg_ea, 0x04);
+		ImGui::SameLine();
+		show_indirect("INDF2: ", 4, reg_ex1, 0x11);
+		ImGui::SameLine();
+		edit_sfr(reg_sp, "STKPTR: ", 5, 4);
+		ImGui::SameLine();
+		edit_sfr(reg_psw, "STATUS: ", 6, 2);
+		ImGui::SameLine();
+		ImGui::TextColored(~UIHelpers::kColorSuccess, "BSR: ");
+		ImGui::SameLine();
+		ImGui::TextUnformatted(reg_dsr);
+		edit_sfr(reg_ex2, "LCDAR: ", 8, 6);
+		return;
+	}
 	ImGui::TextColored(~UIHelpers::kColorSuccess, "RXn: ");
 	for (int i = 0; i < 16; i++) {
 		ImGui::SameLine();
@@ -143,6 +183,24 @@ void WatchWindow::ModRX() {
 }
 
 void WatchWindow::UpdateRX() {
+	if (auto* eps = m_emu->chipset.epscpu) {
+		const auto snapshot = eps->DebugSnapshot();
+		const auto set_indirect = [eps](uint32_t value, bool uses_ram, uint8_t fsr_addr, uint8_t bsr_addr) {
+			eps->WriteDebugMemory(fsr_addr, static_cast<uint8_t>((uses_ram ? 0x80 : 0) | (value & 0x7f)));
+			if (uses_ram)
+				eps->WriteDebugMemory(bsr_addr, static_cast<uint8_t>(value >> 7));
+		};
+		eps->SetPC(static_cast<uint32_t>(strtoul(reg_pc, nullptr, 16)));
+		set_indirect(static_cast<uint32_t>(strtoul(reg_lr, nullptr, 16)), (snapshot.registers[0x01] & 0x80) != 0, 0x01, 0x02);
+		set_indirect(static_cast<uint32_t>(strtoul(reg_ea, nullptr, 16)), (snapshot.registers[0x04] & 0x80) != 0, 0x04, 0x05);
+		set_indirect(static_cast<uint32_t>(strtoul(reg_ex1, nullptr, 16)), (snapshot.registers[0x11] & 0x80) != 0, 0x11, 0x12);
+		eps->WriteDebugMemory(0x06, static_cast<uint8_t>(strtoul(reg_sp, nullptr, 16)));
+		eps->WriteDebugMemory(0x0f, static_cast<uint8_t>(strtoul(reg_psw, nullptr, 16)));
+		const auto lcdar = static_cast<uint32_t>(strtoul(reg_ex2, nullptr, 16));
+		eps->WriteDebugMemory(0x22, static_cast<uint8_t>(lcdar % 0x60));
+		eps->WriteDebugMemory(0x23, static_cast<uint8_t>((snapshot.registers[0x23] & 0xf0) | ((lcdar / 0x60) & 0x03)));
+		return;
+	}
 	for (int i = 0; i < 16; i++) {
 		m_emu->chipset.cpu.reg_r[i] = (uint8_t)strtol((char*)reg_rx[i], nullptr, 16);
 	}
@@ -160,7 +218,8 @@ void WatchWindow::UpdateRX() {
 void WatchWindow::RenderCore() {
 	char_width = ImGui::CalcTextSize("F").x;
 	casioemu::Chipset& chipset = m_emu->chipset;
-	ImGui::BeginChild("##reg_trace", ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * 8), false, 0);
+	ImGui::BeginChild("##reg_trace", ImVec2(0, ImGui::GetTextLineHeightWithSpacing() *
+		(m_emu->chipset.epscpu ? 11.0f : 8.0f)), false, 0);
 	auto rm = m_emu->chipset.run_mode;
 	using casioemu::Chipset::RM_HALT;
 	using casioemu::Chipset::RM_RUN;
@@ -193,9 +252,28 @@ void WatchWindow::RenderCore() {
 	//	m_emu->ModelDefinition.pd_value = pd;
 	// }
 	PrepareRX();
+	if (chipset.epscpu) {
+		const auto debug = chipset.epscpu->DebugSnapshot();
+		ImGui::Text("Instructions: %llu  Cycles: %llu",
+			static_cast<unsigned long long>(debug.instruction_count),
+			static_cast<unsigned long long>(debug.cycle_count));
+		if (ImGui::Checkbox("Trace", &eps_trace_enabled))
+			chipset.epscpu->EnableTrace(eps_trace_enabled);
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(100.0f);
+		if (ImGui::InputInt("Capacity", &eps_trace_capacity, 256, 1024)) {
+			eps_trace_capacity = std::clamp(eps_trace_capacity, 0, 65536);
+			chipset.epscpu->SetTraceCapacity(static_cast<size_t>(eps_trace_capacity));
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Clear trace"))
+			chipset.epscpu->ClearTrace();
+	}
 	if (!m_emu->GetPaused()) {
 		ShowRX();
 		if (ImGui::Button("WatchWindow.Pause"_lc)) {
+			if (m_emu->chipset.epscpu)
+				m_emu->chipset.epscpu->CancelDebugRun();
 			m_emu->SetPaused(1);
 		}
 	}
@@ -203,6 +281,8 @@ void WatchWindow::RenderCore() {
 		ModRX();
 		UpdateRX();
 		if (ImGui::Button("WatchWindow.Continue"_lc)) {
+			if (m_emu->chipset.epscpu)
+				m_emu->chipset.epscpu->RequestContinue();
 			m_emu->SetPaused(0);
 		}
 	}
@@ -220,12 +300,13 @@ void WatchWindow::RenderCore() {
 		ImGui::TableSetupColumn("LR", ImGuiTableColumnFlags_WidthStretch, 1);
 		ImGui::TableHeadersRow();
 		if (chipset.epscpu) {
-			for (size_t i = 0; i < (chipset.epscpu->STKPTR); i++) {
+			const auto snapshot = chipset.epscpu->DebugSnapshot();
+			for (size_t i = 0; i < snapshot.stack_pointer && i < snapshot.stack.size(); i++) {
 				ImGui::TableNextRow();
 				ImGui::TableNextColumn();
-				ImGui::Text("%06X", chipset.epscpu->stack[i] << 1);
+				ImGui::TextUnformatted(lookup_symbol(snapshot.stack[i], g_labels).c_str());
 				ImGui::TableNextColumn();
-				UIHelpers::ClickableAddress(chipset.epscpu->stack[i] << 1);
+				UIHelpers::ClickableAddress(snapshot.stack[i]);
 				ImGui::TableNextColumn();
 				ImGui::Text("%04zX", i);
 				ImGui::TableNextColumn();
@@ -288,11 +369,43 @@ void WatchWindow::RenderCore() {
 		ImGui::EndTable();
 	}
 	ImGui::EndChild();
+	if (chipset.epscpu && ImGui::CollapsingHeader("EPS6800 Trace Buffer")) {
+		const auto trace = chipset.epscpu->TraceBuffer();
+		ImGui::BeginChild("##eps_trace_buffer", ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * 10), true);
+		if (ImGui::BeginTable("##eps_trace_table", 7, pretty_table)) {
+			ImGui::TableSetupScrollFreeze(0, 1);
+			ImGui::TableSetupColumn("#");
+			ImGui::TableSetupColumn("Cycle");
+			ImGui::TableSetupColumn("PC");
+			ImGui::TableSetupColumn("Opcode");
+			ImGui::TableSetupColumn("Next PC");
+			ImGui::TableSetupColumn("A");
+			ImGui::TableSetupColumn("STATUS");
+			ImGui::TableHeadersRow();
+			ImGuiListClipper clipper;
+			clipper.Begin(static_cast<int>(trace.size()));
+			while (clipper.Step()) {
+				for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+					const auto& entry = trace[static_cast<size_t>(i)];
+					ImGui::TableNextRow();
+					ImGui::TableNextColumn(); ImGui::Text("%llu", static_cast<unsigned long long>(entry.instruction_count));
+					ImGui::TableNextColumn(); ImGui::Text("%llu", static_cast<unsigned long long>(entry.cycle_count));
+					ImGui::TableNextColumn(); UIHelpers::ClickableAddress(entry.program_counter, UIHelpers::JumpTarget::Code);
+					ImGui::TableNextColumn(); ImGui::Text("%08X", entry.instruction);
+					ImGui::TableNextColumn(); UIHelpers::ClickableAddress(entry.next_program_counter, UIHelpers::JumpTarget::Code);
+					ImGui::TableNextColumn(); ImGui::Text("%02X", entry.accumulator);
+					ImGui::TableNextColumn(); ImGui::Text("%02X", entry.status);
+				}
+			}
+			ImGui::EndTable();
+		}
+		ImGui::EndChild();
+	}
 	ImGui::BeginChild("##stack_view");
 	ImGui::TextUnformatted("WatchWindow.StackMemViewRange"_lc);
 	ImGui::SameLine();
 	ImGui::SliderInt("##range", &range, 64, 2048);
-	uint16_t offset = chipset.cpu.reg_sp & 0xffff;
+	uint16_t offset = chipset.epscpu ? 0 : chipset.cpu.reg_sp & 0xffff;
 	mem_editor.ReadFn = [](const ImU8* data, size_t off) -> ImU8 {
 		return me_mmu->ReadData((size_t)data + off);
 	};

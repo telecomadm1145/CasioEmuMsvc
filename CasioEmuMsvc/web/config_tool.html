@@ -465,7 +465,7 @@
     w.bool(model.u16_mode ?? defaultU16Mode(model));
     w.bool(model.LARGE_model ?? defaultLargeModel(model));
     w.bool(model.ml620_mirroring ?? defaultMl620Mirroring(model));
-    w.map(model.extra, value => w.string(value));
+    w.map(model.extra ?? {}, value => w.string(value));
     return w.finish();
   }
 

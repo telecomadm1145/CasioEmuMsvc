@@ -22,6 +22,7 @@
 #include "Chipset/MMU.hpp"
 #include "Chipset/MMURegion.hpp"
 #include "Chipset/ePSCpu.h"
+#include "Chipset/Eps6800Display.h"
 #include "Emulator.hpp"
 #include "Ext/Random.hpp"
 #include "Gui/HwController.h"
@@ -34,6 +35,7 @@
 #include <SDL_image.h>
 #include <algorithm> // for std::min, std::max
 #include <array>
+#include <atomic>
 #include <climits>
 #include <cmath>
 #include <cstdio>
@@ -42,8 +44,10 @@
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <mutex>
 #include <sstream>
 #include <system_error>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -664,6 +668,10 @@ namespace casioemu {
 		std::vector<uint8_t> pixel_screen_pixels;
 #endif
 		float screen_ink_alpha[66 * 192]{};
+		std::array<float, 66 * 192> eps_screen_ink_alpha{};
+		std::mutex eps_screen_alpha_mutex;
+		std::atomic_bool eps_screen_thread_running{false};
+		std::thread eps_screen_thread;
 		static const SpriteBitmap sprite_bitmap[];
 		std::vector<SpriteInfo> sprite_info;
 		std::vector<SvgSpriteTextureCache> sprite_svg_textures;
@@ -781,22 +789,37 @@ namespace casioemu {
 		Screen(Emulator& emu)
 			: Peripheral(emu) {
 #if !defined(TEST_BUILD) && !defined(__EMSCRIPTEN__)
-			std::thread thd([&]() {
-				while (1) {
-					tick();
-#ifdef __ANDROID__
-					SDL_Delay(10);
-#elif !defined(__EMSCRIPTEN__)
-					if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext) {
+			if constexpr (hardware_id == HW_EPS6800) {
+				eps_screen_thread_running.store(true, std::memory_order_release);
+				eps_screen_thread = std::thread([this]() {
+					while (eps_screen_thread_running.load(std::memory_order_acquire)) {
+						tick();
 						SDL_Delay(10);
 					}
-#endif
-				}
 				});
-			thd.detach();
+			}
+			else {
+				std::thread thd([&]() {
+					while (1) {
+						tick();
+#ifdef __ANDROID__
+						SDL_Delay(10);
+#elif !defined(__EMSCRIPTEN__)
+						if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext)
+							SDL_Delay(10);
+#endif
+					}
+				});
+				thd.detach();
+			}
 #endif
 		}
 		~Screen() {
+			if constexpr (hardware_id == HW_EPS6800) {
+				eps_screen_thread_running.store(false, std::memory_order_release);
+				if (eps_screen_thread.joinable())
+					eps_screen_thread.join();
+			}
 			for (auto& texture : sprite_svg_textures)
 				texture.Reset();
 #ifndef CASIOEMU_CORE_WEB
@@ -820,9 +843,13 @@ namespace casioemu {
 		void UpdateFrameAlpha() override {
 #ifdef __EMSCRIPTEN__
 			tick();
+			if constexpr (hardware_id == HW_EPS6800) {
+				std::lock_guard<std::mutex> lock(eps_screen_alpha_mutex);
+				std::copy(eps_screen_ink_alpha.begin(), eps_screen_ink_alpha.end(), screen_ink_alpha);
+			}
 #endif
 		}
-		int GetFrameWidth() const override { return 192; }
+		int GetFrameWidth() const override { return hardware_id == HW_EPS6800 ? 96 : 192; }
 		int GetFrameHeight() const override { return hardware_id == HW_FX_5800P || hardware_id == HW_ES_PLUS || hardware_id == HW_EPS6800 ? 32 : 64; }
 		void WriteFrameRgba(uint8_t* out, int r, int g, int b) const override {
 			if (!out) return;
@@ -953,49 +980,43 @@ namespace casioemu {
 				return;
 			}
 			else if (hardware_id == HW_EPS6800) {
-				ratio = 1 - 1e-4;
-#ifdef __EMSCRIPTEN__
-				ratio = 0.0f;
-#elif defined(__ANDROID__)
+				// Match the deterministic ES Plus low-performance cadence: one
+				// update every 10 ms, retaining 80% of the preceding LCD state.
 				ratio = 0.80f;
-#else
-				if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext) {
-					ratio = 0.80f;
-				}
-#endif
-				float ink_alpha_on = 255;
-				float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);
+				std::array<uint8_t, EPS6800_LCD_RAW_SIZE> lcd{};
+				Eps6800LcdControl control{};
+				if (!emulator.chipset.epscpu ||
+					emulator.chipset.epscpu->CopyLcd(lcd.data(), lcd.size(), &control) != lcd.size())
+					return;
+				float ink_alpha_on = Eps6800ActiveAlpha(control.contrast);
+				float ink_alpha_off = Eps6800InactiveAlpha(control.contrast);
 				ink_alpha_off = screen_residual_enabled ? ink_alpha_off * screen_residual_alpha_scale : 0.0f;
-				ink_alpha_on = std::clamp(ink_alpha_on, 0.0f, 255.0f);
-				uint8_t* screen_buffer = (uint8_t*)(emulator.chipset.epscpu->vram + 0x120);
-				// if (emulator.ModelDefinition.real_hardware) {
-				//	screen_buffer = this->screen_buffer;
-				// }
-				for (int blk = 0; blk < 4; ++blk) {
-					for (int ix = 0; ix < 98; ++ix) {
-						for (int iy = 0; iy < 8; ++iy) {
-							uint32_t i = (ix * 8) | iy;
-							int bIndx = (i >> 3);
-							int subIndx = (i & 7);
-							int mask = (1 << subIndx);
-							bool on = (screen_buffer[bIndx] & mask) != 0;
-							auto& data = screen_ink_alpha[(((8 - iy + (blk) * 8)) * 192) + ix];
-							data = data * ratio + (on ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
-						}
-					}
-					screen_buffer -= 0x60;
+				if (!control.visible()) {
+					ink_alpha_on = 0.0f;
+					ink_alpha_off = 0.0f;
 				}
-				screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xe5d4;
-				// if (emulator.ModelDefinition.real_hardware) {
-				//	screen_buffer = this->screen_buffer + 8 * 192;
-				// }
-				// int x = 0;
-				// for (int ix = 1; ix != SPR_MAX; ++ix) {
-				//	auto off = sprite_bitmap[ix].offset;
-				//	auto& data = screen_ink_alpha[x];
-				//	data = data * ratio + ((screen_buffer[off] & sprite_bitmap[ix].mask) ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
-				//	x++;
-				// }
+				const float transition_ratio = screen_residual_enabled ? ratio : 0.0f;
+				std::lock_guard<std::mutex> lock(eps_screen_alpha_mutex);
+
+				// EPS stores four 8-pixel pages bottom-to-top. The physical top
+				// row is a 96-bit segmented annunciator bus; it must not be drawn
+				// as dot-matrix pixels. The remaining 31 rows form the 96x31 LCD.
+				const auto decoded = DecodeEps6800Display(lcd.data(), lcd.size());
+				for (int y = 0; y < static_cast<int>(EPS6800_LCD_PIXEL_HEIGHT); ++y) {
+					for (int x = 0; x < static_cast<int>(EPS6800_LCD_WIDTH); ++x) {
+						const bool on = decoded.pixels[y * EPS6800_LCD_WIDTH + x] != 0;
+						auto& alpha = eps_screen_ink_alpha[(y + 1) * 192 + x];
+						alpha = alpha * transition_ratio +
+							(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
+					}
+				}
+
+				for (int ix = 1; ix < SPR_MAX; ++ix) {
+					const bool on = (decoded.status[sprite_bitmap[ix].offset] & sprite_bitmap[ix].mask) != 0;
+					auto& alpha = eps_screen_ink_alpha[ix - 1];
+					alpha = alpha * transition_ratio +
+						(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
+				}
 				return;
 			}
 
@@ -1428,24 +1449,27 @@ namespace casioemu {
 	template <>
 	const SpriteBitmap Screen<HW_EPS6800>::sprite_bitmap[] = {
 		{"rsd_pixel", 0, 0},
-		{"rsd_s", 0x10, 0x00},
-		{"rsd_a", 0x04, 0x00},
-		{"rsd_m", 0x10, 0x01},
-		{"rsd_sto", 0x02, 0x01},
-		{"rsd_rcl", 0x40, 0x02},
-		{"rsd_stat", 0x40, 0x03},
-		{"rsd_cmplx", 0x80, 0x04},
-		{"rsd_mat", 0x40, 0x05},
-		{"rsd_vct", 0x02, 0x05},
-		{"rsd_d", 0x20, 0x07},
-		{"rsd_r", 0x02, 0x07},
-		{"rsd_g", 0x10, 0x08},
-		{"rsd_fix", 0x01, 0x08},
-		{"rsd_sci", 0x20, 0x09},
-		{"rsd_math", 0x40, 0x0A},
-		{"rsd_down", 0x08, 0x0A},
-		{"rsd_up", 0x80, 0x0B},
-		{"rsd_disp", 0x10, 0x0B} };
+		// HP 300S+ exposes the indicators as the top row of the EPS6800 LCD
+		// framebuffer.  The bits are ordered by their physical X positions and
+		// are not compatible with the ES Plus controller mapping above.
+		{"rsd_s", 0x01, 0x00},       // x=0
+		{"rsd_a", 0x08, 0x00},       // x=3
+		{"rsd_m", 0x80, 0x00},       // x=7
+		{"rsd_sto", 0x10, 0x01},     // x=12
+		{"rsd_rcl", 0x04, 0x02},     // x=18
+		{"rsd_stat", 0x02, 0x03},    // x=25
+		{"rsd_cmplx", 0x80, 0x03},   // x=31
+		{"rsd_mat", 0x02, 0x05},     // x=41
+		{"rsd_vct", 0x80, 0x05},     // x=47
+		{"rsd_d", 0x80, 0x06},       // x=55
+		{"rsd_r", 0x04, 0x07},       // x=58
+		{"rsd_g", 0x20, 0x07},       // x=61
+		{"rsd_fix", 0x02, 0x08},     // x=65
+		{"rsd_sci", 0x80, 0x08},     // x=71
+		{"rsd_math", 0x01, 0x0A},    // x=80
+		{"rsd_down", 0x10, 0x0A},    // x=84
+		{"rsd_up", 0x80, 0x0A},      // x=87
+		{"rsd_disp", 0x80, 0x0B} };  // x=95
 
 	template <HardwareId hardware_id>
 	void Screen<hardware_id>::Initialise() {
@@ -1500,6 +1524,11 @@ namespace casioemu {
 				fillRandomData(screen_buffer1, (N_ROW + 1) * ROW_SIZE);
 			}
 			inited = true;
+		}
+		if constexpr (hardware_id == HW_EPS6800) {
+			// CPU-visible LCD registers and RAM are owned by EPS6800Core. This
+			// peripheral is only the CasioEmuMsvc presentation/resource layer.
+			return;
 		}
 		if constexpr (hardware_id == HW_TI) {
 			auto pp = emulator.chipset.QueryInterface<IPortProvider>();
@@ -3076,7 +3105,14 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 	void Screen<hardware_id>::Frame() {
 #ifdef __EMSCRIPTEN__
 		tick();
+#elif defined(TEST_BUILD)
+		if constexpr (hardware_id == HW_EPS6800)
+			tick();
 #endif
+		if constexpr (hardware_id == HW_EPS6800) {
+			std::lock_guard<std::mutex> lock(eps_screen_alpha_mutex);
+			std::copy(eps_screen_ink_alpha.begin(), eps_screen_ink_alpha.end(), screen_ink_alpha);
+		}
 		int screenWidth = 0, screenHeight = 0;
 
 		// Get the renderer output size if not already available

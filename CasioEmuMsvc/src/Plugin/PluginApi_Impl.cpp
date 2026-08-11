@@ -20,13 +20,59 @@
 #include <Ui.hpp>
 #include <SDL.h>
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 
 extern std::vector<UIWindow*> windows;
 extern SDL_Window* window;
 extern Breakpoints* membp;
+
+namespace {
+	constexpr std::array<const char*, 0x40> kEps6800RegisterNames = {
+		"indf0", "fsr0", "bsr", "indf1", "fsr1", "bsr1", "stkptr", "pcl",
+		"pcm", "pch", "acc", "tabptrl", "tabptrm", "tabptrh", "lcddata", "status",
+		"indf2", "fsr2", "bsr2", "r13", "r14", "r15", "r16", "r17",
+		"r18", "r19", "r1a", "r1b", "r1c", "r1d", "r1e", "r1f",
+		"cpucon", "post_id", "lcdarl", "lcdarh", "intsta", "tr0con", "trl0l", "trl0h",
+		"t0cl", "t0ch", "tr1con", "trl1", "tr2wcon", "trl2", "lcdcon", "r2f",
+		"stbcon", "porta", "pacon", "dcra", "pawake", "painten", "paintsta", "portb",
+		"pbcon", "dcrb", "portc", "pccon", "dcrc", "portd", "porte", "dcrde"
+	};
+
+	std::string Eps6800RegisterName(uint8_t address) {
+		if (address < kEps6800RegisterNames.size())
+			return kEps6800RegisterNames[address];
+		char name[4]{};
+		std::snprintf(name, sizeof(name), "r%02x", address);
+		return name;
+	}
+
+	bool Eps6800RegisterAddress(const std::string& name, uint8_t& address) {
+		for (size_t i = 0; i < kEps6800RegisterNames.size(); ++i) {
+			if (name == kEps6800RegisterNames[i]) {
+				address = static_cast<uint8_t>(i);
+				return true;
+			}
+		}
+		if (name.size() == 3 && name[0] == 'r' && std::isxdigit(static_cast<unsigned char>(name[1])) &&
+			std::isxdigit(static_cast<unsigned char>(name[2]))) {
+			char* end = nullptr;
+			const auto parsed = std::strtoul(name.c_str() + 1, &end, 16);
+			if (end && *end == '\0' && parsed < 0x80) {
+				address = static_cast<uint8_t>(parsed);
+				return true;
+			}
+		}
+		if (name == "psw") address = 0x0f;
+		else if (name == "sp") address = 0x06;
+		else if (name == "dsr") address = 0x02;
+		else return false;
+		return true;
+	}
+}
 
 class PluginApi_Impl : public PluginApi {
 
@@ -71,15 +117,39 @@ class PluginApi_Impl : public PluginApi {
 
 	class IMMU_Impl : public IMMU {
 		uint8_t ReadData(size_t addr) override {
+			if (auto* eps = m_emu->chipset.epscpu)
+				return eps->ReadDebugMemory(static_cast<uint32_t>(addr));
 			return me_mmu->ReadData(addr);
 		}
 		void WriteData(size_t addr, uint8_t dat) override {
+			if (auto* eps = m_emu->chipset.epscpu) {
+				eps->WriteDebugMemory(static_cast<uint32_t>(addr), dat);
+				return;
+			}
 			me_mmu->WriteData(addr, dat);
 		}
 		uint16_t ReadCode(size_t addr) override {
+			if (auto* eps = m_emu->chipset.epscpu) {
+				/* IMMU addresses are bytes on the legacy path; the EPS core is
+				 * word-addressed. */
+				return eps->ReadCodeWord(static_cast<uint32_t>(addr >> 1));
+			}
 			return me_mmu->ReadCode(addr);
 		}
 		void WriteCode(size_t addr, uint8_t dat) override {
+			if (auto* eps = m_emu->chipset.epscpu) {
+				const uint32_t word_address = static_cast<uint32_t>(addr >> 1);
+				uint16_t word = eps->ReadCodeWord(word_address);
+				/* Match EPS_ROM_Hex / IDebugger_Impl::WriteCode: even byte is the
+				 * high half, odd byte is the low half. */
+				word = (addr & 1)
+					? static_cast<uint16_t>((word & 0xff00u) | dat)
+					: static_cast<uint16_t>((word & 0x00ffu) | (static_cast<uint16_t>(dat) << 8));
+				if (!eps->WriteCodeWord(word_address, word))
+					return;
+				eps->WriteRomImageWord(m_emu->chipset.rom_data, word_address, word);
+				return;
+			}
 			m_emu->chipset.rom_data[addr] = dat;
 		}
 	} mmu_impl;
@@ -112,10 +182,18 @@ class PluginApi_Impl : public PluginApi {
 			return m_emu->GetPaused();
 		}
 		void Pause() override {
+			if (auto* eps = m_emu->chipset.epscpu)
+				eps->CancelDebugRun();
 			m_emu->SetPaused(true);
 		}
 		void Resume() override {
-			m_emu->SetPaused(false);
+			if (code_viewer)
+				code_viewer->RequestContinue();
+			else {
+				if (auto* eps = m_emu->chipset.epscpu)
+					eps->RequestContinue();
+				m_emu->SetPaused(false);
+			}
 		}
 		unsigned int GetCyclesPerSecond() override {
 			return m_emu->cycles.cycles_per_second;
@@ -189,7 +267,7 @@ class PluginApi_Impl : public PluginApi {
 
 		static uint32_t CurrentPc() {
 			if (m_emu->chipset.epscpu)
-				return m_emu->chipset.epscpu->PC() >> 1;
+				return m_emu->chipset.epscpu->ProgramCounter();
 			return (uint32_t)(m_emu->chipset.cpu.reg_csr << 16) | m_emu->chipset.cpu.reg_pc;
 		}
 
@@ -203,16 +281,12 @@ class PluginApi_Impl : public PluginApi {
 			auto lock = std::lock_guard(m_emu->access_mx);
 			std::vector<DebugRegisterInfo> result;
 			if (auto* eps = m_emu->chipset.epscpu) {
-				result = {
-					{"pc", eps->PC() >> 1, 20},
-					{"lr", (uint32_t)((eps->BSR << 7) | (eps->FSR & 0x7f)), 20},
-					{"ea", (uint32_t)((eps->BSR1 << 7) | (eps->FSR1 & 0x7f)), 20},
-					{"ex1", (uint32_t)((eps->BSR2 << 7) | (eps->FSR2 & 0x7f)), 20},
-					{"lcdar", (uint32_t)(((eps->LCDARH & 0x03) * 0x60) | eps->LCDARL), 16},
-					{"sp", (uint32_t)(eps->STKPTR << 1), 16},
-					{"psw", eps->STATUS, 8},
-					{"dsr", eps->BSR, 8},
-				};
+				const auto snapshot = eps->DebugSnapshot();
+				result.reserve(0x81);
+				result.push_back({"pc", snapshot.program_counter, 24});
+				for (uint32_t address = 0; address < snapshot.registers.size(); ++address)
+					result.push_back({Eps6800RegisterName(static_cast<uint8_t>(address)),
+						snapshot.registers[address], 8});
 				return result;
 			}
 
@@ -244,14 +318,31 @@ class PluginApi_Impl : public PluginApi {
 					return true;
 				}
 			}
+			if (auto* eps = m_emu->chipset.epscpu) {
+				/* Accept the same writable aliases (psw/sp/dsr) for reads. */
+				uint8_t address = 0;
+				if (Eps6800RegisterAddress(normalized, address)) {
+					value = eps->ReadDebugMemory(address);
+					bitWidth = 8;
+					return true;
+				}
+			}
 			return false;
 		}
 
 		bool WriteRegister(const char* name, uint32_t value) override {
 			auto lock = std::lock_guard(m_emu->access_mx);
 			const auto normalized = NormalizeRegisterName(name);
-			if (m_emu->chipset.epscpu)
-				return false;
+			if (auto* eps = m_emu->chipset.epscpu) {
+				if (normalized == "pc") {
+					eps->SetPC(value);
+					return true;
+				}
+				uint8_t address = 0;
+				if (!Eps6800RegisterAddress(normalized, address))
+					return false;
+				return eps->WriteDebugMemory(address, static_cast<uint8_t>(value));
+			}
 			if (normalized == "pc") {
 				m_emu->chipset.cpu.reg_pc = static_cast<uint16_t>(value);
 				m_emu->chipset.cpu.reg_csr = static_cast<uint16_t>(value >> 16);
@@ -273,28 +364,60 @@ class PluginApi_Impl : public PluginApi {
 			auto lock = std::lock_guard(m_emu->access_mx);
 			std::vector<uint8_t> result;
 			result.reserve(size);
-			for (size_t i = 0; i < size; ++i)
-				result.push_back(m_emu->chipset.mmu.ReadData(address + i));
+			if (auto* eps = m_emu->chipset.epscpu) {
+				for (size_t i = 0; i < size; ++i)
+					result.push_back(eps->ReadDebugMemory(address + static_cast<uint32_t>(i)));
+			}
+			else {
+				for (size_t i = 0; i < size; ++i)
+					result.push_back(m_emu->chipset.mmu.ReadData(address + i));
+			}
 			return result;
 		}
 
 		void WriteMemory(uint32_t address, const std::vector<uint8_t>& data) override {
 			auto lock = std::lock_guard(m_emu->access_mx);
-			for (size_t i = 0; i < data.size(); ++i)
-				m_emu->chipset.mmu.WriteData(address + i, data[i]);
+			if (auto* eps = m_emu->chipset.epscpu) {
+				for (size_t i = 0; i < data.size(); ++i)
+					eps->WriteDebugMemory(address + static_cast<uint32_t>(i), data[i]);
+			}
+			else {
+				for (size_t i = 0; i < data.size(); ++i)
+					m_emu->chipset.mmu.WriteData(address + i, data[i]);
+			}
 		}
 
 		std::vector<uint16_t> ReadCode(uint32_t address, size_t count) override {
 			auto lock = std::lock_guard(m_emu->access_mx);
 			std::vector<uint16_t> result;
 			result.reserve(count);
-			for (size_t i = 0; i < count; ++i)
-				result.push_back(m_emu->chipset.mmu.ReadCode(address + i * 2));
+			if (auto* eps = m_emu->chipset.epscpu) {
+				for (size_t i = 0; i < count; ++i)
+					result.push_back(eps->ReadCodeWord(address + static_cast<uint32_t>(i)));
+			}
+			else {
+				for (size_t i = 0; i < count; ++i)
+					result.push_back(m_emu->chipset.mmu.ReadCode(address + i * 2));
+			}
 			return result;
 		}
 
 		void WriteCode(uint32_t address, const std::vector<uint8_t>& data) override {
 			auto lock = std::lock_guard(m_emu->access_mx);
+			if (auto* eps = m_emu->chipset.epscpu) {
+				for (size_t i = 0; i < data.size(); i += 2) {
+					const uint32_t word_address = address + static_cast<uint32_t>(i / 2);
+					uint16_t word = eps->ReadCodeWord(word_address);
+					word = static_cast<uint16_t>((static_cast<uint16_t>(data[i]) << 8) |
+						(i + 1 < data.size() ? data[i + 1] : (word & 0xff)));
+					if (!eps->WriteCodeWord(word_address, word))
+						break;
+					eps->WriteRomImageWord(m_emu->chipset.rom_data, word_address, word);
+				}
+				if (code_viewer)
+					code_viewer->PrepareDisasm();
+				return;
+			}
 			const auto romSize = m_emu->chipset.rom_data.size();
 			for (size_t i = 0; i < data.size() && address + i < romSize; ++i)
 				m_emu->chipset.rom_data[address + i] = data[i];
@@ -339,13 +462,16 @@ class PluginApi_Impl : public PluginApi {
 		}
 
 		std::vector<uint32_t> GetExecutionBreakpoints() override {
+			if (auto* eps = m_emu->chipset.epscpu)
+				return eps->ExecutionBreakpoints();
 			return code_viewer ? code_viewer->GetBreakpoints() : std::vector<uint32_t>{};
 		}
 		bool AddExecutionBreakpoint(uint32_t address) override {
-			if (!code_viewer)
+			if (!code_viewer || (m_emu->chipset.epscpu && address >= 0x10000))
 				return false;
 			code_viewer->AddBreakpoint(address);
-			return true;
+			const auto breakpoints = GetExecutionBreakpoints();
+			return std::find(breakpoints.begin(), breakpoints.end(), address) != breakpoints.end();
 		}
 		bool RemoveExecutionBreakpoint(uint32_t address) override {
 			if (!code_viewer)
@@ -360,6 +486,12 @@ class PluginApi_Impl : public PluginApi {
 
 		std::vector<DebugMemoryBreakpointInfo> GetMemoryBreakpoints() override {
 			std::vector<DebugMemoryBreakpointInfo> result;
+			if (auto* eps = m_emu->chipset.epscpu) {
+				for (const auto& bp : eps->MemoryBreakpoints())
+					result.push_back({bp.address, bp.write, bp.break_when_hit, static_cast<size_t>(bp.hit_count),
+						bp.enabled, bp.compare_data, bp.data, bp.mask, bp.skip_count});
+				return result;
+			}
 			if (!membp)
 				return result;
 			for (const auto& bp : membp->ExternalListBps())
@@ -368,6 +500,11 @@ class PluginApi_Impl : public PluginApi {
 		}
 		std::vector<DebugMemoryBreakpointHitInfo> GetMemoryBreakpointHits(uint32_t address, bool write) override {
 			std::vector<DebugMemoryBreakpointHitInfo> result;
+			if (auto* eps = m_emu->chipset.epscpu) {
+				for (const auto& record : eps->MemoryBreakpointHits(address, write))
+					result.push_back({record.program_counter, 0, {}});
+				return result;
+			}
 			if (!membp)
 				return result;
 			for (const auto& [pc, record] : membp->ExternalListHits(address, write)) {
@@ -379,31 +516,44 @@ class PluginApi_Impl : public PluginApi {
 			}
 			return result;
 		}
-		bool AddMemoryBreakpoint(uint32_t address, bool write, bool breakWhenHit) override {
+		bool AddMemoryBreakpoint(uint32_t address, bool write, bool breakWhenHit,
+			bool enabled, bool compareData, uint8_t data, uint8_t mask, uint64_t skipCount) override {
+			if (auto* eps = m_emu->chipset.epscpu)
+				return eps->AddMemoryBreakpoint({address, write, enabled, breakWhenHit,
+					compareData, data, mask, skipCount, 0});
 			if (!membp)
 				return false;
-			membp->ExternalAddBp(address, write, breakWhenHit);
+			membp->ExternalAddBp(address, write, breakWhenHit, enabled, compareData,
+				data, mask, skipCount);
 			return true;
 		}
 		bool RemoveMemoryBreakpoint(uint32_t address, bool write) override {
+			if (auto* eps = m_emu->chipset.epscpu)
+				return eps->RemoveMemoryBreakpoint(address, write);
 			return membp && membp->ExternalRemoveBp(address, write);
 		}
 		void ClearMemoryBreakpoints() override {
+			if (auto* eps = m_emu->chipset.epscpu) {
+				eps->ClearMemoryBreakpoints();
+				return;
+			}
 			if (membp)
 				membp->ExternalClearBps();
 		}
 
 		std::string GetBacktrace() override {
 			auto lock = std::lock_guard(m_emu->access_mx);
-			return m_emu->chipset.epscpu ? std::string{} : m_emu->chipset.cpu.GetBacktrace();
+			return m_emu->chipset.epscpu ? m_emu->chipset.epscpu->GetBacktrace() : m_emu->chipset.cpu.GetBacktrace();
 		}
 		std::vector<DebugStackFrameInfo> GetStackFrames() override {
 			auto lock = std::lock_guard(m_emu->access_mx);
 			std::vector<DebugStackFrameInfo> result;
 			if (auto* eps = m_emu->chipset.epscpu) {
-				for (size_t i = 0; i < eps->STKPTR; ++i) {
-					const uint32_t pc = eps->stack[i] << 1;
-					result.push_back({pc, 0, static_cast<uint32_t>(i * 2), 0, 0, false, false, lookup_symbol(pc, g_labels)});
+				const auto snapshot = eps->DebugSnapshot();
+				/* Innermost frame first, matching the legacy stack walk. */
+				for (size_t i = snapshot.stack_pointer; i-- > 0;) {
+					const uint32_t pc = snapshot.stack[i];
+					result.push_back({pc, 0, static_cast<uint32_t>(i), 0, 0, false, false, lookup_symbol(pc, g_labels)});
 				}
 				return result;
 			}
@@ -643,22 +793,11 @@ class PluginApi_Impl : public PluginApi {
 			const bool wasPaused = m_emu->GetPaused();
 			m_emu->SetPaused(true);
 			auto lock = std::lock_guard(m_emu->access_mx);
-			std::vector<unsigned char> data;
-			try {
-				data = m_emu->ReadModelResource(m_emu->ModelDefinition.rom_path);
-			}
-			catch (...) {
-				error = "Failed to open ROM file";
-				m_emu->SetPaused(wasPaused);
-				return false;
-			}
-			std::copy_n(
-				data.begin(),
-				std::min(data.size(), m_emu->chipset.rom_data.size()),
-				m_emu->chipset.rom_data.begin());
-			m_emu->chipset.Reset();
+			const bool reloaded = m_emu->chipset.ReloadRom(error);
+			if (reloaded && m_emu->chipset.epscpu && code_viewer)
+				code_viewer->PrepareDisasm();
 			m_emu->SetPaused(wasPaused);
-			return true;
+			return reloaded;
 		}
 	} debugger_impl;
 	class Hooks_Impl : public Hooks {
@@ -670,6 +809,7 @@ class PluginApi_Impl : public PluginApi {
 				[handler](casioemu::CPU& /*cpu*/, InstructionEventArgs& args) {
 					handler(args);
 				});
+			SetupHook(on_eps_instruction, [handler](InstructionEventArgs& args) { handler(args); });
 		}
 
 		// 注册函数调用 hook，传入的 handler 只需要处理 FunctionEventArgs
@@ -678,6 +818,8 @@ class PluginApi_Impl : public PluginApi {
 				[handler](casioemu::CPU& /*cpu*/, const FunctionEventArgs& args) {
 					handler(args);
 				});
+			SetupHook(on_eps_call_function,
+				[handler](const EpsFunctionEventArgs& args) { handler(args.function); });
 		}
 
 		// 注册函数返回 hook，传入的 handler 只需要处理 FunctionEventArgs
@@ -686,6 +828,8 @@ class PluginApi_Impl : public PluginApi {
 				[handler](casioemu::CPU& /*cpu*/, const FunctionEventArgs& args) {
 					handler(args);
 				});
+			SetupHook(on_eps_function_return,
+				[handler](const EpsFunctionEventArgs& args) { handler(args.function); });
 		}
 
 		// 注册内存读取 hook，传入的 handler 只需要处理 MemoryEventArgs
@@ -694,6 +838,7 @@ class PluginApi_Impl : public PluginApi {
 				[handler](casioemu::MMU& /*mmu*/, MemoryEventArgs& args) {
 					handler(args);
 				});
+			SetupHook(on_eps_memory_read, [handler](MemoryEventArgs& args) { handler(args); });
 		}
 
 		// 注册内存写入 hook，传入的 handler 只需要处理 MemoryEventArgs
@@ -702,6 +847,7 @@ class PluginApi_Impl : public PluginApi {
 				[handler](casioemu::MMU& /*mmu*/, MemoryEventArgs& args) {
 					handler(args);
 				});
+			SetupHook(on_eps_memory_write, [handler](MemoryEventArgs& args) { handler(args); });
 		}
 
 		// 注册中断断点 hook，传入的 handler 只需要处理 InterruptEventArgs
@@ -717,6 +863,8 @@ class PluginApi_Impl : public PluginApi {
 				[handler](casioemu::Chipset& /*chipset*/, InterruptEventArgs& args) {
 					handler(args);
 				});
+			SetupHook(on_eps_interrupt,
+				[handler](casioemu::Chipset&, InterruptEventArgs& args) { handler(args); });
 		}
 
 		// 注册复位 hook，传入的 handler 无参数，但内部 hook 接收 Chipset 引用
@@ -728,7 +876,10 @@ class PluginApi_Impl : public PluginApi {
 		}
 	} hooks_impl;
 	int GetVersion() override {
-		return 1;
+		/* v2: IDebugger::AddMemoryBreakpoint gained the extended parameters and
+		 * DebugMemoryBreakpointInfo grew; plugins built against v1 headers must
+		 * be rebuilt. */
+		return 2;
 	}
 	void AddWindow(UIWindow* wnd) override {
 		windows.push_back(wnd);

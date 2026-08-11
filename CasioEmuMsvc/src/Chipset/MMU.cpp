@@ -2,6 +2,7 @@
 
 #include "CPU.hpp"
 #include "Chipset.hpp"
+#include "ePSCpu.h"
 #include "Emulator.hpp"
 #include "Gui/Hooks.h"
 #include "Gui/Ui.hpp"
@@ -103,12 +104,21 @@ namespace casioemu {
 				return le_read(emulator.chipset.flash_data[offset & 0x7ffff]);
 			return 0xFFFF;
 		case HW_EPS6800:
-			return le_read(emulator.chipset.rom_data[offset]);
+			return emulator.chipset.epscpu
+				/* ReadCode uses byte offsets on the legacy paths; convert to the
+				 * word address expected by the EPS core. */
+				? emulator.chipset.epscpu->ReadCodeWord(static_cast<uint32_t>(offset >> 1))
+				: 0xffff;
 		default:
 			return 0;
 		}
 	}
 	uint8_t MMU::ReadData(size_t offset, bool softwareRead) {
+		if (emulator.hardware_id == HW_EPS6800) {
+			if (!emulator.chipset.epscpu)
+				return 0xff;
+			return emulator.chipset.epscpu->ReadDebugMemory(static_cast<uint32_t>(offset));
+		}
 		if (emulator.chipset.cpu.reg_dsr) {
 			offset = (((size_t)emulator.chipset.cpu.reg_dsr) << 16) | (offset & 0xFFFF);
 		}
@@ -175,6 +185,11 @@ namespace casioemu {
 	}
 
 	void MMU::WriteData(size_t offset, uint8_t data, bool softwareWrite) {
+		if (emulator.hardware_id == HW_EPS6800) {
+			if (emulator.chipset.epscpu)
+				emulator.chipset.epscpu->WriteDebugMemory(static_cast<uint32_t>(offset), data);
+			return;
+		}
 		if (emulator.chipset.cpu.reg_dsr) {
 			offset = (((size_t)emulator.chipset.cpu.reg_dsr) << 16) | (offset & 0xFFFF);
 		}

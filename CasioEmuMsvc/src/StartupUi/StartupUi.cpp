@@ -883,6 +883,9 @@ namespace casioemu {
 							case HW_SOLARII:
 								mod.type = "SolarII";
 								break;
+							case HW_EPS6800:
+								mod.type = "EPS6800";
+								break;
 							default:
 								mod.type = "Unknown";
 								break;
@@ -1631,7 +1634,7 @@ namespace casioemu {
 				ImGui::InputText("StartupUI.SearchBoxHeader"_lc, search_txt, 200);
 				ImGui::SameLine();
 
-				const char* items[] = {"##", "ES", "ESP", "ESP2nd", "CWX", "CWII", "Fx5800p", "TI", "SolarII"};
+				const char* items[] = {"##", "ES", "ESP", "ESP2nd", "CWX", "CWII", "Fx5800p", "TI", "SolarII", "EPS6800"};
 				ImGui::SetNextItemWidth(filterWidth);
 				if (ImGui::BeginCombo("##cb", current_filter)) {
 					for (int n = 0; n < IM_ARRAYSIZE(items); n++) {

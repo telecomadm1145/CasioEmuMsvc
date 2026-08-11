@@ -308,35 +308,36 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 		windows.push_back(CreateFx5800FileSystem());
 	}
 
-	if (m_emu->hardware_id != casioemu::HW_SOLARII) {
+	if (m_emu->hardware_id != casioemu::HW_SOLARII && m_emu->hardware_id != casioemu::HW_EPS6800) {
 		windows.push_back(new VariableWindow());
 	}
 
-	for (auto item : std::initializer_list<UIWindow*>{
-			 new HwController(),
-			 new LabelViewer(),
-			 new WatchWindow(),
-			 CreateCallAnalysisWindow(),
-			 code_viewer = new CodeViewer(),
-			 injector = new Injector(),
-			 membp = new Breakpoints(),
-			 CreateAddressWindow(),
-			 // MakeAssemblerUI(),
+	windows.push_back(new HwController());
+	windows.push_back(new LabelViewer());
+	windows.push_back(new WatchWindow());
+	windows.push_back(CreateCallAnalysisWindow());
+	windows.push_back(code_viewer = new CodeViewer());
+	if (m_emu->hardware_id != casioemu::HW_EPS6800)
+		windows.push_back(injector = new Injector());
+	windows.push_back(membp = new Breakpoints());
+	windows.push_back(CreateAddressWindow());
+	if (m_emu->hardware_id != casioemu::HW_EPS6800) {
 #if !defined(TEST_BUILD)
-			 CreateRopCompilerWindow(),
+		windows.push_back(CreateRopCompilerWindow());
 #endif
+	}
 #if !defined(TEST_BUILD) && !defined(CASIOEMU_CORE_WEB)
-			 new PluginLogWindow(),
+	windows.push_back(new PluginLogWindow());
 #endif
 #if !defined(TEST_BUILD)
-			 snapshot_window = static_cast<SnapshotWindow*>(CreateSnapshotWindow()),
+	windows.push_back(snapshot_window = static_cast<SnapshotWindow*>(CreateSnapshotWindow()));
 #endif
 #ifndef CASIOEMU_CORE_WEB
-			 new QrCodeWindow(),
+	if (m_emu->hardware_id != casioemu::HW_EPS6800)
+		windows.push_back(new QrCodeWindow());
 #endif
-			 MakeThemeWindow(),
-			 CreateBitmapViewer(), })
-		windows.push_back(item);
+	windows.push_back(MakeThemeWindow());
+	windows.push_back(CreateBitmapViewer());
 	for (auto item : GetEditors())
 		windows.push_back(item);
 

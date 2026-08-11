@@ -107,6 +107,38 @@ inline auto Highlight_Default(auto he) {
 	};
 	return he;
 }
+inline auto EPS_ROM_Hex(auto he) {
+	he->ReadFn = [](const ImU8*, size_t off) -> ImU8 {
+		if (!m_emu->chipset.epscpu)
+			return 0xff;
+		const auto word = m_emu->chipset.epscpu->ReadCodeWord(static_cast<uint32_t>(off / 2));
+		return static_cast<ImU8>((off & 1) ? word : (word >> 8));
+	};
+	he->WriteFn = [](ImU8*, size_t off, ImU8 value) {
+		auto* eps = m_emu->chipset.epscpu;
+		if (!eps)
+			return;
+		const uint32_t word_address = static_cast<uint32_t>(off / 2);
+		auto word = eps->ReadCodeWord(word_address);
+		word = (off & 1)
+			? static_cast<uint16_t>((word & 0xff00) | value)
+			: static_cast<uint16_t>((word & 0x00ff) | (static_cast<uint16_t>(value) << 8));
+		if (!eps->WriteCodeWord(word_address, word))
+			return;
+		eps->WriteRomImageWord(m_emu->chipset.rom_data, word_address, word);
+	};
+	return he;
+}
+inline auto EPS_VRAM_Hex(auto he) {
+	he->ReadFn = [](const ImU8*, size_t off) -> ImU8 {
+		return m_emu->chipset.epscpu ? m_emu->chipset.epscpu->ReadLcdMemory(off) : 0xff;
+	};
+	he->WriteFn = [](ImU8*, size_t off, ImU8 value) {
+		if (m_emu->chipset.epscpu)
+			m_emu->chipset.epscpu->WriteLcdMemory(off, value);
+	};
+	return he;
+}
 
 std::vector<UIWindow*> GetEditors() {
 	SetupHook(on_memory_write, [](casioemu::MMU& mmu, MemoryEventArgs& mea) {
@@ -114,13 +146,14 @@ std::vector<UIWindow*> GetEditors() {
 			ram_edit_ov[mea.offset] = 255;
 	});
 	std::vector<UIWindow*> windows;
-	windows.push_back(new HexEditor{"Rom", m_emu->chipset.rom_data.data(), m_emu->chipset.rom_data.size(), 0});
 	if (m_emu->hardware_id == casioemu::HW_EPS6800) {
-		windows.push_back(new HexEditor{"Ram", m_emu->chipset.epscpu->ram, 128 * 64, 0});
-		windows.push_back(new HexEditor{"Regs", m_emu->chipset.epscpu->regs, 128, 0});
-		windows.push_back(new HexEditor{"VRam", m_emu->chipset.epscpu->vram, 0x2000, 0});
+		windows.push_back(EPS_ROM_Hex(new HexEditor{"Rom", nullptr, 0x20000, 0}));
+		windows.push_back(MMU_Hex(new HexEditor{"Ram", nullptr, 0x2080, 0}));
+		windows.push_back(MMU_Hex(new HexEditor{"Regs", nullptr, 0x80, 0}));
+		windows.push_back(EPS_VRAM_Hex(new HexEditor{"VRam", nullptr, m_emu->chipset.epscpu->LcdRawSize(), 0}));
 	}
 	else {
+		windows.push_back(new HexEditor{"Rom", m_emu->chipset.rom_data.data(), m_emu->chipset.rom_data.size(), 0});
 		windows.push_back(
 			Highlight_Default(
 				MMU_Hex(
