@@ -15,6 +15,7 @@
 #include <iterator>
 #include <map>
 #include <regex>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -499,15 +500,39 @@ namespace casioemu {
 			const std::string defs = CollectDefsBlocks(status_frame);
 			auto children = ExtractDirectChildElements(FindStatusContainer(status_frame));
 			model.status_sprite_indexes = configured_status_indexes;
+			std::vector<std::pair<int, StatusIndicatorInfo>> status_indicators;
+			std::set<std::pair<int, int>> used_status_bits;
 			for (const auto& [name, index] : configured_status_indexes) {
 				if (index < 0 || static_cast<size_t>(index) >= children.size())
 					throw std::runtime_error("status sprite index is out of range for " + name + ".");
+				const auto* child = children[static_cast<size_t>(index)];
+				const char* byte_text = child->Attribute("data-status-byte");
+				const char* bit_text = child->Attribute("data-status-bit");
+				if ((byte_text == nullptr) != (bit_text == nullptr))
+					throw std::runtime_error("board SVG status sprite " + name + " must specify both data-status-byte and data-status-bit.");
+				if (byte_text && bit_text) {
+					int byte_offset = -1;
+					int bit = -1;
+					if (child->QueryIntAttribute("data-status-byte", &byte_offset) != tinyxml2::XML_SUCCESS || byte_offset < 0 || byte_offset > 0xffff)
+						throw std::runtime_error("board SVG status sprite " + name + " has an invalid data-status-byte.");
+					if (child->QueryIntAttribute("data-status-bit", &bit) != tinyxml2::XML_SUCCESS || bit < 0 || bit > 7)
+						throw std::runtime_error("board SVG status sprite " + name + " has an invalid data-status-bit.");
+					if (!used_status_bits.emplace(byte_offset, bit).second)
+						throw std::runtime_error("board SVG assigns more than one status sprite to the same LCD bit.");
+					status_indicators.push_back({index, {name, static_cast<unsigned short>(byte_offset), static_cast<unsigned char>(bit)}});
+				}
 				SpriteInfo sprite{};
 				sprite.src = {0, 0, std::max(1, RoundToInt(status_rect.w)), std::max(1, RoundToInt(status_rect.h))};
 				sprite.dest = dest;
-				sprite.svg_shape = BuildStatusSvgShape(document, status_frame, children[static_cast<size_t>(index)], defs);
+				sprite.svg_shape = BuildStatusSvgShape(document, status_frame, child, defs);
 				model.sprites[name] = std::move(sprite);
 			}
+			std::sort(status_indicators.begin(), status_indicators.end(), [](const auto& lhs, const auto& rhs) {
+				return lhs.first < rhs.first;
+			});
+			model.status_indicators.clear();
+			for (auto& [index, indicator] : status_indicators)
+				model.status_indicators.push_back(std::move(indicator));
 		}
 
 		int MaskToIndex(int mask) {

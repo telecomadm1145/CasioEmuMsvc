@@ -1,5 +1,6 @@
 #include "ModelConfig.h"
 
+#include "Chipset/Eps6800Display.h"
 #include "SvgBoardModelLoader.h"
 #include "../../McpPlugin/json.hpp"
 
@@ -21,6 +22,29 @@ namespace casioemu {
 		bool FileExists(const std::filesystem::path& path) {
 			std::error_code ec;
 			return std::filesystem::exists(path, ec) && std::filesystem::is_regular_file(path, ec);
+		}
+
+		bool IsCurrentModelCache(const std::filesystem::path& bin_path, const std::filesystem::path& json_path, const std::filesystem::path& board_path) {
+			if (!FileExists(bin_path))
+				return false;
+			std::ifstream stream(bin_path, std::ios::binary);
+			std::string header(512, '\0');
+			stream.read(header.data(), static_cast<std::streamsize>(header.size()));
+			header.resize(static_cast<size_t>(stream.gcount()));
+			if (header.find("Configuration file v53") == std::string::npos)
+				return false;
+			std::error_code ec;
+			const auto cache_time = std::filesystem::last_write_time(bin_path, ec);
+			if (ec)
+				return false;
+			for (const auto& source : {json_path, board_path}) {
+				if (!FileExists(source))
+					continue;
+				const auto source_time = std::filesystem::last_write_time(source, ec);
+				if (ec || source_time > cache_time)
+					return false;
+			}
+			return true;
 		}
 
 		json RectToJson(const Rect& rect) {
@@ -130,6 +154,34 @@ namespace casioemu {
 			}
 			if (result.empty())
 				throw std::runtime_error("config.json sprites must include at least one status sprite index.");
+			return result;
+		}
+
+		std::vector<StatusIndicatorInfo> ReadStatusIndicators(const json& value) {
+			std::vector<StatusIndicatorInfo> result;
+			if (!value.contains("status"))
+				return result;
+			const auto& status = value.at("status");
+			if (!status.is_array())
+				throw std::runtime_error("config.json field status must be an array.");
+			std::set<std::string> names;
+			std::set<std::pair<int, int>> bits;
+			for (const auto& item : status) {
+				if (!item.is_object() || !item.contains("sprite") || !item.at("sprite").is_string() ||
+					!item.contains("byte") || !item.at("byte").is_number_integer() ||
+					!item.contains("bit") || !item.at("bit").is_number_integer())
+					throw std::runtime_error("config.json status entries must specify string sprite and integer byte/bit.");
+				const std::string name = item.at("sprite").get<std::string>();
+				const int byte_offset = item.at("byte").get<int>();
+				const int bit = item.at("bit").get<int>();
+				if (name.empty() || !names.insert(name).second)
+					throw std::runtime_error("config.json status sprite names must be non-empty and unique.");
+				if (byte_offset < 0 || byte_offset > 0xffff || bit < 0 || bit > 7)
+					throw std::runtime_error("config.json status byte/bit is out of range.");
+				if (!bits.emplace(byte_offset, bit).second)
+					throw std::runtime_error("config.json assigns more than one status sprite to the same LCD bit.");
+				result.push_back({name, static_cast<unsigned short>(byte_offset), static_cast<unsigned char>(bit)});
+			}
 			return result;
 		}
 
@@ -270,6 +322,22 @@ namespace casioemu {
 						model.extra[key] = std::move(item);
 				}
 			}
+			if (value.contains("status")) {
+				auto configured = ReadStatusIndicators(value);
+				if (!model.status_indicators.empty() && !model.board_path.empty()) {
+					if (configured.size() != model.status_indicators.size())
+						throw std::runtime_error("config.json status does not match board SVG status definitions.");
+					for (size_t i = 0; i < configured.size(); ++i) {
+						const auto& lhs = configured[i];
+						const auto& rhs = model.status_indicators[i];
+						if (lhs.sprite_name != rhs.sprite_name || lhs.byte_offset != rhs.byte_offset || lhs.bit != rhs.bit)
+							throw std::runtime_error("config.json status does not match board SVG status definitions.");
+					}
+				}
+				else {
+					model.status_indicators = std::move(configured);
+				}
+			}
 			if (value.contains("buttons")) {
 				if (!model.board_path.empty()) {
 					if (!model.buttons.empty())
@@ -296,6 +364,15 @@ namespace casioemu {
 				model.sprites.clear();
 				for (auto it = value.at("sprites").begin(); it != value.at("sprites").end(); ++it)
 					model.sprites[it.key()] = SpriteFromJson(it.value());
+			}
+		}
+
+		void ValidateStatusIndicators(const ModelInfo& model) {
+			if (model.hardware_id != HW_EPS6800)
+				return;
+			for (const auto& indicator : model.status_indicators) {
+				if (indicator.byte_offset >= EPS6800_STATUS_SIZE)
+					throw std::runtime_error("EPS6800 status byte is outside the 12-byte LCD status area for sprite " + indicator.sprite_name + ".");
 			}
 		}
 	}
@@ -328,6 +405,16 @@ namespace casioemu {
 		}
 		if (!model.extra.empty())
 			value["extra"] = model.extra;
+		if (!model.status_indicators.empty()) {
+			value["status"] = json::array();
+			for (const auto& indicator : model.status_indicators) {
+				value["status"].push_back({
+					{"sprite", indicator.sprite_name},
+					{"byte", indicator.byte_offset},
+					{"bit", indicator.bit},
+				});
+			}
+		}
 
 		if (model.board_path.empty()) {
 			value["buttons"] = json::array();
@@ -396,11 +483,13 @@ namespace casioemu {
 		try {
 			const auto json_path = model_path / MODEL_CONFIG_JSON;
 			const auto bin_path = model_path / MODEL_CONFIG_BIN;
-			if (FileExists(bin_path)) {
+			if ((!FileExists(json_path) && FileExists(bin_path)) ||
+				IsCurrentModelCache(bin_path, json_path, model_path / "board.svg")) {
 				std::ifstream stream(bin_path, std::ios::binary);
 				if (!stream)
 					throw std::runtime_error("Cannot open config.bin.");
 				model.Read(stream);
+				ValidateStatusIndicators(model);
 				if (loaded_from)
 					*loaded_from = MODEL_CONFIG_BIN;
 				return true;
@@ -427,11 +516,14 @@ namespace casioemu {
 					const SpriteInfo interface_sprite = RequireBoardInterfaceSprite(value);
 					model = LoadSvgBoardModelInfo(model_path, hardware_id, requested_board, requested_interface, requested_rom, requested_flash, interface_sprite.src, interface_sprite.dest, display_w, display_h, screen_scale_y, requested_status_indexes);
 					ApplyModelInfoJsonValue(value, model, false);
+					if (hardware_id == HW_EPS6800 && model.status_indicators.size() != requested_status_indexes.size())
+						throw std::runtime_error("EPS6800 board SVG must define data-status-byte and data-status-bit for every status sprite.");
 				}
 				else {
 					RequireSpriteModelFields(value);
 					ApplyModelInfoJsonValue(value, model, true);
 				}
+				ValidateStatusIndicators(model);
 				if (loaded_from)
 					*loaded_from = MODEL_CONFIG_JSON;
 				SaveModelInfoBinCache(model_path, model);
@@ -474,11 +566,14 @@ namespace casioemu {
 					requested_flash, interface_sprite.src, interface_sprite.dest, display_w, display_h, screen_scale_y,
 					requested_status_indexes);
 				ApplyModelInfoJsonValue(value, model, false);
+				if (hardware_id == HW_EPS6800 && model.status_indicators.size() != requested_status_indexes.size())
+					throw std::runtime_error("EPS6800 board SVG must define data-status-byte and data-status-bit for every status sprite.");
 			}
 			else {
 				RequireSpriteModelFields(value);
 				ApplyModelInfoJsonValue(value, model, true);
 			}
+			ValidateStatusIndicators(model);
 			return true;
 		}
 		catch (const std::exception& ex) {

@@ -683,6 +683,12 @@ namespace casioemu {
 		int status_ink_alpha_on = 255;
 		int status_ink_alpha_off = 0;
 
+		int SpriteCount() const {
+			if constexpr (hardware_id == HW_EPS6800)
+				return static_cast<int>(emulator.ModelDefinition.status_indicators.size()) + 1;
+			return SPR_MAX;
+		}
+
 		bool StatusEnabled() const {
 			if (!(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) && hardware_id != HW_FX_5800P && hardware_id != HW_ES_PLUS && hardware_id != HW_EPS6800) {
 				return true;
@@ -867,7 +873,7 @@ namespace casioemu {
 			}
 		}
 		int GetStatusAlphaCount() const override {
-			return SPR_MAX > 0 ? SPR_MAX - 1 : 0;
+			return std::max(0, SpriteCount() - 1);
 		}
 		void WriteStatusAlpha(uint8_t* out, int max_len) const override {
 			if (!out || max_len <= 0) return;
@@ -1011,9 +1017,12 @@ namespace casioemu {
 					}
 				}
 
-				for (int ix = 1; ix < SPR_MAX; ++ix) {
-					const bool on = (decoded.status[sprite_bitmap[ix].offset] & sprite_bitmap[ix].mask) != 0;
-					auto& alpha = eps_screen_ink_alpha[ix - 1];
+				const auto& status_indicators = emulator.ModelDefinition.status_indicators;
+				for (size_t ix = 0; ix < status_indicators.size(); ++ix) {
+					const auto& indicator = status_indicators[ix];
+					const bool on = indicator.byte_offset < decoded.status.size() &&
+						(decoded.status[indicator.byte_offset] & (1u << indicator.bit)) != 0;
+					auto& alpha = eps_screen_ink_alpha[ix];
 					alpha = alpha * transition_ratio +
 						(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
 				}
@@ -1351,7 +1360,7 @@ namespace casioemu {
 	template <>
 	const int Screen<HW_EPS6800>::ROW_SIZE_DISP = 12;
 	template <>
-	const int Screen<HW_EPS6800>::SPR_MAX = 19;
+	const int Screen<HW_EPS6800>::SPR_MAX = 1;
 
 	template <>
 	const SpriteBitmap Screen<HW_CLASSWIZ_II>::sprite_bitmap[] = {
@@ -1448,42 +1457,30 @@ namespace casioemu {
 
 	template <>
 	const SpriteBitmap Screen<HW_EPS6800>::sprite_bitmap[] = {
-		{"rsd_pixel", 0, 0},
-		// HP 300S+ exposes the indicators as the top row of the EPS6800 LCD
-		// framebuffer.  The bits are ordered by their physical X positions and
-		// are not compatible with the ES Plus controller mapping above.
-		{"rsd_s", 0x01, 0x00},       // x=0
-		{"rsd_a", 0x08, 0x00},       // x=3
-		{"rsd_m", 0x80, 0x00},       // x=7
-		{"rsd_sto", 0x10, 0x01},     // x=12
-		{"rsd_rcl", 0x04, 0x02},     // x=18
-		{"rsd_stat", 0x02, 0x03},    // x=25
-		{"rsd_cmplx", 0x80, 0x03},   // x=31
-		{"rsd_mat", 0x02, 0x05},     // x=41
-		{"rsd_vct", 0x80, 0x05},     // x=47
-		{"rsd_d", 0x80, 0x06},       // x=55
-		{"rsd_r", 0x04, 0x07},       // x=58
-		{"rsd_g", 0x20, 0x07},       // x=61
-		{"rsd_fix", 0x02, 0x08},     // x=65
-		{"rsd_sci", 0x80, 0x08},     // x=71
-		{"rsd_math", 0x01, 0x0A},    // x=80
-		{"rsd_down", 0x10, 0x0A},    // x=84
-		{"rsd_up", 0x80, 0x0A},      // x=87
-		{"rsd_disp", 0x80, 0x0B} };  // x=95
+		{"rsd_pixel", 0, 0} };
 
 	template <HardwareId hardware_id>
 	void Screen<hardware_id>::Initialise() {
 		if (!inited) {
 			renderer = emulator.GetRenderer();
 			interface_texture = emulator.GetInterfaceTexture();
-			sprite_info.resize(SPR_MAX);
+			const int sprite_count = SpriteCount();
+			sprite_info.resize(sprite_count);
 			for (auto& texture : sprite_svg_textures)
 				texture.Reset();
 			sprite_svg_textures.clear();
-			sprite_svg_textures.resize(SPR_MAX);
-			sprite_available.assign(SPR_MAX, 0);
-			for (int ix = 0; ix != SPR_MAX; ++ix) {
-				auto sprite = emulator.ModelDefinition.sprites.find(sprite_bitmap[ix].name);
+			sprite_svg_textures.resize(sprite_count);
+			sprite_available.assign(sprite_count, 0);
+			for (int ix = 0; ix != sprite_count; ++ix) {
+				const char* static_name = nullptr;
+				std::string dynamic_name;
+				if constexpr (hardware_id == HW_EPS6800) {
+					dynamic_name = ix == 0 ? "rsd_pixel" : emulator.ModelDefinition.status_indicators[static_cast<size_t>(ix - 1)].sprite_name;
+				}
+				else {
+					static_name = sprite_bitmap[ix].name;
+				}
+				auto sprite = emulator.ModelDefinition.sprites.find(static_name ? static_name : dynamic_name);
 				if (sprite == emulator.ModelDefinition.sprites.end())
 					continue;
 				sprite_info[ix] = sprite->second;
@@ -3123,7 +3120,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		}
 
 		// Set texture transparency and copy sprites as before
-		for (int ix = 1; ix != SPR_MAX; ++ix) {
+		for (int ix = 1; ix != SpriteCount(); ++ix) {
 			if (ix >= static_cast<int>(sprite_available.size()) || !sprite_available[ix])
 				continue;
 			const int alpha_index = ix - 1;

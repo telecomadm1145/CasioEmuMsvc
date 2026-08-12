@@ -67,6 +67,21 @@ namespace casioemu {
 			Binary::Read(stm, keyname);
 		}
 	};
+	struct StatusIndicatorInfo {
+		std::string sprite_name;
+		unsigned short byte_offset{};
+		unsigned char bit{};
+		void Write(std::ostream& stm) const {
+			Binary::Write(stm, sprite_name);
+			Binary::Write(stm, byte_offset);
+			Binary::Write(stm, bit);
+		}
+		void Read(std::istream& stm) {
+			Binary::Read(stm, sprite_name);
+			Binary::Read(stm, byte_offset);
+			Binary::Read(stm, bit);
+		}
+	};
 	struct ModelInfo {
 		std::vector<ButtonInfo> buttons;
 		std::map<std::string, SpriteInfo> sprites;
@@ -91,9 +106,10 @@ namespace casioemu {
 		int screen_height{};
 		double screen_scale_y{};
 		std::map<std::string, int> status_sprite_indexes;
+		std::vector<StatusIndicatorInfo> status_indicators;
 		std::map<std::string, std::string> extra;
 		void Write(std::ostream& os) const {
-			Binary::Write(os, std::string("\n\nnx-U16/U8 Emulator Configuration file v52\n\n模拟器配置文件v52\n\ntệp cấu hình giả lập v52\n\n"));
+			Binary::Write(os, std::string("\n\nnx-U16/U8 Emulator Configuration file v53\n\n模拟器配置文件v53\n\ntệp cấu hình giả lập v53\n\n"));
 			Binary::Write(os, csr_mask);
 			Binary::Write(os, hardware_id);
 			Binary::Write(os, real_hardware);
@@ -139,17 +155,18 @@ namespace casioemu {
 			Binary::Write(os, screen_width);
 			Binary::Write(os, screen_height);
 			Binary::Write(os, screen_scale_y);
+			Binary::Write(os, status_indicators);
 		}
 		void Read(std::istream& is) {
 			status_sprite_indexes.clear();
+			status_indicators.clear();
 			board_path.clear();
 			screen_width = 0;
 			screen_height = 0;
 			screen_scale_y = 0;
-			{
-				std::string unused;
-				Binary::Read(is, unused);
-			}
+			std::string format_header;
+			Binary::Read(is, format_header);
+			const bool has_status_indicators = format_header.find("v53") != std::string::npos;
 			Binary::Read(is, csr_mask);
 			Binary::Read(is, hardware_id);
 			Binary::Read(is, real_hardware);
@@ -215,6 +232,8 @@ namespace casioemu {
 					Binary::Read(is, screen_width);
 					Binary::Read(is, screen_height);
 					Binary::Read(is, screen_scale_y);
+					if (has_status_indicators && is.peek() != std::char_traits<char>::eof())
+						Binary::Read(is, status_indicators);
 				}
 			}
 		}
