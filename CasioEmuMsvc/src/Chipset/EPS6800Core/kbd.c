@@ -90,7 +90,16 @@ static uint8_t kbd_get_matrix(const struct kbd_state *state) {
 
 static uint8_t kbd_get_pa(const struct kbd_state *state) {
 	uint8_t input = kbd_get_matrix(state);
-	return (input & state->reg[REG_DCRA]) | (state->porta_latch & ~state->reg[REG_DCRA]);
+	uint8_t pa = (input & state->reg[REG_DCRA]) |
+		(state->porta_latch & ~state->reg[REG_DCRA]);
+	/* PA7 is the dedicated active-low ON input.  Unlike PA0-PA6 matrix
+	 * contacts, its physical level remains readable when firmware changes
+	 * the ordinary Port A GPIO direction during shutdown. */
+	if (state->on_pressed)
+		pa &= (uint8_t)~KBD_ON_COLUMN_MASK;
+	else
+		pa |= KBD_ON_COLUMN_MASK;
+	return pa;
 }
 
 static void kbd_update_porta(struct kbd_state *state) {
@@ -296,12 +305,16 @@ static void kbd_process_pending_on_press(struct kbd_state *state, uint32_t cycle
 			kbd_cpu_wake(state, WAKE_ON);
 			kbd_trigger_press(state, KBD_ON_COLUMN_MASK);
 			state->on_pending_down = false;
+			if (state->on_pending_up) {
+				state->on_press_cycles = KEY_RELEASE_HOLD_CYCLES;
+			}
 		}
 	}
 }
 
-static void kbd_process_pending_on_release(struct kbd_state *state) {
-	if (state->on_pending_up) {
+static void kbd_process_pending_on_release(struct kbd_state *state, uint32_t cycles) {
+	if (state->on_pending_up && !state->on_pending_down &&
+		kbd_countdown_elapsed(&state->on_press_cycles, cycles)) {
 		state->on_pressed = false;
 		state->on_pending_up = false;
 	}
@@ -357,7 +370,7 @@ static void kbd_process_pending_key_releases(struct kbd_state *state, uint32_t c
 
 void kbd_tick_state(struct kbd_state *state, uint32_t cycles) {
 	kbd_process_pending_on_press(state, cycles);
-	kbd_process_pending_on_release(state);
+	kbd_process_pending_on_release(state, cycles);
 	kbd_process_pending_key_presses(state, cycles);
 	kbd_process_pending_press(state);
 	kbd_process_pending_key_releases(state, cycles);
@@ -373,12 +386,9 @@ void kbd_ondown_state(struct kbd_state *state) {
 }
 
 void kbd_onup_state(struct kbd_state *state) {
-	if (state->on_pending_down) {
-		state->on_pending_up = true;
-	}
-	else {
-		state->on_pressed = false;
-	}
+	state->on_pending_up = true;
+	if (!state->on_pending_down)
+		state->on_press_cycles = KEY_RELEASE_HOLD_CYCLES;
 }
 
 static void kbd_clear_storage(struct kbd_state *state) {

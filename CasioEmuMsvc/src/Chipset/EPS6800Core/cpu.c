@@ -484,7 +484,11 @@ void cpu_loop_state(struct cpu_state *state, uint32_t count) {
 	uint32_t instr;
 	struct cpu_trace_state *trace = &state->trace;
 
-	if (state->int_pending) {
+	/* A request raised while firmware is inside an ISR must remain pending
+	 * until RETI restores GLINT.  Clearing it before cpu_handle_interrupt_state
+	 * can actually enter the vector loses Timer1 wakeups from Idle. */
+	if (state->int_pending &&
+		(cpu_bus_read_internal(state, REG_CPUCON) & BIT_GLINT)) {
 		if (state->int_pending & INT_LEVEL4_TIMINT) {
 			state->int_pending &= ~INT_LEVEL4_TIMINT;
 			cpu_handle_interrupt_state(state, ADDR_TIMINT);

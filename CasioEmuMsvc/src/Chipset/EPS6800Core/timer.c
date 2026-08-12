@@ -180,13 +180,15 @@ void timer_reset_state(struct timer_state *state) {
 	memset(state->reg, 0, sizeof(state->reg));
 }
 
-void timer_tick_state(struct timer_state *state, uint32_t cycles) {
+static void timer_tick_0_state(struct timer_state *state, uint32_t cycles) {
 	if (timer_enabled(state->reg[REG_TR0CON], BIT_T0EN)) {
 		if (timer_tick_counter(&state->t0psc, state->t0prl, &state->t0cnt, state->t0crl, cycles)) {
 			timer_signal_interrupt(state, BIT_TMR0I, state->reg[REG_TR0CON], BIT_TMR0IE);
 		}
 	}
+}
 
+static void timer_tick_1_state(struct timer_state *state, uint32_t cycles) {
 	if (timer_enabled(state->reg[REG_TR1CON], BIT_T1EN)) {
 		if (timer_tick_counter(&state->t1psc, state->t1prl, &state->t1cnt, state->t1crl, cycles)) {
 			timer_signal_interrupt(state, BIT_TMR1I, state->reg[REG_TR1CON], BIT_TMR1IE);
@@ -195,12 +197,31 @@ void timer_tick_state(struct timer_state *state, uint32_t cycles) {
 			}
 		}
 	}
+}
 
+static void timer_tick_2_state(struct timer_state *state, uint32_t cycles) {
 	if (timer_enabled(state->reg[REG_TR2WCON], BIT_T2EN)) {
 		if (timer_tick_counter(&state->t2psc, state->t2prl, &state->t2cnt, state->t2crl, cycles)) {
 			timer_signal_interrupt(state, BIT_TMR2I, state->reg[REG_TR2WCON], BIT_TMR2IE);
 		}
 	}
+}
+
+void timer_tick_state(struct timer_state *state, uint32_t cycles) {
+	timer_tick_0_state(state, cycles);
+	timer_tick_1_state(state, cycles);
+	timer_tick_2_state(state, cycles);
+}
+
+void timer_tick_fast_state(struct timer_state *state, uint32_t cycles) {
+	timer_tick_0_state(state, cycles);
+	timer_tick_2_state(state, cycles);
+}
+
+void timer_tick_idle_state(struct timer_state *state, uint32_t cycles) {
+	/* The low-speed Timer1 oscillator remains active in Idle.  Timer0 and
+	 * Timer2 are driven only while the CPU oscillator is running. */
+	timer_tick_1_state(state, cycles);
 }
 
 

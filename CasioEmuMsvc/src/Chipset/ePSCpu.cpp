@@ -178,8 +178,15 @@ namespace casioemu {
 		last_debug_stop_ = {};
 		instruction_count_ = 0;
 		cycle_count_ = 0;
+		timer_cycle_phase_ = 0;
 		trace_buffer_.clear();
 		memory_break_pending_ = false;
+	}
+
+	void ePSCPU::SetTimerCycleDivisor(uint32_t divisor) {
+		const std::lock_guard lock(state_mutex_);
+		timer_cycle_divisor_ = std::max(1u, divisor);
+		timer_cycle_phase_ = 0;
 	}
 
 	void ePSCPU::Next() {
@@ -205,7 +212,12 @@ namespace casioemu {
 		const uint8_t interrupt_pending = state_->cpu.int_pending;
 		const uint32_t instruction = machine_state_debug_fetch_instruction(state_, pc_before);
 		const uint16_t word = static_cast<uint16_t>(instruction >> 16);
-		machine_state_advance_cycles(state_, 1, tick_timer);
+		bool advance_timer = false;
+		if (tick_timer && ++timer_cycle_phase_ >= timer_cycle_divisor_) {
+			timer_cycle_phase_ = 0;
+			advance_timer = true;
+		}
+		machine_state_advance_cycles_split(state_, 1, tick_timer, advance_timer);
 		++instruction_count_;
 
 		const uint32_t pc_after = state_->cpu.pc;
@@ -731,6 +743,7 @@ namespace casioemu {
 		{
 			const std::lock_guard lock(state_mutex_);
 			machine_state_load_snapshot(state_, snapshot);
+			timer_cycle_phase_ = 0;
 			machine_state_debug_set_memory_access_callback(state_, &ePSCPU::MemoryAccessThunk, this);
 		}
 		machine_snapshot_free(snapshot);

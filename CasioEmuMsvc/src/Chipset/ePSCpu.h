@@ -139,6 +139,8 @@ namespace casioemu {
 		Eps6800DebugStop last_debug_stop_{};
 		uint64_t instruction_count_{};
 		uint64_t cycle_count_{};
+		uint32_t timer_cycle_divisor_{1};
+		uint32_t timer_cycle_phase_{};
 		bool trace_enabled_{};
 		size_t trace_capacity_{4096};
 		std::deque<Eps6800TraceEntry> trace_buffer_;
@@ -173,6 +175,7 @@ namespace casioemu {
 			std::function<bool(uint32_t, uint8_t&, bool)> memory,
 			std::function<void(uint8_t)> interrupt);
 		void Reset();
+		void SetTimerCycleDivisor(uint32_t divisor);
 		void Next();
 		bool RunFrame();
 

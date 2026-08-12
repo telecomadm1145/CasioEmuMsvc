@@ -27,6 +27,12 @@ extern "C" {
 
 void machine_state_bind_modules(struct machine_state *state);
 void machine_state_advance_cycles(struct machine_state *state, uint32_t cycles, bool tick_timer);
+void machine_state_advance_cycles_split(
+	struct machine_state *state,
+	uint32_t cycles,
+	bool tick_fast_timers,
+	bool tick_timer1
+);
 
 #ifdef __cplusplus
 }

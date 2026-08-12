@@ -12,6 +12,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -30,6 +31,26 @@ namespace casioemu {
 			default:
 				return 2048 * 1024 * 2;
 			}
+		}
+
+		unsigned int GetEpsCyclesPerSecond(const ModelInfo& model) {
+			constexpr unsigned int default_cycles_per_second = 100000;
+			const auto iter = model.extra.find("cycles_per_second");
+			if (iter == model.extra.end())
+				return default_cycles_per_second;
+
+			try {
+				std::size_t pos = 0;
+				const auto value = std::stoull(iter->second, &pos, 0);
+				if (pos != iter->second.size() || value == 0 ||
+					value > std::numeric_limits<unsigned int>::max())
+					PANIC("Invalid EPS6800 cycles_per_second value: %s\n", iter->second.c_str());
+				return static_cast<unsigned int>(value);
+			}
+			catch (const std::exception&) {
+				PANIC("Invalid EPS6800 cycles_per_second value: %s\n", iter->second.c_str());
+			}
+			return default_cycles_per_second;
 		}
 
 		bool HasSvgExtension(const std::string& path) {
@@ -169,7 +190,7 @@ namespace casioemu {
 			cycles_per_second = 1024 * 1024 * 8;
 		}
 		if (hardware_id == HW_EPS6800) {
-			cycles_per_second = 100000;
+			cycles_per_second = GetEpsCyclesPerSecond(ModelDefinition);
 		}
 		timer_interval = hardware_id == HW_EPS6800 ? 40 : 20;
 
@@ -334,7 +355,7 @@ namespace casioemu {
 			cycles_per_second = 1024 * 1024 * 8;
 		}
 		if (hardware_id == HW_EPS6800) {
-			cycles_per_second = 100000;
+			cycles_per_second = GetEpsCyclesPerSecond(ModelDefinition);
 		}
 		timer_interval = hardware_id == HW_EPS6800 ? 40 : 20;
 

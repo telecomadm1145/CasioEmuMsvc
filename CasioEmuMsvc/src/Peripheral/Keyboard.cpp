@@ -166,16 +166,14 @@ namespace casioemu {
 			if (pressed) {
 				PressButtonByCode(code);
 			} else {
-				int button_index;
-				if (code == BUTTON_KIKO_POWER) button_index = 63;
-				else if (code == BUTTON_KIKO_RESET) button_index = 62;
-				else button_index = ((code >> 1) & 0x38) | (code & 0x07);
-				if (button_index < 64) {
-					auto& button = buttons[button_index];
+				for (auto& button : buttons) {
+					if (button.type == Button::BT_NONE || button.code != code)
+						continue;
 					if (TryReleaseButton(button)) {
 						if (real_hardware) RecalculateGhost();
 						else RecalculateEmuInput();
 					}
+					break;
 				}
 			}
 		}
@@ -269,7 +267,8 @@ namespace casioemu {
 		}
 		if (button.type != Button::BT_BUTTON)
 			return;
-		const auto matrix_index = static_cast<uint8_t>(&button - buttons);
+		const auto matrix_index = static_cast<uint8_t>(
+			(((button.code >> 4) & 0x0f) * 8) + (button.code & 0x0f));
 		if (pressed)
 			emulator.chipset.epscpu->KeyDown(matrix_index);
 		else
@@ -971,6 +970,34 @@ namespace casioemu {
 			return;
 		}
 
+		const bool eps_power_resets = emulator.hardware_id == HW_EPS6800 &&
+			emulator.ModelDefinition.extra.contains("power_button_resets");
+		if (button.type == Button::BT_POWER && button.pressed && !old_pressed_state &&
+			eps_power_resets) {
+			const size_t current_button_index = static_cast<size_t>(&button - buttons);
+			struct HeldButton {
+				size_t index;
+				bool stuck;
+				SDL_FingerID finger_id;
+			};
+			std::vector<HeldButton> held_buttons;
+			for (size_t index = 0; index < std::size(buttons); ++index) {
+				const auto& held = buttons[index];
+				if (held.pressed)
+					held_buttons.push_back({index, held.stuck, held.pressingFingerId});
+			}
+
+			emulator.chipset.Reset();
+			for (const auto& held : held_buttons) {
+				auto& restored = buttons[held.index];
+				restored.pressed = true;
+				restored.stuck = held.stuck;
+				restored.pressingFingerId = held.finger_id;
+				if (held.index != current_button_index)
+					SetEpsButtonState(restored, true);
+			}
+		}
+
 		if (button.type == Button::BT_POWER && button.pressed && !old_pressed_state &&
 			emulator.hardware_id != HW_EPS6800) {
 			if (!(emulator.hardware_id == HW_CLASSWIZ && (emulator.chipset.data_FCON & 0x03) == 0x03)) {
@@ -1053,21 +1080,11 @@ namespace casioemu {
 	}
 
 	void Keyboard::PressButtonByCode(uint8_t code) {
-		if (code == BUTTON_KIKO_POWER) {
-			// Assuming POWER button is at index 63, not passing fingerId (treat as system event)
-			PressButton(buttons[63], false, 0);
-		}
-		else if (code == BUTTON_KIKO_RESET) {
-			PressButton(buttons[62], false, 0);
-		}
-		else {
-			int button_index = ((code >> 1) & 0x38) | (code & 0x07);
-			if (button_index < 63) {						  // Ensure index is valid
-				PressButton(buttons[button_index], false, 0); // Not passing fingerId
-			}
-			else {
-				// printf("[Keyboard][Info] Invalid button code 0x%02X for PressButtonByCode!\n", code);
-			}
+		for (auto& button : buttons) {
+			if (button.type == Button::BT_NONE || button.code != code)
+				continue;
+			PressButton(button, false, 0);
+			break;
 		}
 	}
 

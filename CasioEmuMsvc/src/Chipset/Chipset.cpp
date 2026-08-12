@@ -54,6 +54,19 @@ namespace casioemu {
 
 	void Chipset::SetupEpsCpu() {
 		epscpu = new ePSCPU();
+		const auto timer_divisor = emulator.ModelDefinition.extra.find("timer_cycle_divisor");
+		if (timer_divisor != emulator.ModelDefinition.extra.end()) {
+			try {
+				size_t consumed = 0;
+				const auto value = std::stoul(timer_divisor->second, &consumed, 0);
+				if (consumed != timer_divisor->second.size() || value == 0)
+					throw std::invalid_argument("invalid timer divisor");
+				epscpu->SetTimerCycleDivisor(static_cast<uint32_t>(value));
+			}
+			catch (const std::exception&) {
+				PANIC("Invalid EPS6800 timer_cycle_divisor value: %s\n", timer_divisor->second.c_str());
+			}
+		}
 		epscpu->SetDebugHooks(
 			[](uint32_t pc_before, uint32_t pc_after, uint8_t stack_pointer) {
 				InstructionEventArgs args{pc_before, pc_after};

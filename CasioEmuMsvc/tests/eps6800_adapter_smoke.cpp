@@ -130,6 +130,35 @@ namespace {
 				machine.Next();
 			return (machine.ReadByte(kPaInterruptStatus) & kOnMask) != 0;
 		};
+		const auto ShortOnPulseIsObservable = [&]() {
+			casioemu::ePSCPU machine;
+			std::vector<uint8_t> rom(0x20000, 0);
+			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+				return false;
+			machine.Reset();
+			machine.WriteByte(kDirectionA, 0xff);
+			machine.OnDown();
+			machine.OnUp();
+			for (int i = 0; i < 1001; ++i)
+				machine.Next();
+			const bool pressed = (machine.ReadByte(kPortA) & kOnMask) == 0;
+			for (int i = 0; i < 1000; ++i)
+				machine.Next();
+			return pressed && (machine.ReadByte(kPortA) & kOnMask) != 0;
+		};
+		const auto OnIgnoresGpioDirection = [&]() {
+			casioemu::ePSCPU machine;
+			std::vector<uint8_t> rom(0x20000, 0);
+			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+				return false;
+			machine.Reset();
+			machine.WriteByte(kDirectionA, 0x00);
+			machine.WriteByte(kPortA, 0xff);
+			machine.OnDown();
+			for (int i = 0; i < 1100; ++i)
+				machine.Next();
+			return machine.ReadByte(kPortA) == 0x7f;
+		};
 		const auto KeyEnableWake = [&]() {
 			casioemu::ePSCPU machine;
 			std::vector<uint8_t> rom(0x20000, 0);
@@ -168,6 +197,8 @@ namespace {
 			Scan({3, 46}, kPb0, true) == 0x77 &&          // 7+ON
 			Scan({0}, kPb0, false, 0x10) == 0xfe &&       // firmware RAM 40h is not scan state
 			OnInterrupt() &&
+			ShortOnPulseIsObservable() &&
+			OnIgnoresGpioDirection() &&
 			KeyEnableWake();
 	}
 
@@ -200,12 +231,19 @@ namespace {
 			return false;
 		idle_machine.Reset();
 		idle_machine.WriteByte(0x20, 0x03); // CPUCON.MS1 selects Idle on SLEP.
-		idle_machine.WriteByte(0x2b, 0x01); // Timer1 reload.
+		idle_machine.WriteByte(kTimer0ReloadLow, 0x02);
+		idle_machine.WriteByte(kTimer0ReloadHigh, 0x00);
+		idle_machine.WriteByte(kTimer0Control, kTimer0Enable);
+		idle_machine.WriteByte(0x2b, 0x40); // Timer1 reload.
 		idle_machine.WriteByte(0x2a, 0x88); // T1WKEN | T1EN.
 		idle_machine.Next();
 		if ((idle_machine.PC() >> 1) != 0)
 			return false;
 		for (int i = 0; i < 20; ++i)
+			idle_machine.Next();
+		if ((idle_machine.ReadByte(kInterruptStatus) & kTimer0Flag) != 0)
+			return false; // Timer0 is stopped while the CPU is in Idle.
+		for (int i = 0; i < 300; ++i)
 			idle_machine.Next();
 		return (idle_machine.PC() >> 1) != 0;
 	}
