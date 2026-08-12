@@ -24,29 +24,6 @@ namespace casioemu {
 			return std::filesystem::exists(path, ec) && std::filesystem::is_regular_file(path, ec);
 		}
 
-		bool IsCurrentModelCache(const std::filesystem::path& bin_path, const std::filesystem::path& json_path, const std::filesystem::path& board_path) {
-			if (!FileExists(bin_path))
-				return false;
-			std::ifstream stream(bin_path, std::ios::binary);
-			std::string header(512, '\0');
-			stream.read(header.data(), static_cast<std::streamsize>(header.size()));
-			header.resize(static_cast<size_t>(stream.gcount()));
-			if (header.find("Configuration file v53") == std::string::npos)
-				return false;
-			std::error_code ec;
-			const auto cache_time = std::filesystem::last_write_time(bin_path, ec);
-			if (ec)
-				return false;
-			for (const auto& source : {json_path, board_path}) {
-				if (!FileExists(source))
-					continue;
-				const auto source_time = std::filesystem::last_write_time(source, ec);
-				if (ec || source_time > cache_time)
-					return false;
-			}
-			return true;
-		}
-
 		json RectToJson(const Rect& rect) {
 			return json{{"x", rect.x}, {"y", rect.y}, {"w", rect.w}, {"h", rect.h}};
 		}
@@ -483,8 +460,7 @@ namespace casioemu {
 		try {
 			const auto json_path = model_path / MODEL_CONFIG_JSON;
 			const auto bin_path = model_path / MODEL_CONFIG_BIN;
-			if ((!FileExists(json_path) && FileExists(bin_path)) ||
-				IsCurrentModelCache(bin_path, json_path, model_path / "board.svg")) {
+			if (FileExists(bin_path)) {
 				std::ifstream stream(bin_path, std::ios::binary);
 				if (!stream)
 					throw std::runtime_error("Cannot open config.bin.");
