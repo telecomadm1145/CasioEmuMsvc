@@ -475,6 +475,8 @@ static void cpu_handle_interrupt_state(struct cpu_state *state, uint32_t addr) {
 		state->sleep_repeat_pc = false;
 		state->pc = addr;
 		cpu_write_pc_registers_state(state);
+		/* Interrupt entry masks further interrupts until RETI reenables them. */
+		cpu_bus_write_internal(state, REG_CPUCON, (uint8_t)(cpucon & ~BIT_GLINT));
 	}
 }
 

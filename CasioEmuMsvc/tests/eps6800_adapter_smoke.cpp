@@ -278,6 +278,47 @@ namespace {
 		return machine.ReadByte(kDestination) == 10;
 	}
 
+	bool InterruptEntryMasksGlobalInterruptSmoke() {
+		constexpr uint8_t kStackPointer = 0x06;
+		constexpr uint8_t kCpuControl = 0x20;
+		constexpr uint8_t kTimer1Control = 0x2a;
+		constexpr uint8_t kTimer1Reload = 0x2b;
+		constexpr uint8_t kGlobalInterruptEnable = 0x04;
+
+		casioemu::ePSCPU machine;
+		std::vector<uint8_t> rom(0x20000, 0);
+		SetPackedRomWord(rom, 0, 0x0000); // NOP
+		SetPackedRomWord(rom, 8, 0x0000); // NOP: keep the ISR active for one step.
+		SetPackedRomWord(rom, 9, 0x2bff); // RETI
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+			return false;
+		machine.Reset();
+		machine.SetTimerCycleDivisor(1);
+		machine.WriteByte(kCpuControl, kGlobalInterruptEnable);
+		machine.WriteByte(kTimer1Reload, 1);
+		machine.WriteByte(kTimer1Control, 0x18); // TMR1IE | T1EN
+
+		for (int i = 0; i < 32 && machine.ReadByte(kStackPointer) == 0; ++i)
+			machine.Next();
+		if ((machine.ReadByte(kCpuControl) & kGlobalInterruptEnable) != 0 ||
+			machine.ReadByte(kStackPointer) != 1 || (machine.PC() >> 1) != 9) {
+			std::cerr << "interrupt entry state: CPUCON=" << static_cast<unsigned>(machine.ReadByte(kCpuControl))
+				<< " STKPTR=" << static_cast<unsigned>(machine.ReadByte(kStackPointer))
+				<< " PC=" << (machine.PC() >> 1) << '\n';
+			return false;
+		}
+
+		machine.Next(); // Pending timer requests cannot nest; execute RETI instead.
+		const bool returned = machine.ReadByte(kStackPointer) == 0 &&
+			(machine.ReadByte(kCpuControl) & kGlobalInterruptEnable) != 0 &&
+			(machine.PC() >> 1) < 8;
+		if (!returned)
+			std::cerr << "interrupt return state: CPUCON=" << static_cast<unsigned>(machine.ReadByte(kCpuControl))
+				<< " STKPTR=" << static_cast<unsigned>(machine.ReadByte(kStackPointer))
+				<< " PC=" << (machine.PC() >> 1) << '\n';
+		return returned;
+	}
+
 	bool TablePointerSmoke() {
 		constexpr uint8_t kAccumulator = 0x0a;
 		constexpr uint8_t kTablePointerLow = 0x0b;
@@ -641,6 +682,10 @@ int main(int argc, char** argv) {
 	}
 	if (!RepeatInterruptDeferralSmoke()) {
 		std::cerr << "EPS6800 repeat/interrupt deferral regression\n";
+		return 1;
+	}
+	if (!InterruptEntryMasksGlobalInterruptSmoke()) {
+		std::cerr << "EPS6800 interrupt entry masking regression\n";
 		return 1;
 	}
 	if (!TablePointerSmoke()) {
