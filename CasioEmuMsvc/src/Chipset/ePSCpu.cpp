@@ -179,6 +179,26 @@ namespace casioemu {
 		instruction_count_ = 0;
 		cycle_count_ = 0;
 		timer_cycle_phase_ = 0;
+		idle_timer_checkpoint_ = std::chrono::steady_clock::now();
+		trace_buffer_.clear();
+		memory_break_pending_ = false;
+	}
+
+	void ePSCPU::ClearRamAndReset() {
+		const std::lock_guard lock(state_mutex_);
+		std::fill(std::begin(state_->mmio.ram), std::end(state_->mmio.ram), 0);
+		std::fill(std::begin(state_->mmio.ram_wbk), std::end(state_->mmio.ram_wbk), 0);
+		std::fill(&state_->mmio.regs[0x13], &state_->mmio.regs[0x20], 0);
+		std::fill(&state_->mmio.regs[0x40], &state_->mmio.regs[0x80], 0);
+		machine_state_reset(state_);
+		debug_run_mode_ = DebugRunMode::Continue;
+		honor_execution_breakpoints_ = true;
+		honor_memory_breakpoints_ = true;
+		last_debug_stop_ = {};
+		instruction_count_ = 0;
+		cycle_count_ = 0;
+		timer_cycle_phase_ = 0;
+		idle_timer_checkpoint_ = std::chrono::steady_clock::now();
 		trace_buffer_.clear();
 		memory_break_pending_ = false;
 	}
@@ -187,6 +207,12 @@ namespace casioemu {
 		const std::lock_guard lock(state_mutex_);
 		timer_cycle_divisor_ = std::max(1u, divisor);
 		timer_cycle_phase_ = 0;
+	}
+
+	void ePSCPU::SetIceTimerScheduling(bool enabled) {
+		const std::lock_guard lock(state_mutex_);
+		ice_timer_scheduling_ = enabled;
+		idle_timer_checkpoint_ = std::chrono::steady_clock::now();
 	}
 
 	void ePSCPU::SetPortCInput(uint8_t mask, uint8_t value) {
@@ -201,10 +227,34 @@ namespace casioemu {
 
 	bool ePSCPU::RunFrame() {
 		const std::lock_guard lock(state_mutex_);
-		constexpr uint32_t kActiveInstructions = 2000;
+		constexpr uint32_t kLegacyActiveInstructions = 2000;
 		constexpr uint32_t kFrameInstructions = 4000;
+		if (!ice_timer_scheduling_) {
+			for (uint32_t i = 0; i < kFrameInstructions; ++i) {
+				if (RunInstructionLocked(i < kLegacyActiveInstructions))
+					return true;
+			}
+			return false;
+		}
+		constexpr auto kIdleTimerPeriod = std::chrono::milliseconds(20);
+		const auto now = std::chrono::steady_clock::now();
+		if (state_->cpu.mode == CPU_MODE_IDLE) {
+			// The official EPS6800 driver blocks for at most 20 ms in Idle and
+			// advances Timer1 once per timeout.  Keep the UI thread non-blocking,
+			// but preserve that wall-clock cadence.  Keyboard settling remains
+			// cycle based so a queued wake key does not take seconds to appear.
+			machine_state_advance_cycles_split(state_, kFrameInstructions, false, false);
+			const auto elapsed = now - idle_timer_checkpoint_;
+			const auto ticks = static_cast<uint32_t>(elapsed / kIdleTimerPeriod);
+			if (ticks != 0) {
+				idle_timer_checkpoint_ += kIdleTimerPeriod * ticks;
+				machine_state_advance_cycles_split(state_, ticks, false, true);
+			}
+			return false;
+		}
+		idle_timer_checkpoint_ = now;
 		for (uint32_t i = 0; i < kFrameInstructions; ++i) {
-			if (RunInstructionLocked(i < kActiveInstructions))
+			if (RunInstructionLocked(true))
 				return true;
 		}
 		return false;
@@ -361,6 +411,11 @@ namespace casioemu {
 		machine_state_keydown(state_, matrix_index);
 	}
 
+	void ePSCPU::RestoreKeyDown(uint8_t matrix_index) {
+		const std::lock_guard lock(state_mutex_);
+		machine_state_restore_keydown(state_, matrix_index);
+	}
+
 	void ePSCPU::KeyUp(uint8_t matrix_index) {
 		const std::lock_guard lock(state_mutex_);
 		machine_state_keyup(state_, matrix_index);
@@ -471,23 +526,33 @@ namespace casioemu {
 	std::vector<uint8_t> ePSCPU::ExportRam() const {
 		const std::lock_guard lock(state_mutex_);
 		std::vector<uint8_t> data;
-		data.reserve(sizeof(state_->mmio.ram) + sizeof(state_->mmio.ram_wbk));
+		data.reserve(sizeof(state_->mmio.ram) + sizeof(state_->mmio.ram_wbk) + 0x0d + 0x40);
 		data.insert(data.end(), std::begin(state_->mmio.ram), std::end(state_->mmio.ram));
 		data.insert(data.end(), std::begin(state_->mmio.ram_wbk), std::end(state_->mmio.ram_wbk));
+		data.insert(data.end(), &state_->mmio.regs[0x13], &state_->mmio.regs[0x20]);
+		data.insert(data.end(), &state_->mmio.regs[0x40], &state_->mmio.regs[0x80]);
 		return data;
 	}
 
 	bool ePSCPU::ImportRam(const std::vector<uint8_t>& data) {
 		const std::lock_guard lock(state_mutex_);
 		const size_t bank_ram_size = sizeof(state_->mmio.ram);
-		const size_t persistent_ram_size = bank_ram_size + sizeof(state_->mmio.ram_wbk);
+		const size_t legacy_persistent_ram_size = bank_ram_size + sizeof(state_->mmio.ram_wbk);
+		const size_t persistent_ram_size = legacy_persistent_ram_size + 0x0d + 0x40;
 		// Older builds wrote only the banked 8 KiB. Keep those images usable while
 		// including the WBK window in all newly written images.
-		if (data.size() != bank_ram_size && data.size() != persistent_ram_size)
+		if (data.size() != bank_ram_size && data.size() != legacy_persistent_ram_size &&
+			data.size() != persistent_ram_size)
 			return false;
 		std::copy_n(data.begin(), bank_ram_size, std::begin(state_->mmio.ram));
-		if (data.size() == persistent_ram_size)
-			std::copy(data.begin() + bank_ram_size, data.end(), std::begin(state_->mmio.ram_wbk));
+		if (data.size() >= legacy_persistent_ram_size)
+			std::copy_n(data.begin() + bank_ram_size, sizeof(state_->mmio.ram_wbk),
+				std::begin(state_->mmio.ram_wbk));
+		if (data.size() == persistent_ram_size) {
+			auto source = data.begin() + legacy_persistent_ram_size;
+			std::copy_n(source, 0x0d, &state_->mmio.regs[0x13]);
+			std::copy_n(source + 0x0d, 0x40, &state_->mmio.regs[0x40]);
+		}
 		return true;
 	}
 

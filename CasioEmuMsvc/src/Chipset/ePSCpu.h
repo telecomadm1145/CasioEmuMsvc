@@ -8,6 +8,7 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -141,6 +142,8 @@ namespace casioemu {
 		uint64_t cycle_count_{};
 		uint32_t timer_cycle_divisor_{1};
 		uint32_t timer_cycle_phase_{};
+		bool ice_timer_scheduling_{};
+		std::chrono::steady_clock::time_point idle_timer_checkpoint_{};
 		bool trace_enabled_{};
 		size_t trace_capacity_{4096};
 		std::deque<Eps6800TraceEntry> trace_buffer_;
@@ -175,12 +178,15 @@ namespace casioemu {
 			std::function<bool(uint32_t, uint8_t&, bool)> memory,
 			std::function<void(uint8_t)> interrupt);
 		void Reset();
+		void ClearRamAndReset();
 		void SetTimerCycleDivisor(uint32_t divisor);
+		void SetIceTimerScheduling(bool enabled);
 		void SetPortCInput(uint8_t mask, uint8_t value);
 		void Next();
 		bool RunFrame();
 
 		void KeyDown(uint8_t matrix_index);
+		void RestoreKeyDown(uint8_t matrix_index);
 		void KeyUp(uint8_t matrix_index);
 		void OnDown();
 		void OnUp();

@@ -73,6 +73,10 @@ namespace casioemu {
 		const uint8_t port_c_input_mask = parse_byte_extra("port_c_input_mask", 0);
 		const uint8_t port_c_input_value = parse_byte_extra("port_c_input_value", 0);
 		epscpu->SetPortCInput(port_c_input_mask, port_c_input_value);
+		const auto ice_timer_entry = emulator.ModelDefinition.extra.find("ice_timer_scheduling");
+		const bool ice_timer_scheduling = ice_timer_entry != emulator.ModelDefinition.extra.end() &&
+			ice_timer_entry->second != "0" && ice_timer_entry->second != "false";
+		epscpu->SetIceTimerScheduling(ice_timer_scheduling);
 		const auto timer_divisor = emulator.ModelDefinition.extra.find("timer_cycle_divisor");
 		if (timer_divisor != emulator.ModelDefinition.extra.end()) {
 			try {

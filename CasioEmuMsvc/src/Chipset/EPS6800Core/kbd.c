@@ -315,6 +315,21 @@ static void kbd_process_pending_on_press(struct kbd_state *state, uint32_t cycle
 	}
 }
 
+void kbd_restore_keydown_state(struct kbd_state *state, uint8_t key) {
+	if (!kbd_key_valid(key)) {
+		return;
+	}
+
+	/* This path represents a contact that remained physically closed while
+	 * ON reset the CPU/SFRs. It must be visible to the reset-vector scan
+	 * immediately instead of being treated as a fresh, bouncing key press. */
+	state->key_pending_down[key] = false;
+	state->key_pending_up[key] = false;
+	state->key_press_cycles[key] = 0;
+	state->key_release_cycles[key] = 0;
+	kbd_activate_key(state, key);
+}
+
 static void kbd_process_pending_on_release(struct kbd_state *state, uint32_t cycles) {
 	if (state->on_pending_up && !state->on_pending_down &&
 		kbd_countdown_elapsed(&state->on_press_cycles, cycles)) {

@@ -36,6 +36,7 @@ size_t machine_state_lcd_copy_display(
 	struct machine_lcd_control *control
 );
 void machine_state_keydown(struct machine_state *state, uint8_t key);
+void machine_state_restore_keydown(struct machine_state *state, uint8_t key);
 void machine_state_keyup(struct machine_state *state, uint8_t key);
 void machine_state_ondown(struct machine_state *state);
 void machine_state_onup(struct machine_state *state);

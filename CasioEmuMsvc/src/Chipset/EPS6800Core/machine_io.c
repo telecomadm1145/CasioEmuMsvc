@@ -40,6 +40,14 @@ void machine_state_keydown(struct machine_state *state, uint8_t key) {
 	kbd_keydown_state(&state->kbd, key);
 }
 
+void machine_state_restore_keydown(struct machine_state *state, uint8_t key) {
+	if (!state) {
+		return;
+	}
+
+	kbd_restore_keydown_state(&state->kbd, key);
+}
+
 void machine_state_keyup(struct machine_state *state, uint8_t key) {
 	if (!state) {
 		return;

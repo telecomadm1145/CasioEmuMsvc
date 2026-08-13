@@ -40,6 +40,7 @@ void kbd_connect_bus_state(struct kbd_state *state, struct cpu_state *cpu, struc
 uint8_t kbd_read_byte_state(struct kbd_state *state, uint8_t addr);
 void kbd_write_byte_state(struct kbd_state *state, uint8_t addr, uint8_t byte);
 void kbd_keydown_state(struct kbd_state *state, uint8_t key);
+void kbd_restore_keydown_state(struct kbd_state *state, uint8_t key);
 void kbd_keyup_state(struct kbd_state *state, uint8_t key);
 void kbd_tick_state(struct kbd_state *state, uint32_t cycles);
 void kbd_ondown_state(struct kbd_state *state);

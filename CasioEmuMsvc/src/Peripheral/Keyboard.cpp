@@ -962,7 +962,10 @@ namespace casioemu {
 				// pressed overlay remains visible until mouse/finger release.
 				const bool reset_stuck = button.stuck;
 				const SDL_FingerID reset_finger_id = button.pressingFingerId;
-				emulator.chipset.Reset();
+				if (emulator.hardware_id == HW_EPS6800 && emulator.chipset.epscpu)
+					emulator.chipset.epscpu->ClearRamAndReset();
+				else
+					emulator.chipset.Reset();
 				button.pressed = true;
 				button.stuck = reset_stuck;
 				button.pressingFingerId = reset_finger_id;
@@ -970,32 +973,36 @@ namespace casioemu {
 			return;
 		}
 
-		const bool eps_power_resets = emulator.hardware_id == HW_EPS6800 &&
-			emulator.ModelDefinition.extra.contains("power_button_resets");
-		if (button.type == Button::BT_POWER && button.pressed && !old_pressed_state &&
-			eps_power_resets) {
-			const size_t current_button_index = static_cast<size_t>(&button - buttons);
-			struct HeldButton {
-				size_t index;
-				bool stuck;
-				SDL_FingerID finger_id;
-			};
-			std::vector<HeldButton> held_buttons;
-			for (size_t index = 0; index < std::size(buttons); ++index) {
-				const auto& held = buttons[index];
-				if (held.pressed)
-					held_buttons.push_back({index, held.stuck, held.pressingFingerId});
+		if (button.type == Button::BT_POWER && emulator.hardware_id == HW_EPS6800) {
+			if (button.pressed && !old_pressed_state) {
+				const bool power_stuck = button.stuck;
+				const SDL_FingerID power_finger_id = button.pressingFingerId;
+				struct HeldButton {
+					size_t index;
+					bool stuck;
+					SDL_FingerID finger_id;
+				};
+				std::vector<HeldButton> held_buttons;
+				for (size_t index = 0; index < std::size(buttons); ++index) {
+					if (buttons[index].pressed && buttons[index].type == Button::BT_BUTTON)
+						held_buttons.push_back({index, buttons[index].stuck,
+							buttons[index].pressingFingerId});
+				}
+				emulator.chipset.Reset();
+				button.pressed = true;
+				button.stuck = power_stuck;
+				button.pressingFingerId = power_finger_id;
+				for (const auto& held : held_buttons) {
+					auto& restored = buttons[held.index];
+					restored.pressed = true;
+					restored.stuck = held.stuck;
+					restored.pressingFingerId = held.finger_id;
+					const auto matrix_index = static_cast<uint8_t>(
+						(((restored.code >> 4) & 0x0f) * 8) + (restored.code & 0x0f));
+					emulator.chipset.epscpu->RestoreKeyDown(matrix_index);
+				}
 			}
-
-			emulator.chipset.Reset();
-			for (const auto& held : held_buttons) {
-				auto& restored = buttons[held.index];
-				restored.pressed = true;
-				restored.stuck = held.stuck;
-				restored.pressingFingerId = held.finger_id;
-				if (held.index != current_button_index)
-					SetEpsButtonState(restored, true);
-			}
+			return;
 		}
 
 		if (button.type == Button::BT_POWER && button.pressed && !old_pressed_state &&

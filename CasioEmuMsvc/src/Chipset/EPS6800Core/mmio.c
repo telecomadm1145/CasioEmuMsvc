@@ -520,8 +520,11 @@ void mmio_write_byte_state(struct mmio_state *state, uint8_t addr, uint8_t byte)
 	mmio_notify_debug_access(state, linear_address, &byte, true, false);
 }
 
-static void mmio_clear_registers(struct mmio_state *state) {
-	memset(state->regs, 0x00, sizeof(state->regs));
+static void mmio_clear_function_registers(struct mmio_state *state) {
+	/* ePS6800.h defines 13h-1Fh and 40h-7Fh as normal registers (RAM).
+	 * Hardware reset clears SFRs but must retain those ranges. */
+	memset(&state->regs[0x00], 0x00, 0x13);
+	memset(&state->regs[0x20], 0x00, 0x20);
 }
 
 static void mmio_apply_reset_defaults(struct mmio_state *state) {
@@ -534,11 +537,12 @@ static void mmio_apply_reset_defaults(struct mmio_state *state) {
 }
 
 void mmio_reset_state(struct mmio_state *state) {
-	mmio_clear_registers(state);
+	mmio_clear_function_registers(state);
 	mmio_apply_reset_defaults(state);
 }
 
 void mmio_init_state(struct mmio_state *state) {
+	memset(state->regs, 0x00, sizeof(state->regs));
 	mmio_reset_state(state);
 	memset(state->ram_wbk, 0x00, sizeof(state->ram_wbk));
 	memset(state->ram, 0x00, sizeof(state->ram));
