@@ -394,7 +394,7 @@ static void cpu_trace_instruction_state(struct cpu_state *state, uint32_t cur_pc
 	/* Collapse RPT repeats: when repeat is active and the instruction stream
 	 * is re-executing the same PC/opcode, emit only the first line. */
 	if (trace->have_last && (trace->last_pc == cur_pc) && (trace->last_instr == instr)) {
-		if ((state->rpt_counter != 0) || trace->repeat_collapse_active) {
+		if ((state->rpt_target_pc != 0) || trace->repeat_collapse_active) {
 			if (!trace->verbose) {
 				trace->repeat_collapse_active = true;
 				return;
@@ -473,7 +473,6 @@ static void cpu_handle_interrupt_state(struct cpu_state *state, uint32_t addr) {
 	if (cpucon & BIT_GLINT) {
 		cpu_push_state(state, state->pc + (state->sleep_repeat_pc ? 1 : 0));
 		state->sleep_repeat_pc = false;
-		state->rpt_counter = 0;
 		state->pc = addr;
 		cpu_write_pc_registers_state(state);
 	}
@@ -487,7 +486,8 @@ void cpu_loop_state(struct cpu_state *state, uint32_t count) {
 	/* A request raised while firmware is inside an ISR must remain pending
 	 * until RETI restores GLINT.  Clearing it before cpu_handle_interrupt_state
 	 * can actually enter the vector loses Timer1 wakeups from Idle. */
-	if (state->int_pending &&
+	/* The hardware finishes an active RPT before accepting an interrupt. */
+	if (state->int_pending && state->rpt_target_pc == 0 &&
 		(cpu_bus_read_internal(state, REG_CPUCON) & BIT_GLINT)) {
 		if (state->int_pending & INT_LEVEL4_TIMINT) {
 			state->int_pending &= ~INT_LEVEL4_TIMINT;
@@ -558,6 +558,7 @@ void cpu_reset_state(struct cpu_state *state) {
 	state->pc = 0;
 	state->status = 0;
 	state->rpt_counter = 0;
+	state->rpt_target_pc = 0;
 	state->mode = CPU_MODE_FAST;
 	state->int_pending = 0;
 	state->sleep_repeat_pc = false;
@@ -778,9 +779,14 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
 
 	instr1 = instr >> 16;
 	newpc = state->pc + 1;
-	if (state->rpt_counter != 0) {
-		newpc = state->pc;
-		state->rpt_counter--;
+	if (state->rpt_target_pc != 0) {
+		if (state->rpt_counter != 0) {
+			newpc = state->rpt_target_pc;
+			state->rpt_counter--;
+		}
+		else {
+			state->rpt_target_pc = 0;
+		}
 	}
 
 	switch (instr1 & CPU_OPCODE_FULL_MASK) {
@@ -830,6 +836,7 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                              cpu_bus_post_id(state, imm8_1);
                              break;
                 case CPU_OPCODE_RPT_R: state->rpt_counter = cpu_bus_read(state, imm8_1) - 1;
+                             state->rpt_target_pc = newpc;
                              cpu_bus_post_id(state, imm8_1);
                              break;
                 case CPU_OPCODE_BANK_IMM: cpu_bus_write_internal(state, REG_BSR, imm8_1);

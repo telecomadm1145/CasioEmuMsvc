@@ -9,7 +9,7 @@
 
 enum {
 	MACHINE_SNAPSHOT_MAGIC = 0x46585353u,
-	MACHINE_SNAPSHOT_VERSION = 2u
+	MACHINE_SNAPSHOT_VERSION = 3u
 };
 
 struct machine_cpu_snapshot {
@@ -17,6 +17,7 @@ struct machine_cpu_snapshot {
 	uint32_t stack[CPU_STACK_DEPTH];
 	uint8_t status;
 	uint8_t rpt_counter;
+	uint32_t rpt_target_pc;
 	uint8_t mode;
 	uint8_t int_pending;
 	uint8_t sleep_repeat_pc;

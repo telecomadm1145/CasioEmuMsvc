@@ -251,6 +251,33 @@ namespace {
 		return (idle_machine.PC() >> 1) != 0;
 	}
 
+	bool RepeatInterruptDeferralSmoke() {
+		constexpr uint8_t kCpuControl = 0x20;
+		constexpr uint8_t kTimer1Control = 0x2a;
+		constexpr uint8_t kTimer1Reload = 0x2b;
+		constexpr uint8_t kRepeatCount = 0x80;
+		constexpr uint8_t kDestination = 0x81;
+
+		casioemu::ePSCPU machine;
+		std::vector<uint8_t> rom(0x20000, 0);
+		SetPackedRomWord(rom, 0, 0x2780); // RPT 80h
+		SetPackedRomWord(rom, 1, 0x1d81); // INC 81h
+		SetPackedRomWord(rom, 2, 0xc002); // SJMP 2
+		SetPackedRomWord(rom, 8, 0x0001); // RETI
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+			return false;
+		machine.Reset();
+		machine.SetTimerCycleDivisor(1);
+		machine.WriteByte(kRepeatCount, 10);
+		machine.WriteByte(kDestination, 0);
+		machine.WriteByte(kCpuControl, 0x04); // CPUCON.GLINT
+		machine.WriteByte(kTimer1Reload, 1);
+		machine.WriteByte(kTimer1Control, 0x18); // TMR1IE | T1EN
+		for (int i = 0; i < 20; ++i)
+			machine.Next();
+		return machine.ReadByte(kDestination) == 10;
+	}
+
 	bool TablePointerSmoke() {
 		constexpr uint8_t kAccumulator = 0x0a;
 		constexpr uint8_t kTablePointerLow = 0x0b;
@@ -430,12 +457,16 @@ namespace {
 		machine.WriteDebugMemory(0x20, 0x80); // CPUCON.WBK
 		machine.WriteDebugMemory(0x25, 0x5a); // First WBK-backed RAM byte.
 		auto ram = machine.ExportRam();
-		if (ram.size() != 8219 || ram[8192] != 0x5a || machine.ImportRam(std::vector<uint8_t>(1, 0)))
+		constexpr size_t kBankRamSize = 8192;
+		constexpr size_t kWbkRamSize = 27;
+		constexpr size_t kPersistentRamSize = kBankRamSize + kWbkRamSize + 0x0d + 0x40;
+		if (ram.size() != kPersistentRamSize || ram[kBankRamSize] != 0x5a ||
+			machine.ImportRam(std::vector<uint8_t>(1, 0)))
 			return false;
 		ram.front() = 0xa5;
-		ram[8191] = 0x3c;
-		ram[8192] = 0x5a;
-		ram.back() = 0x6b;
+		ram[kBankRamSize - 1] = 0x3c;
+		ram[kBankRamSize] = 0x5a;
+		ram[kBankRamSize + kWbkRamSize - 1] = 0x6b;
 		machine.WriteDebugMemory(0x25, 0);
 		machine.WriteDebugMemory(0x3f, 0);
 		if (!machine.ImportRam(ram) || machine.ReadDebugMemory(0x80) != 0xa5 ||
@@ -444,7 +475,7 @@ namespace {
 			return false;
 
 		// RAM files produced by older builds contain only the 8 KiB banked area.
-		ram.resize(8192);
+		ram.resize(kBankRamSize);
 		return machine.ImportRam(ram);
 	}
 
@@ -606,6 +637,10 @@ int main(int argc, char** argv) {
 	}
 	if (!TimerSmoke()) {
 		std::cerr << "EPS6800 timer regression\n";
+		return 1;
+	}
+	if (!RepeatInterruptDeferralSmoke()) {
+		std::cerr << "EPS6800 repeat/interrupt deferral regression\n";
 		return 1;
 	}
 	if (!TablePointerSmoke()) {
