@@ -101,7 +101,9 @@ enum {
 };
 
 enum {
-	MASK_TABPTRH = 0x01
+	/* EPS6800 supports up to 96K 16-bit ROM words (192 KiB).  Table reads
+	 * address bytes, so TABPTR needs two high bits to reach 0x20000..0x2ffff. */
+	MASK_TABPTRH = 0x03
 };
 
 /* STBCON */
@@ -115,7 +117,11 @@ enum {
 /* STATUS */
 enum {
 	BIT_STATUS_Z = 0x04,
-	BIT_STATUS_C = 0x01
+	BIT_STATUS_C = 0x01,
+	BIT_STATUS_DC = 0x02,
+	BIT_STATUS_OV = 0x08,
+	BIT_STATUS_SLE = 0x10,
+	BIT_STATUS_SGE = 0x20
 };
 
 /* TR0CON */

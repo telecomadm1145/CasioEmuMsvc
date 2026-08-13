@@ -54,6 +54,25 @@ namespace casioemu {
 
 	void Chipset::SetupEpsCpu() {
 		epscpu = new ePSCPU();
+		auto parse_byte_extra = [&](const char* name, uint8_t fallback) {
+			const auto item = emulator.ModelDefinition.extra.find(name);
+			if (item == emulator.ModelDefinition.extra.end())
+				return fallback;
+			try {
+				size_t consumed = 0;
+				const auto value = std::stoul(item->second, &consumed, 0);
+				if (consumed != item->second.size() || value > 0xff)
+					throw std::invalid_argument("invalid byte");
+				return static_cast<uint8_t>(value);
+			}
+			catch (const std::exception&) {
+				PANIC("Invalid EPS6800 %s value: %s\n", name, item->second.c_str());
+			}
+			return fallback;
+		};
+		const uint8_t port_c_input_mask = parse_byte_extra("port_c_input_mask", 0);
+		const uint8_t port_c_input_value = parse_byte_extra("port_c_input_value", 0);
+		epscpu->SetPortCInput(port_c_input_mask, port_c_input_value);
 		const auto timer_divisor = emulator.ModelDefinition.extra.find("timer_cycle_divisor");
 		if (timer_divisor != emulator.ModelDefinition.extra.end()) {
 			try {

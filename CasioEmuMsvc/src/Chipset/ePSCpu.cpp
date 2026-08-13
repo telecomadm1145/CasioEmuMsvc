@@ -189,6 +189,11 @@ namespace casioemu {
 		timer_cycle_phase_ = 0;
 	}
 
+	void ePSCPU::SetPortCInput(uint8_t mask, uint8_t value) {
+		const std::lock_guard lock(state_mutex_);
+		machine_state_set_portc_input(state_, mask, value);
+	}
+
 	void ePSCPU::Next() {
 		const std::lock_guard lock(state_mutex_);
 		RunInstructionLocked(true);

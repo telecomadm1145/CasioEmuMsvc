@@ -125,7 +125,7 @@ enum {
 };
 static const uint32_t CPU_PC_HIGH_BITS_MASK = 0xFFFF0000;
 static const uint32_t CPU_PC_HIGH_13_BITS_MASK = 0xFFFFE000;
-static const uint32_t CPU_TABPTR_MASK = 0x0001FFFF;
+static const uint32_t CPU_TABPTR_MASK = 0x0003FFFF;
 enum {
 	CPU_PC_LOW_13_BITS_MASK = 0x1FFF,
 	CPU_LONG_BRANCH_ADDRESS_MASK = 0x0001FFFF,
@@ -584,6 +584,29 @@ void cpu_wake_state(struct cpu_state *state, uint8_t source) {
 	}
 }
 
+static void status_flag_state(struct cpu_state *state, uint8_t mask, bool set) {
+	if (set) {
+		state->status |= mask;
+	}
+	else {
+		state->status &= (uint8_t)(~mask);
+	}
+}
+
+static void status_arithmetic_state(
+	struct cpu_state *state,
+	uint16_t unsigned_result,
+	int16_t signed_result,
+	uint16_t low_digit_result
+) {
+	status_carry_state(state, unsigned_result > CPU_BYTE_MASK);
+	status_flag_state(state, BIT_STATUS_DC, low_digit_result > CPU_LOW_NIBBLE_MASK);
+	status_zero_state(state, (uint8_t)unsigned_result);
+	status_flag_state(state, BIT_STATUS_OV, signed_result < -128 || signed_result > 127);
+	status_flag_state(state, BIT_STATUS_SLE, signed_result <= 0);
+	status_flag_state(state, BIT_STATUS_SGE, signed_result >= 0);
+}
+
 uint8_t cpu_get_status_state(struct cpu_state *state) {
 	return state->status;
 }
@@ -652,86 +675,95 @@ uint64_t cpu_trace_count_state(const struct cpu_state *state) {
 }
 
 static uint8_t alu_add_state(struct cpu_state *state, uint8_t a, uint8_t b) {
-	uint8_t result;
-
-	result = a + b;
-	status_zero_state(state, result);
-	status_carry_state(state, (((uint16_t)a + (uint16_t)b) & CPU_ALU_CARRY_MASK) != 0);
-
-	return result;
+	const uint16_t result = (uint16_t)a + (uint16_t)b;
+	const int16_t signed_result = (int16_t)(int8_t)a + (int16_t)(int8_t)b;
+	status_arithmetic_state(state, result, signed_result,
+		(uint16_t)(a & CPU_LOW_NIBBLE_MASK) + (uint16_t)(b & CPU_LOW_NIBBLE_MASK));
+	return (uint8_t)result;
 }
 
 static uint8_t alu_adc_state(struct cpu_state *state, uint8_t a, uint8_t b, uint8_t c) {
-	uint8_t result;
-
-	result = a + b + c;
-	status_zero_state(state, result);
-	status_carry_state(state, (((uint16_t)a + (uint16_t)b + (uint16_t)c) & CPU_ALU_CARRY_MASK) != 0);
-
-	return result;
+	const uint16_t result = (uint16_t)a + (uint16_t)b + (uint16_t)c;
+	const int16_t signed_result = (int16_t)(int8_t)a + (int16_t)(int8_t)b + (int16_t)c;
+	status_arithmetic_state(state, result, signed_result,
+		(uint16_t)(a & CPU_LOW_NIBBLE_MASK) + (uint16_t)(b & CPU_LOW_NIBBLE_MASK) + (uint16_t)c);
+	return (uint8_t)result;
 }
 
 static uint8_t alu_sub_state(struct cpu_state *state, uint8_t a, uint8_t b) {
-	uint8_t result;
-	uint16_t wide_result;
-
-	wide_result = (uint16_t)a - (uint16_t)b;
-	result = (uint8_t)wide_result;
-	status_zero_state(state, result);
-	status_carry_state(state, (wide_result & CPU_ALU_WIDE_HIGH_MASK) != CPU_ALU_WIDE_HIGH_MASK);
-
-	return result;
+	const uint16_t result = (uint16_t)((uint16_t)a - (uint16_t)b);
+	const int16_t signed_result = (int16_t)(int8_t)a - (int16_t)(int8_t)b;
+	status_flag_state(state, BIT_STATUS_C, a >= b);
+	status_flag_state(state, BIT_STATUS_DC,
+		(a & CPU_LOW_NIBBLE_MASK) >= (b & CPU_LOW_NIBBLE_MASK));
+	status_zero_state(state, (uint8_t)result);
+	status_flag_state(state, BIT_STATUS_OV, signed_result < -128 || signed_result > 127);
+	status_flag_state(state, BIT_STATUS_SLE, signed_result <= 0);
+	status_flag_state(state, BIT_STATUS_SGE, signed_result >= 0);
+	return (uint8_t)result;
 }
 
 static uint8_t alu_subb_state(struct cpu_state *state, uint8_t a, uint8_t b, uint8_t c) {
-	uint8_t result;
-	uint16_t wide_result;
-
-	wide_result = (uint16_t)a - (uint16_t)b - (uint16_t)c;
-	result = (uint8_t)wide_result;
-	status_zero_state(state, result);
-	status_carry_state(state, (wide_result & CPU_ALU_WIDE_HIGH_MASK) != CPU_ALU_WIDE_HIGH_MASK);
-
-	return result;
+	const uint16_t subtrahend = (uint16_t)b + (uint16_t)c;
+	const uint16_t result = (uint16_t)((uint16_t)a - subtrahend);
+	const int16_t signed_result = (int16_t)(int8_t)a - (int16_t)(int8_t)b - (int16_t)c;
+	status_flag_state(state, BIT_STATUS_C, (uint16_t)a >= subtrahend);
+	status_flag_state(state, BIT_STATUS_DC,
+		(uint16_t)(a & CPU_LOW_NIBBLE_MASK) >=
+		(uint16_t)(b & CPU_LOW_NIBBLE_MASK) + (uint16_t)c);
+	status_zero_state(state, (uint8_t)result);
+	status_flag_state(state, BIT_STATUS_OV, signed_result < -128 || signed_result > 127);
+	status_flag_state(state, BIT_STATUS_SLE, signed_result <= 0);
+	status_flag_state(state, BIT_STATUS_SGE, signed_result >= 0);
+	return (uint8_t)result;
 }
 
 /* BCD addition. */
 static uint8_t alu_adddc_state(struct cpu_state *state, uint8_t a, uint8_t b, uint8_t c) {
-	uint16_t result;
-	uint16_t low_digit;
-
-	result = (uint16_t)a + (uint16_t)b + (uint16_t)c;
-	low_digit = (uint16_t)(a & CPU_LOW_NIBBLE_MASK) + (uint16_t)(b & CPU_LOW_NIBBLE_MASK) + (uint16_t)c;
-	if (((result & CPU_LOW_NIBBLE_MASK) > CPU_BCD_DIGIT_MAX) || (low_digit > CPU_LOW_NIBBLE_MASK)) {
-		result += CPU_BCD_LOW_DIGIT_ADJUST;
-	}
-	if (((result & CPU_HIGH_NIBBLE_MASK) > CPU_BCD_HIGH_DIGIT_MAX) || (result > CPU_BYTE_MASK)) {
-		result += CPU_BCD_HIGH_DIGIT_ADJUST;
-	}
-
-	status_carry_state(state, (result & CPU_ALU_WIDE_HIGH_MASK) != 0);
-	status_zero_state(state, (uint8_t)result);
-	return (uint8_t)result;
+	uint16_t low_digit = (uint16_t)(a & CPU_LOW_NIBBLE_MASK) +
+		(uint16_t)(b & CPU_LOW_NIBBLE_MASK) + (uint16_t)c;
+	uint16_t high_digit = (uint16_t)(a >> CPU_NIBBLE_SHIFT) +
+		(uint16_t)(b >> CPU_NIBBLE_SHIFT);
+	bool digit_carry = low_digit >= 10;
+	if (digit_carry)
+		low_digit = (low_digit + CPU_BCD_LOW_DIGIT_ADJUST) & CPU_LOW_NIBBLE_MASK;
+	high_digit += digit_carry ? 1u : 0u;
+	const bool carry = high_digit >= 10;
+	if (carry)
+		high_digit = (high_digit + CPU_BCD_LOW_DIGIT_ADJUST) & CPU_LOW_NIBBLE_MASK;
+	const uint8_t result = (uint8_t)(low_digit | (high_digit << CPU_NIBBLE_SHIFT));
+	status_flag_state(state, BIT_STATUS_C, carry);
+	status_flag_state(state, BIT_STATUS_DC, digit_carry);
+	status_zero_state(state, result);
+	return result;
 }
 
 static uint8_t alu_subdb_state(struct cpu_state *state, uint8_t a, uint8_t b, uint8_t c) {
-	uint16_t result;
-	uint16_t complement;
-	uint16_t low_digit;
-
-	complement = (uint16_t)(CPU_BCD_TENS_COMPLEMENT_BASE - c) - (uint16_t)b;
-	result = complement + (uint16_t)a;
-	low_digit = (complement & CPU_LOW_NIBBLE_MASK) + (uint16_t)(a & CPU_LOW_NIBBLE_MASK);
-	if (((result & CPU_LOW_NIBBLE_MASK) > CPU_BCD_DIGIT_MAX) || (low_digit > CPU_LOW_NIBBLE_MASK)) {
-		result += CPU_BCD_LOW_DIGIT_ADJUST;
-	}
-	if (((result & CPU_HIGH_NIBBLE_MASK) > CPU_BCD_HIGH_DIGIT_MAX) || (result > CPU_BYTE_MASK)) {
-		result += CPU_BCD_HIGH_DIGIT_ADJUST;
-	}
-
-	status_carry_state(state, (result & CPU_ALU_WIDE_HIGH_MASK) != 0);
-	status_zero_state(state, (uint8_t)result);
-	return (uint8_t)result;
+	const uint8_t complement = c ? (uint8_t)~b : (uint8_t)-b;
+	uint16_t low_digit = (uint16_t)(complement & CPU_LOW_NIBBLE_MASK) +
+		(uint16_t)(a & CPU_LOW_NIBBLE_MASK);
+	uint16_t high_digit = (uint16_t)(complement >> CPU_NIBBLE_SHIFT) +
+		(uint16_t)(a >> CPU_NIBBLE_SHIFT);
+	bool digit_carry = low_digit >= 16;
+	if (digit_carry)
+		low_digit &= CPU_LOW_NIBBLE_MASK;
+	high_digit += digit_carry ? 1u : 0u;
+	bool carry = high_digit >= 16;
+	if (carry)
+		high_digit &= CPU_LOW_NIBBLE_MASK;
+	if ((uint8_t)(b + c) == 0)
+		carry = true;
+	if (((b + c) & CPU_LOW_NIBBLE_MASK) == 0)
+		digit_carry = true;
+	if (!digit_carry)
+		low_digit = (low_digit - CPU_BCD_LOW_DIGIT_ADJUST) & CPU_LOW_NIBBLE_MASK;
+	if (!carry)
+		high_digit = (high_digit - CPU_BCD_LOW_DIGIT_ADJUST) & CPU_LOW_NIBBLE_MASK;
+	const uint8_t result = (uint8_t)(low_digit | (high_digit << CPU_NIBBLE_SHIFT));
+	status_flag_state(state, BIT_STATUS_C, carry);
+	status_flag_state(state, BIT_STATUS_DC, digit_carry);
+	status_zero_state(state, result);
+	return result;
 }
 
 static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t instr) {
@@ -880,17 +912,11 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                              cpu_bus_write(state, imm8_1, temp8_1);
                              cpu_bus_post_id(state, imm8_1);
                              break;
-                case CPU_OPCODE_INCA_R: temp8_1 = cpu_read_direct_state(state, imm8_1);
-                             status_carry_state(state, (((uint16_t)temp8_1 + 1) & CPU_ALU_CARRY_MASK) != 0);
-                             temp8_1 += 1; 
-                             status_zero_state(state, temp8_1);
+                case CPU_OPCODE_INCA_R: temp8_1 = alu_add_state(state, cpu_read_direct_state(state, imm8_1), 1);
                              cpu_bus_write_internal(state, REG_ACC, temp8_1);
                              cpu_bus_post_id(state, imm8_1);
                              break;
-                case CPU_OPCODE_INC_R: temp8_1 = cpu_read_direct_state(state, imm8_1);
-                             status_carry_state(state, (((uint16_t)temp8_1 + 1) & CPU_ALU_CARRY_MASK) != 0);
-                             temp8_1 += 1; 
-                             status_zero_state(state, temp8_1);
+                case CPU_OPCODE_INC_R: temp8_1 = alu_add_state(state, cpu_read_direct_state(state, imm8_1), 1);
                              cpu_bus_write(state, imm8_1, temp8_1);
                              if (state->status & BIT_STATUS_C) cpu_bus_carry_propagate(state, imm8_1);
                              cpu_bus_post_id(state, imm8_1);
@@ -922,17 +948,11 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                                 alu_adc_state(state, imm8_1, cpu_bus_read_internal(state, REG_ACC),
                                 state->status & BIT_STATUS_C));
                              break;
-                case CPU_OPCODE_DECA_R: temp8_1 = cpu_bus_read(state, imm8_1);
-                             status_carry_state(state, temp8_1 >= 1);
-                             temp8_1 -= 1; 
-                             status_zero_state(state, temp8_1);
+                case CPU_OPCODE_DECA_R: temp8_1 = alu_sub_state(state, cpu_bus_read(state, imm8_1), 1);
                              cpu_bus_write_internal(state, REG_ACC, temp8_1);
                              cpu_bus_post_id(state, imm8_1);
                              break;
-                case CPU_OPCODE_DEC_R: temp8_1 = cpu_bus_read(state, imm8_1);
-                             status_carry_state(state, temp8_1 >= 1);
-                             temp8_1 -= 1; 
-                             status_zero_state(state, temp8_1);
+                case CPU_OPCODE_DEC_R: temp8_1 = alu_sub_state(state, cpu_bus_read(state, imm8_1), 1);
                              cpu_bus_write(state, imm8_1, temp8_1);
                              if (!(state->status & BIT_STATUS_C)) cpu_bus_borrow_propagate(state, imm8_1);
                              cpu_bus_post_id(state, imm8_1);

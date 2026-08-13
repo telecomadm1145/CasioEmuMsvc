@@ -200,7 +200,10 @@ uint8_t kbd_read_byte_state(struct kbd_state *state, uint8_t addr) {
 			byte = state->portb_latch;
 			break;
 		case REG_PORTC:
-			byte = state->portc_latch;
+			byte = (uint8_t)(
+				(state->portc_latch & (uint8_t)~state->reg[REG_DCRC]) |
+				(((state->portc_input_value & state->portc_input_mask) |
+					(state->portc_latch & (uint8_t)~state->portc_input_mask)) & state->reg[REG_DCRC]));
 			break;
 		default:
 			byte = state->reg[addr];
@@ -389,6 +392,11 @@ void kbd_onup_state(struct kbd_state *state) {
 	state->on_pending_up = true;
 	if (!state->on_pending_down)
 		state->on_press_cycles = KEY_RELEASE_HOLD_CYCLES;
+}
+
+void kbd_set_portc_input_state(struct kbd_state *state, uint8_t mask, uint8_t value) {
+	state->portc_input_mask = mask;
+	state->portc_input_value = (uint8_t)(value & mask);
 }
 
 static void kbd_clear_storage(struct kbd_state *state) {

@@ -63,3 +63,9 @@ void machine_state_onup(struct machine_state *state) {
 
 	kbd_onup_state(&state->kbd);
 }
+
+void machine_state_set_portc_input(struct machine_state *state, uint8_t mask, uint8_t value) {
+	if (state) {
+		kbd_set_portc_input_state(&state->kbd, mask, value);
+	}
+}

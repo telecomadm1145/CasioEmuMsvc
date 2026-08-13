@@ -11,6 +11,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -212,8 +213,10 @@ namespace {
 
 		casioemu::ePSCPU machine;
 		std::vector<uint8_t> rom(0x20000, 0);
-		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian)) {
+			std::cerr << "timer packed ROM load failed\n";
 			return false;
+		}
 		machine.Reset();
 		machine.WriteByte(kTimer0ReloadLow, 0x02);
 		machine.WriteByte(kTimer0ReloadHigh, 0x00);
@@ -253,25 +256,38 @@ namespace {
 		constexpr uint8_t kTablePointerLow = 0x0b;
 		constexpr uint8_t kTablePointerMid = 0x0c;
 		constexpr uint8_t kTablePointerHigh = 0x0d;
+		constexpr uint8_t kTableReadDestination = 0x80;
 		constexpr uint8_t kChecksumHigh = 0x57;
 		constexpr uint8_t kChecksumLow = 0x58;
 
 		casioemu::ePSCPU machine;
-		std::vector<uint8_t> rom(0x20000, 0);
+		std::vector<uint8_t> rom(0x30000, 0);
 		SetPackedRomWord(rom, 0, 0x2d80); // TBRD 1,80h: read then increment TABPTR.
-		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+		rom[0x2ffff] = 0x5a;
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian)) {
+			std::cerr << "192 KiB packed ROM load failed\n";
 			return false;
+		}
 		machine.Reset();
 		machine.WriteByte(kTablePointerLow, 0xff);
 		machine.WriteByte(kTablePointerMid, 0xff);
-		machine.WriteByte(kTablePointerHigh, 0xff);
-		if (machine.ReadByte(kTablePointerHigh) != 0x01)
+		machine.WriteByte(kTablePointerHigh, 0x02);
+		if (machine.ReadByte(kTablePointerHigh) != 0x02) {
+			std::cerr << "TABPTRH did not preserve bit 1\n";
 			return false;
+		}
 		machine.Next();
-		if (machine.ReadByte(kTablePointerLow) != 0 ||
+		if (machine.ReadByte(kTableReadDestination) != 0x5a ||
+			machine.ReadByte(kTablePointerLow) != 0 ||
 			machine.ReadByte(kTablePointerMid) != 0 ||
-			machine.ReadByte(kTablePointerHigh) != 0)
+			machine.ReadByte(kTablePointerHigh) != 3) {
+			std::cerr << "upper table read mismatch: value=0x" << std::hex
+				<< static_cast<unsigned>(machine.ReadByte(kTableReadDestination))
+				<< " pointer=" << static_cast<unsigned>(machine.ReadByte(kTablePointerHigh))
+				<< static_cast<unsigned>(machine.ReadByte(kTablePointerMid))
+				<< static_cast<unsigned>(machine.ReadByte(kTablePointerLow)) << std::dec << '\n';
 			return false;
+		}
 
 		casioemu::ePSCPU arithmetic_machine;
 		std::vector<uint8_t> arithmetic_rom(0x20000, 0);
@@ -296,9 +312,76 @@ namespace {
 					return false;
 			}
 		}
-		return machine.ReadByte(kTablePointerLow) == 0 &&
-			machine.ReadByte(kTablePointerMid) == 0 &&
-			machine.ReadByte(kTablePointerHigh) == 0;
+		return true;
+	}
+
+	bool ArithmeticFlagsSmoke() {
+		constexpr uint8_t kAccumulator = 0x0a;
+		constexpr uint8_t kStatus = 0x0f;
+		constexpr uint8_t kOperand = 0x80;
+		constexpr uint8_t kResetHighBits = 0xc0;
+		constexpr uint8_t kCarry = 0x01;
+		constexpr uint8_t kDigitCarry = 0x02;
+		constexpr uint8_t kZero = 0x04;
+		constexpr uint8_t kOverflow = 0x08;
+		constexpr uint8_t kSignedLessEqual = 0x10;
+		constexpr uint8_t kSignedGreaterEqual = 0x20;
+
+		const auto Run = [&](uint16_t instruction, uint8_t accumulator,
+			uint8_t operand, uint8_t status) {
+			casioemu::ePSCPU machine;
+			std::vector<uint8_t> rom(0x20000, 0);
+			SetPackedRomWord(rom, 0, instruction);
+			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+				return std::pair<uint8_t, uint8_t>{0xff, 0xff};
+			machine.Reset();
+			machine.WriteByte(kAccumulator, accumulator);
+			machine.WriteByte(kOperand, operand);
+			machine.WriteByte(kStatus, status);
+			machine.Next();
+			return std::pair<uint8_t, uint8_t>{
+				machine.ReadByte(kAccumulator), machine.ReadByte(kStatus)};
+		};
+
+		const auto add_overflow = Run(0x4a01, 0x7f, 0, kResetHighBits);
+		const auto add_zero = Run(0x4a01, 0xff, 0, kResetHighBits);
+		const auto subtract_negative = Run(0x4c00, 0x01, 0, kResetHighBits);
+		const auto subtract_borrow = Run(0x4d00, 0x01, 0, kResetHighBits);
+		const auto increment_overflow = Run(0x1c80, 0, 0x7f, kResetHighBits);
+		const auto decrement_negative = Run(0x1e80, 0, 0x00, kResetHighBits);
+		const auto bcd_add = Run(0x1480, 0x01, 0x09, kResetHighBits);
+		const auto bcd_subtract = Run(0x1a80, 0x01, 0x10, kResetHighBits | kCarry);
+
+		return
+			add_overflow == std::pair<uint8_t, uint8_t>{
+				0x80, kResetHighBits | kDigitCarry | kOverflow | kSignedGreaterEqual} &&
+			add_zero == std::pair<uint8_t, uint8_t>{
+				0x00, kResetHighBits | kCarry | kDigitCarry | kZero |
+				kSignedLessEqual | kSignedGreaterEqual} &&
+			subtract_negative == std::pair<uint8_t, uint8_t>{
+				0xff, kResetHighBits | kSignedLessEqual} &&
+			subtract_borrow == std::pair<uint8_t, uint8_t>{
+				0xfe, kResetHighBits | kSignedLessEqual} &&
+			increment_overflow == std::pair<uint8_t, uint8_t>{
+				0x80, kResetHighBits | kDigitCarry | kOverflow | kSignedGreaterEqual} &&
+			decrement_negative == std::pair<uint8_t, uint8_t>{
+				0xff, kResetHighBits | kSignedLessEqual} &&
+			bcd_add == std::pair<uint8_t, uint8_t>{0x10, kResetHighBits | kDigitCarry} &&
+			bcd_subtract == std::pair<uint8_t, uint8_t>{0x09, kResetHighBits | kCarry};
+	}
+
+	bool PortCInputSmoke() {
+		constexpr uint8_t kPortC = 0x3a;
+		constexpr uint8_t kDirectionC = 0x3c;
+		casioemu::ePSCPU machine;
+		machine.SetPortCInput(0x0f, 0x0a);
+		machine.Reset();
+		machine.WriteByte(kPortC, 0xf0);
+		machine.WriteByte(kDirectionC, 0x0f);
+		if (machine.ReadByte(kPortC) != 0xfa)
+			return false;
+		machine.WriteByte(kDirectionC, 0x00);
+		return machine.ReadByte(kPortC) == 0xf0;
 	}
 
 	bool HookAndRamSmoke() {
@@ -509,6 +592,14 @@ int main(int argc, char** argv) {
 		std::cerr << "EPS6800 debugger smoke regression\n";
 		return 1;
 	}
+	if (!ArithmeticFlagsSmoke()) {
+		std::cerr << "EPS6800 arithmetic flags regression\n";
+		return 1;
+	}
+	if (!PortCInputSmoke()) {
+		std::cerr << "EPS6800 Port C external input regression\n";
+		return 1;
+	}
 	if (!KeyboardMatrixSmoke()) {
 		std::cerr << "EPS6800 keyboard matrix/ghosting regression\n";
 		return 1;
@@ -613,7 +704,7 @@ int main(int argc, char** argv) {
 	const auto golden_snapshot = machine.DebugSnapshot();
 	const uint8_t golden_acc = golden_snapshot.registers[0x0a];
 	const uint8_t golden_status = golden_snapshot.registers[0x0f];
-	if (pc != 0x00018c || golden_acc != 0x20 || golden_status != 0xc4 || hash != 0x1b8852c5) {
+	if (pc != 0x00018c || golden_acc != 0x20 || golden_status != 0xd4 || hash != 0x1b8852c5) {
 		std::cerr << std::hex << std::setfill('0')
 			<< "golden mismatch: pc=0x" << std::setw(6) << pc
 			<< " acc=0x" << std::setw(2) << static_cast<unsigned>(golden_acc)

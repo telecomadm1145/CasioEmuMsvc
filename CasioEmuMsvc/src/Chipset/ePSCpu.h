@@ -176,6 +176,7 @@ namespace casioemu {
 			std::function<void(uint8_t)> interrupt);
 		void Reset();
 		void SetTimerCycleDivisor(uint32_t divisor);
+		void SetPortCInput(uint8_t mask, uint8_t value);
 		void Next();
 		bool RunFrame();
 
