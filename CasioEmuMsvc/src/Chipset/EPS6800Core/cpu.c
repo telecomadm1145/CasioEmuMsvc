@@ -721,6 +721,26 @@ static uint8_t alu_subb_state(struct cpu_state *state, uint8_t a, uint8_t b, uin
 	return (uint8_t)result;
 }
 
+/* INC/DEC: the reference ice.dll (EPS6800) commits only C, Z and OV for
+ * these instructions; DC, SLE and SGE are left unchanged. */
+static uint8_t alu_inc_state(struct cpu_state *state, uint8_t a) {
+	const uint16_t result = (uint16_t)a + 1u;
+	const int16_t signed_result = (int16_t)(int8_t)a + 1;
+	status_carry_state(state, result > CPU_BYTE_MASK);
+	status_zero_state(state, (uint8_t)result);
+	status_flag_state(state, BIT_STATUS_OV, signed_result < -128 || signed_result > 127);
+	return (uint8_t)result;
+}
+
+static uint8_t alu_dec_state(struct cpu_state *state, uint8_t a) {
+	const uint16_t result = (uint16_t)((uint16_t)a - 1u);
+	const int16_t signed_result = (int16_t)(int8_t)a - 1;
+	status_carry_state(state, a >= 1); /* C = no borrow of (a - 1) */
+	status_zero_state(state, (uint8_t)result);
+	status_flag_state(state, BIT_STATUS_OV, signed_result < -128 || signed_result > 127);
+	return (uint8_t)result;
+}
+
 /* BCD addition. */
 static uint8_t alu_adddc_state(struct cpu_state *state, uint8_t a, uint8_t b, uint8_t c) {
 	uint16_t low_digit = (uint16_t)(a & CPU_LOW_NIBBLE_MASK) +
@@ -795,6 +815,9 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
 		case CPU_OPCODE_NOP:
 			break;
 		case CPU_OPCODE_UNIMPLEMENTED:
+			/* 0x0001: HALT-like opcode. The reference ice.dll (EPS6800)
+			 * sets STATUS TO (timer overflow) and PD (power down). */
+			state->status |= BIT_STATUS_TO | BIT_STATUS_PD;
 			break;
 		case CPU_OPCODE_SLEEP:
 			temp8_1 = cpu_bus_read_internal(state, REG_CPUCON);
@@ -921,11 +944,11 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                              cpu_bus_write(state, imm8_1, temp8_1);
                              cpu_bus_post_id(state, imm8_1);
                              break;
-                case CPU_OPCODE_INCA_R: temp8_1 = alu_add_state(state, cpu_read_direct_state(state, imm8_1), 1);
+                case CPU_OPCODE_INCA_R: temp8_1 = alu_inc_state(state, cpu_read_direct_state(state, imm8_1));
                              cpu_bus_write_internal(state, REG_ACC, temp8_1);
                              cpu_bus_post_id(state, imm8_1);
                              break;
-                case CPU_OPCODE_INC_R: temp8_1 = alu_add_state(state, cpu_read_direct_state(state, imm8_1), 1);
+                case CPU_OPCODE_INC_R: temp8_1 = alu_inc_state(state, cpu_read_direct_state(state, imm8_1));
                              cpu_bus_write(state, imm8_1, temp8_1);
                              if (state->status & BIT_STATUS_C) cpu_bus_carry_propagate(state, imm8_1);
                              cpu_bus_post_id(state, imm8_1);
@@ -957,11 +980,11 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                                 alu_adc_state(state, imm8_1, cpu_bus_read_internal(state, REG_ACC),
                                 state->status & BIT_STATUS_C));
                              break;
-                case CPU_OPCODE_DECA_R: temp8_1 = alu_sub_state(state, cpu_bus_read(state, imm8_1), 1);
+                case CPU_OPCODE_DECA_R: temp8_1 = alu_dec_state(state, cpu_bus_read(state, imm8_1));
                              cpu_bus_write_internal(state, REG_ACC, temp8_1);
                              cpu_bus_post_id(state, imm8_1);
                              break;
-                case CPU_OPCODE_DEC_R: temp8_1 = alu_sub_state(state, cpu_bus_read(state, imm8_1), 1);
+                case CPU_OPCODE_DEC_R: temp8_1 = alu_dec_state(state, cpu_bus_read(state, imm8_1));
                              cpu_bus_write(state, imm8_1, temp8_1);
                              if (!(state->status & BIT_STATUS_C)) cpu_bus_borrow_propagate(state, imm8_1);
                              cpu_bus_post_id(state, imm8_1);

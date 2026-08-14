@@ -431,11 +431,185 @@ namespace {
 			subtract_borrow == std::pair<uint8_t, uint8_t>{
 				0xfe, kResetHighBits | kSignedLessEqual} &&
 			increment_overflow == std::pair<uint8_t, uint8_t>{
-				0x80, kResetHighBits | kDigitCarry | kOverflow | kSignedGreaterEqual} &&
+				0x80, kResetHighBits | kOverflow} &&
 			decrement_negative == std::pair<uint8_t, uint8_t>{
-				0xff, kResetHighBits | kSignedLessEqual} &&
+				0xff, kResetHighBits} &&
 			bcd_add == std::pair<uint8_t, uint8_t>{0x10, kResetHighBits | kDigitCarry} &&
 			bcd_subtract == std::pair<uint8_t, uint8_t>{0x09, kResetHighBits | kCarry};
+	}
+
+	// F3: 0x0001 (HALT-like) sets STATUS TO/PD; F4: INC/DEC commit only C/Z/OV
+	// and preserve DC/SLE/SGE. Reference behavior from ice.dll (EPS6800).
+	bool HaltAndIncDecSmoke() {
+		constexpr uint8_t kAccumulator = 0x0a;
+		constexpr uint8_t kStatus = 0x0f;
+		constexpr uint8_t kOperand = 0x80;
+		constexpr uint8_t kCarry = 0x01;
+		constexpr uint8_t kDigitCarry = 0x02;
+		constexpr uint8_t kZero = 0x04;
+		constexpr uint8_t kOverflow = 0x08;
+		constexpr uint8_t kSignedLessEqual = 0x10;
+		constexpr uint8_t kSignedGreaterEqual = 0x20;
+		constexpr uint8_t kPowerDown = 0x40;
+		constexpr uint8_t kTimerOverflow = 0x80;
+
+		const auto Run = [&](uint16_t instruction, uint8_t accumulator,
+			uint8_t operand, uint8_t status) {
+			casioemu::ePSCPU machine;
+			std::vector<uint8_t> rom(0x20000, 0);
+			SetPackedRomWord(rom, 0, instruction);
+			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+				return std::pair<uint8_t, uint8_t>{0xff, 0xff};
+			machine.Reset();
+			machine.WriteByte(kAccumulator, accumulator);
+			machine.WriteByte(kOperand, operand);
+			machine.WriteByte(kStatus, status);
+			machine.Next();
+			return std::pair<uint8_t, uint8_t>{
+				machine.ReadByte(kAccumulator), machine.ReadByte(kStatus)};
+		};
+
+		// 0x0001: sets TO and PD, leaves other STATUS bits intact, PC advances.
+		const auto halt = Run(0x0001, 0, 0, kZero | kCarry);
+		if (halt != std::pair<uint8_t, uint8_t>{0, kZero | kCarry | kPowerDown | kTimerOverflow}) {
+			std::cerr << "0x0001 did not set STATUS TO/PD\n";
+			return false;
+		}
+		// 0x0001 is not NOP: TO/PD must not be set for NOP.
+		const auto nop = Run(0x0000, 0, 0, kZero | kCarry);
+		if (nop != std::pair<uint8_t, uint8_t>{0, kZero | kCarry}) {
+			std::cerr << "NOP must not set STATUS TO/PD\n";
+			return false;
+		}
+
+		// INC A: 0x7f + 1 = 0x80: OV=1, C=0, Z=0; DC/SLE/SGE preserved.
+		const auto inc_preserve = Run(0x1c80, 0, 0x7f,
+			kDigitCarry | kSignedLessEqual | kSignedGreaterEqual);
+		if (inc_preserve != std::pair<uint8_t, uint8_t>{
+				0x80, kDigitCarry | kSignedLessEqual | kSignedGreaterEqual | kOverflow}) {
+			std::cerr << "INC must not disturb DC/SLE/SGE\n";
+			return false;
+		}
+		// INC A: 0xff + 1 = 0x00: C=1, Z=1.
+		const auto inc_carry = Run(0x1c80, 0, 0xff, kDigitCarry);
+		if (inc_carry != std::pair<uint8_t, uint8_t>{0x00, kDigitCarry | kCarry | kZero}) {
+			std::cerr << "INC carry/zero flags mismatch\n";
+			return false;
+		}
+
+		// DEC A: 0x00 - 1 = 0xff: C=0 (borrow), Z=0, OV=0; DC/SLE/SGE preserved.
+		const auto dec_borrow = Run(0x1e80, 0, 0x00,
+			kDigitCarry | kSignedLessEqual | kSignedGreaterEqual);
+		if (dec_borrow != std::pair<uint8_t, uint8_t>{
+				0xff, kDigitCarry | kSignedLessEqual | kSignedGreaterEqual}) {
+			std::cerr << "DEC must not disturb DC/SLE/SGE\n";
+			return false;
+		}
+		// DEC A: 0x01 - 1 = 0x00: C=1, Z=1.
+		const auto dec_ok = Run(0x1e80, 0, 0x01, kDigitCarry);
+		if (dec_ok != std::pair<uint8_t, uint8_t>{0x00, kDigitCarry | kCarry | kZero}) {
+			std::cerr << "DEC carry/zero flags mismatch\n";
+			return false;
+		}
+		return true;
+	}
+
+	void DumpLcdAscii(casioemu::ePSCPU& machine, const char* label) {
+		std::array<uint8_t, kLcdSize> lcd{};
+		machine.CopyLcd(lcd.data(), lcd.size());
+		const auto frame = casioemu::DecodeEps6800Display(lcd.data(), lcd.size());
+		std::cout << "--- " << label << " ---\n";
+		for (size_t y = 0; y < casioemu::EPS6800_LCD_PIXEL_HEIGHT; ++y) {
+			for (size_t x = 0; x < casioemu::EPS6800_LCD_WIDTH; ++x)
+				std::cout << (frame.pixels[y * casioemu::EPS6800_LCD_WIDTH + x] ? '#' : ' ');
+			std::cout << '\n';
+		}
+		std::cout << "status:";
+		for (size_t i = 0; i < casioemu::EPS6800_STATUS_SIZE; ++i)
+			std::cout << ' ' << std::hex << std::setw(2) << std::setfill('0')
+			<< static_cast<unsigned>(frame.status[i]);
+		std::cout << std::dec << '\n';
+	}
+
+	// F-789SGA functional check: boot the real ROM, run 1+2=, and dump the
+	// LCD as ASCII art plus hashes. The golden values are locked once verified.
+	bool F789SgaFunctionalSmoke(const char* rom_path) {
+		const auto rom = ReadRom(rom_path);
+		if (rom.size() != 0x30000) {
+			std::cerr << "F-789SGA ROM size mismatch: " << rom.size() << "\n";
+			return false;
+		}
+		casioemu::ePSCPU machine;
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian)) {
+			std::cerr << "F-789SGA ROM load failed\n";
+			return false;
+		}
+		machine.Reset();
+		// config.json: port_c_input_mask 0x0F, value 0x00 (model select).
+		machine.SetPortCInput(0x0f, 0x00);
+		machine.SetIceTimerScheduling(true);
+		const auto State = [&](const char* label) {
+			std::cout << label << ": pc=0x" << std::hex << machine.ProgramCounter()
+				<< " lcdcon=0x" << static_cast<unsigned>(machine.ReadByte(0x2e))
+				<< " lcdarl=0x" << static_cast<unsigned>(machine.ReadByte(0x22))
+				<< " paintsta=0x" << static_cast<unsigned>(machine.ReadByte(0x36))
+				<< " painten=0x" << static_cast<unsigned>(machine.ReadByte(0x35))
+				<< " porta=0x" << static_cast<unsigned>(machine.ReadByte(0x31))
+				<< " dcra=0x" << static_cast<unsigned>(machine.ReadByte(0x33))
+				<< " stbcon=0x" << static_cast<unsigned>(machine.ReadByte(0x30)) << std::dec << '\n';
+		};
+		machine.OnDown();
+		for (int i = 0; i < 30; ++i)
+			machine.RunFrame();
+		machine.OnUp();
+		for (int i = 0; i < 300; ++i)
+			machine.RunFrame();
+		State("F789SGA boot");
+		DumpLcdAscii(machine, "F789SGA boot");
+
+		const auto HashLcd = [&](casioemu::ePSCPU& m) {
+			std::array<uint8_t, kLcdSize> lcd{};
+			m.CopyLcd(lcd.data(), lcd.size());
+			return Fnv1a(lcd.data(), lcd.size());
+		};
+		const uint32_t boot_hash = HashLcd(machine);
+
+		// Press and hold '1' for a long time, then release.
+		machine.KeyDown(0); // '1' (kiko 0: ko=0, ki=0)
+		for (int i = 0; i < 10; ++i)
+			machine.RunFrame();
+		State("while 1 held");
+		machine.KeyUp(0);
+		for (int i = 0; i < 20; ++i)
+			machine.RunFrame();
+		State("after 1");
+
+		const auto TapLong = [&](uint8_t key) {
+			machine.KeyDown(key);
+			for (int i = 0; i < 8; ++i)
+				machine.RunFrame();
+			machine.KeyUp(key);
+			for (int i = 0; i < 20; ++i)
+				machine.RunFrame();
+		};
+		TapLong(11); // '+'
+		TapLong(1);  // '2'
+		TapLong(6);  // '='
+		for (int i = 0; i < 40; ++i)
+			machine.RunFrame();
+		State("after 1+2=");
+		DumpLcdAscii(machine, "F789SGA after 1+2=");
+		const uint32_t result_hash = HashLcd(machine);
+
+		std::cout << "F789SGA boot_lcd_hash=0x" << std::hex << boot_hash
+			<< " result_lcd_hash=0x" << result_hash << std::dec << '\n';
+		/* Golden values locked from the verified run: boot shows the idle
+		 * display, 1+2= produces the computed result glyphs. */
+		if (boot_hash != 0xdf402aebu || result_hash != 0xd8ca5010u) {
+			std::cerr << "F-789SGA 1+2= golden LCD regression\n";
+			return false;
+		}
+		return true;
 	}
 
 	bool PortCInputSmoke() {
@@ -656,8 +830,8 @@ namespace {
 }
 
 int main(int argc, char** argv) {
-	if (argc > 2) {
-		std::cerr << "usage: Eps6800AdapterSmoke [<rom.bin>]\n";
+	if (argc > 3) {
+		std::cerr << "usage: Eps6800AdapterSmoke [<hp300s-rom.bin> [<f789sga-rom.bin>]]\n";
 		return 2;
 	}
 	if (!DebuggerSmoke()) {
@@ -666,6 +840,10 @@ int main(int argc, char** argv) {
 	}
 	if (!ArithmeticFlagsSmoke()) {
 		std::cerr << "EPS6800 arithmetic flags regression\n";
+		return 1;
+	}
+	if (!HaltAndIncDecSmoke()) {
+		std::cerr << "EPS6800 HALT/INC-DEC flags regression\n";
 		return 1;
 	}
 	if (!PortCInputSmoke()) {
@@ -696,7 +874,7 @@ int main(int argc, char** argv) {
 		std::cerr << "EPS6800 hook/RAM persistence regression\n";
 		return 1;
 	}
-	if (argc != 2) {
+	if (argc < 2) {
 		std::cout << "EPS6800 synthetic checks passed (no golden ROM provided; "
 			"skipping golden/status/LCD scenarios).\n";
 		return 0;
@@ -933,5 +1111,12 @@ int main(int argc, char** argv) {
 
 	std::cout << " lcd_control=ok contrast=0x"
 		<< static_cast<unsigned>(adjusted_control.contrast) << "\n";
+
+	if (argc >= 3) {
+		if (!F789SgaFunctionalSmoke(argv[2])) {
+			std::cerr << "F-789SGA functional regression\n";
+			return 1;
+		}
+	}
 	return 0;
 }
