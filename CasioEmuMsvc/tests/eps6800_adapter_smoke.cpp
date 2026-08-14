@@ -514,6 +514,37 @@ namespace {
 		return true;
 	}
 
+	// F5: reset register defaults per the reference ice.dll CIce::Reset
+	// (EPS6800 branch). POSTID 0xF0 (incl. FSR2ID), DCRDE 0x33, CPUCON/PAWAKE
+	// 0x10 (ROM word 12 bit 9 is clear on all supported models), STATUS 0xC0,
+	// FSR1/FSR2 0x80.
+	bool ResetValuesSmoke() {
+		casioemu::ePSCPU machine;
+		std::vector<uint8_t> rom(0x30000, 0);
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian)) {
+			std::cerr << "reset ROM load failed\n";
+			return false;
+		}
+		machine.Reset();
+		const auto Check = [&](uint8_t addr, uint8_t expected, const char* name) {
+			const uint8_t actual = machine.ReadByte(addr);
+			if (actual != expected) {
+				std::cerr << name << " reset mismatch: 0x" << std::hex
+					<< static_cast<unsigned>(actual) << " != 0x"
+					<< static_cast<unsigned>(expected) << std::dec << "\n";
+				return false;
+			}
+			return true;
+		};
+		return Check(0x21, 0xf0, "POSTID") &&
+			Check(0x3f, 0x33, "DCRDE") &&
+			Check(0x20, 0x10, "CPUCON") &&
+			Check(0x34, 0x10, "PAWAKE") &&
+			Check(0x0f, 0xc0, "STATUS") &&
+			Check(0x04, 0x80, "FSR1") &&
+			Check(0x11, 0x80, "FSR2");
+	}
+
 	void DumpLcdAscii(casioemu::ePSCPU& machine, const char* label) {
 		std::array<uint8_t, kLcdSize> lcd{};
 		machine.CopyLcd(lcd.data(), lcd.size());
@@ -846,6 +877,10 @@ int main(int argc, char** argv) {
 		std::cerr << "EPS6800 HALT/INC-DEC flags regression\n";
 		return 1;
 	}
+	if (!ResetValuesSmoke()) {
+		std::cerr << "EPS6800 reset values regression\n";
+		return 1;
+	}
 	if (!PortCInputSmoke()) {
 		std::cerr << "EPS6800 Port C external input regression\n";
 		return 1;
@@ -970,6 +1005,7 @@ int main(int argc, char** argv) {
 			<< " lcd=0x" << std::setw(8) << hash << "\n";
 		return 1;
 	}
+	DumpLcdAscii(machine, "HP300S+ boot (golden)");
 
 	const auto control_before_snapshot = CaptureControl(machine);
 	std::stringstream snapshot(std::ios::in | std::ios::out | std::ios::binary);

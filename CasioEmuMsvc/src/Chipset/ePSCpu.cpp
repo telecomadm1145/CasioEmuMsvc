@@ -267,16 +267,21 @@ namespace casioemu {
 		const uint8_t interrupt_pending = state_->cpu.int_pending;
 		const uint32_t instruction = machine_state_debug_fetch_instruction(state_, pc_before);
 		const uint16_t word = static_cast<uint16_t>(instruction >> 16);
+		const uint8_t base_cycles = EpsInstructionCycles(word);
 		bool advance_timer = false;
 		if (tick_timer && ++timer_cycle_phase_ >= timer_cycle_divisor_) {
 			timer_cycle_phase_ = 0;
 			advance_timer = true;
 		}
-		machine_state_advance_cycles_split(state_, 1, tick_timer, advance_timer);
+		/* Run one instruction and pace the timers with this instruction's
+		 * weighted cycle count (1 or 2), so 2-cycle instructions advance the
+		 * timers twice — matching the reference ice.dll model. The keyboard
+		 * debounce counters keep the per-instruction cadence. */
+		machine_state_advance_instruction_cycles(state_, base_cycles, tick_timer, advance_timer);
 		++instruction_count_;
 
 		const uint32_t pc_after = state_->cpu.pc;
-		uint8_t elapsed_cycles = EpsInstructionCycles(word);
+		uint8_t elapsed_cycles = base_cycles;
 		if (elapsed_cycles == 1 && pc_after != pc_before + EpsInstructionWords(word))
 			elapsed_cycles = 2; // ePS6800 control-flow / PC-write penalty.
 		cycle_count_ += elapsed_cycles;

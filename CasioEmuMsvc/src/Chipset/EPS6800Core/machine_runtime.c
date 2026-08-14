@@ -44,6 +44,30 @@ void machine_state_advance_cycles_split(
 	kbd_tick_state(&state->kbd, cycles);
 }
 
+void machine_state_advance_instruction_cycles(
+	struct machine_state *state,
+	uint32_t timer_cycles,
+	bool tick_fast_timers,
+	bool tick_timer1
+) {
+	if (!state) {
+		return;
+	}
+
+	cpu_loop_state(&state->cpu, 1);
+	if (state->cpu.mode == CPU_MODE_IDLE) {
+		if (tick_timer1)
+			timer_tick_idle_state(&state->timer, timer_cycles);
+	}
+	else if (state->cpu.mode != CPU_MODE_SLEEP) {
+		if (tick_fast_timers)
+			timer_tick_fast_state(&state->timer, timer_cycles);
+		if (tick_timer1)
+			timer_tick_idle_state(&state->timer, timer_cycles);
+	}
+	kbd_tick_state(&state->kbd, 1);
+}
+
 void machine_state_advance_cycles(struct machine_state *state, uint32_t cycles, bool tick_timer) {
 	machine_state_advance_cycles_split(state, cycles, tick_timer, tick_timer);
 }

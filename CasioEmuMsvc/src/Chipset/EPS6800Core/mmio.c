@@ -17,9 +17,10 @@ enum {
 	MMIO_WBK_FIRST_REG = REG_TR0CON,
 	MMIO_WBK_LAST_REG = REG_DCRDE,
 	MMIO_FSR_RAM_END = 0xFF,
-	MMIO_POSTID_RESET = BIT_FSR0ID | BIT_FSR1ID | BIT_LCDID,
+	MMIO_POSTID_RESET = BIT_FSR0ID | BIT_FSR1ID | BIT_LCDID | BIT_FSR2ID,
 	MMIO_DCR_ALL_INPUTS = 0xFF,
-	MMIO_DCRC_RESET = 0xFF
+	MMIO_DCRC_RESET = 0xFF,
+	MMIO_DCRDE_RESET = 0x33
 };
 
 static uint32_t mmio_ram_address(uint8_t page, uint8_t offset) {
@@ -534,6 +535,7 @@ static void mmio_apply_reset_defaults(struct mmio_state *state) {
 	state->regs[REG_DCRA] = MMIO_DCR_ALL_INPUTS;
 	state->regs[REG_DCRB] = MMIO_DCR_ALL_INPUTS;
 	state->regs[REG_DCRC] = MMIO_DCRC_RESET;
+	state->regs[REG_DCRDE] = MMIO_DCRDE_RESET;
 }
 
 void mmio_reset_state(struct mmio_state *state) {
