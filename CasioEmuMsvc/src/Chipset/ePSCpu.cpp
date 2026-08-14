@@ -225,7 +225,7 @@ namespace casioemu {
 		RunInstructionLocked(true);
 	}
 
-	bool ePSCPU::RunFrame() {
+	bool ePSCPU::RunFrame(uint32_t idle_timer_cycles) {
 		const std::lock_guard lock(state_mutex_);
 		constexpr uint32_t kLegacyActiveInstructions = 2000;
 		constexpr uint32_t kFrameInstructions = 4000;
@@ -236,19 +236,22 @@ namespace casioemu {
 			}
 			return false;
 		}
-		constexpr auto kIdleTimerPeriod = std::chrono::milliseconds(20);
 		const auto now = std::chrono::steady_clock::now();
 		if (state_->cpu.mode == CPU_MODE_IDLE) {
-			// The official EPS6800 driver blocks for at most 20 ms in Idle and
-			// advances Timer1 once per timeout.  Keep the UI thread non-blocking,
-			// but preserve that wall-clock cadence.  Keyboard settling remains
-			// cycle based so a queued wake key does not take seconds to appear.
+			constexpr auto kIdleTimerPeriod = std::chrono::milliseconds(20);
 			machine_state_advance_cycles_split(state_, kFrameInstructions, false, false);
-			const auto elapsed = now - idle_timer_checkpoint_;
-			const auto ticks = static_cast<uint32_t>(elapsed / kIdleTimerPeriod);
-			if (ticks != 0) {
-				idle_timer_checkpoint_ += kIdleTimerPeriod * ticks;
-				machine_state_advance_cycles_split(state_, ticks, false, true);
+			if (idle_timer_cycles != 0) {
+				// Some EPS6800 models need Timer1 paced from the low-speed
+				// oscillator while the CPU is idle, not from key wakeups.
+				machine_state_tick_idle_timer1(state_, idle_timer_cycles);
+			}
+			else {
+				const auto elapsed = now - idle_timer_checkpoint_;
+				const auto ticks = static_cast<uint32_t>(elapsed / kIdleTimerPeriod);
+				if (ticks != 0) {
+					idle_timer_checkpoint_ += kIdleTimerPeriod * ticks;
+					machine_state_tick_idle_timer1(state_, ticks);
+				}
 			}
 			return false;
 		}
@@ -819,6 +822,7 @@ namespace casioemu {
 			const std::lock_guard lock(state_mutex_);
 			machine_state_load_snapshot(state_, snapshot);
 			timer_cycle_phase_ = 0;
+			idle_timer_checkpoint_ = std::chrono::steady_clock::now();
 			machine_state_debug_set_memory_access_callback(state_, &ePSCPU::MemoryAccessThunk, this);
 		}
 		machine_snapshot_free(snapshot);

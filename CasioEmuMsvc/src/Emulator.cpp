@@ -53,6 +53,25 @@ namespace casioemu {
 			return default_cycles_per_second;
 		}
 
+		unsigned int GetEpsTimer1SourceHz(const ModelInfo& model) {
+			const auto iter = model.extra.find("timer1_source_hz");
+			if (iter == model.extra.end())
+				return 0;
+
+			try {
+				std::size_t pos = 0;
+				const auto value = std::stoull(iter->second, &pos, 0);
+				if (pos != iter->second.size() || value == 0 ||
+					value > std::numeric_limits<unsigned int>::max())
+					PANIC("Invalid EPS6800 timer1_source_hz value: %s\n", iter->second.c_str());
+				return static_cast<unsigned int>(value);
+			}
+			catch (const std::exception&) {
+				PANIC("Invalid EPS6800 timer1_source_hz value: %s\n", iter->second.c_str());
+			}
+			return 0;
+		}
+
 		bool HasSvgExtension(const std::string& path) {
 			const auto ext = std::filesystem::path(path).extension().string();
 			if (ext.size() != 4)
@@ -191,6 +210,7 @@ namespace casioemu {
 		}
 		if (hardware_id == HW_EPS6800) {
 			cycles_per_second = GetEpsCyclesPerSecond(ModelDefinition);
+			eps_timer1_source_hz = GetEpsTimer1SourceHz(ModelDefinition);
 		}
 		timer_interval = hardware_id == HW_EPS6800 ? 40 : 20;
 
@@ -356,6 +376,7 @@ namespace casioemu {
 		}
 		if (hardware_id == HW_EPS6800) {
 			cycles_per_second = GetEpsCyclesPerSecond(ModelDefinition);
+			eps_timer1_source_hz = GetEpsTimer1SourceHz(ModelDefinition);
 		}
 		timer_interval = hardware_id == HW_EPS6800 ? 40 : 20;
 
@@ -621,13 +642,25 @@ namespace casioemu {
 			const auto cycles_to_emulate = cycles.GetDelta();
 			if (Paused) {
 				eps_frame_cycle_remainder.store(0, std::memory_order_relaxed);
+				eps_timer1_cycle_remainder.store(0, std::memory_order_relaxed);
 				return;
 			}
 			eps_frame_cycle_remainder.fetch_add(cycles_to_emulate, std::memory_order_relaxed);
 			while (eps_frame_cycle_remainder.load(std::memory_order_relaxed) >= cycles_per_eps_frame) {
-				if (chipset.RunEpsFrame()) {
+				uint32_t timer1_cycles = 0;
+				if (eps_timer1_source_hz != 0) {
+					const Uint64 timer1_numerator =
+						eps_timer1_cycle_remainder.fetch_add(cycles_per_eps_frame * eps_timer1_source_hz,
+							std::memory_order_relaxed) +
+						cycles_per_eps_frame * eps_timer1_source_hz;
+					timer1_cycles = static_cast<uint32_t>(timer1_numerator / cycles.cycles_per_second);
+					eps_timer1_cycle_remainder.store(timer1_numerator % cycles.cycles_per_second,
+						std::memory_order_relaxed);
+				}
+				if (chipset.RunEpsFrame(timer1_cycles)) {
 					SetPaused(true);
 					eps_frame_cycle_remainder.store(0, std::memory_order_relaxed);
+					eps_timer1_cycle_remainder.store(0, std::memory_order_relaxed);
 					break;
 				}
 				eps_frame_cycle_remainder.fetch_sub(cycles_per_eps_frame, std::memory_order_relaxed);
@@ -820,6 +853,7 @@ namespace casioemu {
 	void Emulator::SetClockSpeed(float speed) {
 		cycles.Setup((unsigned int)(cycles_per_second * speed), timer_interval);
 		eps_frame_cycle_remainder.store(0, std::memory_order_relaxed);
+		eps_timer1_cycle_remainder.store(0, std::memory_order_relaxed);
 	}
 
 	FairRecursiveMutex::FairRecursiveMutex() : holding{}, recursive_count{} {

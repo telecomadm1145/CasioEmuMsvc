@@ -183,7 +183,7 @@ namespace casioemu {
 		void SetIceTimerScheduling(bool enabled);
 		void SetPortCInput(uint8_t mask, uint8_t value);
 		void Next();
-		bool RunFrame();
+		bool RunFrame(uint32_t idle_timer_cycles = 0);
 
 		void KeyDown(uint8_t matrix_index);
 		void RestoreKeyDown(uint8_t matrix_index);

@@ -68,6 +68,16 @@ void machine_state_advance_instruction_cycles(
 	kbd_tick_state(&state->kbd, 1);
 }
 
+void machine_state_tick_idle_timer1(struct machine_state *state, uint32_t cycles) {
+	if (!state || cycles == 0) {
+		return;
+	}
+
+	if (state->cpu.mode == CPU_MODE_IDLE) {
+		timer_tick_idle_state(&state->timer, cycles);
+	}
+}
+
 void machine_state_advance_cycles(struct machine_state *state, uint32_t cycles, bool tick_timer) {
 	machine_state_advance_cycles_split(state, cycles, tick_timer, tick_timer);
 }

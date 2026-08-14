@@ -170,7 +170,7 @@ namespace casioemu {
 		void RemovePortInput(int, int);
 
 		void Tick();
-		bool RunEpsFrame();
+		bool RunEpsFrame(uint32_t idle_timer_cycles = 0);
 		void EmulatorTick();
 		void Frame();
 		void UIEvent(SDL_Event event);

@@ -42,6 +42,7 @@ void machine_state_advance_instruction_cycles(
 	bool tick_fast_timers,
 	bool tick_timer1
 );
+void machine_state_tick_idle_timer1(struct machine_state *state, uint32_t cycles);
 
 #ifdef __cplusplus
 }

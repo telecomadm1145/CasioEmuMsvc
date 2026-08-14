@@ -251,6 +251,32 @@ namespace {
 		return (idle_machine.PC() >> 1) != 0;
 	}
 
+	bool IceIdleTimerSchedulingSmoke() {
+		constexpr uint8_t kCpuControl = 0x20;
+		constexpr uint8_t kTimer1Control = 0x2a;
+		constexpr uint8_t kTimer1Reload = 0x2b;
+		constexpr uint8_t kTimer1WakeEnable = 0x80;
+		constexpr uint8_t kTimer1Enable = 0x08;
+		constexpr uint8_t kIdleMode = 0x03;
+
+		casioemu::ePSCPU machine;
+		std::vector<uint8_t> rom(0x20000, 0);
+		SetPackedRomWord(rom, 0, 0x0002); // SLEP
+		SetPackedRomWord(rom, 1, 0x4e5a); // MOV A,#5Ah after Timer1 wake.
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+			return false;
+		machine.Reset();
+		machine.SetIceTimerScheduling(true);
+		machine.WriteByte(kCpuControl, kIdleMode);
+		machine.WriteByte(kTimer1Reload, 0x40);
+		machine.WriteByte(kTimer1Control, kTimer1WakeEnable | kTimer1Enable);
+		machine.Next();
+		if ((machine.PC() >> 1) != 0)
+			return false;
+		machine.RunFrame(0x40 * 256);
+		return (machine.PC() >> 1) != 0;
+	}
+
 	bool RepeatInterruptDeferralSmoke() {
 		constexpr uint8_t kCpuControl = 0x20;
 		constexpr uint8_t kTimer1Control = 0x2a;
@@ -891,6 +917,10 @@ int main(int argc, char** argv) {
 	}
 	if (!TimerSmoke()) {
 		std::cerr << "EPS6800 timer regression\n";
+		return 1;
+	}
+	if (!IceIdleTimerSchedulingSmoke()) {
+		std::cerr << "EPS6800 ice idle timer regression\n";
 		return 1;
 	}
 	if (!RepeatInterruptDeferralSmoke()) {

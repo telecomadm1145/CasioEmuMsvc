@@ -90,6 +90,12 @@ namespace casioemu {
 				PANIC("Invalid EPS6800 timer_cycle_divisor value: %s\n", timer_divisor->second.c_str());
 			}
 		}
+		else if (ice_timer_scheduling && emulator.eps_timer1_source_hz != 0) {
+			const auto divisor = std::max(1u,
+				static_cast<uint32_t>((emulator.cycles_per_second + (emulator.eps_timer1_source_hz / 2)) /
+					emulator.eps_timer1_source_hz));
+			epscpu->SetTimerCycleDivisor(divisor);
+		}
 		epscpu->SetDebugHooks(
 			[](uint32_t pc_before, uint32_t pc_after, uint8_t stack_pointer) {
 				InstructionEventArgs args{pc_before, pc_after};
@@ -1106,9 +1112,9 @@ namespace casioemu {
 		SYSCLKTick = false;
 	}
 
-	bool Chipset::RunEpsFrame() {
+	bool Chipset::RunEpsFrame(uint32_t idle_timer_cycles) {
 		if (emulator.hardware_id == HW_EPS6800 && run_mode == RM_RUN && epscpu)
-			return epscpu->RunFrame();
+			return epscpu->RunFrame(idle_timer_cycles);
 		return false;
 	}
 
