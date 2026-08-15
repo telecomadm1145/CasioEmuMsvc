@@ -116,6 +116,10 @@ namespace casioemu {
 			return true;
 		}
 
+		static bool HasExtraFlag(const ModelInfo& model, const std::string& key) {
+			return model.extra.find(key) != model.extra.end();
+		}
+
 		std::map<std::string, int> ReadBoardStatusSpriteMap(const json& value) {
 			const json& sprites = RequireJsonMember(value, {"sprites"}, "sprites");
 			if (!sprites.is_object())
@@ -346,6 +350,8 @@ namespace casioemu {
 
 		void ValidateStatusIndicators(const ModelInfo& model) {
 			if (model.hardware_id != HW_EPS6800)
+				return;
+			if (HasExtraFlag(model, "eps6800_segment_lcd"))
 				return;
 			for (const auto& indicator : model.status_indicators) {
 				if (indicator.byte_offset >= EPS6800_STATUS_SIZE)
