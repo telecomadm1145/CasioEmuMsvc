@@ -440,8 +440,15 @@ public class Game extends SDLActivity {
                         String soName = new File(name).getName();
                         if (soName.contains("libc++_shared")) continue;
                         File outFile = new File(pluginsDir, soName);
+                        File canonicalPluginsDir = pluginsDir.getCanonicalFile();
+                        File canonicalOutFile = outFile.getCanonicalFile();
+                        String pluginsPath = canonicalPluginsDir.getPath() + File.separator;
+                        String outPath = canonicalOutFile.getPath();
+                        if (!outPath.equals(canonicalPluginsDir.getPath()) && !outPath.startsWith(pluginsPath)) {
+                            throw new SecurityException("Bad zip entry path: " + name);
+                        }
                         InputStream in = zipFile.getInputStream(entry);
-                        FileOutputStream out = new FileOutputStream(outFile);
+                        FileOutputStream out = new FileOutputStream(canonicalOutFile);
                         byte[] buffer = new byte[8192];
                         int read;
                         while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
