@@ -136,10 +136,6 @@ inline void fillRandomData(unsigned char* buf, size_t size) {
 #pragma warning(disable : 4244)
 
 namespace casioemu {
-	static bool HasExtraFlag(const ModelInfo& model, const std::string& key) {
-		return model.extra.find(key) != model.extra.end();
-	}
-
 	SDL_Texture* CreateSvgSpriteTexture(SDL_Renderer* renderer, const SpriteInfo& sprite, int width, int height) {
 		if (!renderer || sprite.svg_shape.empty() || width <= 0 || height <= 0)
 			return nullptr;
@@ -693,12 +689,6 @@ namespace casioemu {
 			return SPR_MAX;
 		}
 
-		bool Eps6800SegmentLcd() const {
-			if constexpr (hardware_id == HW_EPS6800)
-				return HasExtraFlag(emulator.ModelDefinition, "eps6800_segment_lcd");
-			return false;
-		}
-
 		bool StatusEnabled() const {
 			if (!(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) && hardware_id != HW_FX_5800P && hardware_id != HW_ES_PLUS && hardware_id != HW_EPS6800) {
 				return true;
@@ -1018,30 +1008,20 @@ namespace casioemu {
 				// row is a 96-bit segmented annunciator bus; it must not be drawn
 				// as dot-matrix pixels. The remaining 31 rows form the 96x31 LCD.
 				const auto decoded = DecodeEps6800Display(lcd.data(), lcd.size());
-				const bool segment_lcd = Eps6800SegmentLcd();
-				if (!segment_lcd) {
-					for (int y = 0; y < static_cast<int>(EPS6800_LCD_PIXEL_HEIGHT); ++y) {
-						for (int x = 0; x < static_cast<int>(EPS6800_LCD_WIDTH); ++x) {
-							const bool on = decoded.pixels[y * EPS6800_LCD_WIDTH + x] != 0;
-							auto& alpha = eps_screen_ink_alpha[(y + 1) * 192 + x];
-							alpha = alpha * transition_ratio +
-								(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
-						}
-					}
-				}
-				else {
-					for (size_t ix = 192; ix < eps_screen_ink_alpha.size(); ++ix) {
-						auto& alpha = eps_screen_ink_alpha[ix];
-						alpha = alpha * transition_ratio + ink_alpha_off * (1 - transition_ratio);
+				for (int y = 0; y < static_cast<int>(EPS6800_LCD_PIXEL_HEIGHT); ++y) {
+					for (int x = 0; x < static_cast<int>(EPS6800_LCD_WIDTH); ++x) {
+						const bool on = decoded.pixels[y * EPS6800_LCD_WIDTH + x] != 0;
+						auto& alpha = eps_screen_ink_alpha[(y + 1) * 192 + x];
+						alpha = alpha * transition_ratio +
+							(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
 					}
 				}
 
 				const auto& status_indicators = emulator.ModelDefinition.status_indicators;
 				for (size_t ix = 0; ix < status_indicators.size(); ++ix) {
 					const auto& indicator = status_indicators[ix];
-					const bool on = segment_lcd ?
-						(indicator.byte_offset < lcd.size() && (lcd[indicator.byte_offset] & (1u << indicator.bit)) != 0) :
-						(indicator.byte_offset < decoded.status.size() && (decoded.status[indicator.byte_offset] & (1u << indicator.bit)) != 0);
+					const bool on = indicator.byte_offset < decoded.status.size() &&
+						(decoded.status[indicator.byte_offset] & (1u << indicator.bit)) != 0;
 					auto& alpha = eps_screen_ink_alpha[ix];
 					alpha = alpha * transition_ratio +
 						(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
@@ -2532,7 +2512,6 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		int logical_width = 0;
 		int logical_height = 0;
 		SDL_Rect lcd_dest{};
-		bool render_pixel_lcd = true;
 	};
 
 	struct ScreenCaptureLayout {
@@ -2563,9 +2542,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		}
 
 		layout = {};
-		const std::vector<SDL_Rect> pixelRects = source.render_pixel_lcd ?
-			std::vector<SDL_Rect>{source.lcd_dest} : std::vector<SDL_Rect>{};
-		if (!GetCaptureRect(spriteRects, pixelRects, layout.capture_rect)) {
+		if (!GetCaptureRect(spriteRects, std::vector<SDL_Rect>{source.lcd_dest}, layout.capture_rect)) {
 			SDL_Log("%s failed: invalid capture region.", purpose);
 			return false;
 		}
@@ -2577,8 +2554,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		layout.content_height = std::max(1, static_cast<int>(std::ceil(layout.capture_rect.h * layout.sy)));
 		layout.output_width = even_output ? ((layout.content_width + 1) & ~1) : layout.content_width;
 		layout.output_height = even_output ? ((layout.content_height + 1) & ~1) : layout.content_height;
-		if (source.render_pixel_lcd)
-			layout.scaled_lcd = ScaleScreenshotRect(source.lcd_dest, layout.capture_rect, layout.sx, layout.sy);
+		layout.scaled_lcd = ScaleScreenshotRect(source.lcd_dest, layout.capture_rect, layout.sx, layout.sy);
 		return true;
 	}
 
@@ -2668,15 +2644,13 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			}
 			restore();
 
-			if (source.render_pixel_lcd) {
-				for (int y = 0; y < source.logical_height; ++y) {
-					const int source_y = y + 1;
-					for (int x = 0; x < source.logical_width; ++x) {
-						const float alpha_value = source.screen_ink_alpha[x + source_y * 192];
-						if (alpha_value <= 0.0f)
-							continue;
-						FillScaledPixel(surface, layout.scaled_lcd.x + x * layout.scale, layout.scaled_lcd.y + y * layout.scale, layout.scale, MapScreenshotPixel(surface->format, *source.ink_colour, background, alpha_value));
-					}
+			for (int y = 0; y < source.logical_height; ++y) {
+				const int source_y = y + 1;
+				for (int x = 0; x < source.logical_width; ++x) {
+					const float alpha_value = source.screen_ink_alpha[x + source_y * 192];
+					if (alpha_value <= 0.0f)
+						continue;
+					FillScaledPixel(surface, layout.scaled_lcd.x + x * layout.scale, layout.scaled_lcd.y + y * layout.scale, layout.scale, MapScreenshotPixel(surface->format, *source.ink_colour, background, alpha_value));
 				}
 			}
 			if (SDL_MUSTLOCK(surface))
@@ -2960,13 +2934,11 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 				RenderModelSprite(mirror_renderer, fallback_texture, &svg_texture_cache[ix], sprite, *source.ink_colour, alpha);
 			}
 
-			if (source.render_pixel_lcd) {
-				SDL_Rect lcd_dest = ScaleScreenshotRect(source.lcd_dest, capture_rect, sx, sy);
-				lcd_dest.x += content_rect.x;
-				lcd_dest.y += content_rect.y;
-				if (!RenderPixelTexture(mirror_renderer, source, lcd_dest))
-					return false;
-			}
+			SDL_Rect lcd_dest = ScaleScreenshotRect(source.lcd_dest, capture_rect, sx, sy);
+			lcd_dest.x += content_rect.x;
+			lcd_dest.y += content_rect.y;
+			if (!RenderPixelTexture(mirror_renderer, source, lcd_dest))
+				return false;
 			mirror.present();
 			return true;
 		}
@@ -2982,9 +2954,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 				if ((*source.sprite_available)[ix])
 					sprite_rects.push_back((*source.sprite_info)[ix].dest);
 			}
-			const std::vector<SDL_Rect> pixel_rects = source.render_pixel_lcd ?
-				std::vector<SDL_Rect>{source.lcd_dest} : std::vector<SDL_Rect>{};
-			return GetCaptureRect(sprite_rects, pixel_rects, capture_rect);
+			return GetCaptureRect(sprite_rects, std::vector<SDL_Rect>{source.lcd_dest}, capture_rect);
 		}
 
 		SDL_Texture* EnsureInterfaceTexture(SDL_Renderer* renderer, const ScreenCaptureSource& source) {
@@ -3079,7 +3049,6 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		int logical_width,
 		int logical_height,
 		const SDL_Rect& lcd_dest,
-		bool render_pixel_lcd,
 		int capture_scale,
 		const SDL_Color& background) {
 		ScreenCaptureSource source{
@@ -3091,8 +3060,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			screen_ink_alpha,
 			logical_width,
 			logical_height,
-			lcd_dest,
-			render_pixel_lcd};
+			lcd_dest};
 
 		ScreenCaptureLayout layout{};
 		if (!BuildScreenCaptureLayout(source, capture_scale, false, layout, "Screenshot"))
@@ -3123,9 +3091,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			if ((*source.sprite_available)[ix])
 				spriteRects.push_back((*source.sprite_info)[ix].dest);
 		}
-		const std::vector<SDL_Rect> pixelRects = source.render_pixel_lcd ?
-			std::vector<SDL_Rect>{source.lcd_dest} : std::vector<SDL_Rect>{};
-		if (!GetCaptureRect(spriteRects, pixelRects, captureRect)) {
+		if (!GetCaptureRect(spriteRects, std::vector<SDL_Rect>{source.lcd_dest}, captureRect)) {
 			return { 0, 0 };
 		}
 		return { captureRect.w, captureRect.h };
@@ -3172,11 +3138,9 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			lcd_dest.w = std::max(1, (logical_width - 1) * sprite_info[SPR_PIXEL].src.w + sprite_info[SPR_PIXEL].dest.w);
 			lcd_dest.h = std::max(1, (logical_height - 1) * sprite_info[SPR_PIXEL].src.h + sprite_info[SPR_PIXEL].dest.h);
 		}
-		const bool render_pixel_lcd = !Eps6800SegmentLcd();
 
 #ifndef CASIOEMU_CORE_WEB
-		if (render_pixel_lcd)
-			RenderPixelScreenTexture(lcd_dest, logical_width, logical_height);
+		RenderPixelScreenTexture(lcd_dest, logical_width, logical_height);
 #endif
 
 #if !defined(__EMSCRIPTEN__) && !defined(CASIOEMU_CORE_WEB)
@@ -3190,8 +3154,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			screen_ink_alpha,
 			logical_width,
 			logical_height,
-			lcd_dest,
-			render_pixel_lcd};
+			lcd_dest};
 
 		// If screenshot is requested, capture only the rendered screen region
 		if (emulator.screenshot_requested.load()) {
@@ -3206,7 +3169,6 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 				logical_width,
 				logical_height,
 				lcd_dest,
-				render_pixel_lcd,
 				emulator.capture_scale.load(),
 				capture_background);
 			emulator.screenshot_requested.store(false);
