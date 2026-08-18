@@ -22,6 +22,9 @@ static void lcd_bus_write_internal(struct lcd_state *state, uint8_t addr, uint8_
 }
 
 static uint16_t lcd_data_address(const struct lcd_state *state) {
+	if (eps_variant_is_6009(state->mmio->variant)) {
+		return state->reg[eps_reg_lcdarl(state->mmio->variant)] % (uint16_t)eps_lcd_raw_size(state->mmio->variant);
+	}
 	return (uint16_t)(((uint16_t)(state->reg[REG_LCDARH] & MASK_LCD_ADDRESS_HIGH) << LCD_ADDRH_SHIFT) |
 		state->reg[REG_LCDARL]);
 }
@@ -31,26 +34,32 @@ static uint16_t lcd_visible_address(uint16_t addr) {
 }
 
 static void lcd_increment_address(struct lcd_state *state) {
-	if (state->reg[REG_LCDARL] < LCD_ADDRL_MAX) {
-		state->reg[REG_LCDARL]++;
+	const uint8_t reg_lcdarl = eps_reg_lcdarl(state->mmio->variant);
+	const uint8_t max_addr = eps_variant_is_6009(state->mmio->variant) ? 0x87u : LCD_ADDRL_MAX;
+	if (state->reg[reg_lcdarl] < max_addr) {
+		state->reg[reg_lcdarl]++;
 	}
 	else {
-		state->reg[REG_LCDARL] = LCD_ADDRL_MIN;
+		state->reg[reg_lcdarl] = LCD_ADDRL_MIN;
 	}
 }
 
 static void lcd_decrement_address(struct lcd_state *state) {
-	if (state->reg[REG_LCDARL] > LCD_ADDRL_MIN) {
-		state->reg[REG_LCDARL]--;
+	const uint8_t reg_lcdarl = eps_reg_lcdarl(state->mmio->variant);
+	const uint8_t max_addr = eps_variant_is_6009(state->mmio->variant) ? 0x87u : LCD_ADDRL_MAX;
+	if (state->reg[reg_lcdarl] > LCD_ADDRL_MIN) {
+		state->reg[reg_lcdarl]--;
 	}
 	else {
-		state->reg[REG_LCDARL] = LCD_ADDRL_MAX;
+		state->reg[reg_lcdarl] = max_addr;
 	}
 }
 
 uint8_t lcd_read_byte_state(struct lcd_state *state, uint8_t addr) {
 	uint8_t byte;
 	if (addr < LCD_REG_COUNT) {
+		if (addr == eps_reg_lcddat(state->mmio->variant))
+			return state->fb[lcd_data_address(state)];
 		switch (addr) {
 		case REG_LCDDAT:
 			byte = state->fb[lcd_data_address(state)];
@@ -68,14 +77,16 @@ uint8_t lcd_read_byte_state(struct lcd_state *state, uint8_t addr) {
 }
 
 void lcd_process_postid_state(struct lcd_state *state) {
-	if (state->reg[REG_POSTID] & BIT_LCDPE) {
-		if (state->reg[REG_POSTID] & BIT_LCDID) {
+	const uint8_t reg_postid = eps_reg_postid(state->mmio->variant);
+	if (state->reg[reg_postid] & BIT_LCDPE) {
+		if (state->reg[reg_postid] & BIT_LCDID) {
 			lcd_increment_address(state);
 		}
 		else {
 			lcd_decrement_address(state);
 		}
-		lcd_bus_write_internal(state, REG_LCDARL, state->reg[REG_LCDARL]);
+		lcd_bus_write_internal(state, eps_reg_lcdarl(state->mmio->variant),
+			state->reg[eps_reg_lcdarl(state->mmio->variant)]);
 	}
 }
 
@@ -84,6 +95,10 @@ void lcd_write_byte_state(struct lcd_state *state, uint8_t addr, uint8_t byte) {
 		state->reg[addr] = byte;
 		/* Keep the debugger's flat SFR view synchronized with the peripheral. */
 		lcd_bus_write_internal(state, addr, byte);
+		if (addr == eps_reg_lcddat(state->mmio->variant)) {
+			state->fb[lcd_data_address(state)] = byte;
+			return;
+		}
 		switch (addr) {
 		case REG_LCDDAT:
 			state->fb[lcd_data_address(state)] = byte;
@@ -96,6 +111,8 @@ void lcd_write_byte_state(struct lcd_state *state, uint8_t addr, uint8_t byte) {
 }
 
 uint8_t lcd_ram_read_byte_state(const struct lcd_state *state, uint16_t addr) {
+	if (eps_variant_is_6009(state->mmio->variant))
+		return addr < eps_lcd_raw_size(state->mmio->variant) ? state->fb[addr] : LCD_INVALID_READ_VALUE;
 	return state->fb[lcd_visible_address(addr)];
 }
 

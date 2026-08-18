@@ -2,6 +2,7 @@
 #ifndef FX_EMU_CORE_MMIO_INTERNAL_H
 #define FX_EMU_CORE_MMIO_INTERNAL_H
 
+#include "eps6800.h"
 #include "mmio_layout.h"
 
 #include <stdint.h>
@@ -21,6 +22,7 @@ typedef bool (*mmio_debug_access_callback)(
 );
 
 struct mmio_state {
+	enum eps_variant variant;
 	uint8_t regs[MMIO_REG_COUNT];
 	uint8_t ram_wbk[MMIO_WBK_COUNT]; /* Mapped into 0x25-0x3F if WBK=1 */
 	uint8_t ram[MMIO_RAM_COUNT];

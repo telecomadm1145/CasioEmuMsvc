@@ -31,6 +31,11 @@ namespace casioemu {
 
 	const char* Eps6800RomFormatName(Eps6800RomFormat format);
 
+	enum class EpsVariant : uint8_t {
+		Eps6800,
+		Eps6009
+	};
+
 	struct Eps6800LcdControl {
 		uint8_t lcdarh{};
 		uint8_t lcdcon{};
@@ -148,6 +153,7 @@ namespace casioemu {
 		size_t trace_capacity_{4096};
 		std::deque<Eps6800TraceEntry> trace_buffer_;
 		Eps6800RomFormat rom_format_{Eps6800RomFormat::PackedLittleEndian};
+		EpsVariant variant_{EpsVariant::Eps6800};
 		std::function<bool(uint32_t, uint32_t, uint8_t)> instruction_hook_;
 		std::function<void(uint32_t, uint32_t, bool, uint32_t, const std::string&)> function_hook_;
 		std::function<bool(uint32_t, uint8_t&, bool)> memory_hook_;
@@ -163,7 +169,7 @@ namespace casioemu {
 		std::string BacktraceLocked() const;
 
 	public:
-		ePSCPU();
+		explicit ePSCPU(EpsVariant variant = EpsVariant::Eps6800);
 		~ePSCPU();
 
 		ePSCPU(const ePSCPU&) = delete;

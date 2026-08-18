@@ -32,6 +32,14 @@ static void machine_state_init(struct machine_state *state) {
 	machine_state_bind_modules(state);
 }
 
+void machine_state_set_variant(struct machine_state *state, enum eps_variant variant) {
+	if (!state) {
+		return;
+	}
+
+	state->mmio.variant = variant;
+}
+
 void machine_state_reset(struct machine_state *state) {
 	if (!state) {
 		return;
@@ -43,17 +51,29 @@ void machine_state_reset(struct machine_state *state) {
 	timer_reset_state(&state->timer);
 	kbd_reset_state(&state->kbd);
 
-	/* Reference ice.dll CIce::Reset (EPS6800): CPUCON and PAWAKE initialise
-	 * from ROM word 12 bit 9 (model configuration), ORed with 0x10. POSTID
-	 * reset 0xF0 must be written through the LCD peripheral, which owns the
-	 * register (the flat mmio mirror alone is shadowed on reads). */
+	/* Reference ice.dll CIce::Reset: variant-specific SFRs must be written
+	 * through their owning peripherals so the flat debugger mirror and device
+	 * state stay synchronized. */
 	{
 		uint16_t config_word = rom_read_word(&state->rom, 12);
-		uint8_t reset_value = 0x10u | (uint8_t)((config_word >> 9) & 1u);
-		state->mmio.regs[REG_CPUCON] = reset_value;
-		state->kbd.reg[REG_PAWAKE] = reset_value;
-		lcd_write_byte_state(&state->lcd, REG_POSTID,
-			BIT_FSR0ID | BIT_FSR1ID | BIT_LCDID | BIT_FSR2ID);
+		if (eps_variant_is_6009(state->mmio.variant)) {
+			uint8_t cpucon = (uint8_t)((config_word >> 1) & 1u);
+			mmio_write_byte_internal_state(&state->mmio, eps_reg_cpucon(state->mmio.variant), cpucon);
+			lcd_write_byte_state(&state->lcd, eps_reg_postid(state->mmio.variant),
+				BIT_FSR0ID | BIT_FSR1ID | BIT_LCDID);
+			kbd_write_byte_state(&state->kbd, eps_reg_pacon(state->mmio.variant), 0x0eu);
+			kbd_write_byte_state(&state->kbd, eps_reg_pbcon(state->mmio.variant), 0x00u);
+			kbd_write_byte_state(&state->kbd, eps_reg_dcrb(state->mmio.variant), 0x03u);
+			kbd_write_byte_state(&state->kbd, eps_reg_porta(state->mmio.variant), 0xffu);
+			kbd_write_byte_state(&state->kbd, eps_reg_portb(state->mmio.variant), 0xffu);
+		}
+		else {
+			uint8_t reset_value = 0x10u | (uint8_t)((config_word >> 9) & 1u);
+			mmio_write_byte_internal_state(&state->mmio, eps_reg_cpucon(state->mmio.variant), reset_value);
+			kbd_write_byte_state(&state->kbd, eps_reg_pawake(state->mmio.variant), reset_value);
+			lcd_write_byte_state(&state->lcd, eps_reg_postid(state->mmio.variant),
+				BIT_FSR0ID | BIT_FSR1ID | BIT_LCDID | BIT_FSR2ID);
+		}
 	}
 }
 

@@ -15,10 +15,15 @@
 #include "EPS6800Core/machine_snapshot.h"
 
 #include <algorithm>
+#include <chrono>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <istream>
 #include <limits>
 #include <ostream>
 #include <sstream>
+#include <thread>
 #include <stdexcept>
 #include <vector>
 
@@ -67,10 +72,15 @@ namespace {
 		return word == 0x2bfeu || word == 0x2bffu;
 	}
 
-	uint8_t EpsInstructionWords(uint16_t word) {
+	enum eps_variant ToCoreVariant(casioemu::EpsVariant variant) {
+		return variant == casioemu::EpsVariant::Eps6009 ? EPS_VARIANT_6009 : EPS_VARIANT_6800;
+	}
+
+	uint8_t EpsInstructionWords(uint16_t word, casioemu::EpsVariant variant) {
 		if ((word & 0xfff0u) == 0x0020u || (word & 0xfff0u) == 0x0030u)
 			return 2;
 		const uint8_t high = static_cast<uint8_t>(word >> 8);
+		(void)variant;
 		if ((high >= 0x50 && high <= 0x51) ||
 			(high >= 0x55 && high <= 0x67) ||
 			(high >= 0x47 && high <= 0x49))
@@ -78,7 +88,7 @@ namespace {
 		return 1;
 	}
 
-	uint8_t EpsInstructionCycles(uint16_t word) {
+	uint8_t EpsInstructionCycles(uint16_t word, casioemu::EpsVariant variant) {
 		const uint8_t high = static_cast<uint8_t>(word >> 8);
 		if ((word & 0xfff0u) == 0x0020u || (word & 0xfff0u) == 0x0030u ||
 			(high >= 0x2c && high <= 0x2f) ||
@@ -88,6 +98,7 @@ namespace {
 			return 2;
 		return 1;
 	}
+
 }
 
 namespace casioemu {
@@ -101,8 +112,9 @@ namespace casioemu {
 		return "unknown";
 	}
 
-	ePSCPU::ePSCPU()
-		: state_(CreateMachineOrThrow()) {
+	ePSCPU::ePSCPU(EpsVariant variant)
+		: state_(CreateMachineOrThrow()), variant_(variant) {
+		machine_state_set_variant(state_, ToCoreVariant(variant_));
 		machine_state_debug_set_memory_access_callback(state_, &ePSCPU::MemoryAccessThunk, this);
 	}
 
@@ -226,19 +238,35 @@ namespace casioemu {
 	}
 
 	bool ePSCPU::RunFrame(uint32_t idle_timer_cycles) {
-		const std::lock_guard lock(state_mutex_);
+		std::unique_lock lock(state_mutex_);
 		constexpr uint32_t kLegacyActiveInstructions = 2000;
 		constexpr uint32_t kFrameInstructions = 4000;
+		constexpr uint32_t kEps6009LockYieldInstructions = 128;
+		constexpr auto kEps6009ActiveFramePacing = std::chrono::milliseconds(1);
+		bool stopped = false;
+		if (state_->cpu.mode == CPU_MODE_SLEEP) {
+			machine_state_advance_cycles_split(state_, kFrameInstructions, false, false);
+			return false;
+		}
 		if (!ice_timer_scheduling_) {
 			for (uint32_t i = 0; i < kFrameInstructions; ++i) {
-				if (RunInstructionLocked(i < kLegacyActiveInstructions))
-					return true;
+				if (RunInstructionLocked(i < kLegacyActiveInstructions)) {
+					stopped = true;
+					break;
+				}
+				if (variant_ == EpsVariant::Eps6009 &&
+					((i + 1) % kEps6009LockYieldInstructions) == 0) {
+					lock.unlock();
+					std::this_thread::yield();
+					lock.lock();
+				}
 			}
-			return false;
+			if (variant_ == EpsVariant::Eps6009 && !stopped)
+				std::this_thread::sleep_for(kEps6009ActiveFramePacing);
+			return stopped;
 		}
 		const auto now = std::chrono::steady_clock::now();
 		if (state_->cpu.mode == CPU_MODE_IDLE) {
-			constexpr auto kIdleTimerPeriod = std::chrono::milliseconds(20);
 			machine_state_advance_cycles_split(state_, kFrameInstructions, false, false);
 			if (idle_timer_cycles != 0) {
 				// Some EPS6800 models need Timer1 paced from the low-speed
@@ -246,6 +274,7 @@ namespace casioemu {
 				machine_state_tick_idle_timer1(state_, idle_timer_cycles);
 			}
 			else {
+				constexpr auto kIdleTimerPeriod = std::chrono::milliseconds(20);
 				const auto elapsed = now - idle_timer_checkpoint_;
 				const auto ticks = static_cast<uint32_t>(elapsed / kIdleTimerPeriod);
 				if (ticks != 0) {
@@ -257,10 +286,20 @@ namespace casioemu {
 		}
 		idle_timer_checkpoint_ = now;
 		for (uint32_t i = 0; i < kFrameInstructions; ++i) {
-			if (RunInstructionLocked(true))
-				return true;
+			if (RunInstructionLocked(true)) {
+				stopped = true;
+				break;
+			}
+			if (variant_ == EpsVariant::Eps6009 &&
+				((i + 1) % kEps6009LockYieldInstructions) == 0) {
+				lock.unlock();
+				std::this_thread::yield();
+				lock.lock();
+			}
 		}
-		return false;
+		if (variant_ == EpsVariant::Eps6009 && !stopped)
+			std::this_thread::sleep_for(kEps6009ActiveFramePacing);
+		return stopped;
 	}
 
 	bool ePSCPU::RunInstructionLocked(bool tick_timer) {
@@ -270,7 +309,7 @@ namespace casioemu {
 		const uint8_t interrupt_pending = state_->cpu.int_pending;
 		const uint32_t instruction = machine_state_debug_fetch_instruction(state_, pc_before);
 		const uint16_t word = static_cast<uint16_t>(instruction >> 16);
-		const uint8_t base_cycles = EpsInstructionCycles(word);
+		const uint8_t base_cycles = EpsInstructionCycles(word, variant_);
 		bool advance_timer = false;
 		if (tick_timer && ++timer_cycle_phase_ >= timer_cycle_divisor_) {
 			timer_cycle_phase_ = 0;
@@ -285,13 +324,13 @@ namespace casioemu {
 
 		const uint32_t pc_after = state_->cpu.pc;
 		uint8_t elapsed_cycles = base_cycles;
-		if (elapsed_cycles == 1 && pc_after != pc_before + EpsInstructionWords(word))
+		if (elapsed_cycles == 1 && pc_after != pc_before + EpsInstructionWords(word, variant_))
 			elapsed_cycles = 2; // ePS6800 control-flow / PC-write penalty.
 		cycle_count_ += elapsed_cycles;
 		const uint8_t stack_pointer_after = state_->mmio.regs[REG_STKPTR] & 0x1f;
 		RecordTraceLocked(pc_before, instruction, pc_after);
 		if (function_hook_ && IsEpsCallInstruction(word)) {
-			function_hook_(pc_after, pc_before + EpsInstructionWords(word), true,
+			function_hook_(pc_after, pc_before + EpsInstructionWords(word, variant_), true,
 				state_->mmio.regs[REG_ACC], BacktraceLocked());
 		}
 		else if (function_hook_ && IsEpsReturnInstruction(word)) {
@@ -447,7 +486,7 @@ namespace casioemu {
 		if (control) {
 			control->lcdarh = raw_control.lcdarh;
 			control->lcdcon = raw_control.lcdcon;
-			control->contrast = static_cast<uint8_t>(
+			control->contrast = variant_ == EpsVariant::Eps6009 ? 0x0f : static_cast<uint8_t>(
 				(raw_control.lcdarh & MASK_LCD_CONTRAST) >> SHIFT_LCD_CONTRAST);
 			control->display_on = (raw_control.lcdcon & BIT_LCD_ON) != 0;
 			control->blanked = (raw_control.lcdcon & BIT_LCD_BLANK) != 0;
@@ -456,7 +495,7 @@ namespace casioemu {
 	}
 
 	size_t ePSCPU::LcdRawSize() const {
-		return sizeof(state_->lcd.fb);
+		return eps_lcd_raw_size(ToCoreVariant(variant_));
 	}
 
 	uint8_t ePSCPU::ReadByte(uint8_t address) {
@@ -592,7 +631,7 @@ namespace casioemu {
 			return;
 		}
 		debug_run_mode_ = DebugRunMode::StepOver;
-		debug_target_pc_ = pc + EpsInstructionWords(word);
+		debug_target_pc_ = pc + EpsInstructionWords(word, variant_);
 		debug_target_stack_pointer_ = state_->mmio.regs[REG_STKPTR] & 0x1f;
 	}
 

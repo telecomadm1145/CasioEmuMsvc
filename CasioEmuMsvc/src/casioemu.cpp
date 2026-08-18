@@ -14,6 +14,7 @@
 #include <SDL.h>
 #include <SDL_image.h>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <cstdio>
@@ -26,6 +27,7 @@
 #include <map>
 #include <mutex>
 #include <ostream>
+#include <sstream>
 #include <string>
 #include <thread>
 #if _WIN32
@@ -415,8 +417,9 @@ int main(int argc, char* argv[]) {
 
 			SDL_RenderPresent(emulator.renderer);
 #else
-			if (!no_dbg)
+			if (!no_dbg) {
 				gui_loop();
+			}
 			emulator.Frame();
 			SDL_RenderPresent(emulator.renderer);
 #endif

@@ -24,8 +24,13 @@ std::string to_hex(unsigned int num) {
 	return result;
 }
 void VariableWindow::RenderCore() {
-	char* base_addr = n_ram_buffer - casioemu::GetRamBaseAddr(m_emu->hardware_id);
 	auto vars = casioemu::GetVariableOffsets(m_emu->hardware_id);
+	if (!n_ram_buffer || vars.empty()) {
+		ImGui::TextUnformatted("No known variable map for this hardware.");
+		return;
+	}
+
+	char* base_addr = n_ram_buffer - casioemu::GetRamBaseAddr(m_emu->hardware_id);
 	static bool showaddr = false;
 	static bool showhex = false;
 	static bool showimg_auto = true;

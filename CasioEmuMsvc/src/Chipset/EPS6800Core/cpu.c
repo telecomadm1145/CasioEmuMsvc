@@ -130,6 +130,7 @@ enum {
 	CPU_PC_LOW_13_BITS_MASK = 0x1FFF,
 	CPU_LONG_BRANCH_ADDRESS_MASK = 0x0001FFFF,
 	CPU_RESET_STATUS = 0xC0,
+	CPU_EPS6009_RESET_STATUS = 0x30,
 	CPU_ROM_HIGH_BYTE_SELECT = 0x01,
 	CPU_OPCODE_SLEEP = 0x0002,
 	CPU_TRACE_FORMAT_BUFFER_SIZE = 256
@@ -165,6 +166,10 @@ static uint16_t cpu_read_rom_word_state(const struct cpu_state *state, uint32_t 
 }
 
 static uint8_t cpu_read_rom_byte_state(const struct cpu_state *state, uint32_t addr) {
+	if (eps_variant_is_6009(cpu_variant(state))) {
+		/* EPS6009 table reads wrap inside its 64 KiB byte-addressed ROM. */
+		addr &= 0xffffu;
+	}
 	uint16_t word = cpu_read_rom_word_state(state, addr >> 1);
 	if (addr & CPU_ROM_HIGH_BYTE_SELECT) {
 		word >>= CPU_PC_MID_SHIFT;
@@ -212,6 +217,10 @@ static uint8_t cpu_bus_read_internal(struct cpu_state *state, uint8_t addr) {
 	return mmio_read_byte_internal_state(state->mmio, addr);
 }
 
+static enum eps_variant cpu_variant(const struct cpu_state *state) {
+	return state->mmio ? state->mmio->variant : EPS_VARIANT_6800;
+}
+
 static void cpu_bus_write_internal(struct cpu_state *state, uint8_t addr, uint8_t byte) {
 	mmio_write_byte_internal_state(state->mmio, addr, byte);
 }
@@ -235,11 +244,13 @@ static void cpu_bus_reset(struct cpu_state *state) {
 static void cpu_write_pc_registers_state(struct cpu_state *state) {
 	cpu_bus_write_internal(state, REG_PCL, state->pc & CPU_BYTE_MASK);
 	cpu_bus_write_internal(state, REG_PCM, (state->pc >> CPU_PC_MID_SHIFT) & CPU_BYTE_MASK);
-	cpu_bus_write_internal(state, REG_PCH, (state->pc >> CPU_PC_HIGH_SHIFT) & CPU_BYTE_MASK);
+	if (eps_has_pch(cpu_variant(state)))
+		cpu_bus_write_internal(state, REG_PCH, (state->pc >> CPU_PC_HIGH_SHIFT) & CPU_BYTE_MASK);
 }
 
 static uint32_t cpu_read_pc_registers_state(struct cpu_state *state) {
-	uint32_t pc = (uint32_t)cpu_bus_read_internal(state, REG_PCH) << CPU_PC_HIGH_SHIFT;
+	uint32_t pc = eps_has_pch(cpu_variant(state)) ?
+		((uint32_t)cpu_bus_read_internal(state, REG_PCH) << CPU_PC_HIGH_SHIFT) : 0;
 	pc |= (uint32_t)cpu_bus_read_internal(state, REG_PCM) << CPU_PC_MID_SHIFT;
 	pc |= (uint32_t)cpu_bus_read_internal(state, REG_PCL);
 	return pc;
@@ -283,7 +294,9 @@ static uint8_t cpu_read_direct_state(struct cpu_state *state, uint8_t addr) {
 	case REG_PCM:
 		return ((state->pc + 1) >> CPU_PC_MID_SHIFT) & CPU_BYTE_MASK;
 	case REG_PCH:
-		return ((state->pc + 1) >> CPU_PC_HIGH_SHIFT) & CPU_BYTE_MASK;
+		if (eps_has_pch(cpu_variant(state)))
+			return ((state->pc + 1) >> CPU_PC_HIGH_SHIFT) & CPU_BYTE_MASK;
+		return cpu_bus_read(state, addr);
 	default:
 		return cpu_bus_read(state, addr);
 	}
@@ -469,14 +482,14 @@ static uint32_t cpu_pop_state(struct cpu_state *state) {
 
 static void cpu_handle_interrupt_state(struct cpu_state *state, uint32_t addr) {
 	uint8_t cpucon;
-	cpucon = cpu_bus_read_internal(state, REG_CPUCON);
+	cpucon = cpu_bus_read_internal(state, eps_reg_cpucon(cpu_variant(state)));
 	if (cpucon & BIT_GLINT) {
 		cpu_push_state(state, state->pc + (state->sleep_repeat_pc ? 1 : 0));
 		state->sleep_repeat_pc = false;
 		state->pc = addr;
 		cpu_write_pc_registers_state(state);
 		/* Interrupt entry masks further interrupts until RETI reenables them. */
-		cpu_bus_write_internal(state, REG_CPUCON, (uint8_t)(cpucon & ~BIT_GLINT));
+		cpu_bus_write_internal(state, eps_reg_cpucon(cpu_variant(state)), (uint8_t)(cpucon & ~BIT_GLINT));
 	}
 }
 
@@ -490,7 +503,7 @@ void cpu_loop_state(struct cpu_state *state, uint32_t count) {
 	 * can actually enter the vector loses Timer1 wakeups from Idle. */
 	/* The hardware finishes an active RPT before accepting an interrupt. */
 	if (state->int_pending && state->rpt_target_pc == 0 &&
-		(cpu_bus_read_internal(state, REG_CPUCON) & BIT_GLINT)) {
+		(cpu_bus_read_internal(state, eps_reg_cpucon(cpu_variant(state))) & BIT_GLINT)) {
 		if (state->int_pending & INT_LEVEL4_TIMINT) {
 			state->int_pending &= ~INT_LEVEL4_TIMINT;
 			cpu_handle_interrupt_state(state, ADDR_TIMINT);
@@ -565,7 +578,7 @@ void cpu_reset_state(struct cpu_state *state) {
 	state->int_pending = 0;
 	state->sleep_repeat_pc = false;
 	cpu_bus_reset(state);
-	cpu_set_status_state(state, CPU_RESET_STATUS);
+	cpu_set_status_state(state, eps_variant_is_6009(cpu_variant(state)) ? CPU_EPS6009_RESET_STATUS : CPU_RESET_STATUS);
 }
 
 void cpu_interrupt_state(struct cpu_state *state, uint8_t int_level) {
@@ -581,7 +594,7 @@ void cpu_wake_state(struct cpu_state *state, uint8_t source) {
 		cpu_write_pc_registers_state(state);
 	}
 	if ((source == WAKE_PAINT) || (source == WAKE_ON) || timer_idle_wake) {
-		state->mode = (cpu_bus_read_internal(state, REG_CPUCON) & BIT_MS0)
+		state->mode = (cpu_bus_read_internal(state, eps_reg_cpucon(cpu_variant(state))) & BIT_MS0)
 			? CPU_MODE_FAST
 			: CPU_MODE_SLOW;
 	}
@@ -820,15 +833,20 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
 			state->status |= BIT_STATUS_TO | BIT_STATUS_PD;
 			break;
 		case CPU_OPCODE_SLEEP:
-			temp8_1 = cpu_bus_read_internal(state, REG_CPUCON);
+			temp8_1 = cpu_bus_read_internal(state, eps_reg_cpucon(cpu_variant(state)));
 			state->mode = (temp8_1 & BIT_MS1) ? CPU_MODE_IDLE : CPU_MODE_SLEEP;
-			state->sleep_repeat_pc = true;
-			newpc = state->pc;
+			if (eps_variant_is_6009(cpu_variant(state))) {
+				state->sleep_repeat_pc = false;
+			}
+			else {
+				state->sleep_repeat_pc = true;
+				newpc = state->pc;
+			}
 			break;
 		case CPU_OPCODE_RETI:
-			temp8_1 = cpu_bus_read_internal(state, REG_CPUCON);
+			temp8_1 = cpu_bus_read_internal(state, eps_reg_cpucon(cpu_variant(state)));
 			temp8_1 |= BIT_GLINT;
-			cpu_bus_write_internal(state, REG_CPUCON, temp8_1);
+			cpu_bus_write_internal(state, eps_reg_cpucon(cpu_variant(state)), temp8_1);
 			newpc = cpu_pop_state(state);
 			break;
 		case CPU_OPCODE_RET:

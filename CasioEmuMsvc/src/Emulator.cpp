@@ -8,6 +8,7 @@
 #include <cassert>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -208,11 +209,11 @@ namespace casioemu {
 		else {
 			cycles_per_second = 1024 * 1024 * 8;
 		}
-		if (hardware_id == HW_EPS6800) {
+		if (IsEpsFamily(hardware_id)) {
 			cycles_per_second = GetEpsCyclesPerSecond(ModelDefinition);
 			eps_timer1_source_hz = GetEpsTimer1SourceHz(ModelDefinition);
 		}
-		timer_interval = hardware_id == HW_EPS6800 ? 40 : 20;
+		timer_interval = IsEpsFamily(hardware_id) ? 40 : 20;
 
 		cycles.Setup(cycles_per_second, timer_interval);
 		chipset.Setup();
@@ -283,9 +284,9 @@ namespace casioemu {
 		cycles.Reset();
 		// EPS reset clears CPU/SFR state but preserves its RAM image. Do this before
 		// the worker starts so firmware sees a clean reset with the restored RAM.
-		if (hardware_id == HW_EPS6800)
+		if (IsEpsFamily(hardware_id))
 			chipset.Reset();
-		if (hardware_id == HW_EPS6800 && argv_map.find("paused") != argv_map.end())
+		if (IsEpsFamily(hardware_id) && argv_map.find("paused") != argv_map.end())
 			SetPaused(true);
 		#ifdef __EMSCRIPTEN__
 		tick_thread = nullptr;
@@ -345,7 +346,7 @@ namespace casioemu {
 
 		RunStartupScript();
 
-		if (hardware_id != HW_EPS6800)
+		if (!IsEpsFamily(hardware_id))
 			chipset.Reset();
 
 		if (argv_map.find("paused") != argv_map.end())
@@ -374,11 +375,11 @@ namespace casioemu {
 		else {
 			cycles_per_second = 1024 * 1024 * 8;
 		}
-		if (hardware_id == HW_EPS6800) {
+		if (IsEpsFamily(hardware_id)) {
 			cycles_per_second = GetEpsCyclesPerSecond(ModelDefinition);
 			eps_timer1_source_hz = GetEpsTimer1SourceHz(ModelDefinition);
 		}
-		timer_interval = hardware_id == HW_EPS6800 ? 40 : 20;
+		timer_interval = IsEpsFamily(hardware_id) ? 40 : 20;
 
 		cycles.Setup(cycles_per_second, timer_interval);
 		chipset.Setup();
@@ -441,7 +442,7 @@ namespace casioemu {
 		cycles.Reset();
 		// EPS reset clears CPU/SFR state but preserves its RAM image. Do this before
 		// the worker starts so firmware sees a clean reset with the restored RAM.
-		if (hardware_id == HW_EPS6800)
+		if (IsEpsFamily(hardware_id))
 			chipset.Reset();
 		if (!headless) {
 		#ifdef __EMSCRIPTEN__
@@ -503,7 +504,7 @@ namespace casioemu {
 			RunStartupScript();
 		}
 
-		if (hardware_id != HW_EPS6800)
+		if (!IsEpsFamily(hardware_id))
 			chipset.Reset();
 	}
 
@@ -637,7 +638,7 @@ namespace casioemu {
 
 	void Emulator::TimerCallback() {
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
-		if (hardware_id == HW_EPS6800) {
+		if (IsEpsFamily(hardware_id)) {
 			constexpr Uint64 cycles_per_eps_frame = 4000;
 			const auto cycles_to_emulate = cycles.GetDelta();
 			if (Paused) {
@@ -646,6 +647,7 @@ namespace casioemu {
 				return;
 			}
 			eps_frame_cycle_remainder.fetch_add(cycles_to_emulate, std::memory_order_relaxed);
+			Uint64 frames_run = 0;
 			while (eps_frame_cycle_remainder.load(std::memory_order_relaxed) >= cycles_per_eps_frame) {
 				uint32_t timer1_cycles = 0;
 				if (eps_timer1_source_hz != 0) {
@@ -664,6 +666,7 @@ namespace casioemu {
 					break;
 				}
 				eps_frame_cycle_remainder.fetch_sub(cycles_per_eps_frame, std::memory_order_relaxed);
+				++frames_run;
 			}
 			return;
 		}
@@ -682,7 +685,6 @@ namespace casioemu {
 		if (headless)
 			return;
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
-
 		const bool board_interface = !ModelDefinition.board_path.empty() &&
 			interface_background.dest.w > 0 && interface_background.dest.h > 0;
 		if (board_interface) {

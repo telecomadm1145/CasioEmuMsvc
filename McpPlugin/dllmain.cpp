@@ -774,6 +774,7 @@ json CallTool(const std::string& name, const json& args) {
             hits.push_back({
                 {"program_counter", hit.ProgramCounter},
                 {"link_register", hit.LinkRegister},
+                {"value", hit.Value},
                 {"stack", hit.Stack},
                 {"registers", std::move(registers)},
             });

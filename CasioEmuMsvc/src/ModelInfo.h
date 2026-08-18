@@ -30,8 +30,17 @@ namespace casioemu {
 		HW_SOLARII = 8,
 		// our test ends here, so we can add new models without worrying about breaking old configs
 		HW_EPS6800 = 9,
-		HW_MAX = HW_EPS6800,
+		HW_EPS6009 = 10,
+		HW_MAX = HW_EPS6009,
 	};
+
+	inline constexpr bool IsEpsFamily(unsigned short hardware_id) {
+		return hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009;
+	}
+
+	inline constexpr bool IsEpsSegmentLcd(unsigned short hardware_id) {
+		return hardware_id == HW_EPS6009;
+	}
 	struct SpriteInfo {
 		Rect src, dest;
 		std::string svg_shape;

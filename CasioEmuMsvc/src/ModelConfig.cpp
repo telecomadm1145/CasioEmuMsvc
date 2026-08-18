@@ -24,6 +24,13 @@ namespace casioemu {
 			return std::filesystem::exists(path, ec) && std::filesystem::is_regular_file(path, ec);
 		}
 
+		std::filesystem::path ResolveModelFilePath(const std::filesystem::path& model_path, const std::string& file_name) {
+			std::filesystem::path path(file_name);
+			if (path.is_absolute())
+				return path;
+			return model_path / path;
+		}
+
 		json RectToJson(const Rect& rect) {
 			return json{{"x", rect.x}, {"y", rect.y}, {"w", rect.w}, {"h", rect.h}};
 		}
@@ -460,7 +467,22 @@ namespace casioemu {
 		try {
 			const auto json_path = model_path / MODEL_CONFIG_JSON;
 			const auto bin_path = model_path / MODEL_CONFIG_BIN;
-			if (FileExists(bin_path)) {
+			const bool has_json = FileExists(json_path);
+			bool has_fresh_bin = FileExists(bin_path) &&
+				(!has_json || std::filesystem::last_write_time(bin_path) >= std::filesystem::last_write_time(json_path));
+			if (has_fresh_bin && has_json) {
+				std::ifstream stream(json_path);
+				if (!stream)
+					throw std::runtime_error("Cannot open config.json.");
+				json value = json::parse(stream);
+				const std::string requested_board = ReadJsonString(value, {"board_path"});
+				if (!requested_board.empty()) {
+					const auto board_path = ResolveModelFilePath(model_path, requested_board);
+					if (FileExists(board_path))
+						has_fresh_bin = std::filesystem::last_write_time(bin_path) >= std::filesystem::last_write_time(board_path);
+				}
+			}
+			if (has_fresh_bin) {
 				std::ifstream stream(bin_path, std::ios::binary);
 				if (!stream)
 					throw std::runtime_error("Cannot open config.bin.");
@@ -471,7 +493,7 @@ namespace casioemu {
 				return true;
 			}
 
-			if (FileExists(json_path)) {
+			if (has_json) {
 				std::ifstream stream(json_path);
 				if (!stream)
 					throw std::runtime_error("Cannot open config.json.");

@@ -15,7 +15,7 @@
 		(ptr)[3])
 
 char* decodeeps(char* rom, int pc, bool& l) {
-	// unsigned int* v6; // edi  // Kh√¥ng d√πng, c√≥ th·ª?b·ª?
+	// unsigned int* v6; // edi  //
 	// unsigned __int16 v9;      // a
 	// int v11;                  // eax
 	// int v13;                  // [esp+Ch] [ebp-20h]

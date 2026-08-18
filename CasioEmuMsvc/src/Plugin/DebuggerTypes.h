@@ -53,6 +53,7 @@ struct DebugMemoryBreakpointHitInfo {
 	uint32_t ProgramCounter = 0;
 	uint32_t LinkRegister = 0;
 	std::string Stack;
+	uint8_t Value = 0;
 	std::vector<DebugRegisterInfo> Registers;
 };
 

@@ -17,13 +17,13 @@ size_t machine_state_lcd_copy_display(
 		return 0;
 	}
 
-	copy_size = (size < MACHINE_LCD_FRAMEBUFFER_SIZE) ? size : MACHINE_LCD_FRAMEBUFFER_SIZE;
+	copy_size = (size < eps_lcd_raw_size(state->mmio.variant)) ? size : eps_lcd_raw_size(state->mmio.variant);
 	for (i = 0; i < copy_size; i++) {
 		data[i] = lcd_ram_read_byte_state(&state->lcd, (uint16_t)i);
 	}
 	if (control) {
-		control->lcdarh = state->lcd.reg[REG_LCDARH];
-		control->lcdcon = state->lcd.reg[REG_LCDCON];
+		control->lcdarh = eps_variant_is_6009(state->mmio.variant) ? 0 : state->lcd.reg[eps_reg_lcdarh(state->mmio.variant)];
+		control->lcdcon = state->lcd.reg[eps_reg_lcdcon(state->mmio.variant)];
 	}
 	return copy_size;
 }

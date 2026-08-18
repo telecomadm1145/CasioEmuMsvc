@@ -42,17 +42,34 @@ namespace {
 		"pbcon", "dcrb", "portc", "pccon", "dcrc", "portd", "porte", "dcrde"
 	};
 
-	std::string Eps6800RegisterName(uint8_t address) {
-		if (address < kEps6800RegisterNames.size())
-			return kEps6800RegisterNames[address];
+	constexpr std::array<const char*, 0x40> kEps6009RegisterNames = {
+		"indf0", "fsr0", "bsr", "indf1", "fsr1", "bsr1", "stkptr", "pcl",
+		"pcm", "lcdarl", "acc", "tabptrl", "tabptrm", "tabptrh", "lcddata", "status",
+		"porta", "portb", "r12", "r13", "r14", "r15", "r16", "r17",
+		"r18", "r19", "r1a", "r1b", "r1c", "r1d", "r1e", "r1f",
+		"stbcon", "trintcon", "trintsta", "tr01con", "trl0l", "trl0h", "trl1", "tr2wcon",
+		"trl2", "pacon", "pawake", "painten", "paintsta", "pbcon", "dcrb", "lcdcon",
+		"post_id", "cpucon", "r32", "r33", "r34", "r35", "r36", "r37",
+		"r38", "r39", "r3a", "r3b", "r3c", "r3d", "r3e", "r3f"
+	};
+
+	const std::array<const char*, 0x40>& EpsRegisterNames(bool eps6009) {
+		return eps6009 ? kEps6009RegisterNames : kEps6800RegisterNames;
+	}
+
+	std::string EpsRegisterName(uint8_t address, bool eps6009) {
+		const auto& names = EpsRegisterNames(eps6009);
+		if (address < names.size())
+			return names[address];
 		char name[4]{};
 		std::snprintf(name, sizeof(name), "r%02x", address);
 		return name;
 	}
 
-	bool Eps6800RegisterAddress(const std::string& name, uint8_t& address) {
-		for (size_t i = 0; i < kEps6800RegisterNames.size(); ++i) {
-			if (name == kEps6800RegisterNames[i]) {
+	bool EpsRegisterAddress(const std::string& name, bool eps6009, uint8_t& address) {
+		const auto& names = EpsRegisterNames(eps6009);
+		for (size_t i = 0; i < names.size(); ++i) {
+			if (name == names[i]) {
 				address = static_cast<uint8_t>(i);
 				return true;
 			}
@@ -69,6 +86,9 @@ namespace {
 		if (name == "psw") address = 0x0f;
 		else if (name == "sp") address = 0x06;
 		else if (name == "dsr") address = 0x02;
+		else if (eps6009 && name == "lcdarh") address = 0x09;
+		else if (eps6009 && name == "tr0con") address = 0x23;
+		else if (eps6009 && name == "tr1con") address = 0x23;
 		else return false;
 		return true;
 	}
@@ -282,10 +302,11 @@ class PluginApi_Impl : public PluginApi {
 			std::vector<DebugRegisterInfo> result;
 			if (auto* eps = m_emu->chipset.epscpu) {
 				const auto snapshot = eps->DebugSnapshot();
+				const bool eps6009 = m_emu->hardware_id == casioemu::HW_EPS6009;
 				result.reserve(0x81);
 				result.push_back({"pc", snapshot.program_counter, 24});
 				for (uint32_t address = 0; address < snapshot.registers.size(); ++address)
-					result.push_back({Eps6800RegisterName(static_cast<uint8_t>(address)),
+					result.push_back({EpsRegisterName(static_cast<uint8_t>(address), eps6009),
 						snapshot.registers[address], 8});
 				return result;
 			}
@@ -321,7 +342,7 @@ class PluginApi_Impl : public PluginApi {
 			if (auto* eps = m_emu->chipset.epscpu) {
 				/* Accept the same writable aliases (psw/sp/dsr) for reads. */
 				uint8_t address = 0;
-				if (Eps6800RegisterAddress(normalized, address)) {
+				if (EpsRegisterAddress(normalized, m_emu->hardware_id == casioemu::HW_EPS6009, address)) {
 					value = eps->ReadDebugMemory(address);
 					bitWidth = 8;
 					return true;
@@ -339,7 +360,7 @@ class PluginApi_Impl : public PluginApi {
 					return true;
 				}
 				uint8_t address = 0;
-				if (!Eps6800RegisterAddress(normalized, address))
+				if (!EpsRegisterAddress(normalized, m_emu->hardware_id == casioemu::HW_EPS6009, address))
 					return false;
 				return eps->WriteDebugMemory(address, static_cast<uint8_t>(value));
 			}
@@ -501,8 +522,11 @@ class PluginApi_Impl : public PluginApi {
 		std::vector<DebugMemoryBreakpointHitInfo> GetMemoryBreakpointHits(uint32_t address, bool write) override {
 			std::vector<DebugMemoryBreakpointHitInfo> result;
 			if (auto* eps = m_emu->chipset.epscpu) {
-				for (const auto& record : eps->MemoryBreakpointHits(address, write))
-					result.push_back({record.program_counter, 0, {}});
+				for (const auto& record : eps->MemoryBreakpointHits(address, write)) {
+					DebugMemoryBreakpointHitInfo hit{record.program_counter, 0, {}};
+					hit.Value = record.value;
+					result.push_back(std::move(hit));
+				}
 				return result;
 			}
 			if (!membp)

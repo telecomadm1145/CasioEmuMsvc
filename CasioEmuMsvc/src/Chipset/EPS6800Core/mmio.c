@@ -13,6 +13,7 @@ enum {
 	MMIO_RAM_SELECT_MASK = 0x80,
 	MMIO_RAM_OFFSET_MASK = 0x7F,
 	MMIO_RAM_PAGE_MASK = 0x3F,
+	MMIO_EPS6009_RAM_PAGE_MASK = 0x0F,
 	MMIO_RAM_PAGE_SHIFT = 7,
 	MMIO_WBK_FIRST_REG = REG_TR0CON,
 	MMIO_WBK_LAST_REG = REG_DCRDE,
@@ -28,20 +29,39 @@ static uint32_t mmio_ram_address(uint8_t page, uint8_t offset) {
 		(offset & MMIO_RAM_OFFSET_MASK);
 }
 
+static uint32_t mmio_variant_ram_address(const struct mmio_state *state, uint8_t page, uint8_t offset) {
+	const uint8_t page_mask = eps_variant_is_6009(state->variant) ? MMIO_EPS6009_RAM_PAGE_MASK : MMIO_RAM_PAGE_MASK;
+	return ((uint32_t)(page & page_mask) << MMIO_RAM_PAGE_SHIFT) |
+		(offset & MMIO_RAM_OFFSET_MASK);
+}
+
+static bool mmio_eps6009_normal_register(uint8_t addr) {
+	return (addr >= 0x12u && addr <= 0x1fu) ||
+		(addr >= 0x32u && addr <= 0x7fu);
+}
+
+static bool mmio_direct_normal_register(const struct mmio_state *state, uint8_t addr) {
+	return eps_variant_is_6009(state->variant) &&
+		mmio_eps6009_normal_register(addr) &&
+		addr != eps_reg_lcddat(state->variant);
+}
+
+static bool mmio_read_peripheral(struct mmio_state *state, uint8_t addr, uint8_t *byte);
+
 static uint32_t mmio_direct_ram_address(const struct mmio_state *state, uint8_t addr) {
-	return mmio_ram_address(state->regs[REG_BSR], addr);
+	return mmio_variant_ram_address(state, state->regs[REG_BSR], addr);
 }
 
 static uint32_t mmio_fsr0_ram_address(const struct mmio_state *state) {
-	return mmio_ram_address(state->regs[REG_BSR], state->regs[REG_FSR0]);
+	return mmio_variant_ram_address(state, state->regs[REG_BSR], state->regs[REG_FSR0]);
 }
 
 static uint32_t mmio_fsr1_ram_address(const struct mmio_state *state) {
-	return mmio_ram_address(state->regs[REG_BSR1], state->regs[REG_FSR1]);
+	return mmio_variant_ram_address(state, state->regs[REG_BSR1], state->regs[REG_FSR1]);
 }
 
 static uint32_t mmio_fsr2_ram_address(const struct mmio_state *state) {
-	return mmio_ram_address(state->regs[REG_BSR2], state->regs[REG_FSR2]);
+	return mmio_variant_ram_address(state, state->regs[REG_BSR2], state->regs[REG_FSR2]);
 }
 
 static uint8_t mmio_wbk_index(uint8_t addr) {
@@ -49,9 +69,10 @@ static uint8_t mmio_wbk_index(uint8_t addr) {
 }
 
 static bool mmio_wbk_register_selected(const struct mmio_state *state, uint8_t addr) {
-	return (addr >= MMIO_WBK_FIRST_REG) &&
+	return !eps_variant_is_6009(state->variant) &&
+		(addr >= MMIO_WBK_FIRST_REG) &&
 		(addr <= MMIO_WBK_LAST_REG) &&
-		(state->regs[REG_CPUCON] & BIT_WBK);
+		(state->regs[eps_reg_cpucon(state->variant)] & BIT_WBK);
 }
 
 static uint32_t mmio_effective_linear_address(const struct mmio_state *state, uint8_t addr) {
@@ -66,6 +87,8 @@ static uint32_t mmio_effective_linear_address(const struct mmio_state *state, ui
 	case REG_INDF1:
 		return 0x80u + mmio_fsr1_ram_address(state);
 	case REG_INDF2:
+		if (!eps_has_indf2(state->variant))
+			return addr;
 		return 0x80u + mmio_fsr2_ram_address(state);
 	default:
 		return addr;
@@ -84,56 +107,44 @@ static bool mmio_notify_debug_access(
 	return false;
 }
 
-static bool mmio_lcd_register(uint8_t addr) {
-	switch (addr) {
-	case REG_POSTID:
-	case REG_LCDARH:
-	case REG_LCDARL:
-	case REG_LCDDAT:
-	case REG_LCDCON:
-		return true;
-	default:
-		return false;
-	}
+static bool mmio_lcd_register(const struct mmio_state *state, uint8_t addr) {
+	return addr == eps_reg_lcddat(state->variant) ||
+		addr == eps_reg_postid(state->variant) ||
+		addr == eps_reg_lcdarl(state->variant) ||
+		addr == eps_reg_lcdcon(state->variant) ||
+		(!eps_variant_is_6009(state->variant) && addr == eps_reg_lcdarh(state->variant));
 }
 
-static bool mmio_timer_register(uint8_t addr) {
-	switch (addr) {
-	case REG_INTSTA:
-	case REG_TR0CON:
-	case REG_TRL0H:
-	case REG_TRL0L:
-	case REG_T0CH:
-	case REG_T0CL:
-	case REG_TR1CON:
-	case REG_TRL1:
-	case REG_TR2WCON:
-	case REG_TRL2:
+static bool mmio_timer_register(const struct mmio_state *state, uint8_t addr) {
+	if (addr == eps_reg_trintcon(state->variant) ||
+		addr == eps_reg_trintsta(state->variant) ||
+		addr == eps_reg_tr0con(state->variant) ||
+		addr == eps_reg_trl0h(state->variant) ||
+		addr == eps_reg_trl0l(state->variant) ||
+		addr == eps_reg_trl1(state->variant) ||
+		addr == eps_reg_tr2wcon(state->variant) ||
+		addr == eps_reg_trl2(state->variant))
 		return true;
-	default:
-		return false;
-	}
+	if (!eps_variant_is_6009(state->variant) && (addr == REG_T0CH || addr == REG_T0CL))
+		return true;
+	return false;
 }
 
-static bool mmio_kbd_register(uint8_t addr) {
-	switch (addr) {
-	case REG_STBCON:
-	case REG_PORTA:
-	case REG_PACON:
-	case REG_DCRA:
-	case REG_PAWAKE:
-	case REG_PAINTEN:
-	case REG_PAINTSTA:
-	case REG_PORTB:
-	case REG_PBCON:
-	case REG_DCRB:
-	case REG_PORTC:
-	case REG_PCCON:
-	case REG_DCRC:
+static bool mmio_kbd_register(const struct mmio_state *state, uint8_t addr) {
+	if (addr == eps_reg_stbcon(state->variant) ||
+		addr == eps_reg_porta(state->variant) ||
+		addr == eps_reg_pacon(state->variant) ||
+		addr == eps_reg_pawake(state->variant) ||
+		addr == eps_reg_painten(state->variant) ||
+		addr == eps_reg_paintsta(state->variant) ||
+		addr == eps_reg_portb(state->variant) ||
+		addr == eps_reg_pbcon(state->variant) ||
+		addr == eps_reg_dcrb(state->variant))
 		return true;
-	default:
-		return false;
-	}
+	if (!eps_variant_is_6009(state->variant) &&
+		(addr == REG_DCRA || addr == REG_PORTC || addr == REG_PCCON || addr == REG_DCRC))
+		return true;
+	return false;
 }
 
 static uint8_t mmio_read_indf0(struct mmio_state *state) {
@@ -141,7 +152,12 @@ static uint8_t mmio_read_indf0(struct mmio_state *state) {
 		return state->ram[mmio_fsr0_ram_address(state)];
 	}
 
-	return state->regs[state->regs[REG_FSR0]]; /* indirect SFR read */
+	uint8_t byte = 0;
+	const uint8_t target = state->regs[REG_FSR0];
+	if (!mmio_read_peripheral(state, target, &byte)) {
+		byte = state->regs[target];
+	}
+	return byte;
 }
 
 static uint8_t mmio_read_indf1(struct mmio_state *state) {
@@ -160,7 +176,7 @@ static void mmio_write_indf0(struct mmio_state *state, uint8_t byte) {
 	}
 	else {
 		uint8_t target = state->regs[REG_FSR0];
-		state->regs[target] = byte; /* indirect SFR write */
+		mmio_write_byte_state(state, target, byte); /* indirect SFR write */
 	}
 }
 
@@ -175,15 +191,15 @@ static void mmio_write_indf2(struct mmio_state *state, uint8_t byte) {
 }
 
 static bool mmio_read_peripheral(struct mmio_state *state, uint8_t addr, uint8_t *byte) {
-	if (mmio_lcd_register(addr)) {
+	if (mmio_lcd_register(state, addr)) {
 		*byte = lcd_read_byte_state(state->lcd, addr);
 		return true;
 	}
-	if (mmio_timer_register(addr)) {
+	if (mmio_timer_register(state, addr)) {
 		*byte = timer_read_byte_state(state->timer, addr);
 		return true;
 	}
-	if (mmio_kbd_register(addr)) {
+	if (mmio_kbd_register(state, addr)) {
 		*byte = kbd_read_byte_state(state->kbd, addr);
 		return true;
 	}
@@ -192,15 +208,15 @@ static bool mmio_read_peripheral(struct mmio_state *state, uint8_t addr, uint8_t
 }
 
 static bool mmio_write_peripheral(struct mmio_state *state, uint8_t addr, uint8_t byte) {
-	if (mmio_lcd_register(addr)) {
+	if (mmio_lcd_register(state, addr)) {
 		lcd_write_byte_state(state->lcd, addr, byte);
 		return true;
 	}
-	if (mmio_timer_register(addr)) {
+	if (mmio_timer_register(state, addr)) {
 		timer_write_byte_state(state->timer, addr, byte);
 		return true;
 	}
-	if (mmio_kbd_register(addr)) {
+	if (mmio_kbd_register(state, addr)) {
 		kbd_write_byte_state(state->kbd, addr, byte);
 		return true;
 	}
@@ -262,6 +278,16 @@ static void mmio_report_bad_access(struct mmio_state *state, const char *access,
 		mmio_read_byte_internal_state(state, REG_STATUS));
 }
 
+static uint8_t mmio_filter_register_write(const struct mmio_state *state, uint8_t addr, uint8_t byte) {
+	if (eps_variant_is_6009(state->variant) && (addr == REG_BSR || addr == REG_BSR1)) {
+		return (uint8_t)(byte & MMIO_EPS6009_RAM_PAGE_MASK);
+	}
+	if (eps_variant_is_6009(state->variant) && addr == eps_reg_cpucon(state->variant)) {
+		return (uint8_t)(byte & (BIT_GLINT | BIT_MS1 | BIT_MS0));
+	}
+	return byte;
+}
+
 void mmio_bad_read_byte_state(struct mmio_state *state, uint8_t addr) {
 	mmio_report_bad_access(state, "read", addr);
 }
@@ -271,8 +297,9 @@ void mmio_bad_write_byte_state(struct mmio_state *state, uint8_t addr) {
 }
 
 static void mmio_postid_step_fsr0(struct mmio_state *state) {
-	if (state->regs[REG_POSTID] & BIT_FSR0PE) {
-		if (state->regs[REG_POSTID] & BIT_FSR0ID) {
+	const uint8_t postid = state->regs[eps_reg_postid(state->variant)];
+	if (postid & BIT_FSR0PE) {
+		if (postid & BIT_FSR0ID) {
 			state->regs[REG_FSR0]++;
 		}
 		else {
@@ -282,6 +309,16 @@ static void mmio_postid_step_fsr0(struct mmio_state *state) {
 }
 
 static void mmio_increment_extended_fsr(struct mmio_state *state, uint8_t bsr_reg, uint8_t fsr_reg) {
+	if (eps_variant_is_6009(state->variant)) {
+		if (state->regs[fsr_reg] == MMIO_FSR_RAM_END) {
+			state->regs[bsr_reg] = (uint8_t)((state->regs[bsr_reg] + 1u) & MMIO_EPS6009_RAM_PAGE_MASK);
+			state->regs[fsr_reg] = MMIO_RAM_SELECT_MASK;
+		}
+		else {
+			state->regs[fsr_reg]++;
+		}
+		return;
+	}
 	if (state->regs[fsr_reg] == MMIO_FSR_RAM_END) {
 		state->regs[bsr_reg]++;
 		state->regs[fsr_reg] = MMIO_RAM_SELECT_MASK;
@@ -292,6 +329,16 @@ static void mmio_increment_extended_fsr(struct mmio_state *state, uint8_t bsr_re
 }
 
 static void mmio_decrement_extended_fsr(struct mmio_state *state, uint8_t bsr_reg, uint8_t fsr_reg) {
+	if (eps_variant_is_6009(state->variant)) {
+		if (state->regs[fsr_reg] == MMIO_RAM_SELECT_MASK) {
+			state->regs[bsr_reg] = (uint8_t)((state->regs[bsr_reg] - 1u) & MMIO_EPS6009_RAM_PAGE_MASK);
+			state->regs[fsr_reg] = MMIO_FSR_RAM_END;
+		}
+		else {
+			state->regs[fsr_reg]--;
+		}
+		return;
+	}
 	if (state->regs[fsr_reg] == MMIO_RAM_SELECT_MASK) {
 		state->regs[bsr_reg]--;
 		state->regs[fsr_reg] = MMIO_FSR_RAM_END;
@@ -308,9 +355,10 @@ static void mmio_postid_step_extended_fsr(
 	uint8_t bsr_reg,
 	uint8_t fsr_reg
 ) {
-	if (state->regs[REG_POSTID] & post_enable_bit) {
+	const uint8_t postid = state->regs[eps_reg_postid(state->variant)];
+	if (postid & post_enable_bit) {
 		state->regs[fsr_reg] |= MMIO_RAM_SELECT_MASK;
-		if (state->regs[REG_POSTID] & post_increment_bit) {
+		if (postid & post_increment_bit) {
 			mmio_increment_extended_fsr(state, bsr_reg, fsr_reg);
 		}
 		else {
@@ -359,7 +407,10 @@ uint8_t mmio_read_byte_state(struct mmio_state *state, uint8_t addr) {
 		byte = mmio_read_indf1(state);
 		break;
 	case REG_INDF2:
-		byte = mmio_read_indf2(state);
+		if (eps_has_indf2(state->variant))
+			byte = mmio_read_indf2(state);
+		else if (!mmio_read_peripheral(state, addr, &byte))
+			byte = state->regs[addr];
 		break;
 	default:
 		if (!mmio_read_peripheral(state, addr, &byte)) {
@@ -376,6 +427,7 @@ void mmio_write_byte_internal_state(struct mmio_state *state, uint8_t addr, uint
 	if (addr == REG_TABPTRH) {
 		byte &= MASK_TABPTRH;
 	}
+	byte = mmio_filter_register_write(state, addr, byte);
 	state->regs[addr] = byte;
 }
 
@@ -386,6 +438,10 @@ uint8_t mmio_read_byte_internal_state(struct mmio_state *state, uint8_t addr) {
 }
 
 void mmio_post_id_state(struct mmio_state *state, uint8_t addr) {
+	if (addr == eps_reg_lcddat(state->variant)) {
+		lcd_process_postid_state(state->lcd);
+		return;
+	}
 	switch (addr) {
 	case REG_INDF0:
 		mmio_postid_step_fsr0(state);
@@ -394,7 +450,8 @@ void mmio_post_id_state(struct mmio_state *state, uint8_t addr) {
 		mmio_postid_step_fsr1(state);
 		break;
 	case REG_INDF2:
-		mmio_postid_step_fsr2(state);
+		if (eps_has_indf2(state->variant))
+			mmio_postid_step_fsr2(state);
 		break;
 	case REG_LCDDAT:
 		lcd_process_postid_state(state->lcd);
@@ -404,15 +461,23 @@ void mmio_post_id_state(struct mmio_state *state, uint8_t addr) {
 
 static void mmio_carry_fsr0(struct mmio_state *state) {
 	state->regs[REG_BSR]++;
+	if (eps_variant_is_6009(state->variant))
+		state->regs[REG_BSR] &= MMIO_EPS6009_RAM_PAGE_MASK;
 }
 
 static void mmio_carry_extended_fsr(struct mmio_state *state, uint8_t bsr_reg, uint8_t fsr_reg) {
 	state->regs[bsr_reg]++;
+	if (eps_variant_is_6009(state->variant))
+		state->regs[bsr_reg] &= MMIO_EPS6009_RAM_PAGE_MASK;
 	state->regs[fsr_reg] |= MMIO_RAM_SELECT_MASK;
 }
 
 static void mmio_borrow_fsr0(struct mmio_state *state) {
 	state->regs[REG_BSR]--;
+	if (eps_variant_is_6009(state->variant)) {
+		state->regs[REG_BSR] &= MMIO_EPS6009_RAM_PAGE_MASK;
+		return;
+	}
 	if (state->regs[REG_BSR] != 0) {
 		state->regs[REG_FSR0] |= MMIO_RAM_SELECT_MASK;
 	}
@@ -420,7 +485,13 @@ static void mmio_borrow_fsr0(struct mmio_state *state) {
 
 static void mmio_borrow_extended_fsr(struct mmio_state *state, uint8_t bsr_reg, uint8_t fsr_reg) {
 	state->regs[bsr_reg]--;
-	if (state->regs[bsr_reg] != 0) {
+	if (eps_variant_is_6009(state->variant)) {
+		state->regs[bsr_reg] &= MMIO_EPS6009_RAM_PAGE_MASK;
+	}
+	else if (state->regs[bsr_reg] != 0) {
+		state->regs[fsr_reg] |= MMIO_RAM_SELECT_MASK;
+	}
+	if (eps_variant_is_6009(state->variant)) {
 		state->regs[fsr_reg] |= MMIO_RAM_SELECT_MASK;
 	}
 }
@@ -437,7 +508,8 @@ void mmio_carry_propagate_state(struct mmio_state *state, uint8_t addr) {
 		state->regs[REG_PCM]++;
 		break;
 	case REG_PCM:
-		state->regs[REG_PCH]++;
+		if (eps_has_pch(state->variant))
+			state->regs[REG_PCH]++;
 		break;
 	case REG_TABPTRL:
 		state->regs[REG_TABPTRM]++;
@@ -446,7 +518,8 @@ void mmio_carry_propagate_state(struct mmio_state *state, uint8_t addr) {
 		state->regs[REG_TABPTRH]++;
 		break;
 	case REG_FSR2:
-		mmio_carry_extended_fsr(state, REG_BSR2, REG_FSR2);
+		if (eps_has_indf2(state->variant))
+			mmio_carry_extended_fsr(state, REG_BSR2, REG_FSR2);
 		break;
 	default:
 		break;
@@ -465,7 +538,8 @@ void mmio_borrow_propagate_state(struct mmio_state *state, uint8_t addr) {
 		state->regs[REG_PCM]--;
 		break;
 	case REG_PCM:
-		state->regs[REG_PCH]--;
+		if (eps_has_pch(state->variant))
+			state->regs[REG_PCH]--;
 		break;
 	case REG_TABPTRL:
 		state->regs[REG_TABPTRM] -= 2; /* Preserve observed TABPTR borrow adjustment. */
@@ -474,7 +548,8 @@ void mmio_borrow_propagate_state(struct mmio_state *state, uint8_t addr) {
 		state->regs[REG_TABPTRH]--;
 		break;
 	case REG_FSR2:
-		mmio_borrow_extended_fsr(state, REG_BSR2, REG_FSR2);
+		if (eps_has_indf2(state->variant))
+			mmio_borrow_extended_fsr(state, REG_BSR2, REG_FSR2);
 		break;
 	default:
 		break;
@@ -497,10 +572,28 @@ void mmio_write_byte_state(struct mmio_state *state, uint8_t addr, uint8_t byte)
 		if (addr == REG_TABPTRH) {
 			byte &= MASK_TABPTRH;
 		}
-		if (addr != REG_LCDDAT) {
+		byte = mmio_filter_register_write(state, addr, byte);
+		if (addr != eps_reg_lcddat(state->variant)) {
 			state->regs[addr] = byte; /* Do all write. */
 		}
 		switch (addr) {
+		case 0x12:
+		case 0x13:
+		case 0x14:
+		case 0x15:
+		case 0x16:
+		case 0x17:
+		case 0x18:
+		case 0x19:
+		case 0x1A:
+		case 0x1B:
+		case 0x1C:
+		case 0x1D:
+		case 0x1E:
+		case 0x1F:
+			if (mmio_direct_normal_register(state, addr))
+				break;
+			break;
 		case REG_STATUS:
 			mmio_cpu_set_status(state, byte);
 			break;
@@ -511,7 +604,10 @@ void mmio_write_byte_state(struct mmio_state *state, uint8_t addr, uint8_t byte)
 			mmio_write_indf1(state, byte);
 			break;
 		case REG_INDF2:
-			mmio_write_indf2(state, byte);
+			if (eps_has_indf2(state->variant))
+				mmio_write_indf2(state, byte);
+			else
+				mmio_write_peripheral(state, addr, byte);
 			break;
 		default:
 			mmio_write_peripheral(state, addr, byte);
@@ -522,20 +618,38 @@ void mmio_write_byte_state(struct mmio_state *state, uint8_t addr, uint8_t byte)
 }
 
 static void mmio_clear_function_registers(struct mmio_state *state) {
-	/* ePS6800.h defines 13h-1Fh and 40h-7Fh as normal registers (RAM).
-	 * Hardware reset clears SFRs but must retain those ranges. */
-	memset(&state->regs[0x00], 0x00, 0x13);
-	memset(&state->regs[0x20], 0x00, 0x20);
+	if (eps_variant_is_6009(state->variant)) {
+		/* ePS6009.h defines 12h-1Fh and 32h-7Fh as normal registers. */
+		memset(&state->regs[0x00], 0x00, 0x12);
+		memset(&state->regs[0x20], 0x00, 0x12);
+	}
+	else {
+		/* ePS6800.h defines 13h-1Fh and 40h-7Fh as normal registers (RAM).
+		 * Hardware reset clears SFRs but must retain those ranges. */
+		memset(&state->regs[0x00], 0x00, 0x13);
+		memset(&state->regs[0x20], 0x00, 0x20);
+	}
 }
 
 static void mmio_apply_reset_defaults(struct mmio_state *state) {
 	state->regs[REG_FSR1] = MMIO_RAM_SELECT_MASK;
-	state->regs[REG_FSR2] = MMIO_RAM_SELECT_MASK;
-	state->regs[REG_POSTID] = MMIO_POSTID_RESET;
-	state->regs[REG_DCRA] = MMIO_DCR_ALL_INPUTS;
-	state->regs[REG_DCRB] = MMIO_DCR_ALL_INPUTS;
-	state->regs[REG_DCRC] = MMIO_DCRC_RESET;
-	state->regs[REG_DCRDE] = MMIO_DCRDE_RESET;
+	if (eps_variant_is_6009(state->variant)) {
+		state->regs[REG_STATUS] = BIT_STATUS_SGE | BIT_STATUS_SLE;
+		state->regs[eps_reg_porta(state->variant)] = 0x8fu;
+		state->regs[eps_reg_portb(state->variant)] = 0x00u;
+		state->regs[eps_reg_pacon(state->variant)] = 0x0eu;
+		state->regs[eps_reg_pbcon(state->variant)] = 0x00u;
+		state->regs[eps_reg_dcrb(state->variant)] = 0x03u;
+		state->regs[eps_reg_postid(state->variant)] = BIT_FSR0ID | BIT_FSR1ID | BIT_LCDID;
+	}
+	else {
+		state->regs[REG_FSR2] = MMIO_RAM_SELECT_MASK;
+		state->regs[REG_POSTID] = MMIO_POSTID_RESET;
+		state->regs[REG_DCRA] = MMIO_DCR_ALL_INPUTS;
+		state->regs[REG_DCRB] = MMIO_DCR_ALL_INPUTS;
+		state->regs[REG_DCRC] = MMIO_DCRC_RESET;
+		state->regs[REG_DCRDE] = MMIO_DCRDE_RESET;
+	}
 }
 
 void mmio_reset_state(struct mmio_state *state) {
@@ -545,6 +659,7 @@ void mmio_reset_state(struct mmio_state *state) {
 
 void mmio_init_state(struct mmio_state *state) {
 	memset(state->regs, 0x00, sizeof(state->regs));
+	state->variant = EPS_VARIANT_6800;
 	mmio_reset_state(state);
 	memset(state->ram_wbk, 0x00, sizeof(state->ram_wbk));
 	memset(state->ram, 0x00, sizeof(state->ram));

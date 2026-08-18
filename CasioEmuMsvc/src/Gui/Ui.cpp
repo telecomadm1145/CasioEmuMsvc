@@ -13,6 +13,7 @@
 #include "LabelFile.h"
 #include "LabelViewer.h"
 #include "MemBreakPoint.hpp"
+#include "ModelInfo.h"
 #include "Random.hpp"
 #include "RendererBackend.h"
 #include "Theme.h"
@@ -35,7 +36,11 @@
 #endif
 #include <Gui.h>
 #include <SDL.h>
+#include <chrono>
+#include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 #ifdef ENABLE_SENTRY
 #include <sentry.h>
 #endif
@@ -308,20 +313,22 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 		windows.push_back(CreateFx5800FileSystem());
 	}
 
-	if (m_emu->hardware_id != casioemu::HW_SOLARII && m_emu->hardware_id != casioemu::HW_EPS6800) {
+	if (m_emu->hardware_id != casioemu::HW_SOLARII && !casioemu::IsEpsFamily(m_emu->hardware_id)) {
 		windows.push_back(new VariableWindow());
 	}
 
 	windows.push_back(new HwController());
 	windows.push_back(new LabelViewer());
-	windows.push_back(new WatchWindow());
+	auto* watch_window = new WatchWindow();
+	windows.push_back(watch_window);
 	windows.push_back(CreateCallAnalysisWindow());
 	windows.push_back(code_viewer = new CodeViewer());
-	if (m_emu->hardware_id != casioemu::HW_EPS6800)
+	if (!casioemu::IsEpsFamily(m_emu->hardware_id))
 		windows.push_back(injector = new Injector());
-	windows.push_back(membp = new Breakpoints());
+	membp = new Breakpoints();
+	windows.push_back(membp);
 	windows.push_back(CreateAddressWindow());
-	if (m_emu->hardware_id != casioemu::HW_EPS6800) {
+	if (!casioemu::IsEpsFamily(m_emu->hardware_id)) {
 #if !defined(TEST_BUILD)
 		windows.push_back(CreateRopCompilerWindow());
 #endif
@@ -333,13 +340,15 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 	windows.push_back(snapshot_window = static_cast<SnapshotWindow*>(CreateSnapshotWindow()));
 #endif
 #ifndef CASIOEMU_CORE_WEB
-	if (m_emu->hardware_id != casioemu::HW_EPS6800)
+	if (!casioemu::IsEpsFamily(m_emu->hardware_id))
 		windows.push_back(new QrCodeWindow());
 #endif
 	windows.push_back(MakeThemeWindow());
-	windows.push_back(CreateBitmapViewer());
-	for (auto item : GetEditors())
+	auto* bitmap_window = CreateBitmapViewer();
+	windows.push_back(bitmap_window);
+	for (auto item : GetEditors()) {
 		windows.push_back(item);
+	}
 
 #ifdef __ANDROID__
 	for (auto item : windows) {
