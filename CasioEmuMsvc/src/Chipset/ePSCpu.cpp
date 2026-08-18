@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -275,11 +276,22 @@ namespace casioemu {
 			}
 			else {
 				constexpr auto kIdleTimerPeriod = std::chrono::milliseconds(20);
+				/* Timer1 keeps running from its low-speed source while the
+				 * CPU is idle, and the F-715SG firmware relies on its
+				 * overflow cadence for the periodic LCD refresh and the
+				 * ~7-minute auto power-off counter (0x3F increments every
+				 * 4 overflows, threshold 0xD2).  Calibrate the wall-clock
+				 * delivery to a 0.5 s overflow period (1280 timer cycles),
+				 * i.e. 2560 cycles/s; the historical EPS6800 checkpoint
+				 * delivered one cycle per period and effectively stalled
+				 * Timer1 in idle. */
+				constexpr uint32_t kEps6009IdleTimer1CyclesPerTick = 51;
 				const auto elapsed = now - idle_timer_checkpoint_;
 				const auto ticks = static_cast<uint32_t>(elapsed / kIdleTimerPeriod);
 				if (ticks != 0) {
 					idle_timer_checkpoint_ += kIdleTimerPeriod * ticks;
-					machine_state_tick_idle_timer1(state_, ticks);
+					machine_state_tick_idle_timer1(state_, ticks *
+						(variant_ == EpsVariant::Eps6009 ? kEps6009IdleTimer1CyclesPerTick : 1));
 				}
 			}
 			return false;

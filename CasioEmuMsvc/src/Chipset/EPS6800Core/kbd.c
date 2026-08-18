@@ -249,6 +249,48 @@ static void kbd_process_pending_press(struct kbd_state *state) {
 	kbd_trigger_press(state, ready_mask);
 }
 
+/*
+ * ePS6009 key inputs are level-sensitive.  The reference implementation
+ * (the official Canon F-715SG emulator's embedded CIce core) re-synchronises
+ * the key state on every instruction: while a PAINTEN bit is enabled and the
+ * corresponding PORTA input reads low, the sticky PAINTSTA bit is asserted
+ * and the PAINT interrupt is requested — regardless of whether the CPU is
+ * running, idle, or sleeping.  The CPU takes the request whenever GLINT is
+ * set, and the firmware's interrupt handler masks PAINTEN while it drains
+ * the event, which stops the assertion until it re-enables the key inputs.
+ *
+ * The same level, gated by PAWAKE, wakes the CPU from Idle/Sleep so that a
+ * key held across a sleep entry cannot strand the press.  Without this, a
+ * key pressed while the CPU runs is never seen: the F-715SG firmware is
+ * fully interrupt-driven and only scans the matrix from the PAINT interrupt
+ * service routine.
+ */
+static void kbd_sync_eps6009_inputs(struct kbd_state *state) {
+	uint8_t asserted;
+
+	if (!eps_variant_is_6009(state->mmio->variant)) {
+		return;
+	}
+
+	const uint8_t pa = kbd_get_pa(state);
+	asserted = (uint8_t)(state->reg[eps_reg_painten(state->mmio->variant)] &
+		(uint8_t)~pa & KBD_EPS6009_PORTA_MASK);
+	if (asserted) {
+		state->reg[eps_reg_paintsta(state->mmio->variant)] |= asserted;
+		kbd_bus_write_internal(state, eps_reg_paintsta(state->mmio->variant),
+			state->reg[eps_reg_paintsta(state->mmio->variant)]);
+		kbd_cpu_interrupt(state, INT_LEVEL1_PAINT);
+	}
+
+	if (kbd_cpu_accepts_pending_press(state)) {
+		asserted = (uint8_t)(state->reg[eps_reg_pawake(state->mmio->variant)] &
+			(uint8_t)~pa & KBD_EPS6009_PORTA_MASK);
+		if (asserted) {
+			kbd_cpu_wake(state, WAKE_PAINT);
+		}
+	}
+}
+
 static void kbd_schedule_release_hold(struct kbd_state *state, uint8_t key) {
 	state->key_pending_up[key] = false;
 	state->key_release_cycles[key] = KEY_RELEASE_HOLD_CYCLES;
@@ -503,6 +545,7 @@ void kbd_tick_state(struct kbd_state *state, uint32_t cycles) {
 	kbd_process_pending_press(state);
 	kbd_process_pending_key_releases(state, cycles);
 	kbd_process_pending_press(state);
+	kbd_sync_eps6009_inputs(state);
 }
 
 void kbd_ondown_state(struct kbd_state *state) {
