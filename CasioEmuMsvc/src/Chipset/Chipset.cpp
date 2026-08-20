@@ -677,12 +677,12 @@ namespace casioemu {
 		}
 		if (IsEpsFamily(emulator.hardware_id)) {
 			const auto unpacked_entry = emulator.ModelDefinition.extra.find("is_unpacked_nibbles");
-			const bool is_unpacked_nibbles = unpacked_entry == emulator.ModelDefinition.extra.end() ||
-				(unpacked_entry->second != "0" && unpacked_entry->second != "false");
+			const bool is_unpacked_nibbles = unpacked_entry != emulator.ModelDefinition.extra.end() &&
+				unpacked_entry->second != "0" && unpacked_entry->second != "false";
 			const auto rom_format = is_unpacked_nibbles ? Eps6800RomFormat::UnpackedNibbles :
 				Eps6800RomFormat::PackedLittleEndian;
 			if (!epscpu || !epscpu->LoadRom(rom_data, rom_format))
-				printf("Invalid EPS6800 ROM for configured format %s\n", Eps6800RomFormatName(rom_format));
+				PANIC("Invalid EPS6800 ROM for configured format %s\n", Eps6800RomFormatName(rom_format));
 		#ifndef CASIOEMU_DISABLE_RAM_IMAGE
 			if (ShouldPersistEpsRam(emulator.hardware_id) && emulator.HasModelResource("ram.dmp")) {
 				try {
