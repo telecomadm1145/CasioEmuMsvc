@@ -268,12 +268,18 @@ static uint32_t cpu_read_tabptr_state(struct cpu_state *state) {
 	uint32_t tabptr = (uint32_t)cpu_bus_read_internal(state, REG_TABPTRH) << CPU_PC_HIGH_SHIFT;
 	tabptr |= (uint32_t)cpu_bus_read_internal(state, REG_TABPTRM) << CPU_PC_MID_SHIFT;
 	tabptr |= (uint32_t)cpu_bus_read_internal(state, REG_TABPTRL);
-	return tabptr & CPU_TABPTR_MASK;
+	/* EPS6009 keeps the complete TBPTH byte even though its 64 KiB ROM
+	 * wraps table reads to the low 16 address bits. */
+	return eps_variant_is_6009(cpu_variant(state)) ? tabptr : (tabptr & CPU_TABPTR_MASK);
 }
 
 static void cpu_write_tabptr_state(struct cpu_state *state, uint32_t tabptr) {
-	tabptr &= CPU_TABPTR_MASK;
-	cpu_bus_write_internal(state, REG_TABPTRH, (tabptr >> CPU_PC_HIGH_SHIFT) & MASK_TABPTRH);
+	if (!eps_variant_is_6009(cpu_variant(state)))
+		tabptr &= CPU_TABPTR_MASK;
+	cpu_bus_write_internal(state, REG_TABPTRH,
+		eps_variant_is_6009(cpu_variant(state)) ?
+			(uint8_t)(tabptr >> CPU_PC_HIGH_SHIFT) :
+			(uint8_t)((tabptr >> CPU_PC_HIGH_SHIFT) & MASK_TABPTRH));
 	cpu_bus_write_internal(state, REG_TABPTRM, (tabptr >> CPU_PC_MID_SHIFT) & CPU_BYTE_MASK);
 	cpu_bus_write_internal(state, REG_TABPTRL, tabptr & CPU_BYTE_MASK);
 }
@@ -892,7 +898,8 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                              break;
                 case CPU_OPCODE_TBPTM_IMM: cpu_bus_write_internal(state, REG_TABPTRM, imm8_1);
                              break;
-				case CPU_OPCODE_TBPTH_IMM: cpu_bus_write_internal(state, REG_TABPTRH, imm8_1 & MASK_TABPTRH);
+				case CPU_OPCODE_TBPTH_IMM: cpu_bus_write_internal(state, REG_TABPTRH,
+						eps_variant_is_6009(cpu_variant(state)) ? imm8_1 : (imm8_1 & MASK_TABPTRH));
                              break;
 				case CPU_OPCODE_TBRD_A_R: temp32 = cpu_read_tabptr_state(state);
 							 temp32 = (temp32 + cpu_bus_read_internal(state, REG_ACC)) & CPU_TABPTR_MASK;

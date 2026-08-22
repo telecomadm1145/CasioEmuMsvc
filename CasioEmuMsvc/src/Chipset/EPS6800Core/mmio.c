@@ -279,6 +279,10 @@ static void mmio_report_bad_access(struct mmio_state *state, const char *access,
 }
 
 static uint8_t mmio_filter_register_write(const struct mmio_state *state, uint8_t addr, uint8_t byte) {
+	if (eps_variant_is_6009(state->variant) && addr == REG_FSR1) {
+		/* EPS6009 FSR1 addresses banked RAM only; bit 7 is fixed to one. */
+		return (uint8_t)(byte | MMIO_RAM_SELECT_MASK);
+	}
 	if (eps_variant_is_6009(state->variant) && (addr == REG_BSR || addr == REG_BSR1)) {
 		return (uint8_t)(byte & MMIO_EPS6009_RAM_PAGE_MASK);
 	}
@@ -424,7 +428,7 @@ uint8_t mmio_read_byte_state(struct mmio_state *state, uint8_t addr) {
 }
 
 void mmio_write_byte_internal_state(struct mmio_state *state, uint8_t addr, uint8_t byte) {
-	if (addr == REG_TABPTRH) {
+	if (addr == REG_TABPTRH && !eps_variant_is_6009(state->variant)) {
 		byte &= MASK_TABPTRH;
 	}
 	byte = mmio_filter_register_write(state, addr, byte);
@@ -569,7 +573,7 @@ void mmio_write_byte_state(struct mmio_state *state, uint8_t addr, uint8_t byte)
 		state->ram_wbk[mmio_wbk_index(addr)] = byte;
 	}
 	else {
-		if (addr == REG_TABPTRH) {
+		if (addr == REG_TABPTRH && !eps_variant_is_6009(state->variant)) {
 			byte &= MASK_TABPTRH;
 		}
 		byte = mmio_filter_register_write(state, addr, byte);
