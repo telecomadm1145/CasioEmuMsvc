@@ -434,6 +434,38 @@ try {
 
     $code = Invoke-McpTool 7 "read_code" @{ address = 0; count = 2 }
     Assert-True ($code.words[0] -eq 0x0020) "EPS ROM word decoding is incorrect at reset."
+	$originalWord0 = [uint16]$code.words[0]
+	$originalWord1 = [uint16]$code.words[1]
+	$originalLow = [byte]($originalWord0 -band 0xff)
+	$originalHigh = [byte](($originalWord0 -shr 8) -band 0xff)
+	$changedLow = [byte]($originalLow -bxor 1)
+	$changedHigh = [byte]($originalHigh -bxor 1)
+	try {
+		$null = Invoke-McpTool 61 "write_code" @{ address = 0; bytes = @([int]$changedLow) }
+		$afterLowPatch = Invoke-McpTool 62 "read_code" @{ address = 0; count = 2 }
+		Assert-True ([uint16]$afterLowPatch.words[0] -eq
+			[uint16](($originalWord0 -band 0xff00) -bor $changedLow)) `
+			"EPS write_code did not treat an even address as the low code byte."
+		Assert-True ([uint16]$afterLowPatch.words[1] -eq $originalWord1) `
+			"EPS write_code changed the adjacent instruction word."
+		$null = Invoke-McpTool 63 "write_code" @{ address = 0; bytes = @([int]$originalLow) }
+		$null = Invoke-McpTool 64 "write_code" @{ address = 1; bytes = @([int]$changedHigh) }
+		$afterHighPatch = Invoke-McpTool 65 "read_code" @{ address = 1; count = 2 }
+		Assert-True ([uint16]$afterHighPatch.words[0] -eq
+			[uint16](($originalWord0 -band 0x00ff) -bor ([uint16]$changedHigh -shl 8))) `
+			"EPS write_code did not treat an odd address as the high code byte."
+		Assert-True ([uint16]$afterHighPatch.words[1] -eq $originalWord1) `
+			"EPS write_code changed the adjacent instruction word."
+	}
+	finally {
+		$null = Invoke-McpTool 66 "write_code" @{
+			address = 0
+			bytes = @([int]$originalLow, [int]$originalHigh)
+		}
+	}
+	$restoredCode = Invoke-McpTool 67 "read_code" @{ address = 0; count = 2 }
+	Assert-True ([uint16]$restoredCode.words[0] -eq $originalWord0 -and
+		[uint16]$restoredCode.words[1] -eq $originalWord1) "EPS ROM patch was not restored."
 
     $null = Invoke-McpTool 8 "add_execution_breakpoint" @{ address = 0x100 }
     $listed = Invoke-McpTool 9 "list_execution_breakpoints"

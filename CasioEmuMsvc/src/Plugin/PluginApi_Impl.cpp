@@ -26,6 +26,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <limits>
 
 extern std::vector<UIWindow*> windows;
 extern SDL_Window* window;
@@ -414,8 +415,13 @@ class PluginApi_Impl : public PluginApi {
 			std::vector<uint16_t> result;
 			result.reserve(count);
 			if (auto* eps = m_emu->chipset.epscpu) {
-				for (size_t i = 0; i < count; ++i)
-					result.push_back(eps->ReadCodeWord(address + static_cast<uint32_t>(i)));
+				const uint32_t first_word_address = (address & ~1u) >> 1;
+				for (size_t i = 0; i < count; ++i) {
+					const uint64_t word_address = static_cast<uint64_t>(first_word_address) + i;
+					result.push_back(word_address <= std::numeric_limits<uint32_t>::max()
+						? eps->ReadCodeWord(static_cast<uint32_t>(word_address))
+						: 0);
+				}
 			}
 			else {
 				for (size_t i = 0; i < count; ++i)
@@ -427,11 +433,17 @@ class PluginApi_Impl : public PluginApi {
 		void WriteCode(uint32_t address, const std::vector<uint8_t>& data) override {
 			auto lock = std::lock_guard(m_emu->access_mx);
 			if (auto* eps = m_emu->chipset.epscpu) {
-				for (size_t i = 0; i < data.size(); i += 2) {
-					const uint32_t word_address = address + static_cast<uint32_t>(i / 2);
+				for (size_t i = 0; i < data.size(); ++i) {
+					const uint64_t byte_address = static_cast<uint64_t>(address) + i;
+					if (byte_address > std::numeric_limits<uint32_t>::max())
+						break;
+					const uint32_t word_address = static_cast<uint32_t>(byte_address >> 1);
 					uint16_t word = eps->ReadCodeWord(word_address);
-					word = static_cast<uint16_t>((static_cast<uint16_t>(data[i]) << 8) |
-						(i + 1 < data.size() ? data[i + 1] : (word & 0xff)));
+					if ((byte_address & 1u) == 0)
+						word = static_cast<uint16_t>((word & 0xff00u) | data[i]);
+					else
+						word = static_cast<uint16_t>((word & 0x00ffu) |
+							(static_cast<uint16_t>(data[i]) << 8));
 					if (!eps->WriteCodeWord(word_address, word))
 						break;
 					eps->WriteRomImageWord(m_emu->chipset.rom_data, word_address, word);
