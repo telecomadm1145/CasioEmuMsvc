@@ -26,7 +26,13 @@ namespace casioemu {
 		constexpr int EPS_KBD_COL_COUNT = 8;
 		constexpr int BUTTON_SLOT_COUNT = EPS_KBD_ROW_COUNT * EPS_KBD_COL_COUNT;
 		constexpr uint32_t DEFAULT_MIN_PRESS_MS = 25;
-		constexpr uint32_t EPS_MIN_PRESS_MS = 60;
+		constexpr uint32_t EPS6800_MIN_PRESS_MS = 60;
+
+		uint32_t MinimumPressDuration(int hardware_id) {
+			if (hardware_id == HW_EPS6009)
+				return 0;
+			return hardware_id == HW_EPS6800 ? EPS6800_MIN_PRESS_MS : DEFAULT_MIN_PRESS_MS;
+		}
 
 		SDL_Rect ExpandRect(const SDL_Rect& rect, int padding) {
 			return {
@@ -260,7 +266,7 @@ namespace casioemu {
 
 		uint32_t now = SDL_GetTicks();
 		uint32_t elapsed = now - button.pressTime;
-		const uint32_t min_press_ms = IsEpsFamily(emulator.hardware_id) ? EPS_MIN_PRESS_MS : DEFAULT_MIN_PRESS_MS;
+		const uint32_t min_press_ms = MinimumPressDuration(emulator.hardware_id);
 		if (elapsed < min_press_ms) {
 			if (button.releaseTimer != 0) {
 				return false; // Timer already running
@@ -989,6 +995,8 @@ namespace casioemu {
 
 		if (button.type == Button::BT_POWER && IsEpsFamily(emulator.hardware_id)) {
 			if (button.pressed && !old_pressed_state) {
+				const bool was_paused = emulator.GetPaused();
+				emulator.SetPaused(true);
 				const bool power_stuck = button.stuck;
 				const SDL_FingerID power_finger_id = button.pressingFingerId;
 				struct HeldButton {
@@ -1015,6 +1023,7 @@ namespace casioemu {
 					if (matrix_index >= 0)
 						emulator.chipset.epscpu->RestoreKeyDown(static_cast<uint8_t>(matrix_index));
 				}
+				emulator.SetPaused(was_paused);
 			}
 			return;
 		}

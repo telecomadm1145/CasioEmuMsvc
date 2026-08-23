@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <condition_variable>
 #include <deque>
 #include <functional>
 #include <iosfwd>
@@ -119,6 +120,28 @@ namespace casioemu {
 
 	class ePSCPU {
 	private:
+		class StateMutex {
+			std::mutex mutex_;
+			std::condition_variable condition_;
+			uint64_t next_ticket_{};
+			uint64_t serving_ticket_{};
+
+		public:
+			void lock() {
+				std::unique_lock lock(mutex_);
+				const auto ticket = next_ticket_++;
+				condition_.wait(lock, [this, ticket] { return serving_ticket_ == ticket; });
+			}
+
+			void unlock() {
+				{
+					const std::lock_guard lock(mutex_);
+					++serving_ticket_;
+				}
+				condition_.notify_all();
+			}
+		};
+
 		enum class DebugRunMode : uint8_t {
 			Continue,
 			StepInto,
@@ -128,7 +151,7 @@ namespace casioemu {
 		};
 
 		machine_state* state_;
-		mutable std::mutex state_mutex_;
+		mutable StateMutex state_mutex_;
 		DebugRunMode debug_run_mode_{DebugRunMode::Continue};
 		uint32_t debug_target_pc_{};
 		uint8_t debug_target_stack_pointer_{};

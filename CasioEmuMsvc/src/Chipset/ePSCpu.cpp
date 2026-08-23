@@ -24,7 +24,6 @@
 #include <limits>
 #include <ostream>
 #include <sstream>
-#include <thread>
 #include <stdexcept>
 #include <vector>
 
@@ -239,17 +238,10 @@ namespace casioemu {
 	}
 
 	bool ePSCPU::RunFrame(uint32_t idle_timer_cycles) {
-		std::unique_lock lock(state_mutex_);
+		const std::lock_guard lock(state_mutex_);
 		constexpr uint32_t kLegacyActiveInstructions = 2000;
 		constexpr uint32_t kFrameInstructions = 4000;
-		constexpr auto kEps6009ActiveFramePacing = std::chrono::milliseconds(1);
 		bool stopped = false;
-		const auto finish_active_frame = [&]() {
-			lock.unlock();
-			if (variant_ == EpsVariant::Eps6009 && !stopped)
-				std::this_thread::sleep_for(kEps6009ActiveFramePacing);
-			return stopped;
-		};
 		if (state_->cpu.mode == CPU_MODE_SLEEP) {
 			machine_state_advance_cycles_split(state_, kFrameInstructions, false, false);
 			return false;
@@ -261,7 +253,7 @@ namespace casioemu {
 					break;
 				}
 			}
-			return finish_active_frame();
+			return stopped;
 		}
 		const auto now = std::chrono::steady_clock::now();
 		if (state_->cpu.mode == CPU_MODE_IDLE) {
@@ -300,7 +292,7 @@ namespace casioemu {
 				break;
 			}
 		}
-		return finish_active_frame();
+		return stopped;
 	}
 
 	bool ePSCPU::RunInstructionLocked(bool tick_timer) {

@@ -56,7 +56,8 @@ namespace casioemu {
 		 * thread); keep it atomic to avoid a data race. */
 		std::atomic<Uint64> eps_frame_cycle_remainder{0};
 		std::atomic<Uint64> eps_timer1_cycle_remainder{0};
-		bool running, Paused;
+		bool running;
+		std::atomic<bool> Paused;
 		bool headless = false;
 		std::atomic<bool> m_step_requested;
 		unsigned int last_frame_tick_count;

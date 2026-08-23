@@ -73,6 +73,17 @@ namespace casioemu {
 			return 0;
 		}
 
+		bool ShouldLimitSpeed(const ModelInfo& model) {
+			return IsEpsFamily(model.hardware_id) || model.real_hardware ||
+				model.extra.find("limit_spd") != model.extra.end();
+		}
+
+		unsigned int GetTimerInterval(int hardware_id) {
+			if (hardware_id == HW_EPS6009)
+				return 4;
+			return hardware_id == HW_EPS6800 ? 40 : 20;
+		}
+
 		bool HasSvgExtension(const std::string& path) {
 			const auto ext = std::filesystem::path(path).extension().string();
 			if (ext.size() != 4)
@@ -199,10 +210,7 @@ namespace casioemu {
 		if (hardware_id < HW_MIN || hardware_id > HW_MAX)
 			PANIC("Unknown hardware id %d\n", hardware_id);
 		this->hardware_id = (HardwareId)hardware_id;
-		bool full_spd = !ModelDefinition.real_hardware;
-		if (ModelDefinition.extra.find("limit_spd") != ModelDefinition.extra.end()) {
-			full_spd = false;
-		}
+		const bool full_spd = !ShouldLimitSpeed(ModelDefinition);
 		if (!full_spd) {
 			cycles_per_second = GetLimitedCyclesPerSecond(hardware_id);
 		}
@@ -213,7 +221,7 @@ namespace casioemu {
 			cycles_per_second = GetEpsCyclesPerSecond(ModelDefinition);
 			eps_timer1_source_hz = GetEpsTimer1SourceHz(ModelDefinition);
 		}
-		timer_interval = IsEpsFamily(hardware_id) ? 40 : 20;
+		timer_interval = GetTimerInterval(hardware_id);
 
 		cycles.Setup(cycles_per_second, timer_interval);
 		chipset.Setup();
@@ -291,8 +299,8 @@ namespace casioemu {
 		#ifdef __EMSCRIPTEN__
 		tick_thread = nullptr;
 		#else
-		bool limit_spd = ModelDefinition.extra.find("limit_spd") != ModelDefinition.extra.end();
-		if (ModelDefinition.real_hardware || limit_spd) {
+		const bool limit_spd = ShouldLimitSpeed(ModelDefinition);
+		if (limit_spd) {
 			tick_thread = new std::thread([this] {
 				auto iteration_end = std::chrono::steady_clock::now();
 				while (1) {
@@ -365,10 +373,7 @@ namespace casioemu {
 		if (hardware_id < HW_MIN || hardware_id > HW_MAX)
 			PANIC("Unknown hardware id %d\n", hardware_id);
 		this->hardware_id = (HardwareId)hardware_id;
-		bool full_spd = !ModelDefinition.real_hardware;
-		if (ModelDefinition.extra.find("limit_spd") != ModelDefinition.extra.end()) {
-			full_spd = false;
-		}
+		const bool full_spd = !ShouldLimitSpeed(ModelDefinition);
 		if (!full_spd) {
 			cycles_per_second = GetLimitedCyclesPerSecond(hardware_id);
 		}
@@ -379,7 +384,7 @@ namespace casioemu {
 			cycles_per_second = GetEpsCyclesPerSecond(ModelDefinition);
 			eps_timer1_source_hz = GetEpsTimer1SourceHz(ModelDefinition);
 		}
-		timer_interval = IsEpsFamily(hardware_id) ? 40 : 20;
+		timer_interval = GetTimerInterval(hardware_id);
 
 		cycles.Setup(cycles_per_second, timer_interval);
 		chipset.Setup();
@@ -448,8 +453,8 @@ namespace casioemu {
 		#ifdef __EMSCRIPTEN__
 			tick_thread = nullptr;
 		#else
-			bool limit_spd = ModelDefinition.extra.find("limit_spd") != ModelDefinition.extra.end();
-			if (ModelDefinition.real_hardware || limit_spd) {
+			const bool limit_spd = ShouldLimitSpeed(ModelDefinition);
+			if (limit_spd) {
 				tick_thread = new std::thread([this] {
 					auto iteration_end = std::chrono::steady_clock::now();
 					while (1) {
@@ -649,6 +654,11 @@ namespace casioemu {
 			eps_frame_cycle_remainder.fetch_add(cycles_to_emulate, std::memory_order_relaxed);
 			Uint64 frames_run = 0;
 			while (eps_frame_cycle_remainder.load(std::memory_order_relaxed) >= cycles_per_eps_frame) {
+				if (Paused) {
+					eps_frame_cycle_remainder.store(0, std::memory_order_relaxed);
+					eps_timer1_cycle_remainder.store(0, std::memory_order_relaxed);
+					break;
+				}
 				uint32_t timer1_cycles = 0;
 				if (eps_timer1_source_hz != 0) {
 					const Uint64 timer1_numerator =
@@ -804,7 +814,7 @@ namespace casioemu {
 	}
 
 	bool Emulator::GetPaused() {
-		return Paused;
+		return Paused.load(std::memory_order_relaxed);
 	}
 
 	void Emulator::Shutdown() {
@@ -817,7 +827,7 @@ namespace casioemu {
 	}
 
 	void Emulator::SetPaused(bool _paused) {
-		Paused = _paused;
+		Paused.store(_paused, std::memory_order_relaxed);
 	}
 
 	void Emulator::Cycles::Setup(Uint64 _cycles_per_second, unsigned int _timer_interval) {
