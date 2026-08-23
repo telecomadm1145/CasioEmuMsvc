@@ -49,6 +49,7 @@
 #include <iostream>
 #include <mutex>
 #include <sstream>
+#include <string_view>
 #include <system_error>
 #include <thread>
 #include <utility>
@@ -161,8 +162,6 @@ namespace casioemu {
 			SDL_Log("[Screen][Warn] SDL_ConvertSurfaceFormat failed for SVG sprite: %s", SDL_GetError());
 			return nullptr;
 		}
-		SDL_Surface* texture_surface = converted;
-		SDL_Surface* cropped = nullptr;
 		if (content_bounds) {
 			int min_x = converted->w;
 			int min_y = converted->h;
@@ -186,30 +185,10 @@ namespace casioemu {
 				if (SDL_MUSTLOCK(converted))
 					SDL_UnlockSurface(converted);
 			}
-			if (max_x >= min_x && max_y >= min_y) {
+			if (max_x >= min_x && max_y >= min_y)
 				*content_bounds = {min_x, min_y, max_x - min_x + 1, max_y - min_y + 1};
-				if (content_bounds->w != converted->w || content_bounds->h != converted->h) {
-					cropped = SDL_CreateRGBSurfaceWithFormat(0, content_bounds->w, content_bounds->h, 32, SDL_PIXELFORMAT_RGBA32);
-					if (cropped) {
-						SDL_Rect source = *content_bounds;
-						SDL_SetSurfaceBlendMode(converted, SDL_BLENDMODE_NONE);
-						if (SDL_BlitSurface(converted, &source, cropped, nullptr) == 0)
-							texture_surface = cropped;
-						else {
-							SDL_FreeSurface(cropped);
-							cropped = nullptr;
-							*content_bounds = {0, 0, width, height};
-						}
-					}
-					else {
-						*content_bounds = {0, 0, width, height};
-					}
-				}
-			}
 		}
-		SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, texture_surface);
-		if (cropped)
-			SDL_FreeSurface(cropped);
+		SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, converted);
 		SDL_FreeSurface(converted);
 		if (!texture) {
 			SDL_Log("[Screen][Warn] SDL_CreateTextureFromSurface failed for SVG sprite: %s", SDL_GetError());
@@ -248,6 +227,7 @@ namespace casioemu {
 			shape_size = 0;
 			shape_hash = 0;
 			content_bounds = {};
+			software_renderer = false;
 		}
 
 		SDL_Texture* Get(SDL_Renderer* renderer, const SpriteInfo& sprite, int requested_width, int requested_height) {
@@ -260,7 +240,12 @@ namespace casioemu {
 			if (!texture || width != target_width || height != target_height ||
 				shape_size != target_shape_size || shape_hash != target_shape_hash) {
 				Reset();
-				texture = CreateSvgSpriteTexture(renderer, sprite, target_width, target_height, &content_bounds);
+				SDL_RendererInfo renderer_info{};
+				software_renderer = SDL_GetRendererInfo(renderer, &renderer_info) == 0 &&
+					renderer_info.name && std::string_view(renderer_info.name) == "software";
+				texture = CreateSvgSpriteTexture(renderer, sprite, target_width, target_height,
+					software_renderer ? &content_bounds : nullptr);
+				software_renderer = texture && software_renderer;
 				width = texture ? target_width : 0;
 				height = texture ? target_height : 0;
 				shape_size = texture ? target_shape_size : 0;
@@ -269,14 +254,15 @@ namespace casioemu {
 			return texture;
 		}
 
-		SDL_Rect AdjustDest(const SDL_Rect& dest) const {
-			if (width <= 0 || height <= 0 || content_bounds.w <= 0 || content_bounds.h <= 0)
-				return dest;
-			const int left = static_cast<int>(std::lround(static_cast<double>(content_bounds.x) * dest.w / width));
-			const int top = static_cast<int>(std::lround(static_cast<double>(content_bounds.y) * dest.h / height));
-			const int right = static_cast<int>(std::lround(static_cast<double>(content_bounds.x + content_bounds.w) * dest.w / width));
-			const int bottom = static_cast<int>(std::lround(static_cast<double>(content_bounds.y + content_bounds.h) * dest.h / height));
-			return {dest.x + left, dest.y + top, std::max(1, right - left), std::max(1, bottom - top)};
+		bool ContentClip(const SDL_Rect& dest, SDL_Rect& clip) const {
+			if (!software_renderer || width <= 0 || height <= 0 || content_bounds.w <= 0 || content_bounds.h <= 0)
+				return false;
+			const int left = static_cast<int>(std::floor(static_cast<double>(content_bounds.x) * dest.w / width));
+			const int top = static_cast<int>(std::floor(static_cast<double>(content_bounds.y) * dest.h / height));
+			const int right = static_cast<int>(std::ceil(static_cast<double>(content_bounds.x + content_bounds.w) * dest.w / width));
+			const int bottom = static_cast<int>(std::ceil(static_cast<double>(content_bounds.y + content_bounds.h) * dest.h / height));
+			clip = {dest.x + left - 1, dest.y + top - 1, std::max(1, right - left + 2), std::max(1, bottom - top + 2)};
+			return true;
 		}
 
 	private:
@@ -287,6 +273,7 @@ namespace casioemu {
 			shape_size = std::exchange(other.shape_size, 0);
 			shape_hash = std::exchange(other.shape_hash, 0);
 			content_bounds = std::exchange(other.content_bounds, SDL_Rect{});
+			software_renderer = std::exchange(other.software_renderer, false);
 		}
 
 		SDL_Texture* texture = nullptr;
@@ -295,6 +282,7 @@ namespace casioemu {
 		size_t shape_size = 0;
 		size_t shape_hash = 0;
 		SDL_Rect content_bounds{};
+		bool software_renderer = false;
 	};
 
 	std::pair<int, int> CurrentRenderTargetSpriteSize(SDL_Renderer* renderer, const SDL_Rect& dest) {
@@ -313,15 +301,30 @@ namespace casioemu {
 		if (svg_texture) {
 			auto [target_width, target_height] = CurrentRenderTargetSpriteSize(renderer, dest);
 			texture = svg_texture->Get(renderer, sprite, target_width, target_height);
-			if (texture)
-				dest = svg_texture->AdjustDest(dest);
 		}
 		if (texture) {
+			SDL_Rect old_clip{};
+			const SDL_bool old_clip_enabled = SDL_RenderIsClipEnabled(renderer);
+			if (old_clip_enabled)
+				SDL_RenderGetClipRect(renderer, &old_clip);
+			SDL_Rect content_clip{};
+			bool content_clip_enabled = svg_texture && svg_texture->ContentClip(dest, content_clip);
+			if (content_clip_enabled && old_clip_enabled) {
+				SDL_Rect intersection{};
+				if (SDL_IntersectRect(&content_clip, &old_clip, &intersection))
+					content_clip = intersection;
+				else
+					content_clip = {0, 0, 0, 0};
+			}
+			if (content_clip_enabled)
+				SDL_RenderSetClipRect(renderer, &content_clip);
 			SDL_SetTextureColorMod(texture, ink_colour.r, ink_colour.g, ink_colour.b);
 			SDL_SetTextureAlphaMod(texture, alpha);
 			SDL_RenderCopy(renderer, texture, nullptr, &dest);
 			SDL_SetTextureAlphaMod(texture, 255);
 			SDL_SetTextureColorMod(texture, 255, 255, 255);
+			if (content_clip_enabled)
+				SDL_RenderSetClipRect(renderer, old_clip_enabled ? &old_clip : nullptr);
 			return;
 		}
 		if (!interface_texture)
@@ -3260,7 +3263,6 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			SDL_SetTextureColorMod(interface_texture, ink_colour.r, ink_colour.g, ink_colour.b);
 		}
 
-		// Set texture transparency and copy sprites as before
 		for (int ix = 1; ix != SpriteCount(); ++ix) {
 			if (ix >= static_cast<int>(sprite_available.size()) || !sprite_available[ix])
 				continue;
@@ -3268,7 +3270,9 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			const uint8_t alpha = Uint8(std::clamp((int)screen_ink_alpha[alpha_index], 0, 255));
 			if (alpha == 0)
 				continue;
-			RenderModelSprite(renderer, interface_texture, ix < static_cast<int>(sprite_svg_textures.size()) ? &sprite_svg_textures[ix] : nullptr, sprite_info[ix], ink_colour, alpha);
+			RenderModelSprite(renderer, interface_texture,
+				ix < static_cast<int>(sprite_svg_textures.size()) ? &sprite_svg_textures[ix] : nullptr,
+				sprite_info[ix], ink_colour, alpha);
 		}
 
 		static constexpr auto SPR_PIXEL = 0;
