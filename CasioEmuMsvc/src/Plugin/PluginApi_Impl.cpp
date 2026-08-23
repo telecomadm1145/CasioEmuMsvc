@@ -23,6 +23,7 @@
 #include <array>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 
@@ -454,6 +455,8 @@ class PluginApi_Impl : public PluginApi {
 		}
 
 		void Pause() override {
+			if (auto* eps = m_emu->chipset.epscpu)
+				eps->CancelDebugRun();
 			m_emu->SetPaused(true);
 		}
 		void Resume() override {
@@ -488,7 +491,8 @@ class PluginApi_Impl : public PluginApi {
 			return code_viewer ? code_viewer->GetBreakpoints() : std::vector<uint32_t>{};
 		}
 		bool AddExecutionBreakpoint(uint32_t address) override {
-			if (!code_viewer || (m_emu->chipset.epscpu && address >= 0x10000))
+			if (!code_viewer || (m_emu->chipset.epscpu &&
+					address >= m_emu->chipset.epscpu->RomWordCount()))
 				return false;
 			code_viewer->AddBreakpoint(address);
 			const auto breakpoints = GetExecutionBreakpoints();

@@ -24,7 +24,8 @@ namespace casioemu {
 		constexpr int SHAPE_PADDING = 2;
 		constexpr int EPS_KBD_ROW_COUNT = 16;
 		constexpr int EPS_KBD_COL_COUNT = 8;
-		constexpr int BUTTON_SLOT_COUNT = EPS_KBD_ROW_COUNT * EPS_KBD_COL_COUNT;
+		constexpr int EPS_MATRIX_SLOT_COUNT = EPS_KBD_ROW_COUNT * EPS_KBD_COL_COUNT;
+		constexpr int BUTTON_SLOT_COUNT = EPS_MATRIX_SLOT_COUNT + 2;
 		constexpr uint32_t DEFAULT_MIN_PRESS_MS = 25;
 		constexpr uint32_t EPS6800_MIN_PRESS_MS = 60;
 
@@ -65,9 +66,9 @@ namespace casioemu {
 
 		int ButtonSlotForCode(uint8_t code, unsigned short hardware_id) {
 			if (code == BUTTON_KIKO_POWER)
-				return BUTTON_SLOT_COUNT - 1;
+				return EPS_MATRIX_SLOT_COUNT;
 			if (code == BUTTON_KIKO_RESET)
-				return BUTTON_SLOT_COUNT - 2;
+				return EPS_MATRIX_SLOT_COUNT + 1;
 			if (hardware_id == HW_TI)
 				return code;
 			if (IsEpsFamily(hardware_id))

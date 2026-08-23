@@ -140,6 +140,7 @@ namespace casioemu {
 		if (!machine_state_load_rom_image(state_, data, size))
 			return false;
 		rom_format_ = format;
+		rom_word_count_ = size / kPackedBytesPerWord;
 		return true;
 	}
 
@@ -183,6 +184,7 @@ namespace casioemu {
 
 	void ePSCPU::Reset() {
 		const std::lock_guard lock(state_mutex_);
+		break_requested_.store(false, std::memory_order_relaxed);
 		machine_state_reset(state_);
 		debug_run_mode_ = DebugRunMode::Continue;
 		honor_execution_breakpoints_ = true;
@@ -239,6 +241,8 @@ namespace casioemu {
 
 	bool ePSCPU::RunFrame(uint32_t idle_timer_cycles) {
 		const std::lock_guard lock(state_mutex_);
+		if (ConsumeBreakRequestLocked())
+			return true;
 		constexpr uint32_t kLegacyActiveInstructions = 2000;
 		constexpr uint32_t kFrameInstructions = 4000;
 		bool stopped = false;
@@ -296,6 +300,8 @@ namespace casioemu {
 	}
 
 	bool ePSCPU::RunInstructionLocked(bool tick_timer) {
+		if (ConsumeBreakRequestLocked())
+			return true;
 		memory_break_pending_ = false;
 		const uint32_t pc_before = state_->cpu.pc;
 		const uint8_t stack_pointer_before = state_->mmio.regs[REG_STKPTR] & 0x1f;
@@ -339,6 +345,19 @@ namespace casioemu {
 		if (reason == Eps6800DebugStopReason::None && !ShouldStopLocked(pc_after, stack_pointer_after, reason))
 			return false;
 		RecordStopLocked(reason, pc_after);
+		debug_run_mode_ = DebugRunMode::Continue;
+		return true;
+	}
+
+	size_t ePSCPU::RomWordCount() const {
+		const std::lock_guard lock(state_mutex_);
+		return rom_word_count_;
+	}
+
+	bool ePSCPU::ConsumeBreakRequestLocked() {
+		if (!break_requested_.exchange(false, std::memory_order_acquire))
+			return false;
+		RecordStopLocked(Eps6800DebugStopReason::Break, state_->cpu.pc);
 		debug_run_mode_ = DebugRunMode::Continue;
 		return true;
 	}
@@ -657,16 +676,22 @@ namespace casioemu {
 		last_debug_stop_ = {};
 	}
 
+	void ePSCPU::RequestBreak() {
+		break_requested_.store(true, std::memory_order_release);
+	}
+
 	void ePSCPU::AddExecutionBreakpoint(uint32_t word_address) {
 		const std::lock_guard lock(state_mutex_);
+		if (word_address >= rom_word_count_)
+			return;
 		execution_breakpoints_.try_emplace(word_address,
 			Eps6800ExecutionBreakpoint{.address = word_address});
 	}
 
 	bool ePSCPU::ConfigureExecutionBreakpoint(const Eps6800ExecutionBreakpoint& breakpoint) {
-		if (breakpoint.address >= 0x10000u)
-			return false;
 		const std::lock_guard lock(state_mutex_);
+		if (breakpoint.address >= rom_word_count_)
+			return false;
 		execution_breakpoints_[breakpoint.address] = breakpoint;
 		return true;
 	}

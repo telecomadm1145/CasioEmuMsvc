@@ -188,15 +188,18 @@ static bool Eps6800BranchTarget(casioemu::ePSCPU& cpu, uint32_t pc, uint16_t opc
 		target = opcode & 0x0fffu;
 		return true;
 	}
-	if ((opcode & 0xe000u) == 0xc000u) {
+	if ((opcode & 0xe000u) == 0xc000u || (opcode & 0xe000u) == 0xe000u) {
 		target = ((pc + 1) & ~0x1fffu) | (opcode & 0x1fffu);
+		return true;
+	}
+	if ((opcode & 0xf800u) == 0x5000u || (opcode & 0xf800u) == 0x5800u) {
+		target = ((pc + 1) & ~0xffffu) | cpu.ReadCodeWord(pc + 1);
 		return true;
 	}
 	switch (group) {
 	case 0x4700u: case 0x4800u: case 0x4900u:
-	case 0x5000u: case 0x5100u:
 	case 0x5500u: case 0x5600u: case 0x5700u:
-	case 0x5800u: case 0x6000u:
+	case 0x6000u:
 		target = ((pc + 1) & ~0xffffu) | cpu.ReadCodeWord(pc + 1);
 		return true;
 	default:
@@ -254,20 +257,21 @@ void CodeViewer::PrepareDisasm() {
 	auto build_disasm = [this]() {
 		std::vector<CodeElem> new_codes;
 		if (m_emu->chipset.epscpu) {
+			const size_t rom_word_count = m_emu->chipset.epscpu->RomWordCount();
 			std::map<uint32_t, std::string> labels = {
 				{0x0000u, "reset"}, {0x0002u, "paint"}, {0x0004u, "reserved_04"},
 				{0x0006u, "reserved_06"}, {0x0008u, "tmrxi"}, {0x000au, "reserved_0a"},
 				{0x0010u, "test"}};
 			for (const auto& label : g_labels) {
-				if (label.address < 0x10000u)
+				if (label.address < rom_word_count)
 					labels[label.address] = label.name;
 			}
 			std::set<uint32_t> branch_targets;
-			new_codes.reserve(0x10000);
+			new_codes.reserve(rom_word_count);
 			// The legacy disassembler consumes one byte per nibble. Build that view
 			// from logical words so both packed and unpacked model ROMs are safe.
-			std::vector<char> disasm_rom((0x10000 + 1) * 4, 0);
-			for (uint32_t address = 0; address <= 0x10000; ++address) {
+			std::vector<char> disasm_rom((rom_word_count + 1) * 4, 0);
+			for (uint32_t address = 0; address <= rom_word_count; ++address) {
 				const uint16_t word = m_emu->chipset.epscpu->ReadCodeWord(address);
 				const size_t offset = static_cast<size_t>(address) * 4;
 				disasm_rom[offset] = static_cast<char>((word >> 12) & 0x0f);
@@ -275,7 +279,7 @@ void CodeViewer::PrepareDisasm() {
 				disasm_rom[offset + 2] = static_cast<char>((word >> 4) & 0x0f);
 				disasm_rom[offset + 3] = static_cast<char>(word & 0x0f);
 			}
-			for (size_t i = 0; i < 0x10000; i++) {
+			for (size_t i = 0; i < rom_word_count; i++) {
 				if (i >= 0xc && i <= 0xf) {
 					new_codes.push_back(CodeElem{(uint32_t)(i), "<Code Option>", 0, 0});
 					continue;
@@ -289,7 +293,7 @@ void CodeViewer::PrepareDisasm() {
 				free(str);
 				uint32_t target = 0;
 				if (Eps6800BranchTarget(*m_emu->chipset.epscpu, static_cast<uint32_t>(i),
-						m_emu->chipset.epscpu->ReadCodeWord(static_cast<uint32_t>(i)), target) && target < 0x10000u) {
+						m_emu->chipset.epscpu->ReadCodeWord(static_cast<uint32_t>(i)), target) && target < rom_word_count) {
 					ce.xref_operand = static_cast<int>(target);
 					branch_targets.insert(target);
 				}

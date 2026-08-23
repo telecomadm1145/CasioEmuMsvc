@@ -331,7 +331,7 @@ try {
 		return
 	}
 	if ($CheckAnsPersistence) {
-		$requestId = 700
+		$script:requestId = 700
 		function Press-TestKey([int]$Code) {
 			$script:requestId++
 			$null = Invoke-McpTool $script:requestId "keyboard_code" @{ code = $Code; pressed = $true }
@@ -351,6 +351,9 @@ try {
 			Sort-Object LastWriteTimeUtc | Select-Object -Last 1).FullName
 		$beforeOnRegisters = Invoke-McpTool 753 "read_memory" @{ address = 0x20; size = 0x18 }
 		$beforeOnRam = Invoke-McpTool 755 "read_memory" @{ address = 0x80; size = 0x2000 }
+		$afterOnOnlyScreenshot = $null
+		$afterOnRegisters = $null
+		$afterOnRam = $null
 		if (-not $SkipOnForAnsPersistence) {
 			if ($TraceOnRamClear) {
 				$null = Invoke-McpTool 757 "add_memory_breakpoint" @{
@@ -369,7 +372,7 @@ try {
 					Model = $initial.model_name
 					ProgramCounter = '0x{0:X}' -f $ramClearStatus.program_counter
 					Backtrace = $ramClearBacktrace.backtrace
-					Disassembly = ($ramClearCode.instructions | ForEach-Object {
+					Disassembly = ($ramClearCode.lines | ForEach-Object {
 						'0x{0:X}: {1}' -f $_.address, $_.text
 					}) -join "`n"
 				} | Format-List
@@ -396,14 +399,22 @@ try {
 			BeforeOnScreenshot = $beforeOnScreenshot
 			AfterOnOnlyScreenshot = $afterOnOnlyScreenshot
 			BeforeOnRegisters = ($beforeOnRegisters.bytes | ForEach-Object { '{0:X2}' -f $_ }) -join ' '
-			AfterOnRegisters = ($afterOnRegisters.bytes | ForEach-Object { '{0:X2}' -f $_ }) -join ' '
-			RamChangesAfterOn = @(
-				for ($i = 0; $i -lt $beforeOnRam.bytes.Count; $i++) {
-					if ($beforeOnRam.bytes[$i] -ne $afterOnRam.bytes[$i]) {
-						'0x{0:X4}:{1:X2}->{2:X2}' -f (0x80 + $i), $beforeOnRam.bytes[$i], $afterOnRam.bytes[$i]
+			AfterOnRegisters = if ($SkipOnForAnsPersistence) {
+				'SKIPPED'
+			} else {
+				($afterOnRegisters.bytes | ForEach-Object { '{0:X2}' -f $_ }) -join ' '
+			}
+			RamChangesAfterOn = if ($SkipOnForAnsPersistence) {
+				'SKIPPED'
+			} else {
+				@(
+					for ($i = 0; $i -lt $beforeOnRam.bytes.Count; $i++) {
+						if ($beforeOnRam.bytes[$i] -ne $afterOnRam.bytes[$i]) {
+							'0x{0:X4}:{1:X2}->{2:X2}' -f (0x80 + $i), $beforeOnRam.bytes[$i], $afterOnRam.bytes[$i]
+						}
 					}
-				}
-			) -join ' '
+				) -join ' '
+			}
 			AfterOnAnsScreenshot = $afterOnScreenshot
 		} | Format-List
 		return

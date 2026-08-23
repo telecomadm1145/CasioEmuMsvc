@@ -7,10 +7,12 @@
 #include "Peripheral/ExternalInterrupts.hpp"
 #include "Peripheral/IOPorts.hpp"
 #include <SDL.h>
+#include <condition_variable>
 #include <forward_list>
 #include <iosfwd>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace casioemu {
@@ -75,8 +77,11 @@ namespace casioemu {
 		int LSCLKFreqAddition{};
 
 		bool real_hardware;
-		SDL_TimerID eps_ram_save_timer_id{};
-		/* Serializes PersistEpsRam against ~Chipset deleting epscpu. */
+		std::thread eps_ram_save_thread;
+		std::mutex eps_ram_save_thread_mutex;
+		std::condition_variable eps_ram_save_thread_cv;
+		bool eps_ram_save_thread_stop{};
+		/* Serializes PersistEpsRam with other RAM operations and teardown. */
 		std::mutex eps_ram_save_mutex;
 
 	public:

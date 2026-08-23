@@ -626,7 +626,7 @@ namespace casioemu {
 				else {
 					const int ki = MaskToIndex(ki_mask);
 					const int ko = MaskToIndex(ko_mask);
-					if (ki < 0 || ko < 0)
+					if (ki < 0 || ki >= 8 || ko < 0 || ko >= 16)
 						continue;
 					button.kiko = (ko << 4) | ki;
 				}

@@ -700,10 +700,13 @@ namespace {
 		int writes = 0;
 		uint8_t maximum_stack_pointer = 0;
 		bool saw_backtrace = false;
+		bool instruction_hook_reentered = false;
+		bool memory_hook_reentered = false;
 		machine.SetDebugHooks(
-			[&](uint32_t, uint32_t, uint8_t stack_pointer) {
+			[&](uint32_t, uint32_t pc_after, uint8_t stack_pointer) {
 				++instructions;
 				maximum_stack_pointer = std::max(maximum_stack_pointer, stack_pointer);
+				instruction_hook_reentered |= machine.ProgramCounter() == pc_after;
 				return stack_pointer == 1;
 			},
 			[&](uint32_t, uint32_t, bool call, uint32_t accumulator, const std::string& backtrace) {
@@ -713,6 +716,8 @@ namespace {
 			[&](uint32_t address, uint8_t&, bool write) {
 				if (write && address == 0x80) {
 					++writes;
+					(void)machine.DebugSnapshot();
+					memory_hook_reentered = true;
 					return true; // Address-lock semantics: cancel before the physical write.
 				}
 				return false;
@@ -723,7 +728,33 @@ namespace {
 			machine.Next();
 		if (instructions != 5 || calls != 1 || returns != 1 || writes != 1 || maximum_stack_pointer != 1 ||
 			machine.LastDebugStop().reason != casioemu::Eps6800DebugStopReason::Hook ||
-			!saw_backtrace || machine.ReadDebugMemory(0x80) != 0)
+			!saw_backtrace || !instruction_hook_reentered || !memory_hook_reentered ||
+			machine.ReadDebugMemory(0x80) != 0)
+			return false;
+
+		machine.SetDebugHooks({}, {}, {}, {});
+		machine.Reset();
+		machine.RequestBreak();
+		if (!machine.RunFrame() || machine.ProgramCounter() != 0 ||
+			machine.LastDebugStop().reason != casioemu::Eps6800DebugStopReason::Break)
+			return false;
+
+		std::vector<uint8_t> extended_rom(0x30000, 0);
+		casioemu::ePSCPU extended_machine;
+		if (!extended_machine.LoadRom(extended_rom, casioemu::Eps6800RomFormat::PackedLittleEndian) ||
+			extended_machine.RomWordCount() != 0x18000 ||
+			!extended_machine.ConfigureExecutionBreakpoint({.address = 0x17fff}) ||
+			extended_machine.ConfigureExecutionBreakpoint({.address = 0x18000}))
+			return false;
+
+		std::vector<uint8_t> stack_rom(0x20000, 0);
+		SetPackedRomWord(stack_rom, 0, 0x2bfe); // RET with STKPTR=0 wraps to slot 31.
+		casioemu::ePSCPU stack_machine;
+		if (!stack_machine.LoadRom(stack_rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+			return false;
+		stack_machine.Reset();
+		stack_machine.Next();
+		if (stack_machine.DebugSnapshot().stack_pointer != 31)
 			return false;
 
 		machine.WriteDebugMemory(0x20, 0x80); // CPUCON.WBK

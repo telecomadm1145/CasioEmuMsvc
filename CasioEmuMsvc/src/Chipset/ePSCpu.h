@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include <atomic>
 #include <array>
 #include <chrono>
 #include <cstddef>
@@ -17,6 +18,7 @@
 #include <iosfwd>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -55,7 +57,8 @@ namespace casioemu {
 		RunToAddress,
 		ExecutionBreakpoint,
 		MemoryBreakpoint,
-		Hook
+		Hook,
+		Break
 	};
 
 	struct Eps6800DebugStop {
@@ -125,20 +128,37 @@ namespace casioemu {
 			std::condition_variable condition_;
 			uint64_t next_ticket_{};
 			uint64_t serving_ticket_{};
+			std::thread::id owner_{};
+			uint32_t recursion_{};
 
 		public:
 			void lock() {
 				std::unique_lock lock(mutex_);
+				const auto caller = std::this_thread::get_id();
+				if (owner_ == caller) {
+					++recursion_;
+					return;
+				}
 				const auto ticket = next_ticket_++;
-				condition_.wait(lock, [this, ticket] { return serving_ticket_ == ticket; });
+				condition_.wait(lock, [this, ticket] {
+					return serving_ticket_ == ticket && recursion_ == 0;
+				});
+				owner_ = caller;
+				recursion_ = 1;
 			}
 
 			void unlock() {
+				bool notify = false;
 				{
 					const std::lock_guard lock(mutex_);
-					++serving_ticket_;
+					if (--recursion_ == 0) {
+						owner_ = {};
+						++serving_ticket_;
+						notify = true;
+					}
 				}
-				condition_.notify_all();
+				if (notify)
+					condition_.notify_all();
 			}
 		};
 
@@ -176,13 +196,16 @@ namespace casioemu {
 		size_t trace_capacity_{4096};
 		std::deque<Eps6800TraceEntry> trace_buffer_;
 		Eps6800RomFormat rom_format_{Eps6800RomFormat::PackedLittleEndian};
+		size_t rom_word_count_{};
 		EpsVariant variant_{EpsVariant::Eps6800};
+		std::atomic_bool break_requested_{};
 		std::function<bool(uint32_t, uint32_t, uint8_t)> instruction_hook_;
 		std::function<void(uint32_t, uint32_t, bool, uint32_t, const std::string&)> function_hook_;
 		std::function<bool(uint32_t, uint8_t&, bool)> memory_hook_;
 		std::function<void(uint8_t)> interrupt_hook_;
 
 		bool RunInstructionLocked(bool tick_timer);
+		bool ConsumeBreakRequestLocked();
 		bool ShouldStopLocked(uint32_t pc_after, uint8_t stack_pointer_after,
 			Eps6800DebugStopReason& reason);
 		void RecordStopLocked(Eps6800DebugStopReason reason, uint32_t pc);
@@ -200,6 +223,7 @@ namespace casioemu {
 
 		bool LoadRom(const std::vector<unsigned char>& rom, Eps6800RomFormat format);
 		Eps6800RomFormat RomFormat() const;
+		size_t RomWordCount() const;
 		bool WriteRomImageWord(std::vector<unsigned char>& rom, uint32_t word_address, uint16_t value) const;
 		void SetDebugHooks(
 			std::function<bool(uint32_t, uint32_t, uint8_t)> instruction,
@@ -241,6 +265,7 @@ namespace casioemu {
 		bool RequestStepOut();
 		void RequestRunToAddress(uint32_t word_address);
 		void CancelDebugRun();
+		void RequestBreak();
 		void AddExecutionBreakpoint(uint32_t word_address);
 		bool ConfigureExecutionBreakpoint(const Eps6800ExecutionBreakpoint& breakpoint);
 		void RemoveExecutionBreakpoint(uint32_t word_address);

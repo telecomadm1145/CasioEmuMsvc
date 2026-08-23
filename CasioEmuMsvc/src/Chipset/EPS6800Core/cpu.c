@@ -165,6 +165,8 @@ static uint16_t cpu_read_rom_word_state(const struct cpu_state *state, uint32_t 
 	return state->rom_read_fn(addr, state->rom_read_user);
 }
 
+static enum eps_variant cpu_variant(const struct cpu_state *state);
+
 static uint8_t cpu_read_rom_byte_state(const struct cpu_state *state, uint32_t addr) {
 	if (eps_variant_is_6009(cpu_variant(state))) {
 		/* EPS6009 table reads wrap inside its 64 KiB byte-addressed ROM. */
@@ -479,9 +481,7 @@ static void cpu_push_state(struct cpu_state *state, uint32_t dat) {
 static uint32_t cpu_pop_state(struct cpu_state *state) {
 	uint8_t stkptr;
 	stkptr = cpu_bus_read_internal(state, REG_STKPTR) & (CPU_STACK_DEPTH - 1);
-	if (stkptr > 0) {
-		stkptr--;
-	}
+	stkptr = (uint8_t)((stkptr - 1) & (CPU_STACK_DEPTH - 1));
 	cpu_bus_write_internal(state, REG_STKPTR, stkptr);
 	return state->stack[stkptr];
 }

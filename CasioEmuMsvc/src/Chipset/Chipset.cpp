@@ -32,10 +32,12 @@
 #include <ML620Ports.h>
 #include <Spi.h>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <limits>
 
 namespace casioemu {
 	constexpr uint32_t EPS_RAM_SAVE_INTERVAL_MS = 10 * 1000;
@@ -87,7 +89,8 @@ namespace casioemu {
 			try {
 				size_t consumed = 0;
 				const auto value = std::stoul(timer_divisor->second, &consumed, 0);
-				if (consumed != timer_divisor->second.size() || value == 0)
+				if (consumed != timer_divisor->second.size() || value == 0 ||
+					value > std::numeric_limits<uint32_t>::max())
 					throw std::invalid_argument("invalid timer divisor");
 				epscpu->SetTimerCycleDivisor(static_cast<uint32_t>(value));
 			}
@@ -168,24 +171,22 @@ namespace casioemu {
 	}
 
 	Chipset::~Chipset() {
-		if (eps_ram_save_timer_id) {
-			SDL_RemoveTimer(eps_ram_save_timer_id);
-			eps_ram_save_timer_id = 0;
+		{
+			const std::lock_guard lock(eps_ram_save_thread_mutex);
+			eps_ram_save_thread_stop = true;
 		}
+		eps_ram_save_thread_cv.notify_all();
+		if (eps_ram_save_thread.joinable())
+			eps_ram_save_thread.join();
 		PersistEpsRam();
 		DestructPeripherals();
 		if (!IsEpsFamily(emulator.hardware_id)) {
 			DestructClockGenerator();
 			DestructInterruptSFR();
 		}
-		{
-			/* SDL_RemoveTimer does not wait for a callback that is already
-			 * running; acquire the save mutex so an in-flight PersistEpsRam can
-			 * never outlive epscpu. */
-			const std::lock_guard lock(eps_ram_save_mutex);
-			delete epscpu;
-			epscpu = nullptr;
-		}
+		const std::lock_guard lock(eps_ram_save_mutex);
+		delete epscpu;
+		epscpu = nullptr;
 		delete& mmu;
 		delete& cpu;
 	}
@@ -697,13 +698,20 @@ namespace casioemu {
 				}
 			}
 			if (ShouldPersistEpsRam(emulator.hardware_id)) {
-				eps_ram_save_timer_id = SDL_AddTimer(
-					EPS_RAM_SAVE_INTERVAL_MS,
-					[](Uint32 interval, void* param) -> Uint32 {
-						static_cast<Chipset*>(param)->PersistEpsRam();
-						return interval;
-					},
-					this);
+				eps_ram_save_thread_stop = false;
+				eps_ram_save_thread = std::thread([this] {
+					std::unique_lock lock(eps_ram_save_thread_mutex);
+					while (!eps_ram_save_thread_stop) {
+						if (eps_ram_save_thread_cv.wait_for(
+								lock,
+								std::chrono::milliseconds(EPS_RAM_SAVE_INTERVAL_MS),
+								[this] { return eps_ram_save_thread_stop; }))
+							break;
+						lock.unlock();
+						PersistEpsRam();
+						lock.lock();
+					}
+				});
 			}
 		#endif
 			for (auto& peripheral : peripherals)
@@ -794,6 +802,14 @@ namespace casioemu {
 	}
 
 	void Chipset::Break() {
+		if (IsEpsFamily(emulator.hardware_id)) {
+			InterruptEventArgs iea{};
+			iea.index = INT_BREAK;
+			RaiseEvent(on_brk, *this, iea);
+			if (!iea.handled && epscpu)
+				epscpu->RequestBreak();
+			return;
+		}
 		if (cpu.GetExceptionLevel() > 1) {
 			Reset();
 			return;

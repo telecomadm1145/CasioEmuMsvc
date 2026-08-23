@@ -386,11 +386,14 @@ public:
 					}
 					ImGui::TextUnformatted("ModelEditor.HardwareType"_lc);
 					ImGui::SetNextItemWidth(80);
-					if (ImGui::BeginCombo("##cb", items[mi.hardware_id])) {
-						for (int n = 0; n < IM_ARRAYSIZE(items); n++) {
+					const int current_hardware_id = static_cast<int>(mi.hardware_id);
+					const bool valid_hardware_id = current_hardware_id >= casioemu::HW_MIN &&
+						current_hardware_id <= casioemu::HW_MAX;
+					if (ImGui::BeginCombo("##cb", valid_hardware_id ? items[current_hardware_id] : "Invalid")) {
+						for (int n = casioemu::HW_MIN; n <= casioemu::HW_MAX; n++) {
 							bool is_selected = (mi.hardware_id == n);
 							if (ImGui::Selectable(items[n], is_selected)) {
-								mi.hardware_id = n;
+								mi.hardware_id = static_cast<unsigned short>(n);
 							}
 							if (is_selected)
 								ImGui::SetItemDefaultFocus();
