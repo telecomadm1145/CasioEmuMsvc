@@ -242,9 +242,14 @@ namespace casioemu {
 		std::unique_lock lock(state_mutex_);
 		constexpr uint32_t kLegacyActiveInstructions = 2000;
 		constexpr uint32_t kFrameInstructions = 4000;
-		constexpr uint32_t kEps6009LockYieldInstructions = 128;
 		constexpr auto kEps6009ActiveFramePacing = std::chrono::milliseconds(1);
 		bool stopped = false;
+		const auto finish_active_frame = [&]() {
+			lock.unlock();
+			if (variant_ == EpsVariant::Eps6009 && !stopped)
+				std::this_thread::sleep_for(kEps6009ActiveFramePacing);
+			return stopped;
+		};
 		if (state_->cpu.mode == CPU_MODE_SLEEP) {
 			machine_state_advance_cycles_split(state_, kFrameInstructions, false, false);
 			return false;
@@ -255,16 +260,8 @@ namespace casioemu {
 					stopped = true;
 					break;
 				}
-				if (variant_ == EpsVariant::Eps6009 &&
-					((i + 1) % kEps6009LockYieldInstructions) == 0) {
-					lock.unlock();
-					std::this_thread::yield();
-					lock.lock();
-				}
 			}
-			if (variant_ == EpsVariant::Eps6009 && !stopped)
-				std::this_thread::sleep_for(kEps6009ActiveFramePacing);
-			return stopped;
+			return finish_active_frame();
 		}
 		const auto now = std::chrono::steady_clock::now();
 		if (state_->cpu.mode == CPU_MODE_IDLE) {
@@ -302,16 +299,8 @@ namespace casioemu {
 				stopped = true;
 				break;
 			}
-			if (variant_ == EpsVariant::Eps6009 &&
-				((i + 1) % kEps6009LockYieldInstructions) == 0) {
-				lock.unlock();
-				std::this_thread::yield();
-				lock.lock();
-			}
 		}
-		if (variant_ == EpsVariant::Eps6009 && !stopped)
-			std::this_thread::sleep_for(kEps6009ActiveFramePacing);
-		return stopped;
+		return finish_active_frame();
 	}
 
 	bool ePSCPU::RunInstructionLocked(bool tick_timer) {
