@@ -101,7 +101,7 @@ namespace casioemu {
 		bool remap = false;
 
 		InterruptSource* MaskableInterrupts = nullptr;
-		size_t EffectiveMICount;
+		size_t EffectiveMICount = 0;
 
 		// Reserve these pointers to make it easy for other peripherals to input to pins.
 		IOPorts* ioport = nullptr;

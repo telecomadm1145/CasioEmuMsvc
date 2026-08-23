@@ -162,11 +162,11 @@ class PluginApi_Impl : public PluginApi {
 			if (auto* eps = m_emu->chipset.epscpu) {
 				const uint32_t word_address = static_cast<uint32_t>(addr >> 1);
 				uint16_t word = eps->ReadCodeWord(word_address);
-				/* Match EPS_ROM_Hex / IDebugger_Impl::WriteCode: even byte is the
-				 * high half, odd byte is the low half. */
+				/* Match IDebugger_Impl::WriteCode: even byte is the low half,
+				 * odd byte is the high half. */
 				word = (addr & 1)
-					? static_cast<uint16_t>((word & 0xff00u) | dat)
-					: static_cast<uint16_t>((word & 0x00ffu) | (static_cast<uint16_t>(dat) << 8));
+					? static_cast<uint16_t>((word & 0x00ffu) | (static_cast<uint16_t>(dat) << 8))
+					: static_cast<uint16_t>((word & 0xff00u) | dat);
 				if (!eps->WriteCodeWord(word_address, word))
 					return;
 				eps->WriteRomImageWord(m_emu->chipset.rom_data, word_address, word);
