@@ -119,6 +119,7 @@ static bool mmio_timer_register(const struct mmio_state *state, uint8_t addr) {
 	if (addr == eps_reg_trintcon(state->variant) ||
 		addr == eps_reg_trintsta(state->variant) ||
 		addr == eps_reg_tr0con(state->variant) ||
+		addr == eps_reg_tr1con(state->variant) ||
 		addr == eps_reg_trl0h(state->variant) ||
 		addr == eps_reg_trl0l(state->variant) ||
 		addr == eps_reg_trl1(state->variant) ||
