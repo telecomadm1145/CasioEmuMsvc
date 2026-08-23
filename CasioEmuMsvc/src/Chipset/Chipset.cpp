@@ -42,10 +42,6 @@
 namespace casioemu {
 	constexpr uint32_t EPS_RAM_SAVE_INTERVAL_MS = 10 * 1000;
 
-	static bool ShouldPersistEpsRam(HardwareId hardware_id) {
-		return hardware_id == HW_EPS6800;
-	}
-
 	void* Chipset::QueryInterface(const char* name) {
 		auto d = (void*)0;
 		for (auto& phe : peripherals) {
@@ -195,17 +191,15 @@ namespace casioemu {
 	#ifdef CASIOEMU_DISABLE_RAM_IMAGE
 		return;
 	#else
-		if (!ShouldPersistEpsRam(emulator.hardware_id))
-			return;
 		const std::lock_guard lock(eps_ram_save_mutex);
 		if (!epscpu)
 			return;
 		try {
 			emulator.WriteModelSessionResource("ram.dmp", epscpu->ExportRam());
-			logger::Info("[EPS6800][Info] RAM image saved to ram.dmp\n");
+			logger::Info("[EPS][Info] RAM image saved to ram.dmp\n");
 		}
 		catch (const std::exception& error) {
-			logger::Info("[EPS6800][Warn] Failed to save RAM image: %s\n", error.what());
+			logger::Info("[EPS][Warn] Failed to save RAM image: %s\n", error.what());
 		}
 	#endif
 	}
@@ -685,34 +679,32 @@ namespace casioemu {
 			if (!epscpu || !epscpu->LoadRom(rom_data, rom_format))
 				PANIC("Invalid EPS6800 ROM for configured format %s\n", Eps6800RomFormatName(rom_format));
 		#ifndef CASIOEMU_DISABLE_RAM_IMAGE
-			if (ShouldPersistEpsRam(emulator.hardware_id) && emulator.HasModelResource("ram.dmp")) {
+			if (emulator.HasModelResource("ram.dmp")) {
 				try {
 					const auto saved_ram = emulator.ReadModelResource("ram.dmp");
 					if (!epscpu->ImportRam(saved_ram))
-						logger::Info("[EPS6800][Warn] Ignoring ram.dmp with size %zu (expected 8192 or 8219)\n", saved_ram.size());
+						logger::Info("[EPS][Warn] Ignoring ram.dmp with unsupported size %zu\n", saved_ram.size());
 					else
-						logger::Info("[EPS6800][Info] RAM image loaded from ram.dmp\n");
+						logger::Info("[EPS][Info] RAM image loaded from ram.dmp\n");
 				}
 				catch (const std::exception& error) {
-					logger::Info("[EPS6800][Warn] Failed to load RAM image: %s\n", error.what());
+					logger::Info("[EPS][Warn] Failed to load RAM image: %s\n", error.what());
 				}
 			}
-			if (ShouldPersistEpsRam(emulator.hardware_id)) {
-				eps_ram_save_thread_stop = false;
-				eps_ram_save_thread = std::thread([this] {
-					std::unique_lock lock(eps_ram_save_thread_mutex);
-					while (!eps_ram_save_thread_stop) {
-						if (eps_ram_save_thread_cv.wait_for(
-								lock,
-								std::chrono::milliseconds(EPS_RAM_SAVE_INTERVAL_MS),
-								[this] { return eps_ram_save_thread_stop; }))
-							break;
-						lock.unlock();
-						PersistEpsRam();
-						lock.lock();
-					}
-				});
-			}
+			eps_ram_save_thread_stop = false;
+			eps_ram_save_thread = std::thread([this] {
+				std::unique_lock lock(eps_ram_save_thread_mutex);
+				while (!eps_ram_save_thread_stop) {
+					if (eps_ram_save_thread_cv.wait_for(
+							lock,
+							std::chrono::milliseconds(EPS_RAM_SAVE_INTERVAL_MS),
+							[this] { return eps_ram_save_thread_stop; }))
+						break;
+					lock.unlock();
+					PersistEpsRam();
+					lock.lock();
+				}
+			});
 		#endif
 			for (auto& peripheral : peripherals)
 				peripheral->Initialise();
