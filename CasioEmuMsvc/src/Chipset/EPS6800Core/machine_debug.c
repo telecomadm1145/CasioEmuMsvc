@@ -155,10 +155,10 @@ uint8_t machine_state_debug_peek_memory(struct machine_state *state, uint32_t li
 	}
 
 	mmio_suppress_debug_access_state(&state->mmio, true);
-	postid = mmio_read_byte_state(&state->mmio, REG_POSTID);
-	mmio_write_byte_state(&state->mmio, REG_POSTID, MACHINE_DEBUG_POSTID_DISABLED);
+	postid = mmio_read_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant));
+	mmio_write_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant), MACHINE_DEBUG_POSTID_DISABLED);
 	byte = mmio_read_byte_state(&state->mmio, (uint8_t)linear_addr);
-	mmio_write_byte_state(&state->mmio, REG_POSTID, postid);
+	mmio_write_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant), postid);
 	mmio_suppress_debug_access_state(&state->mmio, false);
 	return byte;
 }

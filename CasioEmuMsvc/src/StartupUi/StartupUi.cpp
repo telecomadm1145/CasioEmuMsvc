@@ -130,7 +130,7 @@ class ModelEditor : public UIWindow {
 	casioemu::ModelInfo mi;
 	int v;
 	int k;
-	static constexpr const char* items[10] = {"##1", "##2", "##3", "ES(P)", "CWX", "CWII", "Fx5800p", "TI", "SolarII", "EPS6800"};
+	static constexpr const char* items[11] = {"##1", "##2", "##3", "ES(P)", "CWX", "CWII", "Fx5800p", "TI", "SolarII", "EPS6800", "EPS6009"};
 	char path1[260];
 	char path2[260];
 	char path3[260];
@@ -311,7 +311,7 @@ public:
 					}
 				}
 				auto sp2 = mi.sprites["rsd_pixel"];
-				if (mi.hardware_id == casioemu::HW_ES_PLUS || mi.hardware_id == casioemu::HW_FX_5800P || mi.hardware_id == casioemu::HW_EPS6800) {
+				if (mi.hardware_id == casioemu::HW_ES_PLUS || mi.hardware_id == casioemu::HW_FX_5800P || casioemu::IsEpsFamily(mi.hardware_id)) {
 					for (size_t j = 0; j < 31; j++) {
 						for (size_t i = 0; i < 96; i++) {
 							ImGui::SetCursorPos({(float)(sp2.dest.x + i * sp2.dest.w) * scaleFactor, (float)(sp2.dest.y + j * sp2.dest.h) * scaleFactor + y});
@@ -386,11 +386,14 @@ public:
 					}
 					ImGui::TextUnformatted("ModelEditor.HardwareType"_lc);
 					ImGui::SetNextItemWidth(80);
-					if (ImGui::BeginCombo("##cb", items[mi.hardware_id])) {
-						for (int n = 0; n < IM_ARRAYSIZE(items); n++) {
+					const int current_hardware_id = static_cast<int>(mi.hardware_id);
+					const bool valid_hardware_id = current_hardware_id >= casioemu::HW_MIN &&
+						current_hardware_id <= casioemu::HW_MAX;
+					if (ImGui::BeginCombo("##cb", valid_hardware_id ? items[current_hardware_id] : "Invalid")) {
+						for (int n = casioemu::HW_MIN; n <= casioemu::HW_MAX; n++) {
 							bool is_selected = (mi.hardware_id == n);
 							if (ImGui::Selectable(items[n], is_selected)) {
-								mi.hardware_id = n;
+								mi.hardware_id = static_cast<unsigned short>(n);
 							}
 							if (is_selected)
 								ImGui::SetItemDefaultFocus();
@@ -885,6 +888,9 @@ namespace casioemu {
 								break;
 							case HW_EPS6800:
 								mod.type = "EPS6800";
+								break;
+							case HW_EPS6009:
+								mod.type = "EPS6009";
 								break;
 							default:
 								mod.type = "Unknown";
@@ -1634,7 +1640,7 @@ namespace casioemu {
 				ImGui::InputText("StartupUI.SearchBoxHeader"_lc, search_txt, 200);
 				ImGui::SameLine();
 
-				const char* items[] = {"##", "ES", "ESP", "ESP2nd", "CWX", "CWII", "Fx5800p", "TI", "SolarII", "EPS6800"};
+				const char* items[] = {"##", "ES", "ESP", "ESP2nd", "CWX", "CWII", "Fx5800p", "TI", "SolarII", "EPS6800", "EPS6009"};
 				ImGui::SetNextItemWidth(filterWidth);
 				if (ImGui::BeginCombo("##cb", current_filter)) {
 					for (int n = 0; n < IM_ARRAYSIZE(items); n++) {

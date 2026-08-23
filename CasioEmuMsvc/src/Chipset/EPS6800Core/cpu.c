@@ -125,11 +125,12 @@ enum {
 };
 static const uint32_t CPU_PC_HIGH_BITS_MASK = 0xFFFF0000;
 static const uint32_t CPU_PC_HIGH_13_BITS_MASK = 0xFFFFE000;
-static const uint32_t CPU_TABPTR_MASK = 0x0001FFFF;
+static const uint32_t CPU_TABPTR_MASK = 0x0003FFFF;
 enum {
 	CPU_PC_LOW_13_BITS_MASK = 0x1FFF,
 	CPU_LONG_BRANCH_ADDRESS_MASK = 0x0001FFFF,
 	CPU_RESET_STATUS = 0xC0,
+	CPU_EPS6009_RESET_STATUS = 0x30,
 	CPU_ROM_HIGH_BYTE_SELECT = 0x01,
 	CPU_OPCODE_SLEEP = 0x0002,
 	CPU_TRACE_FORMAT_BUFFER_SIZE = 256
@@ -164,7 +165,13 @@ static uint16_t cpu_read_rom_word_state(const struct cpu_state *state, uint32_t 
 	return state->rom_read_fn(addr, state->rom_read_user);
 }
 
+static enum eps_variant cpu_variant(const struct cpu_state *state);
+
 static uint8_t cpu_read_rom_byte_state(const struct cpu_state *state, uint32_t addr) {
+	if (eps_variant_is_6009(cpu_variant(state))) {
+		/* EPS6009 table reads wrap inside its 64 KiB byte-addressed ROM. */
+		addr &= 0xffffu;
+	}
 	uint16_t word = cpu_read_rom_word_state(state, addr >> 1);
 	if (addr & CPU_ROM_HIGH_BYTE_SELECT) {
 		word >>= CPU_PC_MID_SHIFT;
@@ -212,6 +219,10 @@ static uint8_t cpu_bus_read_internal(struct cpu_state *state, uint8_t addr) {
 	return mmio_read_byte_internal_state(state->mmio, addr);
 }
 
+static enum eps_variant cpu_variant(const struct cpu_state *state) {
+	return state->mmio ? state->mmio->variant : EPS_VARIANT_6800;
+}
+
 static void cpu_bus_write_internal(struct cpu_state *state, uint8_t addr, uint8_t byte) {
 	mmio_write_byte_internal_state(state->mmio, addr, byte);
 }
@@ -235,11 +246,13 @@ static void cpu_bus_reset(struct cpu_state *state) {
 static void cpu_write_pc_registers_state(struct cpu_state *state) {
 	cpu_bus_write_internal(state, REG_PCL, state->pc & CPU_BYTE_MASK);
 	cpu_bus_write_internal(state, REG_PCM, (state->pc >> CPU_PC_MID_SHIFT) & CPU_BYTE_MASK);
-	cpu_bus_write_internal(state, REG_PCH, (state->pc >> CPU_PC_HIGH_SHIFT) & CPU_BYTE_MASK);
+	if (eps_has_pch(cpu_variant(state)))
+		cpu_bus_write_internal(state, REG_PCH, (state->pc >> CPU_PC_HIGH_SHIFT) & CPU_BYTE_MASK);
 }
 
 static uint32_t cpu_read_pc_registers_state(struct cpu_state *state) {
-	uint32_t pc = (uint32_t)cpu_bus_read_internal(state, REG_PCH) << CPU_PC_HIGH_SHIFT;
+	uint32_t pc = eps_has_pch(cpu_variant(state)) ?
+		((uint32_t)cpu_bus_read_internal(state, REG_PCH) << CPU_PC_HIGH_SHIFT) : 0;
 	pc |= (uint32_t)cpu_bus_read_internal(state, REG_PCM) << CPU_PC_MID_SHIFT;
 	pc |= (uint32_t)cpu_bus_read_internal(state, REG_PCL);
 	return pc;
@@ -257,12 +270,18 @@ static uint32_t cpu_read_tabptr_state(struct cpu_state *state) {
 	uint32_t tabptr = (uint32_t)cpu_bus_read_internal(state, REG_TABPTRH) << CPU_PC_HIGH_SHIFT;
 	tabptr |= (uint32_t)cpu_bus_read_internal(state, REG_TABPTRM) << CPU_PC_MID_SHIFT;
 	tabptr |= (uint32_t)cpu_bus_read_internal(state, REG_TABPTRL);
-	return tabptr & CPU_TABPTR_MASK;
+	/* EPS6009 keeps the complete TBPTH byte even though its 64 KiB ROM
+	 * wraps table reads to the low 16 address bits. */
+	return eps_variant_is_6009(cpu_variant(state)) ? tabptr : (tabptr & CPU_TABPTR_MASK);
 }
 
 static void cpu_write_tabptr_state(struct cpu_state *state, uint32_t tabptr) {
-	tabptr &= CPU_TABPTR_MASK;
-	cpu_bus_write_internal(state, REG_TABPTRH, (tabptr >> CPU_PC_HIGH_SHIFT) & MASK_TABPTRH);
+	if (!eps_variant_is_6009(cpu_variant(state)))
+		tabptr &= CPU_TABPTR_MASK;
+	cpu_bus_write_internal(state, REG_TABPTRH,
+		eps_variant_is_6009(cpu_variant(state)) ?
+			(uint8_t)(tabptr >> CPU_PC_HIGH_SHIFT) :
+			(uint8_t)((tabptr >> CPU_PC_HIGH_SHIFT) & MASK_TABPTRH));
 	cpu_bus_write_internal(state, REG_TABPTRM, (tabptr >> CPU_PC_MID_SHIFT) & CPU_BYTE_MASK);
 	cpu_bus_write_internal(state, REG_TABPTRL, tabptr & CPU_BYTE_MASK);
 }
@@ -283,7 +302,9 @@ static uint8_t cpu_read_direct_state(struct cpu_state *state, uint8_t addr) {
 	case REG_PCM:
 		return ((state->pc + 1) >> CPU_PC_MID_SHIFT) & CPU_BYTE_MASK;
 	case REG_PCH:
-		return ((state->pc + 1) >> CPU_PC_HIGH_SHIFT) & CPU_BYTE_MASK;
+		if (eps_has_pch(cpu_variant(state)))
+			return ((state->pc + 1) >> CPU_PC_HIGH_SHIFT) & CPU_BYTE_MASK;
+		return cpu_bus_read(state, addr);
 	default:
 		return cpu_bus_read(state, addr);
 	}
@@ -394,7 +415,7 @@ static void cpu_trace_instruction_state(struct cpu_state *state, uint32_t cur_pc
 	/* Collapse RPT repeats: when repeat is active and the instruction stream
 	 * is re-executing the same PC/opcode, emit only the first line. */
 	if (trace->have_last && (trace->last_pc == cur_pc) && (trace->last_instr == instr)) {
-		if ((state->rpt_counter != 0) || trace->repeat_collapse_active) {
+		if ((state->rpt_target_pc != 0) || trace->repeat_collapse_active) {
 			if (!trace->verbose) {
 				trace->repeat_collapse_active = true;
 				return;
@@ -460,22 +481,21 @@ static void cpu_push_state(struct cpu_state *state, uint32_t dat) {
 static uint32_t cpu_pop_state(struct cpu_state *state) {
 	uint8_t stkptr;
 	stkptr = cpu_bus_read_internal(state, REG_STKPTR) & (CPU_STACK_DEPTH - 1);
-	if (stkptr > 0) {
-		stkptr--;
-	}
+	stkptr = (uint8_t)((stkptr - 1) & (CPU_STACK_DEPTH - 1));
 	cpu_bus_write_internal(state, REG_STKPTR, stkptr);
 	return state->stack[stkptr];
 }
 
 static void cpu_handle_interrupt_state(struct cpu_state *state, uint32_t addr) {
 	uint8_t cpucon;
-	cpucon = cpu_bus_read_internal(state, REG_CPUCON);
+	cpucon = cpu_bus_read_internal(state, eps_reg_cpucon(cpu_variant(state)));
 	if (cpucon & BIT_GLINT) {
 		cpu_push_state(state, state->pc + (state->sleep_repeat_pc ? 1 : 0));
 		state->sleep_repeat_pc = false;
-		state->rpt_counter = 0;
 		state->pc = addr;
 		cpu_write_pc_registers_state(state);
+		/* Interrupt entry masks further interrupts until RETI reenables them. */
+		cpu_bus_write_internal(state, eps_reg_cpucon(cpu_variant(state)), (uint8_t)(cpucon & ~BIT_GLINT));
 	}
 }
 
@@ -484,7 +504,12 @@ void cpu_loop_state(struct cpu_state *state, uint32_t count) {
 	uint32_t instr;
 	struct cpu_trace_state *trace = &state->trace;
 
-	if (state->int_pending) {
+	/* A request raised while firmware is inside an ISR must remain pending
+	 * until RETI restores GLINT.  Clearing it before cpu_handle_interrupt_state
+	 * can actually enter the vector loses Timer1 wakeups from Idle. */
+	/* The hardware finishes an active RPT before accepting an interrupt. */
+	if (state->int_pending && state->rpt_target_pc == 0 &&
+		(cpu_bus_read_internal(state, eps_reg_cpucon(cpu_variant(state))) & BIT_GLINT)) {
 		if (state->int_pending & INT_LEVEL4_TIMINT) {
 			state->int_pending &= ~INT_LEVEL4_TIMINT;
 			cpu_handle_interrupt_state(state, ADDR_TIMINT);
@@ -554,11 +579,12 @@ void cpu_reset_state(struct cpu_state *state) {
 	state->pc = 0;
 	state->status = 0;
 	state->rpt_counter = 0;
+	state->rpt_target_pc = 0;
 	state->mode = CPU_MODE_FAST;
 	state->int_pending = 0;
 	state->sleep_repeat_pc = false;
 	cpu_bus_reset(state);
-	cpu_set_status_state(state, CPU_RESET_STATUS);
+	cpu_set_status_state(state, eps_variant_is_6009(cpu_variant(state)) ? CPU_EPS6009_RESET_STATUS : CPU_RESET_STATUS);
 }
 
 void cpu_interrupt_state(struct cpu_state *state, uint8_t int_level) {
@@ -574,10 +600,33 @@ void cpu_wake_state(struct cpu_state *state, uint8_t source) {
 		cpu_write_pc_registers_state(state);
 	}
 	if ((source == WAKE_PAINT) || (source == WAKE_ON) || timer_idle_wake) {
-		state->mode = (cpu_bus_read_internal(state, REG_CPUCON) & BIT_MS0)
+		state->mode = (cpu_bus_read_internal(state, eps_reg_cpucon(cpu_variant(state))) & BIT_MS0)
 			? CPU_MODE_FAST
 			: CPU_MODE_SLOW;
 	}
+}
+
+static void status_flag_state(struct cpu_state *state, uint8_t mask, bool set) {
+	if (set) {
+		state->status |= mask;
+	}
+	else {
+		state->status &= (uint8_t)(~mask);
+	}
+}
+
+static void status_arithmetic_state(
+	struct cpu_state *state,
+	uint16_t unsigned_result,
+	int16_t signed_result,
+	uint16_t low_digit_result
+) {
+	status_carry_state(state, unsigned_result > CPU_BYTE_MASK);
+	status_flag_state(state, BIT_STATUS_DC, low_digit_result > CPU_LOW_NIBBLE_MASK);
+	status_zero_state(state, (uint8_t)unsigned_result);
+	status_flag_state(state, BIT_STATUS_OV, signed_result < -128 || signed_result > 127);
+	status_flag_state(state, BIT_STATUS_SLE, signed_result <= 0);
+	status_flag_state(state, BIT_STATUS_SGE, signed_result >= 0);
 }
 
 uint8_t cpu_get_status_state(struct cpu_state *state) {
@@ -648,86 +697,115 @@ uint64_t cpu_trace_count_state(const struct cpu_state *state) {
 }
 
 static uint8_t alu_add_state(struct cpu_state *state, uint8_t a, uint8_t b) {
-	uint8_t result;
-
-	result = a + b;
-	status_zero_state(state, result);
-	status_carry_state(state, (((uint16_t)a + (uint16_t)b) & CPU_ALU_CARRY_MASK) != 0);
-
-	return result;
+	const uint16_t result = (uint16_t)a + (uint16_t)b;
+	const int16_t signed_result = (int16_t)(int8_t)a + (int16_t)(int8_t)b;
+	status_arithmetic_state(state, result, signed_result,
+		(uint16_t)(a & CPU_LOW_NIBBLE_MASK) + (uint16_t)(b & CPU_LOW_NIBBLE_MASK));
+	return (uint8_t)result;
 }
 
 static uint8_t alu_adc_state(struct cpu_state *state, uint8_t a, uint8_t b, uint8_t c) {
-	uint8_t result;
-
-	result = a + b + c;
-	status_zero_state(state, result);
-	status_carry_state(state, (((uint16_t)a + (uint16_t)b + (uint16_t)c) & CPU_ALU_CARRY_MASK) != 0);
-
-	return result;
+	const uint16_t result = (uint16_t)a + (uint16_t)b + (uint16_t)c;
+	const int16_t signed_result = (int16_t)(int8_t)a + (int16_t)(int8_t)b + (int16_t)c;
+	status_arithmetic_state(state, result, signed_result,
+		(uint16_t)(a & CPU_LOW_NIBBLE_MASK) + (uint16_t)(b & CPU_LOW_NIBBLE_MASK) + (uint16_t)c);
+	return (uint8_t)result;
 }
 
 static uint8_t alu_sub_state(struct cpu_state *state, uint8_t a, uint8_t b) {
-	uint8_t result;
-	uint16_t wide_result;
-
-	wide_result = (uint16_t)a - (uint16_t)b;
-	result = (uint8_t)wide_result;
-	status_zero_state(state, result);
-	status_carry_state(state, (wide_result & CPU_ALU_WIDE_HIGH_MASK) != CPU_ALU_WIDE_HIGH_MASK);
-
-	return result;
+	const uint16_t result = (uint16_t)((uint16_t)a - (uint16_t)b);
+	const int16_t signed_result = (int16_t)(int8_t)a - (int16_t)(int8_t)b;
+	status_flag_state(state, BIT_STATUS_C, a >= b);
+	status_flag_state(state, BIT_STATUS_DC,
+		(a & CPU_LOW_NIBBLE_MASK) >= (b & CPU_LOW_NIBBLE_MASK));
+	status_zero_state(state, (uint8_t)result);
+	status_flag_state(state, BIT_STATUS_OV, signed_result < -128 || signed_result > 127);
+	status_flag_state(state, BIT_STATUS_SLE, signed_result <= 0);
+	status_flag_state(state, BIT_STATUS_SGE, signed_result >= 0);
+	return (uint8_t)result;
 }
 
 static uint8_t alu_subb_state(struct cpu_state *state, uint8_t a, uint8_t b, uint8_t c) {
-	uint8_t result;
-	uint16_t wide_result;
+	const uint16_t subtrahend = (uint16_t)b + (uint16_t)c;
+	const uint16_t result = (uint16_t)((uint16_t)a - subtrahend);
+	const int16_t signed_result = (int16_t)(int8_t)a - (int16_t)(int8_t)b - (int16_t)c;
+	status_flag_state(state, BIT_STATUS_C, (uint16_t)a >= subtrahend);
+	status_flag_state(state, BIT_STATUS_DC,
+		(uint16_t)(a & CPU_LOW_NIBBLE_MASK) >=
+		(uint16_t)(b & CPU_LOW_NIBBLE_MASK) + (uint16_t)c);
+	status_zero_state(state, (uint8_t)result);
+	status_flag_state(state, BIT_STATUS_OV, signed_result < -128 || signed_result > 127);
+	status_flag_state(state, BIT_STATUS_SLE, signed_result <= 0);
+	status_flag_state(state, BIT_STATUS_SGE, signed_result >= 0);
+	return (uint8_t)result;
+}
 
-	wide_result = (uint16_t)a - (uint16_t)b - (uint16_t)c;
-	result = (uint8_t)wide_result;
-	status_zero_state(state, result);
-	status_carry_state(state, (wide_result & CPU_ALU_WIDE_HIGH_MASK) != CPU_ALU_WIDE_HIGH_MASK);
+/* INC/DEC: the reference ice.dll (EPS6800) commits only C, Z and OV for
+ * these instructions; DC, SLE and SGE are left unchanged. */
+static uint8_t alu_inc_state(struct cpu_state *state, uint8_t a) {
+	const uint16_t result = (uint16_t)a + 1u;
+	const int16_t signed_result = (int16_t)(int8_t)a + 1;
+	status_carry_state(state, result > CPU_BYTE_MASK);
+	status_zero_state(state, (uint8_t)result);
+	status_flag_state(state, BIT_STATUS_OV, signed_result < -128 || signed_result > 127);
+	return (uint8_t)result;
+}
 
-	return result;
+static uint8_t alu_dec_state(struct cpu_state *state, uint8_t a) {
+	const uint16_t result = (uint16_t)((uint16_t)a - 1u);
+	const int16_t signed_result = (int16_t)(int8_t)a - 1;
+	status_carry_state(state, a >= 1); /* C = no borrow of (a - 1) */
+	status_zero_state(state, (uint8_t)result);
+	status_flag_state(state, BIT_STATUS_OV, signed_result < -128 || signed_result > 127);
+	return (uint8_t)result;
 }
 
 /* BCD addition. */
 static uint8_t alu_adddc_state(struct cpu_state *state, uint8_t a, uint8_t b, uint8_t c) {
-	uint16_t result;
-	uint16_t low_digit;
-
-	result = (uint16_t)a + (uint16_t)b + (uint16_t)c;
-	low_digit = (uint16_t)(a & CPU_LOW_NIBBLE_MASK) + (uint16_t)(b & CPU_LOW_NIBBLE_MASK) + (uint16_t)c;
-	if (((result & CPU_LOW_NIBBLE_MASK) > CPU_BCD_DIGIT_MAX) || (low_digit > CPU_LOW_NIBBLE_MASK)) {
-		result += CPU_BCD_LOW_DIGIT_ADJUST;
-	}
-	if (((result & CPU_HIGH_NIBBLE_MASK) > CPU_BCD_HIGH_DIGIT_MAX) || (result > CPU_BYTE_MASK)) {
-		result += CPU_BCD_HIGH_DIGIT_ADJUST;
-	}
-
-	status_carry_state(state, (result & CPU_ALU_WIDE_HIGH_MASK) != 0);
-	status_zero_state(state, (uint8_t)result);
-	return (uint8_t)result;
+	uint16_t low_digit = (uint16_t)(a & CPU_LOW_NIBBLE_MASK) +
+		(uint16_t)(b & CPU_LOW_NIBBLE_MASK) + (uint16_t)c;
+	uint16_t high_digit = (uint16_t)(a >> CPU_NIBBLE_SHIFT) +
+		(uint16_t)(b >> CPU_NIBBLE_SHIFT);
+	bool digit_carry = low_digit >= 10;
+	if (digit_carry)
+		low_digit = (low_digit + CPU_BCD_LOW_DIGIT_ADJUST) & CPU_LOW_NIBBLE_MASK;
+	high_digit += digit_carry ? 1u : 0u;
+	const bool carry = high_digit >= 10;
+	if (carry)
+		high_digit = (high_digit + CPU_BCD_LOW_DIGIT_ADJUST) & CPU_LOW_NIBBLE_MASK;
+	const uint8_t result = (uint8_t)(low_digit | (high_digit << CPU_NIBBLE_SHIFT));
+	status_flag_state(state, BIT_STATUS_C, carry);
+	status_flag_state(state, BIT_STATUS_DC, digit_carry);
+	status_zero_state(state, result);
+	return result;
 }
 
 static uint8_t alu_subdb_state(struct cpu_state *state, uint8_t a, uint8_t b, uint8_t c) {
-	uint16_t result;
-	uint16_t complement;
-	uint16_t low_digit;
-
-	complement = (uint16_t)(CPU_BCD_TENS_COMPLEMENT_BASE - c) - (uint16_t)b;
-	result = complement + (uint16_t)a;
-	low_digit = (complement & CPU_LOW_NIBBLE_MASK) + (uint16_t)(a & CPU_LOW_NIBBLE_MASK);
-	if (((result & CPU_LOW_NIBBLE_MASK) > CPU_BCD_DIGIT_MAX) || (low_digit > CPU_LOW_NIBBLE_MASK)) {
-		result += CPU_BCD_LOW_DIGIT_ADJUST;
-	}
-	if (((result & CPU_HIGH_NIBBLE_MASK) > CPU_BCD_HIGH_DIGIT_MAX) || (result > CPU_BYTE_MASK)) {
-		result += CPU_BCD_HIGH_DIGIT_ADJUST;
-	}
-
-	status_carry_state(state, (result & CPU_ALU_WIDE_HIGH_MASK) != 0);
-	status_zero_state(state, (uint8_t)result);
-	return (uint8_t)result;
+	const uint8_t complement = c ? (uint8_t)~b : (uint8_t)-b;
+	uint16_t low_digit = (uint16_t)(complement & CPU_LOW_NIBBLE_MASK) +
+		(uint16_t)(a & CPU_LOW_NIBBLE_MASK);
+	uint16_t high_digit = (uint16_t)(complement >> CPU_NIBBLE_SHIFT) +
+		(uint16_t)(a >> CPU_NIBBLE_SHIFT);
+	bool digit_carry = low_digit >= 16;
+	if (digit_carry)
+		low_digit &= CPU_LOW_NIBBLE_MASK;
+	high_digit += digit_carry ? 1u : 0u;
+	bool carry = high_digit >= 16;
+	if (carry)
+		high_digit &= CPU_LOW_NIBBLE_MASK;
+	if ((uint8_t)(b + c) == 0)
+		carry = true;
+	if (((b + c) & CPU_LOW_NIBBLE_MASK) == 0)
+		digit_carry = true;
+	if (!digit_carry)
+		low_digit = (low_digit - CPU_BCD_LOW_DIGIT_ADJUST) & CPU_LOW_NIBBLE_MASK;
+	if (!carry)
+		high_digit = (high_digit - CPU_BCD_LOW_DIGIT_ADJUST) & CPU_LOW_NIBBLE_MASK;
+	const uint8_t result = (uint8_t)(low_digit | (high_digit << CPU_NIBBLE_SHIFT));
+	status_flag_state(state, BIT_STATUS_C, carry);
+	status_flag_state(state, BIT_STATUS_DC, digit_carry);
+	status_zero_state(state, result);
+	return result;
 }
 
 static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t instr) {
@@ -742,26 +820,39 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
 
 	instr1 = instr >> 16;
 	newpc = state->pc + 1;
-	if (state->rpt_counter != 0) {
-		newpc = state->pc;
-		state->rpt_counter--;
+	if (state->rpt_target_pc != 0) {
+		if (state->rpt_counter != 0) {
+			newpc = state->rpt_target_pc;
+			state->rpt_counter--;
+		}
+		else {
+			state->rpt_target_pc = 0;
+		}
 	}
 
 	switch (instr1 & CPU_OPCODE_FULL_MASK) {
 		case CPU_OPCODE_NOP:
 			break;
 		case CPU_OPCODE_UNIMPLEMENTED:
+			/* 0x0001: HALT-like opcode. The reference ice.dll (EPS6800)
+			 * sets STATUS TO (timer overflow) and PD (power down). */
+			state->status |= BIT_STATUS_TO | BIT_STATUS_PD;
 			break;
 		case CPU_OPCODE_SLEEP:
-			temp8_1 = cpu_bus_read_internal(state, REG_CPUCON);
+			temp8_1 = cpu_bus_read_internal(state, eps_reg_cpucon(cpu_variant(state)));
 			state->mode = (temp8_1 & BIT_MS1) ? CPU_MODE_IDLE : CPU_MODE_SLEEP;
-			state->sleep_repeat_pc = true;
-			newpc = state->pc;
+			if (eps_variant_is_6009(cpu_variant(state))) {
+				state->sleep_repeat_pc = false;
+			}
+			else {
+				state->sleep_repeat_pc = true;
+				newpc = state->pc;
+			}
 			break;
 		case CPU_OPCODE_RETI:
-			temp8_1 = cpu_bus_read_internal(state, REG_CPUCON);
+			temp8_1 = cpu_bus_read_internal(state, eps_reg_cpucon(cpu_variant(state)));
 			temp8_1 |= BIT_GLINT;
-			cpu_bus_write_internal(state, REG_CPUCON, temp8_1);
+			cpu_bus_write_internal(state, eps_reg_cpucon(cpu_variant(state)), temp8_1);
 			newpc = cpu_pop_state(state);
 			break;
 		case CPU_OPCODE_RET:
@@ -794,6 +885,7 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                              cpu_bus_post_id(state, imm8_1);
                              break;
                 case CPU_OPCODE_RPT_R: state->rpt_counter = cpu_bus_read(state, imm8_1) - 1;
+                             state->rpt_target_pc = newpc;
                              cpu_bus_post_id(state, imm8_1);
                              break;
                 case CPU_OPCODE_BANK_IMM: cpu_bus_write_internal(state, REG_BSR, imm8_1);
@@ -806,7 +898,8 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                              break;
                 case CPU_OPCODE_TBPTM_IMM: cpu_bus_write_internal(state, REG_TABPTRM, imm8_1);
                              break;
-				case CPU_OPCODE_TBPTH_IMM: cpu_bus_write_internal(state, REG_TABPTRH, imm8_1 & MASK_TABPTRH);
+				case CPU_OPCODE_TBPTH_IMM: cpu_bus_write_internal(state, REG_TABPTRH,
+						eps_variant_is_6009(cpu_variant(state)) ? imm8_1 : (imm8_1 & MASK_TABPTRH));
                              break;
 				case CPU_OPCODE_TBRD_A_R: temp32 = cpu_read_tabptr_state(state);
 							 temp32 = (temp32 + cpu_bus_read_internal(state, REG_ACC)) & CPU_TABPTR_MASK;
@@ -876,17 +969,11 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                              cpu_bus_write(state, imm8_1, temp8_1);
                              cpu_bus_post_id(state, imm8_1);
                              break;
-                case CPU_OPCODE_INCA_R: temp8_1 = cpu_read_direct_state(state, imm8_1);
-                             status_carry_state(state, (((uint16_t)temp8_1 + 1) & CPU_ALU_CARRY_MASK) != 0);
-                             temp8_1 += 1; 
-                             status_zero_state(state, temp8_1);
+                case CPU_OPCODE_INCA_R: temp8_1 = alu_inc_state(state, cpu_read_direct_state(state, imm8_1));
                              cpu_bus_write_internal(state, REG_ACC, temp8_1);
                              cpu_bus_post_id(state, imm8_1);
                              break;
-                case CPU_OPCODE_INC_R: temp8_1 = cpu_read_direct_state(state, imm8_1);
-                             status_carry_state(state, (((uint16_t)temp8_1 + 1) & CPU_ALU_CARRY_MASK) != 0);
-                             temp8_1 += 1; 
-                             status_zero_state(state, temp8_1);
+                case CPU_OPCODE_INC_R: temp8_1 = alu_inc_state(state, cpu_read_direct_state(state, imm8_1));
                              cpu_bus_write(state, imm8_1, temp8_1);
                              if (state->status & BIT_STATUS_C) cpu_bus_carry_propagate(state, imm8_1);
                              cpu_bus_post_id(state, imm8_1);
@@ -918,17 +1005,11 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                                 alu_adc_state(state, imm8_1, cpu_bus_read_internal(state, REG_ACC),
                                 state->status & BIT_STATUS_C));
                              break;
-                case CPU_OPCODE_DECA_R: temp8_1 = cpu_bus_read(state, imm8_1);
-                             status_carry_state(state, temp8_1 >= 1);
-                             temp8_1 -= 1; 
-                             status_zero_state(state, temp8_1);
+                case CPU_OPCODE_DECA_R: temp8_1 = alu_dec_state(state, cpu_bus_read(state, imm8_1));
                              cpu_bus_write_internal(state, REG_ACC, temp8_1);
                              cpu_bus_post_id(state, imm8_1);
                              break;
-                case CPU_OPCODE_DEC_R: temp8_1 = cpu_bus_read(state, imm8_1);
-                             status_carry_state(state, temp8_1 >= 1);
-                             temp8_1 -= 1; 
-                             status_zero_state(state, temp8_1);
+                case CPU_OPCODE_DEC_R: temp8_1 = alu_dec_state(state, cpu_bus_read(state, imm8_1));
                              cpu_bus_write(state, imm8_1, temp8_1);
                              if (!(state->status & BIT_STATUS_C)) cpu_bus_borrow_propagate(state, imm8_1);
                              cpu_bus_post_id(state, imm8_1);

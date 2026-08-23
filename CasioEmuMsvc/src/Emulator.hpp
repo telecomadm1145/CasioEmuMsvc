@@ -50,11 +50,14 @@ namespace casioemu {
 		bool interface_is_svg = false;
 		std::string interface_svg_data;
 		unsigned int cycles_per_second;
+		unsigned int eps_timer1_source_hz = 0;
 		unsigned int timer_interval;
 		/* Written by SetClockSpeed (UI thread) and by TimerCallback (timer
 		 * thread); keep it atomic to avoid a data race. */
 		std::atomic<Uint64> eps_frame_cycle_remainder{0};
-		bool running, Paused;
+		std::atomic<Uint64> eps_timer1_cycle_remainder{0};
+		bool running;
+		std::atomic<bool> Paused;
 		bool headless = false;
 		std::atomic<bool> m_step_requested;
 		unsigned int last_frame_tick_count;

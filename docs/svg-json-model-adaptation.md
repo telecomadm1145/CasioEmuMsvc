@@ -83,7 +83,7 @@ SOLAR II 是段码/状态图形类显示，不涉及矩阵像素屏幕，不应�
 | `pd_value`          | integer | 是  | PD 初始值。                           |
 | `interface_path`    | string  | 是  | interface 图片路径。                   |
 | `rom_path`          | string  | 是  | ROM 文件路径。                         |
-| `is_unpacked_nibbles` | boolean | 否 | ROM 是否为每个 nibble 各占一个字节的格式；缺省为 `false`。当前用于 EPS6800。 |
+| `is_unpacked_nibbles` | boolean | 否 | ROM 是否为每个 nibble 各占一个字节的格式；缺省为 `false`。当前用于 EPS6800；缺省的 packed ROM 按 little-endian 16-bit word 编码。 |
 | `flash_path`        | string  | 是  | flash 文件路径；没有独立 flash 文件时写空字符串。   |
 | `ink_color`         | object  | 是  | LCD 和 status 绘制颜色，包含 `r`、`g`、`b`。 |
 | `enable_new_screen` | boolean | 是  | 屏幕渲染模式开关。                         |

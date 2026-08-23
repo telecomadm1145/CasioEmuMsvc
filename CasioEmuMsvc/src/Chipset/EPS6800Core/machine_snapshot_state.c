@@ -34,6 +34,7 @@ static void machine_snapshot_save_cpu(struct machine_cpu_snapshot *snapshot, con
 	memcpy(snapshot->stack, state->stack, sizeof(snapshot->stack));
 	snapshot->status = state->status;
 	snapshot->rpt_counter = state->rpt_counter;
+	snapshot->rpt_target_pc = state->rpt_target_pc;
 	snapshot->mode = (uint8_t)state->mode;
 	snapshot->int_pending = state->int_pending;
 	snapshot->sleep_repeat_pc = machine_snapshot_encode_bool(state->sleep_repeat_pc);
@@ -44,6 +45,7 @@ static void machine_snapshot_load_cpu(struct cpu_state *state, const struct mach
 	memcpy(state->stack, snapshot->stack, sizeof(state->stack));
 	state->status = snapshot->status;
 	state->rpt_counter = snapshot->rpt_counter;
+	state->rpt_target_pc = snapshot->rpt_target_pc;
 	state->mode = (enum cpu_mode)snapshot->mode;
 	state->int_pending = snapshot->int_pending;
 	state->sleep_repeat_pc = machine_snapshot_decode_bool(snapshot->sleep_repeat_pc);

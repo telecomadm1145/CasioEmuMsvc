@@ -23,8 +23,10 @@
 #include <array>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <limits>
 
 extern std::vector<UIWindow*> windows;
 extern SDL_Window* window;
@@ -42,17 +44,34 @@ namespace {
 		"pbcon", "dcrb", "portc", "pccon", "dcrc", "portd", "porte", "dcrde"
 	};
 
-	std::string Eps6800RegisterName(uint8_t address) {
-		if (address < kEps6800RegisterNames.size())
-			return kEps6800RegisterNames[address];
+	constexpr std::array<const char*, 0x40> kEps6009RegisterNames = {
+		"indf0", "fsr0", "bsr", "indf1", "fsr1", "bsr1", "stkptr", "pcl",
+		"pcm", "lcdarl", "acc", "tabptrl", "tabptrm", "tabptrh", "lcddata", "status",
+		"porta", "portb", "r12", "r13", "r14", "r15", "r16", "r17",
+		"r18", "r19", "r1a", "r1b", "r1c", "r1d", "r1e", "r1f",
+		"stbcon", "trintcon", "trintsta", "tr01con", "trl0l", "trl0h", "trl1", "tr2wcon",
+		"trl2", "pacon", "pawake", "painten", "paintsta", "pbcon", "dcrb", "lcdcon",
+		"post_id", "cpucon", "r32", "r33", "r34", "r35", "r36", "r37",
+		"r38", "r39", "r3a", "r3b", "r3c", "r3d", "r3e", "r3f"
+	};
+
+	const std::array<const char*, 0x40>& EpsRegisterNames(bool eps6009) {
+		return eps6009 ? kEps6009RegisterNames : kEps6800RegisterNames;
+	}
+
+	std::string EpsRegisterName(uint8_t address, bool eps6009) {
+		const auto& names = EpsRegisterNames(eps6009);
+		if (address < names.size())
+			return names[address];
 		char name[4]{};
 		std::snprintf(name, sizeof(name), "r%02x", address);
 		return name;
 	}
 
-	bool Eps6800RegisterAddress(const std::string& name, uint8_t& address) {
-		for (size_t i = 0; i < kEps6800RegisterNames.size(); ++i) {
-			if (name == kEps6800RegisterNames[i]) {
+	bool EpsRegisterAddress(const std::string& name, bool eps6009, uint8_t& address) {
+		const auto& names = EpsRegisterNames(eps6009);
+		for (size_t i = 0; i < names.size(); ++i) {
+			if (name == names[i]) {
 				address = static_cast<uint8_t>(i);
 				return true;
 			}
@@ -69,6 +88,9 @@ namespace {
 		if (name == "psw") address = 0x0f;
 		else if (name == "sp") address = 0x06;
 		else if (name == "dsr") address = 0x02;
+		else if (eps6009 && name == "lcdarh") address = 0x09;
+		else if (eps6009 && name == "tr0con") address = 0x23;
+		else if (eps6009 && name == "tr1con") address = 0x23;
 		else return false;
 		return true;
 	}
@@ -140,11 +162,11 @@ class PluginApi_Impl : public PluginApi {
 			if (auto* eps = m_emu->chipset.epscpu) {
 				const uint32_t word_address = static_cast<uint32_t>(addr >> 1);
 				uint16_t word = eps->ReadCodeWord(word_address);
-				/* Match EPS_ROM_Hex / IDebugger_Impl::WriteCode: even byte is the
-				 * high half, odd byte is the low half. */
+				/* Match IDebugger_Impl::WriteCode: even byte is the low half,
+				 * odd byte is the high half. */
 				word = (addr & 1)
-					? static_cast<uint16_t>((word & 0xff00u) | dat)
-					: static_cast<uint16_t>((word & 0x00ffu) | (static_cast<uint16_t>(dat) << 8));
+					? static_cast<uint16_t>((word & 0x00ffu) | (static_cast<uint16_t>(dat) << 8))
+					: static_cast<uint16_t>((word & 0xff00u) | dat);
 				if (!eps->WriteCodeWord(word_address, word))
 					return;
 				eps->WriteRomImageWord(m_emu->chipset.rom_data, word_address, word);
@@ -282,10 +304,11 @@ class PluginApi_Impl : public PluginApi {
 			std::vector<DebugRegisterInfo> result;
 			if (auto* eps = m_emu->chipset.epscpu) {
 				const auto snapshot = eps->DebugSnapshot();
+				const bool eps6009 = m_emu->hardware_id == casioemu::HW_EPS6009;
 				result.reserve(0x81);
 				result.push_back({"pc", snapshot.program_counter, 24});
 				for (uint32_t address = 0; address < snapshot.registers.size(); ++address)
-					result.push_back({Eps6800RegisterName(static_cast<uint8_t>(address)),
+					result.push_back({EpsRegisterName(static_cast<uint8_t>(address), eps6009),
 						snapshot.registers[address], 8});
 				return result;
 			}
@@ -321,7 +344,7 @@ class PluginApi_Impl : public PluginApi {
 			if (auto* eps = m_emu->chipset.epscpu) {
 				/* Accept the same writable aliases (psw/sp/dsr) for reads. */
 				uint8_t address = 0;
-				if (Eps6800RegisterAddress(normalized, address)) {
+				if (EpsRegisterAddress(normalized, m_emu->hardware_id == casioemu::HW_EPS6009, address)) {
 					value = eps->ReadDebugMemory(address);
 					bitWidth = 8;
 					return true;
@@ -339,7 +362,7 @@ class PluginApi_Impl : public PluginApi {
 					return true;
 				}
 				uint8_t address = 0;
-				if (!Eps6800RegisterAddress(normalized, address))
+				if (!EpsRegisterAddress(normalized, m_emu->hardware_id == casioemu::HW_EPS6009, address))
 					return false;
 				return eps->WriteDebugMemory(address, static_cast<uint8_t>(value));
 			}
@@ -392,8 +415,13 @@ class PluginApi_Impl : public PluginApi {
 			std::vector<uint16_t> result;
 			result.reserve(count);
 			if (auto* eps = m_emu->chipset.epscpu) {
-				for (size_t i = 0; i < count; ++i)
-					result.push_back(eps->ReadCodeWord(address + static_cast<uint32_t>(i)));
+				const uint32_t first_word_address = (address & ~1u) >> 1;
+				for (size_t i = 0; i < count; ++i) {
+					const uint64_t word_address = static_cast<uint64_t>(first_word_address) + i;
+					result.push_back(word_address <= std::numeric_limits<uint32_t>::max()
+						? eps->ReadCodeWord(static_cast<uint32_t>(word_address))
+						: 0);
+				}
 			}
 			else {
 				for (size_t i = 0; i < count; ++i)
@@ -405,11 +433,17 @@ class PluginApi_Impl : public PluginApi {
 		void WriteCode(uint32_t address, const std::vector<uint8_t>& data) override {
 			auto lock = std::lock_guard(m_emu->access_mx);
 			if (auto* eps = m_emu->chipset.epscpu) {
-				for (size_t i = 0; i < data.size(); i += 2) {
-					const uint32_t word_address = address + static_cast<uint32_t>(i / 2);
+				for (size_t i = 0; i < data.size(); ++i) {
+					const uint64_t byte_address = static_cast<uint64_t>(address) + i;
+					if (byte_address > std::numeric_limits<uint32_t>::max())
+						break;
+					const uint32_t word_address = static_cast<uint32_t>(byte_address >> 1);
 					uint16_t word = eps->ReadCodeWord(word_address);
-					word = static_cast<uint16_t>((static_cast<uint16_t>(data[i]) << 8) |
-						(i + 1 < data.size() ? data[i + 1] : (word & 0xff)));
+					if ((byte_address & 1u) == 0)
+						word = static_cast<uint16_t>((word & 0xff00u) | data[i]);
+					else
+						word = static_cast<uint16_t>((word & 0x00ffu) |
+							(static_cast<uint16_t>(data[i]) << 8));
 					if (!eps->WriteCodeWord(word_address, word))
 						break;
 					eps->WriteRomImageWord(m_emu->chipset.rom_data, word_address, word);
@@ -433,6 +467,8 @@ class PluginApi_Impl : public PluginApi {
 		}
 
 		void Pause() override {
+			if (auto* eps = m_emu->chipset.epscpu)
+				eps->CancelDebugRun();
 			m_emu->SetPaused(true);
 		}
 		void Resume() override {
@@ -467,7 +503,8 @@ class PluginApi_Impl : public PluginApi {
 			return code_viewer ? code_viewer->GetBreakpoints() : std::vector<uint32_t>{};
 		}
 		bool AddExecutionBreakpoint(uint32_t address) override {
-			if (!code_viewer || (m_emu->chipset.epscpu && address >= 0x10000))
+			if (!code_viewer || (m_emu->chipset.epscpu &&
+					address >= m_emu->chipset.epscpu->RomWordCount()))
 				return false;
 			code_viewer->AddBreakpoint(address);
 			const auto breakpoints = GetExecutionBreakpoints();
@@ -501,8 +538,11 @@ class PluginApi_Impl : public PluginApi {
 		std::vector<DebugMemoryBreakpointHitInfo> GetMemoryBreakpointHits(uint32_t address, bool write) override {
 			std::vector<DebugMemoryBreakpointHitInfo> result;
 			if (auto* eps = m_emu->chipset.epscpu) {
-				for (const auto& record : eps->MemoryBreakpointHits(address, write))
-					result.push_back({record.program_counter, 0, {}});
+				for (const auto& record : eps->MemoryBreakpointHits(address, write)) {
+					DebugMemoryBreakpointHitInfo hit{record.program_counter, 0, {}};
+					hit.Value = record.value;
+					result.push_back(std::move(hit));
+				}
 				return result;
 			}
 			if (!membp)

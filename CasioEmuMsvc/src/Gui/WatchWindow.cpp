@@ -31,7 +31,8 @@ void WatchWindow::PrepareRX() {
 		format_indirect(regs[0x01], regs[0x02], reg_lr, sizeof(reg_lr));
 		format_indirect(regs[0x04], regs[0x05], reg_ea, sizeof(reg_ea));
 		format_indirect(regs[0x11], regs[0x12], reg_ex1, sizeof(reg_ex1));
-		snprintf(reg_ex2, sizeof(reg_ex2), "%05x", (uint32_t)(((regs[0x23] & 0x03) * 0x60) + regs[0x22]));
+		snprintf(reg_ex2, sizeof(reg_ex2), "%05x",
+			(static_cast<uint32_t>(regs[0x23] & 0x03) << 8) | regs[0x22]);
 		snprintf(reg_sp, sizeof(reg_sp), "%04x", snapshot.stack_pointer);
 		snprintf(reg_psw, sizeof(reg_psw), "%02x", regs[0x0f]);
 		snprintf(reg_dsr, sizeof(reg_dsr), "%02x", regs[0x02]);
@@ -197,8 +198,9 @@ void WatchWindow::UpdateRX() {
 		eps->WriteDebugMemory(0x06, static_cast<uint8_t>(strtoul(reg_sp, nullptr, 16)));
 		eps->WriteDebugMemory(0x0f, static_cast<uint8_t>(strtoul(reg_psw, nullptr, 16)));
 		const auto lcdar = static_cast<uint32_t>(strtoul(reg_ex2, nullptr, 16));
-		eps->WriteDebugMemory(0x22, static_cast<uint8_t>(lcdar % 0x60));
-		eps->WriteDebugMemory(0x23, static_cast<uint8_t>((snapshot.registers[0x23] & 0xf0) | ((lcdar / 0x60) & 0x03)));
+		eps->WriteDebugMemory(0x22, static_cast<uint8_t>(lcdar & 0xff));
+		eps->WriteDebugMemory(0x23,
+			static_cast<uint8_t>((snapshot.registers[0x23] & 0xfc) | ((lcdar >> 8) & 0x03)));
 		return;
 	}
 	for (int i = 0; i < 16; i++) {

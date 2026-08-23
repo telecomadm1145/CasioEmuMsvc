@@ -23,6 +23,8 @@ void timer_connect_bus_state(struct timer_state *state, struct cpu_state *cpu, s
 uint8_t timer_read_byte_state(struct timer_state *state, uint8_t addr);
 void timer_write_byte_state(struct timer_state *state, uint8_t addr, uint8_t byte);
 void timer_tick_state(struct timer_state *state, uint32_t cycles);
+void timer_tick_fast_state(struct timer_state *state, uint32_t cycles);
+void timer_tick_idle_state(struct timer_state *state, uint32_t cycles);
 void timer_reset_state(struct timer_state *state);
 
 #endif /* FX_EMU_CORE_TIMER_INTERNAL_H */

@@ -17,13 +17,13 @@ size_t machine_state_lcd_copy_display(
 		return 0;
 	}
 
-	copy_size = (size < MACHINE_LCD_FRAMEBUFFER_SIZE) ? size : MACHINE_LCD_FRAMEBUFFER_SIZE;
+	copy_size = (size < eps_lcd_raw_size(state->mmio.variant)) ? size : eps_lcd_raw_size(state->mmio.variant);
 	for (i = 0; i < copy_size; i++) {
 		data[i] = lcd_ram_read_byte_state(&state->lcd, (uint16_t)i);
 	}
 	if (control) {
-		control->lcdarh = state->lcd.reg[REG_LCDARH];
-		control->lcdcon = state->lcd.reg[REG_LCDCON];
+		control->lcdarh = eps_variant_is_6009(state->mmio.variant) ? 0 : state->lcd.reg[eps_reg_lcdarh(state->mmio.variant)];
+		control->lcdcon = state->lcd.reg[eps_reg_lcdcon(state->mmio.variant)];
 	}
 	return copy_size;
 }
@@ -38,6 +38,14 @@ void machine_state_keydown(struct machine_state *state, uint8_t key) {
 	}
 
 	kbd_keydown_state(&state->kbd, key);
+}
+
+void machine_state_restore_keydown(struct machine_state *state, uint8_t key) {
+	if (!state) {
+		return;
+	}
+
+	kbd_restore_keydown_state(&state->kbd, key);
 }
 
 void machine_state_keyup(struct machine_state *state, uint8_t key) {
@@ -62,4 +70,10 @@ void machine_state_onup(struct machine_state *state) {
 	}
 
 	kbd_onup_state(&state->kbd);
+}
+
+void machine_state_set_portc_input(struct machine_state *state, uint8_t mask, uint8_t value) {
+	if (state) {
+		kbd_set_portc_input_state(&state->kbd, mask, value);
+	}
 }

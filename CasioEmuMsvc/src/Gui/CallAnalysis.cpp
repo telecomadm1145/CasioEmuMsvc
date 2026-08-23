@@ -26,8 +26,10 @@ struct CallAnalysis : public UIWindow {
 	std::vector<FunctionCall> viewing_calls;
 	CallAnalysis() : UIWindow("Funcs") {
 		SetupHook(on_call_function, [this](casioemu::CPU& sender, const FunctionEventArgs& ea) {
-			const uint32_t xr0 = (sender.reg_r[3] << 24) | (sender.reg_r[2] << 16) |
-				(sender.reg_r[1] << 8) | sender.reg_r[0];
+			const uint32_t xr0 = (static_cast<uint32_t>(sender.reg_r[3]) << 24) |
+				(static_cast<uint32_t>(sender.reg_r[2]) << 16) |
+				(static_cast<uint32_t>(sender.reg_r[1]) << 8) |
+				static_cast<uint32_t>(sender.reg_r[0]);
 			OnCallFunction(ea.pc, ea.lr, xr0, sender.GetBacktrace());
 		});
 		SetupHook(on_eps_call_function, [this](const EpsFunctionEventArgs& ea) {

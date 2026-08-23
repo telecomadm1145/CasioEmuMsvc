@@ -36,16 +36,20 @@
 #include <algorithm> // for std::min, std::max
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <climits>
 #include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <ctime> // for std::time
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iomanip>
 #include <iostream>
 #include <mutex>
 #include <sstream>
+#include <string_view>
 #include <system_error>
 #include <thread>
 #include <utility>
@@ -136,9 +140,11 @@ inline void fillRandomData(unsigned char* buf, size_t size) {
 #pragma warning(disable : 4244)
 
 namespace casioemu {
-	SDL_Texture* CreateSvgSpriteTexture(SDL_Renderer* renderer, const SpriteInfo& sprite, int width, int height) {
+	SDL_Texture* CreateSvgSpriteTexture(SDL_Renderer* renderer, const SpriteInfo& sprite, int width, int height, SDL_Rect* content_bounds) {
 		if (!renderer || sprite.svg_shape.empty() || width <= 0 || height <= 0)
 			return nullptr;
+		if (content_bounds)
+			*content_bounds = {0, 0, width, height};
 		SDL_RWops* rw = SDL_RWFromConstMem(sprite.svg_shape.data(), static_cast<int>(sprite.svg_shape.size()));
 		if (!rw) {
 			SDL_Log("[Screen][Warn] SDL_RWFromConstMem failed for SVG sprite: %s", SDL_GetError());
@@ -155,6 +161,32 @@ namespace casioemu {
 		if (!converted) {
 			SDL_Log("[Screen][Warn] SDL_ConvertSurfaceFormat failed for SVG sprite: %s", SDL_GetError());
 			return nullptr;
+		}
+		if (content_bounds) {
+			int min_x = converted->w;
+			int min_y = converted->h;
+			int max_x = -1;
+			int max_y = -1;
+			if (!SDL_MUSTLOCK(converted) || SDL_LockSurface(converted) == 0) {
+				for (int y = 0; y < converted->h; ++y) {
+					const auto* row = reinterpret_cast<const Uint32*>(
+						static_cast<const Uint8*>(converted->pixels) + y * converted->pitch);
+					for (int x = 0; x < converted->w; ++x) {
+						Uint8 red = 0, green = 0, blue = 0, alpha = 0;
+						SDL_GetRGBA(row[x], converted->format, &red, &green, &blue, &alpha);
+						if (alpha == 0)
+							continue;
+						min_x = std::min(min_x, x);
+						min_y = std::min(min_y, y);
+						max_x = std::max(max_x, x);
+						max_y = std::max(max_y, y);
+					}
+				}
+				if (SDL_MUSTLOCK(converted))
+					SDL_UnlockSurface(converted);
+			}
+			if (max_x >= min_x && max_y >= min_y)
+				*content_bounds = {min_x, min_y, max_x - min_x + 1, max_y - min_y + 1};
 		}
 		SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, converted);
 		SDL_FreeSurface(converted);
@@ -194,6 +226,8 @@ namespace casioemu {
 			height = 0;
 			shape_size = 0;
 			shape_hash = 0;
+			content_bounds = {};
+			software_renderer = false;
 		}
 
 		SDL_Texture* Get(SDL_Renderer* renderer, const SpriteInfo& sprite, int requested_width, int requested_height) {
@@ -206,13 +240,29 @@ namespace casioemu {
 			if (!texture || width != target_width || height != target_height ||
 				shape_size != target_shape_size || shape_hash != target_shape_hash) {
 				Reset();
-				texture = CreateSvgSpriteTexture(renderer, sprite, target_width, target_height);
+				SDL_RendererInfo renderer_info{};
+				software_renderer = SDL_GetRendererInfo(renderer, &renderer_info) == 0 &&
+					renderer_info.name && std::string_view(renderer_info.name) == "software";
+				texture = CreateSvgSpriteTexture(renderer, sprite, target_width, target_height,
+					software_renderer ? &content_bounds : nullptr);
+				software_renderer = texture && software_renderer;
 				width = texture ? target_width : 0;
 				height = texture ? target_height : 0;
 				shape_size = texture ? target_shape_size : 0;
 				shape_hash = texture ? target_shape_hash : 0;
 			}
 			return texture;
+		}
+
+		bool ContentClip(const SDL_Rect& dest, SDL_Rect& clip) const {
+			if (!software_renderer || width <= 0 || height <= 0 || content_bounds.w <= 0 || content_bounds.h <= 0)
+				return false;
+			const int left = static_cast<int>(std::floor(static_cast<double>(content_bounds.x) * dest.w / width));
+			const int top = static_cast<int>(std::floor(static_cast<double>(content_bounds.y) * dest.h / height));
+			const int right = static_cast<int>(std::ceil(static_cast<double>(content_bounds.x + content_bounds.w) * dest.w / width));
+			const int bottom = static_cast<int>(std::ceil(static_cast<double>(content_bounds.y + content_bounds.h) * dest.h / height));
+			clip = {dest.x + left - 1, dest.y + top - 1, std::max(1, right - left + 2), std::max(1, bottom - top + 2)};
+			return true;
 		}
 
 	private:
@@ -222,6 +272,8 @@ namespace casioemu {
 			height = std::exchange(other.height, 0);
 			shape_size = std::exchange(other.shape_size, 0);
 			shape_hash = std::exchange(other.shape_hash, 0);
+			content_bounds = std::exchange(other.content_bounds, SDL_Rect{});
+			software_renderer = std::exchange(other.software_renderer, false);
 		}
 
 		SDL_Texture* texture = nullptr;
@@ -229,6 +281,8 @@ namespace casioemu {
 		int height = 0;
 		size_t shape_size = 0;
 		size_t shape_hash = 0;
+		SDL_Rect content_bounds{};
+		bool software_renderer = false;
 	};
 
 	std::pair<int, int> CurrentRenderTargetSpriteSize(SDL_Renderer* renderer, const SDL_Rect& dest) {
@@ -249,11 +303,28 @@ namespace casioemu {
 			texture = svg_texture->Get(renderer, sprite, target_width, target_height);
 		}
 		if (texture) {
+			SDL_Rect old_clip{};
+			const SDL_bool old_clip_enabled = SDL_RenderIsClipEnabled(renderer);
+			if (old_clip_enabled)
+				SDL_RenderGetClipRect(renderer, &old_clip);
+			SDL_Rect content_clip{};
+			bool content_clip_enabled = svg_texture && svg_texture->ContentClip(dest, content_clip);
+			if (content_clip_enabled && old_clip_enabled) {
+				SDL_Rect intersection{};
+				if (SDL_IntersectRect(&content_clip, &old_clip, &intersection))
+					content_clip = intersection;
+				else
+					content_clip = {0, 0, 0, 0};
+			}
+			if (content_clip_enabled)
+				SDL_RenderSetClipRect(renderer, &content_clip);
 			SDL_SetTextureColorMod(texture, ink_colour.r, ink_colour.g, ink_colour.b);
 			SDL_SetTextureAlphaMod(texture, alpha);
 			SDL_RenderCopy(renderer, texture, nullptr, &dest);
 			SDL_SetTextureAlphaMod(texture, 255);
 			SDL_SetTextureColorMod(texture, 255, 255, 255);
+			if (content_clip_enabled)
+				SDL_RenderSetClipRect(renderer, old_clip_enabled ? &old_clip : nullptr);
 			return;
 		}
 		if (!interface_texture)
@@ -683,8 +754,14 @@ namespace casioemu {
 		int status_ink_alpha_on = 255;
 		int status_ink_alpha_off = 0;
 
+		int SpriteCount() const {
+			if constexpr (hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009)
+				return static_cast<int>(emulator.ModelDefinition.status_indicators.size()) + 1;
+			return SPR_MAX;
+		}
+
 		bool StatusEnabled() const {
-			if (!(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) && hardware_id != HW_FX_5800P && hardware_id != HW_ES_PLUS && hardware_id != HW_EPS6800) {
+			if (!(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) && hardware_id != HW_FX_5800P && hardware_id != HW_ES_PLUS && !IsEpsFamily(hardware_id)) {
 				return true;
 			}
 			if (!enabled_2 || (screen_range & 0b100000)) {
@@ -789,7 +866,7 @@ namespace casioemu {
 		Screen(Emulator& emu)
 			: Peripheral(emu) {
 #if !defined(TEST_BUILD) && !defined(__EMSCRIPTEN__)
-			if constexpr (hardware_id == HW_EPS6800) {
+			if constexpr (hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009) {
 				eps_screen_thread_running.store(true, std::memory_order_release);
 				eps_screen_thread = std::thread([this]() {
 					while (eps_screen_thread_running.load(std::memory_order_acquire)) {
@@ -815,7 +892,7 @@ namespace casioemu {
 #endif
 		}
 		~Screen() {
-			if constexpr (hardware_id == HW_EPS6800) {
+			if constexpr (hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009) {
 				eps_screen_thread_running.store(false, std::memory_order_release);
 				if (eps_screen_thread.joinable())
 					eps_screen_thread.join();
@@ -843,18 +920,30 @@ namespace casioemu {
 		void UpdateFrameAlpha() override {
 #ifdef __EMSCRIPTEN__
 			tick();
-			if constexpr (hardware_id == HW_EPS6800) {
+			if constexpr (hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009) {
 				std::lock_guard<std::mutex> lock(eps_screen_alpha_mutex);
 				std::copy(eps_screen_ink_alpha.begin(), eps_screen_ink_alpha.end(), screen_ink_alpha);
 			}
 #endif
 		}
-		int GetFrameWidth() const override { return hardware_id == HW_EPS6800 ? 96 : 192; }
-		int GetFrameHeight() const override { return hardware_id == HW_FX_5800P || hardware_id == HW_ES_PLUS || hardware_id == HW_EPS6800 ? 32 : 64; }
+		int GetFrameWidth() const override {
+			if constexpr (hardware_id == HW_EPS6009)
+				return std::max(1, emulator.ModelDefinition.screen_width);
+			return hardware_id == HW_EPS6800 ? 96 : 192;
+		}
+		int GetFrameHeight() const override {
+			if constexpr (hardware_id == HW_EPS6009)
+				return std::max(1, emulator.ModelDefinition.screen_height);
+			return hardware_id == HW_FX_5800P || hardware_id == HW_ES_PLUS || hardware_id == HW_EPS6800 ? 32 : 64;
+		}
 		void WriteFrameRgba(uint8_t* out, int r, int g, int b) const override {
 			if (!out) return;
 			const int width = GetFrameWidth();
 			const int height = GetFrameHeight();
+			if constexpr (hardware_id == HW_EPS6009) {
+				std::fill(out, out + static_cast<size_t>(width) * static_cast<size_t>(height) * 4, 0);
+				return;
+			}
 			for (int y = 0; y < height; ++y) {
 				for (int x = 0; x < width; ++x) {
 					const float alpha = screen_ink_alpha[y * 192 + x];
@@ -867,7 +956,7 @@ namespace casioemu {
 			}
 		}
 		int GetStatusAlphaCount() const override {
-			return SPR_MAX > 0 ? SPR_MAX - 1 : 0;
+			return std::max(0, SpriteCount() - 1);
 		}
 		void WriteStatusAlpha(uint8_t* out, int max_len) const override {
 			if (!out || max_len <= 0) return;
@@ -1011,9 +1100,39 @@ namespace casioemu {
 					}
 				}
 
-				for (int ix = 1; ix < SPR_MAX; ++ix) {
-					const bool on = (decoded.status[sprite_bitmap[ix].offset] & sprite_bitmap[ix].mask) != 0;
-					auto& alpha = eps_screen_ink_alpha[ix - 1];
+				const auto& status_indicators = emulator.ModelDefinition.status_indicators;
+				for (size_t ix = 0; ix < status_indicators.size(); ++ix) {
+					const auto& indicator = status_indicators[ix];
+					const bool on = indicator.byte_offset < decoded.status.size() &&
+						(decoded.status[indicator.byte_offset] & (1u << indicator.bit)) != 0;
+					auto& alpha = eps_screen_ink_alpha[ix];
+					alpha = alpha * transition_ratio +
+						(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
+				}
+				return;
+			}
+			else if (hardware_id == HW_EPS6009) {
+				ratio = 0.80f;
+				std::array<uint8_t, 0x88> lcd{};
+				Eps6800LcdControl control{};
+				if (!emulator.chipset.epscpu ||
+					emulator.chipset.epscpu->CopyLcd(lcd.data(), lcd.size(), &control) != lcd.size())
+					return;
+				float ink_alpha_on = 230.0f;
+				float ink_alpha_off = 8.0f;
+				ink_alpha_off = screen_residual_enabled ? ink_alpha_off * screen_residual_alpha_scale : 0.0f;
+				if (!control.visible()) {
+					ink_alpha_on = 0.0f;
+					ink_alpha_off = 0.0f;
+				}
+				const float transition_ratio = screen_residual_enabled ? ratio : 0.0f;
+				std::lock_guard<std::mutex> lock(eps_screen_alpha_mutex);
+				const auto& status_indicators = emulator.ModelDefinition.status_indicators;
+				for (size_t ix = 0; ix < status_indicators.size(); ++ix) {
+					const auto& indicator = status_indicators[ix];
+					const bool on = indicator.byte_offset < lcd.size() &&
+						(lcd[indicator.byte_offset] & (1u << indicator.bit)) != 0;
+					auto& alpha = eps_screen_ink_alpha[ix];
 					alpha = alpha * transition_ratio +
 						(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
 				}
@@ -1351,7 +1470,18 @@ namespace casioemu {
 	template <>
 	const int Screen<HW_EPS6800>::ROW_SIZE_DISP = 12;
 	template <>
-	const int Screen<HW_EPS6800>::SPR_MAX = 19;
+	const int Screen<HW_EPS6800>::SPR_MAX = 1;
+
+	template <>
+	const int Screen<HW_EPS6009>::N_ROW = 0;
+	template <>
+	const int Screen<HW_EPS6009>::ROW_SIZE = 1;
+	template <>
+	const int Screen<HW_EPS6009>::OFFSET = 0;
+	template <>
+	const int Screen<HW_EPS6009>::ROW_SIZE_DISP = 1;
+	template <>
+	const int Screen<HW_EPS6009>::SPR_MAX = 1;
 
 	template <>
 	const SpriteBitmap Screen<HW_CLASSWIZ_II>::sprite_bitmap[] = {
@@ -1448,42 +1578,34 @@ namespace casioemu {
 
 	template <>
 	const SpriteBitmap Screen<HW_EPS6800>::sprite_bitmap[] = {
-		{"rsd_pixel", 0, 0},
-		// HP 300S+ exposes the indicators as the top row of the EPS6800 LCD
-		// framebuffer.  The bits are ordered by their physical X positions and
-		// are not compatible with the ES Plus controller mapping above.
-		{"rsd_s", 0x01, 0x00},       // x=0
-		{"rsd_a", 0x08, 0x00},       // x=3
-		{"rsd_m", 0x80, 0x00},       // x=7
-		{"rsd_sto", 0x10, 0x01},     // x=12
-		{"rsd_rcl", 0x04, 0x02},     // x=18
-		{"rsd_stat", 0x02, 0x03},    // x=25
-		{"rsd_cmplx", 0x80, 0x03},   // x=31
-		{"rsd_mat", 0x02, 0x05},     // x=41
-		{"rsd_vct", 0x80, 0x05},     // x=47
-		{"rsd_d", 0x80, 0x06},       // x=55
-		{"rsd_r", 0x04, 0x07},       // x=58
-		{"rsd_g", 0x20, 0x07},       // x=61
-		{"rsd_fix", 0x02, 0x08},     // x=65
-		{"rsd_sci", 0x80, 0x08},     // x=71
-		{"rsd_math", 0x01, 0x0A},    // x=80
-		{"rsd_down", 0x10, 0x0A},    // x=84
-		{"rsd_up", 0x80, 0x0A},      // x=87
-		{"rsd_disp", 0x80, 0x0B} };  // x=95
+		{"rsd_pixel", 0, 0} };
+
+	template <>
+	const SpriteBitmap Screen<HW_EPS6009>::sprite_bitmap[] = {
+		{"rsd_pixel", 0, 0} };
 
 	template <HardwareId hardware_id>
 	void Screen<hardware_id>::Initialise() {
 		if (!inited) {
 			renderer = emulator.GetRenderer();
 			interface_texture = emulator.GetInterfaceTexture();
-			sprite_info.resize(SPR_MAX);
+			const int sprite_count = SpriteCount();
+			sprite_info.resize(sprite_count);
 			for (auto& texture : sprite_svg_textures)
 				texture.Reset();
 			sprite_svg_textures.clear();
-			sprite_svg_textures.resize(SPR_MAX);
-			sprite_available.assign(SPR_MAX, 0);
-			for (int ix = 0; ix != SPR_MAX; ++ix) {
-				auto sprite = emulator.ModelDefinition.sprites.find(sprite_bitmap[ix].name);
+			sprite_svg_textures.resize(sprite_count);
+			sprite_available.assign(sprite_count, 0);
+			for (int ix = 0; ix != sprite_count; ++ix) {
+				const char* static_name = nullptr;
+				std::string dynamic_name;
+				if constexpr (hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009) {
+					dynamic_name = ix == 0 ? "rsd_pixel" : emulator.ModelDefinition.status_indicators[static_cast<size_t>(ix - 1)].sprite_name;
+				}
+				else {
+					static_name = sprite_bitmap[ix].name;
+				}
+				auto sprite = emulator.ModelDefinition.sprites.find(static_name ? static_name : dynamic_name);
 				if (sprite == emulator.ModelDefinition.sprites.end())
 					continue;
 				sprite_info[ix] = sprite->second;
@@ -1525,7 +1647,7 @@ namespace casioemu {
 			}
 			inited = true;
 		}
-		if constexpr (hardware_id == HW_EPS6800) {
+		if constexpr (hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009) {
 			// CPU-visible LCD registers and RAM are owned by EPS6800Core. This
 			// peripheral is only the CasioEmuMsvc presentation/resource layer.
 			return;
@@ -2515,6 +2637,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		int logical_width = 0;
 		int logical_height = 0;
 		SDL_Rect lcd_dest{};
+		bool render_pixel_layer = true;
 	};
 
 	struct ScreenCaptureLayout {
@@ -2530,10 +2653,22 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 	};
 
 	bool BuildScreenCaptureLayout(const ScreenCaptureSource& source, int requested_scale, bool even_output, ScreenCaptureLayout& layout, const char* purpose) {
-		if (!source.interface_texture || !source.sprite_info || !source.sprite_available ||
+		if (!source.sprite_info || !source.sprite_available ||
 			!source.ink_colour || !source.screen_ink_alpha ||
 			source.logical_width <= 0 || source.logical_height <= 0 || source.lcd_dest.w <= 0 || source.lcd_dest.h <= 0) {
-			SDL_Log("%s failed: invalid capture source.", purpose);
+			SDL_Log("%s failed: invalid capture source: texture=%p sprites=%p available=%p ink=%p alpha=%p logical=%dx%d lcd=%d,%d %dx%d.",
+				purpose,
+				static_cast<void*>(source.interface_texture),
+				static_cast<const void*>(source.sprite_info),
+				static_cast<const void*>(source.sprite_available),
+				static_cast<const void*>(source.ink_colour),
+				static_cast<const void*>(source.screen_ink_alpha),
+				source.logical_width,
+				source.logical_height,
+				source.lcd_dest.x,
+				source.lcd_dest.y,
+				source.lcd_dest.w,
+				source.lcd_dest.h);
 			return false;
 		}
 
@@ -2647,13 +2782,15 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			}
 			restore();
 
-			for (int y = 0; y < source.logical_height; ++y) {
-				const int source_y = y + 1;
-				for (int x = 0; x < source.logical_width; ++x) {
-					const float alpha_value = source.screen_ink_alpha[x + source_y * 192];
-					if (alpha_value <= 0.0f)
-						continue;
-					FillScaledPixel(surface, layout.scaled_lcd.x + x * layout.scale, layout.scaled_lcd.y + y * layout.scale, layout.scale, MapScreenshotPixel(surface->format, *source.ink_colour, background, alpha_value));
+			if (source.render_pixel_layer) {
+				for (int y = 0; y < source.logical_height; ++y) {
+					const int source_y = y + 1;
+					for (int x = 0; x < source.logical_width; ++x) {
+						const float alpha_value = source.screen_ink_alpha[x + source_y * 192];
+						if (alpha_value <= 0.0f)
+							continue;
+						FillScaledPixel(surface, layout.scaled_lcd.x + x * layout.scale, layout.scaled_lcd.y + y * layout.scale, layout.scale, MapScreenshotPixel(surface->format, *source.ink_colour, background, alpha_value));
+					}
 				}
 			}
 			if (SDL_MUSTLOCK(surface))
@@ -2937,11 +3074,13 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 				RenderModelSprite(mirror_renderer, fallback_texture, &svg_texture_cache[ix], sprite, *source.ink_colour, alpha);
 			}
 
-			SDL_Rect lcd_dest = ScaleScreenshotRect(source.lcd_dest, capture_rect, sx, sy);
-			lcd_dest.x += content_rect.x;
-			lcd_dest.y += content_rect.y;
-			if (!RenderPixelTexture(mirror_renderer, source, lcd_dest))
-				return false;
+			if (source.render_pixel_layer) {
+				SDL_Rect lcd_dest = ScaleScreenshotRect(source.lcd_dest, capture_rect, sx, sy);
+				lcd_dest.x += content_rect.x;
+				lcd_dest.y += content_rect.y;
+				if (!RenderPixelTexture(mirror_renderer, source, lcd_dest))
+					return false;
+			}
 			mirror.present();
 			return true;
 		}
@@ -3053,7 +3192,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		int logical_height,
 		const SDL_Rect& lcd_dest,
 		int capture_scale,
-		const SDL_Color& background) {
+		const SDL_Color& background,
+		bool render_pixel_layer = true) {
 		ScreenCaptureSource source{
 			interface_texture,
 			interface_surface,
@@ -3063,7 +3203,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			screen_ink_alpha,
 			logical_width,
 			logical_height,
-			lcd_dest};
+			lcd_dest,
+			render_pixel_layer};
 
 		ScreenCaptureLayout layout{};
 		if (!BuildScreenCaptureLayout(source, capture_scale, false, layout, "Screenshot"))
@@ -3106,10 +3247,10 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 #ifdef __EMSCRIPTEN__
 		tick();
 #elif defined(TEST_BUILD)
-		if constexpr (hardware_id == HW_EPS6800)
+		if constexpr (hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009)
 			tick();
 #endif
-		if constexpr (hardware_id == HW_EPS6800) {
+		if constexpr (hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009) {
 			std::lock_guard<std::mutex> lock(eps_screen_alpha_mutex);
 			std::copy(eps_screen_ink_alpha.begin(), eps_screen_ink_alpha.end(), screen_ink_alpha);
 		}
@@ -3122,20 +3263,24 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			SDL_SetTextureColorMod(interface_texture, ink_colour.r, ink_colour.g, ink_colour.b);
 		}
 
-		// Set texture transparency and copy sprites as before
-		for (int ix = 1; ix != SPR_MAX; ++ix) {
+		for (int ix = 1; ix != SpriteCount(); ++ix) {
 			if (ix >= static_cast<int>(sprite_available.size()) || !sprite_available[ix])
 				continue;
 			const int alpha_index = ix - 1;
 			const uint8_t alpha = Uint8(std::clamp((int)screen_ink_alpha[alpha_index], 0, 255));
-			RenderModelSprite(renderer, interface_texture, ix < static_cast<int>(sprite_svg_textures.size()) ? &sprite_svg_textures[ix] : nullptr, sprite_info[ix], ink_colour, alpha);
+			if (alpha == 0)
+				continue;
+			RenderModelSprite(renderer, interface_texture,
+				ix < static_cast<int>(sprite_svg_textures.size()) ? &sprite_svg_textures[ix] : nullptr,
+				sprite_info[ix], ink_colour, alpha);
 		}
 
 		static constexpr auto SPR_PIXEL = 0;
 		SDL_Rect dest = Screen<hardware_id>::sprite_info[SPR_PIXEL].dest;
 		const bool board_screen_slot = !emulator.ModelDefinition.board_path.empty();
-		const int logical_width = ROW_SIZE_DISP * 8;
-		const int logical_height = N_ROW;
+		const bool segment_lcd = IsEpsSegmentLcd(hardware_id);
+		const int logical_width = segment_lcd ? std::max(1, emulator.ModelDefinition.screen_width) : ROW_SIZE_DISP * 8;
+		const int logical_height = segment_lcd ? std::max(1, emulator.ModelDefinition.screen_height) : N_ROW;
 		SDL_Rect lcd_dest = dest;
 		if (!board_screen_slot) {
 			lcd_dest.w = std::max(1, (logical_width - 1) * sprite_info[SPR_PIXEL].src.w + sprite_info[SPR_PIXEL].dest.w);
@@ -3143,7 +3288,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		}
 
 #ifndef CASIOEMU_CORE_WEB
-		RenderPixelScreenTexture(lcd_dest, logical_width, logical_height);
+		if (!segment_lcd)
+			RenderPixelScreenTexture(lcd_dest, logical_width, logical_height);
 #endif
 
 #if !defined(__EMSCRIPTEN__) && !defined(CASIOEMU_CORE_WEB)
@@ -3157,7 +3303,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			screen_ink_alpha,
 			logical_width,
 			logical_height,
-			lcd_dest};
+			lcd_dest,
+			!segment_lcd};
 
 		// If screenshot is requested, capture only the rendered screen region
 		if (emulator.screenshot_requested.load()) {
@@ -3173,7 +3320,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 				logical_height,
 				lcd_dest,
 				emulator.capture_scale.load(),
-				capture_background);
+				capture_background,
+				!segment_lcd);
 			emulator.screenshot_requested.store(false);
 		}
 		static ScreenRecorder recorder;
@@ -3259,6 +3407,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			return new Screen<HW_TI>(emulator);
 		case HW_EPS6800:
 			return new Screen<HW_EPS6800>(emulator);
+		case HW_EPS6009:
+			return new Screen<HW_EPS6009>(emulator);
 		default:
 			PANIC("Unknown hardware id\n");
 		}

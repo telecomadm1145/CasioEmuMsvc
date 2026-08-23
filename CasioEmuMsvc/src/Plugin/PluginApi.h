@@ -146,8 +146,14 @@ public:
 
 	virtual std::vector<uint8_t> ReadMemory(uint32_t address, size_t size) = 0;
 	virtual void WriteMemory(uint32_t address, const std::vector<uint8_t>& data) = 0;
-	virtual std::vector<uint16_t> ReadCode(uint32_t address, size_t count) = 0;
-	virtual void WriteCode(uint32_t address, const std::vector<uint8_t>& data) = 0;
+	/// Read 16-bit instruction words starting at a byte address in code space.
+	/// The address is aligned down to an even byte, and consecutive words are
+	/// read at two-byte intervals on every supported architecture.
+	virtual std::vector<uint16_t> ReadCode(uint32_t byteAddress, size_t count) = 0;
+	/// Patch consecutive bytes starting at a byte address in code space.
+	/// Byte order follows the architecture's logical code bytes; reading the
+	/// containing word with ReadCode observes the same patched byte values.
+	virtual void WriteCode(uint32_t byteAddress, const std::vector<uint8_t>& data) = 0;
 	virtual std::vector<DebugDisassemblyLine> GetDisassembly(uint32_t address, size_t count) = 0;
 
 	virtual void Pause() = 0;

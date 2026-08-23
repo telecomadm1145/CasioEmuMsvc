@@ -15,6 +15,7 @@
 #include <iterator>
 #include <map>
 #include <regex>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -442,10 +443,11 @@ namespace casioemu {
 			return transforms;
 		}
 
-		std::string BuildStatusSvgShape(const tinyxml2::XMLDocument& document, const tinyxml2::XMLElement* status_frame, const tinyxml2::XMLElement* child, const std::string& defs) {
+		std::string BuildStatusSvgShape(const tinyxml2::XMLDocument& document, const tinyxml2::XMLElement* status_frame, const tinyxml2::XMLElement* child, const std::string& defs, const SvgRect& view_box) {
 			SvgRect frame_rect{};
 			ParseViewBox(status_frame, frame_rect);
-			if (frame_rect.w <= 0 || frame_rect.h <= 0)
+			const SvgRect svg_view_box = view_box.w > 0 && view_box.h > 0 ? view_box : frame_rect;
+			if (svg_view_box.w <= 0 || svg_view_box.h <= 0)
 				return {};
 
 			std::string shape;
@@ -473,8 +475,8 @@ namespace casioemu {
 
 			shape = WrapTransformed(shape, CollectAncestorTransforms(status_frame, child));
 			return "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"" +
-				std::to_string(frame_rect.x) + " " + std::to_string(frame_rect.y) + " " +
-				std::to_string(frame_rect.w) + " " + std::to_string(frame_rect.h) +
+				std::to_string(svg_view_box.x) + " " + std::to_string(svg_view_box.y) + " " +
+				std::to_string(svg_view_box.w) + " " + std::to_string(svg_view_box.h) +
 				"\"><g fill=\"#000000\">" + defs + shape + "</g></svg>";
 		}
 
@@ -495,25 +497,53 @@ namespace casioemu {
 				display.y + status_rect.y * display.sy,
 				status_rect.w * display.sx,
 				status_rect.h * display.sy}));
-
 			const std::string defs = CollectDefsBlocks(status_frame);
 			auto children = ExtractDirectChildElements(FindStatusContainer(status_frame));
 			model.status_sprite_indexes = configured_status_indexes;
+			std::vector<std::pair<int, StatusIndicatorInfo>> status_indicators;
+			std::set<std::pair<int, int>> used_status_bits;
 			for (const auto& [name, index] : configured_status_indexes) {
 				if (index < 0 || static_cast<size_t>(index) >= children.size())
 					throw std::runtime_error("status sprite index is out of range for " + name + ".");
+				const auto* child = children[static_cast<size_t>(index)];
+				const char* byte_text = child->Attribute("data-status-byte");
+				const char* bit_text = child->Attribute("data-status-bit");
+				if ((byte_text == nullptr) != (bit_text == nullptr))
+					throw std::runtime_error("board SVG status sprite " + name + " must specify both data-status-byte and data-status-bit.");
+				if (byte_text && bit_text) {
+					int byte_offset = -1;
+					int bit = -1;
+					if (!byte_text || (ToInt(byte_text, -1) < 0)) {
+						throw std::runtime_error("board SVG status sprite " + name + " has an invalid data-status-byte.");
+					}
+					byte_offset = ToInt(byte_text, -1);
+					bit = ToInt(bit_text ? bit_text : "", -1);
+					if (byte_offset < 0 || byte_offset > 0xffff)
+						throw std::runtime_error("board SVG status sprite " + name + " has an invalid data-status-byte.");
+					if (bit < 0 || bit > 7)
+						throw std::runtime_error("board SVG status sprite " + name + " has an invalid data-status-bit.");
+					if (!used_status_bits.emplace(byte_offset, bit).second)
+						throw std::runtime_error("board SVG assigns more than one status sprite to the same LCD bit.");
+					status_indicators.push_back({index, {name, static_cast<unsigned short>(byte_offset), static_cast<unsigned char>(bit)}});
+				}
 				SpriteInfo sprite{};
 				sprite.src = {0, 0, std::max(1, RoundToInt(status_rect.w)), std::max(1, RoundToInt(status_rect.h))};
 				sprite.dest = dest;
-				sprite.svg_shape = BuildStatusSvgShape(document, status_frame, children[static_cast<size_t>(index)], defs);
+				sprite.svg_shape = BuildStatusSvgShape(document, status_frame, child, defs, status_rect);
 				model.sprites[name] = std::move(sprite);
 			}
+			std::sort(status_indicators.begin(), status_indicators.end(), [](const auto& lhs, const auto& rhs) {
+				return lhs.first < rhs.first;
+			});
+			model.status_indicators.clear();
+			for (auto& [index, indicator] : status_indicators)
+				model.status_indicators.push_back(std::move(indicator));
 		}
 
 		int MaskToIndex(int mask) {
 			if (mask <= 0)
 				return -1;
-			for (int ix = 0; ix < 8; ++ix) {
+			for (int ix = 0; ix < 16; ++ix) {
 				if (mask == (1 << ix))
 					return ix;
 			}
@@ -596,7 +626,7 @@ namespace casioemu {
 				else {
 					const int ki = MaskToIndex(ki_mask);
 					const int ko = MaskToIndex(ko_mask);
-					if (ki < 0 || ko < 0)
+					if (ki < 0 || ki >= 8 || ko < 0 || ko >= 16)
 						continue;
 					button.kiko = (ko << 4) | ki;
 				}

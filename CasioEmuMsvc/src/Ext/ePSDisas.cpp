@@ -15,7 +15,7 @@
 		(ptr)[3])
 
 char* decodeeps(char* rom, int pc, bool& l) {
-	// unsigned int* v6; // edi  // KhÃ´ng dÃ¹ng, cÃ³ thá»?bá»?
+	// unsigned int* v6; // edi  //
 	// unsigned __int16 v9;      // a
 	// int v11;                  // eax
 	// int v13;                  // [esp+Ch] [ebp-20h]
@@ -47,6 +47,9 @@ char* decodeeps(char* rom, int pc, bool& l) {
 				else {
 					v16 = HIBYTE(v15);
 					switch (v15 >> 8) {
+					case 1u:
+						snprintf(v7, sizeof(v7), "SFR4\t0x%02X", (uint8_t)v15);
+						break;
 					case 2u:
 						snprintf(v7, sizeof(v7), "OR\tA, 0x%02X", (uint8_t)v15);
 						break;
@@ -156,10 +159,19 @@ char* decodeeps(char* rom, int pc, bool& l) {
 						snprintf(v7, sizeof(v7), "TEST\t0x%02X", (uint8_t)v15);
 						break;
 					case 0x26u:
-						snprintf(v7, sizeof(v7), "MUL\tA, 0x%02X", (uint8_t)v15);
+						snprintf(v7, sizeof(v7), "MOVL\t0x%02X, A", (uint8_t)v15);
 						break;
 					case 0x27u:
 						snprintf(v7, sizeof(v7), "RPT\t0x%02X", (uint8_t)v15);
+						break;
+					case 0x28u:
+						snprintf(v7, sizeof(v7), "MOVH\t0x%02X, A", (uint8_t)v15);
+						break;
+					case 0x29u:
+						snprintf(v7, sizeof(v7), "MOVL\tA, 0x%02X", (uint8_t)v15);
+						break;
+					case 0x2Au:
+						snprintf(v7, sizeof(v7), "MOVH\tA, 0x%02X", (uint8_t)v15);
 						break;
 					case 0x2Cu:
 						snprintf(v7, sizeof(v7), "TBRD\t0, 0x%02X", (uint8_t)v15);
@@ -222,7 +234,7 @@ char* decodeeps(char* rom, int pc, bool& l) {
 						snprintf(v7, sizeof(v7), "MOV\tA, #0x%02X", (uint8_t)v15);
 						break;
 					case 0x4Fu:
-						snprintf(v7, sizeof(v7), "MUL\tA, #0x%02X", (uint8_t)v15);
+						snprintf(v7, sizeof(v7), "SFL4\t0x%02X", (uint8_t)v15);
 						break;
 					case 0x50u:
 						snprintf(v7, sizeof(v7), "JDNZ\tA, 0x%02X, 0x%04X", (uint8_t)v15, v9);
@@ -233,12 +245,13 @@ char* decodeeps(char* rom, int pc, bool& l) {
 						l = true;
 						break;
 					case 0x52u:
-						snprintf(v7, sizeof(v7), "JINZ\tA, 0x%02X, 0x%04X", (uint8_t)v15, v9);
-						l = true;
+						snprintf(v7, sizeof(v7), "EXL\t0x%02X", (uint8_t)v15);
 						break;
 					case 0x53u:
-						snprintf(v7, sizeof(v7), "JINZ\t0x%02X, 0x%04X", (uint8_t)v15, v9);
-						l = true;
+						snprintf(v7, sizeof(v7), "EXH\t0x%02X", (uint8_t)v15);
+						break;
+					case 0x54u:
+						snprintf(v7, sizeof(v7), "EX\t0x%02X", (uint8_t)v15);
 						break;
 					case 0x55u:
 						snprintf(v7, sizeof(v7), "JGE\tA, 0x%02X, 0x%04X", (uint8_t)v15, v9);

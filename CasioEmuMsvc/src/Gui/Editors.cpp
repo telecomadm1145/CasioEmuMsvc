@@ -146,7 +146,7 @@ std::vector<UIWindow*> GetEditors() {
 			ram_edit_ov[mea.offset] = 255;
 	});
 	std::vector<UIWindow*> windows;
-	if (m_emu->hardware_id == casioemu::HW_EPS6800) {
+	if (casioemu::IsEpsFamily(m_emu->hardware_id)) {
 		windows.push_back(EPS_ROM_Hex(new HexEditor{"Rom", nullptr, 0x20000, 0}));
 		windows.push_back(MMU_Hex(new HexEditor{"Ram", nullptr, 0x2080, 0}));
 		windows.push_back(MMU_Hex(new HexEditor{"Regs", nullptr, 0x80, 0}));

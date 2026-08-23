@@ -24,12 +24,62 @@ void machine_state_bind_modules(struct machine_state *state) {
 	mmio_connect_peripherals_state(&state->mmio, &state->kbd, &state->lcd, &state->timer);
 }
 
-void machine_state_advance_cycles(struct machine_state *state, uint32_t cycles, bool tick_timer) {
+void machine_state_advance_cycles_split(
+	struct machine_state *state,
+	uint32_t cycles,
+	bool tick_fast_timers,
+	bool tick_timer1
+) {
 	cpu_loop_state(&state->cpu, cycles);
-	if (tick_timer) {
-		timer_tick_state(&state->timer, cycles);
+	if (state->cpu.mode == CPU_MODE_IDLE) {
+		if (tick_timer1)
+			timer_tick_idle_state(&state->timer, cycles);
+	}
+	else if (state->cpu.mode != CPU_MODE_SLEEP) {
+		if (tick_fast_timers)
+			timer_tick_fast_state(&state->timer, cycles);
+		if (tick_timer1)
+			timer_tick_idle_state(&state->timer, cycles);
 	}
 	kbd_tick_state(&state->kbd, cycles);
+}
+
+void machine_state_advance_instruction_cycles(
+	struct machine_state *state,
+	uint32_t timer_cycles,
+	bool tick_fast_timers,
+	bool tick_timer1
+) {
+	if (!state) {
+		return;
+	}
+
+	cpu_loop_state(&state->cpu, 1);
+	if (state->cpu.mode == CPU_MODE_IDLE) {
+		if (tick_timer1)
+			timer_tick_idle_state(&state->timer, timer_cycles);
+	}
+	else if (state->cpu.mode != CPU_MODE_SLEEP) {
+		if (tick_fast_timers)
+			timer_tick_fast_state(&state->timer, timer_cycles);
+		if (tick_timer1)
+			timer_tick_idle_state(&state->timer, timer_cycles);
+	}
+	kbd_tick_state(&state->kbd, 1);
+}
+
+void machine_state_tick_idle_timer1(struct machine_state *state, uint32_t cycles) {
+	if (!state || cycles == 0) {
+		return;
+	}
+
+	if (state->cpu.mode == CPU_MODE_IDLE) {
+		timer_tick_idle_state(&state->timer, cycles);
+	}
+}
+
+void machine_state_advance_cycles(struct machine_state *state, uint32_t cycles, bool tick_timer) {
+	machine_state_advance_cycles_split(state, cycles, tick_timer, tick_timer);
 }
 
 static void machine_state_run_chunks(struct machine_state *state, int chunks, bool tick_timer) {

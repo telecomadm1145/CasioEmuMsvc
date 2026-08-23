@@ -300,7 +300,7 @@ json ToolDefinitions() {
         },
         {
             {"name", "read_code"},
-            {"description", "Read 16-bit instruction words from code space."},
+            {"description", "Read 16-bit instruction words from a byte address in code space; the address is aligned down to an even byte and consecutive words are two bytes apart."},
             {"inputSchema", ObjectSchema({
                 {"address", {{"type", "integer"}, {"minimum", 0}, {"maximum", kMaxAddress}}},
                 {"count", {{"type", "integer"}, {"minimum", 0}, {"maximum", kMaxCodeWords}}},
@@ -308,7 +308,7 @@ json ToolDefinitions() {
         },
         {
             {"name", "write_code"},
-            {"description", "Patch bytes in the loaded ROM image."},
+            {"description", "Patch consecutive logical code bytes starting at a byte address. Use the same byte-address unit on EPS and non-EPS architectures."},
             {"inputSchema", ObjectSchema({
                 {"address", {{"type", "integer"}, {"minimum", 0}, {"maximum", kMaxAddress}}},
                 {"bytes", {{"type", "array"}, {"maxItems", kMaxMemoryTransfer}, {"items", {{"type", "integer"}, {"minimum", 0}, {"maximum", 255}}}}},
@@ -774,6 +774,7 @@ json CallTool(const std::string& name, const json& args) {
             hits.push_back({
                 {"program_counter", hit.ProgramCounter},
                 {"link_register", hit.LinkRegister},
+                {"value", hit.Value},
                 {"stack", hit.Stack},
                 {"registers", std::move(registers)},
             });

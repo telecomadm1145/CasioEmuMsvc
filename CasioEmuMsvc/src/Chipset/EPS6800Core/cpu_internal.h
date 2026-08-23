@@ -52,6 +52,7 @@ struct cpu_state {
 	uint32_t pc; /* program counter */
 	uint32_t stack[CPU_STACK_DEPTH];
 	uint8_t rpt_counter;
+	uint32_t rpt_target_pc; /* Zero when no repeated instruction is active. */
 	enum cpu_mode mode;
 	uint8_t int_pending;
 	bool sleep_repeat_pc;

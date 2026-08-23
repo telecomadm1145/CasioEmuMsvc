@@ -5,6 +5,7 @@
 #include "Chipset.hpp"
 #include "CodeViewer.hpp"
 #include "Localization.h"
+#include "ModelInfo.h"
 #include <algorithm>
 #include <cstdint>
 #include <cmath>
@@ -83,7 +84,7 @@ void HwController::RenderCore() {
 	}
 #endif
 
-	if (m_emu->hardware_id != casioemu::HW_EPS6800) {
+	if (!casioemu::IsEpsFamily(m_emu->hardware_id)) {
 		ImGui::SliderInt("HwController.Value1"_lc, &screen_flashing_threshold, 0, 0x3F);
 		ImGui::SliderFloat("HwController.Value2"_lc, &screen_flashing_brightness_coeff, 1.0f, 8.0f);
 		ImGui::SliderInt("HwController.ScreenBufferSelect"_lc, &screen_buffer_select, 0, 2);
@@ -99,7 +100,7 @@ void HwController::RenderCore() {
 	
 	ImGui::Spacing();
 	
-	if (m_emu->hardware_id != casioemu::HW_EPS6800) {
+	if (!casioemu::IsEpsFamily(m_emu->hardware_id)) {
 		static bool pdx[8];
 		int pd = m_emu->ModelDefinition.pd_value;
 

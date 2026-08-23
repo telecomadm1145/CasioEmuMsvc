@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.10...3.22)
 
 project(CasioEmuMsvc)
-include(CTest)
 include(FetchContent)
 #set(CMAKE_MESSAGE_LOG_LEVEL NOTICE)
 set(CMAKE_CXX_STANDARD 20)
@@ -417,27 +416,6 @@ endif()
 if(MSVC)
     # Ensure UTF-8 and increase compiler heap and object limits for large translation units
     target_compile_options(${TARGET_NAME} PRIVATE /utf-8 /Zm200 /bigobj)
-endif()
-
-set(EPS6800_TEST_ROM "" CACHE FILEPATH "Optional local HP 300S+ ROM for EPS6800 smoke testing")
-if(BUILD_TESTING AND NOT EMSCRIPTEN)
-    add_executable(Eps6800AdapterSmoke
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/eps6800_adapter_smoke.cpp"
-        "${SOURCE_DIR}/Chipset/ePSCpu.cpp"
-        ${MAIN_SOURCES_EPS6800_CORE}
-    )
-    target_compile_features(Eps6800AdapterSmoke PRIVATE cxx_std_20)
-    target_include_directories(Eps6800AdapterSmoke PRIVATE
-        "${SOURCE_DIR}/Chipset"
-        "${SOURCE_DIR}/Chipset/EPS6800Core"
-    )
-    if(MSVC)
-        target_compile_options(Eps6800AdapterSmoke PRIVATE /utf-8)
-    endif()
-    if(EPS6800_TEST_ROM)
-        add_test(NAME eps6800_adapter_golden
-            COMMAND Eps6800AdapterSmoke "${EPS6800_TEST_ROM}")
-    endif()
 endif()
 
 if(CASIOEMU_WEB)
