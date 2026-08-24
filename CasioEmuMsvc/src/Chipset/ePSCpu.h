@@ -234,6 +234,7 @@ namespace casioemu {
 		void ClearRamAndReset();
 		void SetTimerCycleDivisor(uint32_t divisor);
 		void SetIceTimerScheduling(bool enabled);
+		void SetPortBInput(uint8_t mask, uint8_t value);
 		void SetPortCInput(uint8_t mask, uint8_t value);
 		void Next();
 		bool RunFrame(uint32_t idle_timer_cycles = 0);

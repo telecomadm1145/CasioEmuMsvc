@@ -161,7 +161,12 @@ static void kbd_update_eps6009_portb(struct kbd_state *state) {
 	const uint8_t dcrb = state->reg[eps_reg_dcrb(variant)] & KBD_EPS6009_PORTB_MASK;
 	const uint8_t pbcon = state->reg[eps_reg_pbcon(variant)] & KBD_EPS6009_PORTB_MASK;
 	const uint8_t latch = state->portb_latch & KBD_EPS6009_PORTB_MASK;
-	const uint8_t pb = (uint8_t)((latch & (uint8_t)~dcrb) | (pbcon & dcrb));
+	/* F-715SG-family firmware samples PB1:PB0 as model-selection straps at
+	 * boot, then changes the same pins back to keyboard row outputs. */
+	const uint8_t external = (uint8_t)(
+		(state->portb_input_value & state->portb_input_mask) |
+		(pbcon & (uint8_t)~state->portb_input_mask));
+	const uint8_t pb = (uint8_t)((latch & (uint8_t)~dcrb) | (external & dcrb));
 
 	state->reg[eps_reg_portb(variant)] = pb;
 	kbd_bus_write_internal(state, eps_reg_portb(variant), pb);
@@ -565,6 +570,14 @@ void kbd_onup_state(struct kbd_state *state) {
 void kbd_set_portc_input_state(struct kbd_state *state, uint8_t mask, uint8_t value) {
 	state->portc_input_mask = mask;
 	state->portc_input_value = (uint8_t)(value & mask);
+}
+
+void kbd_set_portb_input_state(struct kbd_state *state, uint8_t mask, uint8_t value) {
+	state->portb_input_mask = (uint8_t)(mask & KBD_EPS6009_PORTB_MASK);
+	state->portb_input_value = (uint8_t)(value & state->portb_input_mask);
+	if (eps_variant_is_6009(state->mmio->variant)) {
+		kbd_update_eps6009_portb(state);
+	}
 }
 
 static void kbd_clear_storage(struct kbd_state *state) {

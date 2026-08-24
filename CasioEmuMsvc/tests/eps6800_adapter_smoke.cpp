@@ -683,6 +683,22 @@ namespace {
 		return machine.ReadByte(kPortC) == 0xf0;
 	}
 
+	bool Eps6009PortBInputSmoke() {
+		constexpr uint8_t kPortB = 0x11;
+		constexpr uint8_t kPortBControl = 0x2d;
+		constexpr uint8_t kDirectionB = 0x2e;
+		casioemu::ePSCPU machine(casioemu::EpsVariant::Eps6009);
+		machine.SetPortBInput(0x03, 0x01);
+		machine.Reset();
+		machine.WriteByte(kPortBControl, 0x03);
+		machine.WriteByte(kDirectionB, 0x03);
+		if (machine.ReadByte(kPortB) != 0x01)
+			return false;
+		machine.WriteByte(kPortB, 0x02);
+		machine.WriteByte(kDirectionB, 0x00);
+		return machine.ReadByte(kPortB) == 0x02;
+	}
+
 	bool HookAndRamSmoke() {
 		std::vector<uint8_t> rom(0x20000, 0);
 		SetPackedRomWord(rom, 0, 0x4e5a); // MOV A,#5Ah
@@ -940,6 +956,10 @@ int main(int argc, char** argv) {
 	}
 	if (!PortCInputSmoke()) {
 		std::cerr << "EPS6800 Port C external input regression\n";
+		return 1;
+	}
+	if (!Eps6009PortBInputSmoke()) {
+		std::cerr << "EPS6009 Port B external input regression\n";
 		return 1;
 	}
 	if (!KeyboardMatrixSmoke()) {

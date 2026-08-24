@@ -229,6 +229,11 @@ namespace casioemu {
 		idle_timer_checkpoint_ = std::chrono::steady_clock::now();
 	}
 
+	void ePSCPU::SetPortBInput(uint8_t mask, uint8_t value) {
+		const std::lock_guard lock(state_mutex_);
+		machine_state_set_portb_input(state_, mask, value);
+	}
+
 	void ePSCPU::SetPortCInput(uint8_t mask, uint8_t value) {
 		const std::lock_guard lock(state_mutex_);
 		machine_state_set_portc_input(state_, mask, value);

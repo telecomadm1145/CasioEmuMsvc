@@ -40,6 +40,7 @@ void machine_state_restore_keydown(struct machine_state *state, uint8_t key);
 void machine_state_keyup(struct machine_state *state, uint8_t key);
 void machine_state_ondown(struct machine_state *state);
 void machine_state_onup(struct machine_state *state);
+void machine_state_set_portb_input(struct machine_state *state, uint8_t mask, uint8_t value);
 void machine_state_set_portc_input(struct machine_state *state, uint8_t mask, uint8_t value);
 
 #ifdef __cplusplus
