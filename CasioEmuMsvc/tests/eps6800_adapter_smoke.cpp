@@ -736,6 +736,27 @@ namespace {
 			stack_machine.LastDebugStop().reason != casioemu::Eps6800DebugStopReason::StepOut ||
 			(stack_machine.ProgramCounter() >> 1) != 1)
 			return false;
+
+		std::vector<uint8_t> wbk_rom(0x30000, 0);
+		SetPackedRomWord(wbk_rom, 0, 0x2000); // MOV A,INDF0.
+		casioemu::ePSCPU wbk_machine(casioemu::EpsVariant::Eps9500);
+		if (!wbk_machine.LoadRom(wbk_rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+			return false;
+		wbk_machine.Reset();
+		wbk_machine.WriteByte(0x20, 0x00); // CPUCON.WBK off: select the real SFR.
+		wbk_machine.WriteByte(0x2e, 0x32); // LCDCON.
+		wbk_machine.WriteByte(0x20, 0x80); // CPUCON.WBK on: select the work bank.
+		wbk_machine.WriteByte(0x2e, 0x5a);
+		wbk_machine.WriteByte(0x01, 0x2e); // FSR0 indirectly selects work-bank 2Eh.
+		wbk_machine.Next();
+		if (wbk_machine.ReadByte(0x0a) != 0x5a)
+			return false;
+		wbk_machine.WriteByte(0x00, 0x6b); // INDF0 write must use the same selection.
+		if (wbk_machine.ReadByte(0x2e) != 0x6b)
+			return false;
+		wbk_machine.WriteByte(0x20, 0x00);
+		if (wbk_machine.ReadByte(0x2e) != 0x32)
+			return false;
 		return true;
 	}
 

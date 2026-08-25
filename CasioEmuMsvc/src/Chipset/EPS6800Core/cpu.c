@@ -473,12 +473,9 @@ static void cpu_push_state(struct cpu_state *state, uint32_t dat) {
 		/* The official ePS9500 core uses an 8-bit descending stack pointer.
 		 * Each return address occupies two stack positions: push subtracts two
 		 * (reset 00h -> FEh), while pop reads at SP and then adds two. */
-		const uint8_t old_stkptr = cpu_bus_read_internal(state, REG_STKPTR);
-		stkptr = (uint8_t)(old_stkptr - 2u);
+		stkptr = (uint8_t)(cpu_bus_read_internal(state, REG_STKPTR) - 2u);
 		state->stack[stkptr] = dat;
 		cpu_bus_write_internal(state, REG_STKPTR, stkptr);
-		if (state->pc >= 0x10000u)
-			fprintf(stderr, "[EPS9500 stack] PUSH pc=%05X %02X->%02X dat=%05X\n", state->pc, old_stkptr, stkptr, dat);
 		return;
 	}
 	/* STKPTR is a 5-bit circular stack pointer; normalize the register value
@@ -513,8 +510,6 @@ static uint32_t cpu_pop_state(struct cpu_state *state) {
 	if (eps_variant_is_9500(cpu_variant(state))) {
 		stkptr = cpu_bus_read_internal(state, REG_STKPTR);
 		cpu_bus_write_internal(state, REG_STKPTR, (uint8_t)(stkptr + 2u));
-		if (state->pc >= 0x10000u)
-			fprintf(stderr, "[EPS9500 stack] POP  pc=%05X %02X->%02X dat=%05X\n", state->pc, stkptr, (uint8_t)(stkptr + 2u), state->stack[stkptr]);
 		return state->stack[stkptr];
 	}
 	stkptr = cpu_bus_read_internal(state, REG_STKPTR) & (CPU_LEGACY_STACK_DEPTH - 1);
@@ -857,16 +852,6 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
 	uint8_t temp8_1, temp8_2, temp8_3; /* instruction related temp */
 	uint32_t temp32; /* instruction related temp */
 
-	if (eps_variant_is_9500(cpu_variant(state)) &&
-		(state->pc == 0x10005u || state->pc == 0x1001eu ||
-		 state->pc == 0x10f3du || state->pc == 0x10f41u || state->pc == 0x1001fu)) {
-		fprintf(stderr, "[EPS9500 acc] PC=%05X A=%02X SP=%02X FSR2=%02X BSR2=%02X POST=%02X\n",
-			state->pc, cpu_bus_read_internal(state, REG_ACC),
-			cpu_bus_read_internal(state, REG_STKPTR),
-			cpu_bus_read_internal(state, REG_FSR2),
-			cpu_bus_read_internal(state, REG_BSR2),
-			cpu_bus_read_internal(state, eps_reg_postid(cpu_variant(state))));
-	}
 	instr1 = instr >> 16;
 	newpc = state->pc + 1;
 	if (state->rpt_target_pc != 0) {
@@ -1308,19 +1293,11 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                                                      cpu_bus_post_id(state, imm8_1);
 													 break;
 										case CPU_OPCODE_MOVPR: imm5 = (instr1 & CPU_MOVR_PAGE_MASK) >> CPU_PC_MID_SHIFT;
-												 if (eps_variant_is_9500(cpu_variant(state)) && state->pc == 0x10031u && cpu_bus_read_internal(state, REG_FSR0) >= 4u && cpu_bus_read_internal(state, REG_FSR0) <= 10u)
-													 fprintf(stderr, "[EPS9500 movpr] before PC=%05X PCREG=%02X%02X%02X SP=%02X FSR0=%02X BSR=%02X POST=%02X\n", state->pc, cpu_bus_read_internal(state, REG_PCH), cpu_bus_read_internal(state, REG_PCM), cpu_bus_read_internal(state, REG_PCL), cpu_bus_read_internal(state, REG_STKPTR), cpu_bus_read_internal(state, REG_FSR0), cpu_bus_read_internal(state, REG_BSR), cpu_bus_read_internal(state, eps_reg_postid(cpu_variant(state))));
-															 temp8_1 = cpu_bus_read(state, imm5);
-												 if (eps_variant_is_9500(cpu_variant(state)) && state->pc == 0x10031u && cpu_bus_read_internal(state, REG_FSR0) >= 4u && cpu_bus_read_internal(state, REG_FSR0) <= 10u)
-																 fprintf(stderr, "[EPS9500 movpr] read=%02X SP=%02X FSR0=%02X\n", temp8_1, cpu_bus_read_internal(state, REG_STKPTR), cpu_bus_read_internal(state, REG_FSR0));
-															 cpu_bus_write(state, imm8_1, temp8_1);
-												 if (eps_variant_is_9500(cpu_variant(state)) && state->pc == 0x10031u && cpu_bus_read_internal(state, REG_FSR0) >= 4u && cpu_bus_read_internal(state, REG_FSR0) <= 10u)
-																 fprintf(stderr, "[EPS9500 movpr] wrote SP=%02X FSR0=%02X\n", cpu_bus_read_internal(state, REG_STKPTR), cpu_bus_read_internal(state, REG_FSR0));
-															 cpu_bus_post_id(state, imm5);
-															 cpu_bus_post_id(state, imm8_1);
-												 if (eps_variant_is_9500(cpu_variant(state)) && state->pc == 0x10031u && cpu_bus_read_internal(state, REG_FSR0) >= 4u && cpu_bus_read_internal(state, REG_FSR0) <= 10u)
-																 fprintf(stderr, "[EPS9500 movpr] post SP=%02X FSR0=%02X\n", cpu_bus_read_internal(state, REG_STKPTR), cpu_bus_read_internal(state, REG_FSR0));
-															 break;
+													 temp8_1 = cpu_bus_read(state, imm5);
+													 cpu_bus_write(state, imm8_1, temp8_1);
+													 cpu_bus_post_id(state, imm5);
+													 cpu_bus_post_id(state, imm8_1);
+													 break;
 										default:
 											core_diag_printf_state(&state->diag, "[Warning] Invalid instruction @ %4xh!\n", state->pc);
 											break;

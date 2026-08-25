@@ -155,6 +155,10 @@ static uint8_t mmio_read_indf0(struct mmio_state *state) {
 
 	uint8_t byte = 0;
 	const uint8_t target = state->regs[REG_FSR0];
+	/* WBK selection is applied after INDF0 resolves its SFR target. */
+	if (mmio_wbk_register_selected(state, target)) {
+		return state->ram_wbk[mmio_wbk_index(target)];
+	}
 	if (!mmio_read_peripheral(state, target, &byte)) {
 		byte = state->regs[target];
 	}

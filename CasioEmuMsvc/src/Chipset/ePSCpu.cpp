@@ -16,7 +16,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -341,10 +340,6 @@ namespace casioemu {
 		++instruction_count_;
 
 		const uint32_t pc_after = state_->cpu.pc;
-		if (variant_ == EpsVariant::Eps9500 && pc_after == 0 && pc_before != 0) {
-			std::fprintf(stderr, "[EPS9500 diag] control reached zero from PC=%05X instr=%04X SP=%02X\n",
-				pc_before, word, state_->mmio.regs[REG_STKPTR]);
-		}
 		uint8_t elapsed_cycles = base_cycles;
 		if (elapsed_cycles == 1 && pc_after != pc_before + EpsInstructionWords(word, variant_))
 			elapsed_cycles = 2; // ePS6800 control-flow / PC-write penalty.
