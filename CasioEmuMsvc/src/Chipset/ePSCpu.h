@@ -36,7 +36,8 @@ namespace casioemu {
 
 	enum class EpsVariant : uint8_t {
 		Eps6800,
-		Eps6009
+		Eps6009,
+		Eps9500
 	};
 
 	struct Eps6800LcdControl {

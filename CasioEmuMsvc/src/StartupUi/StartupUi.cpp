@@ -892,6 +892,9 @@ namespace casioemu {
 							case HW_EPS6009:
 								mod.type = "EPS6009";
 								break;
+							case HW_EPS9500:
+								mod.type = "EPS9500";
+								break;
 							default:
 								mod.type = "Unknown";
 								break;

@@ -280,6 +280,16 @@ static void mmio_report_bad_access(struct mmio_state *state, const char *access,
 }
 
 static uint8_t mmio_filter_register_write(const struct mmio_state *state, uint8_t addr, uint8_t byte) {
+	if (eps_variant_is_9500(state->variant) &&
+		(addr == REG_FSR1 || addr == REG_FSR2)) {
+		/* The mode-4 SFR writer in the official ePS9500 core forces the
+		 * RAM-select bit for both extended file-select registers. */
+		return (uint8_t)(byte | MMIO_RAM_SELECT_MASK);
+	}
+	if (eps_variant_is_9500(state->variant) &&
+		(addr == REG_BSR || addr == REG_BSR1 || addr == REG_BSR2)) {
+		return (uint8_t)(byte & MMIO_RAM_PAGE_MASK);
+	}
 	if (eps_variant_is_6009(state->variant) && addr == REG_FSR1) {
 		/* EPS6009 FSR1 addresses banked RAM only; bit 7 is fixed to one. */
 		return (uint8_t)(byte | MMIO_RAM_SELECT_MASK);

@@ -38,7 +38,11 @@ static bool kbd_cpu_is_sleep_repeating(const struct kbd_state *state) {
 }
 
 static bool kbd_cpu_accepts_pending_press(const struct kbd_state *state) {
-	if (eps_variant_is_6009(state->mmio->variant)) {
+	if (eps_variant_is_6009(state->mmio->variant) ||
+		eps_variant_is_9500(state->mmio->variant)) {
+		/* ePS9500 SLEP advances PC before entering Sleep/Idle, unlike the
+		 * legacy ePS6800 repeat-at-SLEP implementation.  It must therefore
+		 * accept a matrix edge from the explicit CPU mode as ePS6009 does. */
 		return state->cpu->mode == CPU_MODE_SLEEP ||
 			state->cpu->mode == CPU_MODE_IDLE ||
 			kbd_cpu_is_sleep_repeating(state);
@@ -59,7 +63,10 @@ static uint8_t kbd_scan_row_mask(uint8_t row) {
 }
 
 static uint8_t kbd_key_input_mask(const struct kbd_state *state) {
-	return eps_variant_is_6009(state->mmio->variant) ? KBD_EPS6009_PORTA_KEY_MASK : KBD_KEY_COLUMNS_MASK;
+	if (eps_variant_is_6009(state->mmio->variant))
+		return KBD_EPS6009_PORTA_KEY_MASK;
+	/* Official sub_4255B0 drives PA0..PA7 as matrix inputs in core mode 4. */
+	return eps_variant_is_9500(state->mmio->variant) ? 0xffu : KBD_KEY_COLUMNS_MASK;
 }
 
 /*
@@ -138,9 +145,11 @@ static uint8_t kbd_get_pa(const struct kbd_state *state) {
 	uint8_t input = kbd_get_matrix(state);
 	uint8_t pa = (input & state->reg[REG_DCRA]) |
 		(state->porta_latch & ~state->reg[REG_DCRA]);
-	/* PA7 is the dedicated active-low ON input.  Unlike PA0-PA6 matrix
+	/* PA7 is the dedicated active-low ON input. Unlike PA0-PA6 matrix
 	 * contacts, its physical level remains readable when firmware changes
-	 * the ordinary Port A GPIO direction during shutdown. */
+	 * the ordinary Port A GPIO direction during shutdown. Official ePS9500
+	 * sub_4077D0/sub_4255B0 drives PA7 directly for On/C; PB0 is the paired
+	 * host event field, not a reason to route PA7 through the ordinary scan. */
 	if (state->on_pressed)
 		pa &= (uint8_t)~KBD_ON_COLUMN_MASK;
 	else
@@ -322,6 +331,7 @@ uint8_t kbd_read_byte_state(struct kbd_state *state, uint8_t addr) {
 			break;
 		case REG_PORTB:
 			byte = state->portb_latch;
+			state->reg[REG_PORTB] = byte;
 			break;
 		case REG_PORTC:
 			byte = (uint8_t)(
@@ -456,12 +466,11 @@ static void kbd_process_pending_on_press(struct kbd_state *state, uint32_t cycle
 	if (state->on_pending_down) {
 		if (kbd_countdown_elapsed(&state->on_press_cycles, cycles)) {
 			state->on_pressed = true;
-			/*
-			 * ON is the independent active-low PA7 input, not a matrix
-			 * switch.  It wakes the CPU and also follows the normal PA
-			 * interrupt path so firmware can distinguish plain ON from
-			 * held-key combinations such as SHIFT+7+ON.
-			 */
+			/* The official mode-4 host writes the PA7 level into SFR 31h before
+			 * waking the interpreter. Some ROM bit-test paths sample the latched
+			 * SFR directly rather than invoking the GPIO read callback. */
+			if (eps_variant_is_9500(state->mmio->variant))
+				kbd_update_porta(state);
 			kbd_cpu_wake(state, WAKE_ON);
 			kbd_trigger_press(state, KBD_ON_COLUMN_MASK);
 			state->on_pending_down = false;
@@ -491,6 +500,8 @@ static void kbd_process_pending_on_release(struct kbd_state *state, uint32_t cyc
 	if (state->on_pending_up && !state->on_pending_down &&
 		kbd_countdown_elapsed(&state->on_press_cycles, cycles)) {
 		state->on_pressed = false;
+		if (eps_variant_is_9500(state->mmio->variant))
+			kbd_update_porta(state);
 		state->on_pending_up = false;
 	}
 }
@@ -550,6 +561,10 @@ void kbd_tick_state(struct kbd_state *state, uint32_t cycles) {
 	kbd_process_pending_press(state);
 	kbd_process_pending_key_releases(state, cycles);
 	kbd_process_pending_press(state);
+	/* sub_4255B0 continuously reapplies the active mode-4 host key level;
+	 * firmware GPIO writes must not permanently erase a held On/C input. */
+	if (eps_variant_is_9500(state->mmio->variant) && state->on_pressed)
+		kbd_update_porta(state);
 	kbd_sync_eps6009_inputs(state);
 }
 

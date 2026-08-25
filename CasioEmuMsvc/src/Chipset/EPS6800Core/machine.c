@@ -67,6 +67,28 @@ void machine_state_reset(struct machine_state *state) {
 			kbd_write_byte_state(&state->kbd, eps_reg_porta(state->mmio.variant), 0xffu);
 			kbd_write_byte_state(&state->kbd, eps_reg_portb(state->mmio.variant), 0xffu);
 		}
+		else if (eps_variant_is_9500(state->mmio.variant)) {
+			/* Official EL-W531TL CIce::Reset core-mode-4 branch
+			 * (sub_422F80).  sub_425C20 only performs the preceding low-level
+			 * SFR clear; these are the final values visible to firmware. */
+			const uint8_t cpucon = 0x10u | (uint8_t)((config_word >> 9) & 1u);
+			mmio_write_byte_internal_state(&state->mmio,
+				eps_reg_cpucon(state->mmio.variant), cpucon);
+			kbd_write_byte_state(&state->kbd, REG_STBCON, 0x20u);
+			kbd_write_byte_state(&state->kbd, REG_PORTA, 0xffu);
+			kbd_write_byte_state(&state->kbd, REG_PACON, 0x00u);
+			kbd_write_byte_state(&state->kbd, REG_DCRA, 0xffu);
+			kbd_write_byte_state(&state->kbd, REG_PORTB, 0xffu);
+			kbd_write_byte_state(&state->kbd, REG_PBCON, 0x00u);
+			kbd_write_byte_state(&state->kbd, REG_DCRB, 0xffu);
+			kbd_write_byte_state(&state->kbd, REG_PORTC, 0xffu);
+			kbd_write_byte_state(&state->kbd, REG_PCCON, 0x00u);
+			kbd_write_byte_state(&state->kbd, REG_DCRC, 0xffu);
+			kbd_write_byte_state(&state->kbd,
+				eps_reg_pawake(state->mmio.variant), 0x00u);
+			lcd_write_byte_state(&state->lcd, eps_reg_postid(state->mmio.variant),
+				BIT_FSR0ID | BIT_FSR1ID | BIT_LCDID | BIT_FSR2ID);
+		}
 		else {
 			uint8_t reset_value = 0x10u | (uint8_t)((config_word >> 9) & 1u);
 			mmio_write_byte_internal_state(&state->mmio, eps_reg_cpucon(state->mmio.variant), reset_value);

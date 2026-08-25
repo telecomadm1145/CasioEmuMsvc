@@ -755,7 +755,7 @@ namespace casioemu {
 		int status_ink_alpha_off = 0;
 
 		int SpriteCount() const {
-			if constexpr (hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009)
+			if constexpr (IsEpsFamily(hardware_id))
 				return static_cast<int>(emulator.ModelDefinition.status_indicators.size()) + 1;
 			return SPR_MAX;
 		}
@@ -866,7 +866,7 @@ namespace casioemu {
 		Screen(Emulator& emu)
 			: Peripheral(emu) {
 #if !defined(TEST_BUILD) && !defined(__EMSCRIPTEN__)
-			if constexpr (hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009) {
+			if constexpr (IsEpsFamily(hardware_id)) {
 				eps_screen_thread_running.store(true, std::memory_order_release);
 				eps_screen_thread = std::thread([this]() {
 					while (eps_screen_thread_running.load(std::memory_order_acquire)) {
@@ -892,7 +892,7 @@ namespace casioemu {
 #endif
 		}
 		~Screen() {
-			if constexpr (hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009) {
+			if constexpr (IsEpsFamily(hardware_id)) {
 				eps_screen_thread_running.store(false, std::memory_order_release);
 				if (eps_screen_thread.joinable())
 					eps_screen_thread.join();
@@ -920,7 +920,7 @@ namespace casioemu {
 		void UpdateFrameAlpha() override {
 #ifdef __EMSCRIPTEN__
 			tick();
-			if constexpr (hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009) {
+			if constexpr (IsEpsFamily(hardware_id)) {
 				std::lock_guard<std::mutex> lock(eps_screen_alpha_mutex);
 				std::copy(eps_screen_ink_alpha.begin(), eps_screen_ink_alpha.end(), screen_ink_alpha);
 			}
@@ -929,12 +929,13 @@ namespace casioemu {
 		int GetFrameWidth() const override {
 			if constexpr (hardware_id == HW_EPS6009)
 				return std::max(1, emulator.ModelDefinition.screen_width);
-			return hardware_id == HW_EPS6800 ? 96 : 192;
+			return hardware_id == HW_EPS6800 || hardware_id == HW_EPS9500 ? 96 : 192;
 		}
 		int GetFrameHeight() const override {
 			if constexpr (hardware_id == HW_EPS6009)
 				return std::max(1, emulator.ModelDefinition.screen_height);
-			return hardware_id == HW_FX_5800P || hardware_id == HW_ES_PLUS || hardware_id == HW_EPS6800 ? 32 : 64;
+			return hardware_id == HW_FX_5800P || hardware_id == HW_ES_PLUS ||
+				hardware_id == HW_EPS6800 || hardware_id == HW_EPS9500 ? 32 : 64;
 		}
 		void WriteFrameRgba(uint8_t* out, int r, int g, int b) const override {
 			if (!out) return;
@@ -1100,6 +1101,42 @@ namespace casioemu {
 					}
 				}
 
+				const auto& status_indicators = emulator.ModelDefinition.status_indicators;
+				for (size_t ix = 0; ix < status_indicators.size(); ++ix) {
+					const auto& indicator = status_indicators[ix];
+					const bool on = indicator.byte_offset < decoded.status.size() &&
+						(decoded.status[indicator.byte_offset] & (1u << indicator.bit)) != 0;
+					auto& alpha = eps_screen_ink_alpha[ix];
+					alpha = alpha * transition_ratio +
+						(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
+				}
+				return;
+			}
+			else if (hardware_id == HW_EPS9500) {
+				ratio = 0.80f;
+				std::array<uint8_t, EPS9500_LCD_RAW_SIZE> lcd{};
+				Eps6800LcdControl control{};
+				if (!emulator.chipset.epscpu ||
+					emulator.chipset.epscpu->CopyLcd(lcd.data(), lcd.size(), &control) != lcd.size())
+					return;
+				float ink_alpha_on = Eps6800ActiveAlpha(control.contrast);
+				float ink_alpha_off = Eps6800InactiveAlpha(control.contrast);
+				ink_alpha_off = screen_residual_enabled ? ink_alpha_off * screen_residual_alpha_scale : 0.0f;
+				if (!control.visible()) {
+					ink_alpha_on = 0.0f;
+					ink_alpha_off = 0.0f;
+				}
+				const float transition_ratio = screen_residual_enabled ? ratio : 0.0f;
+				std::lock_guard<std::mutex> lock(eps_screen_alpha_mutex);
+				const auto decoded = DecodeEps9500Display(lcd.data(), lcd.size());
+				for (int y = 0; y < static_cast<int>(EPS9500_LCD_HEIGHT); ++y) {
+					for (int x = 0; x < static_cast<int>(EPS9500_LCD_WIDTH); ++x) {
+						const bool on = decoded.pixels[y * EPS9500_LCD_WIDTH + x] != 0;
+						auto& alpha = eps_screen_ink_alpha[(y + 1) * 192 + x];
+						alpha = alpha * transition_ratio +
+							(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
+					}
+				}
 				const auto& status_indicators = emulator.ModelDefinition.status_indicators;
 				for (size_t ix = 0; ix < status_indicators.size(); ++ix) {
 					const auto& indicator = status_indicators[ix];
@@ -1484,6 +1521,17 @@ namespace casioemu {
 	const int Screen<HW_EPS6009>::SPR_MAX = 1;
 
 	template <>
+	const int Screen<HW_EPS9500>::N_ROW = 32;
+	template <>
+	const int Screen<HW_EPS9500>::ROW_SIZE = 16;
+	template <>
+	const int Screen<HW_EPS9500>::OFFSET = 16;
+	template <>
+	const int Screen<HW_EPS9500>::ROW_SIZE_DISP = 12;
+	template <>
+	const int Screen<HW_EPS9500>::SPR_MAX = 1;
+
+	template <>
 	const SpriteBitmap Screen<HW_CLASSWIZ_II>::sprite_bitmap[] = {
 		{"rsd_pixel", 0, 0},
 		{"rsd_s", 0x01, 0x01},
@@ -1584,6 +1632,10 @@ namespace casioemu {
 	const SpriteBitmap Screen<HW_EPS6009>::sprite_bitmap[] = {
 		{"rsd_pixel", 0, 0} };
 
+	template <>
+	const SpriteBitmap Screen<HW_EPS9500>::sprite_bitmap[] = {
+		{"rsd_pixel", 0, 0} };
+
 	template <HardwareId hardware_id>
 	void Screen<hardware_id>::Initialise() {
 		if (!inited) {
@@ -1599,7 +1651,7 @@ namespace casioemu {
 			for (int ix = 0; ix != sprite_count; ++ix) {
 				const char* static_name = nullptr;
 				std::string dynamic_name;
-				if constexpr (hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009) {
+				if constexpr (IsEpsFamily(hardware_id)) {
 					dynamic_name = ix == 0 ? "rsd_pixel" : emulator.ModelDefinition.status_indicators[static_cast<size_t>(ix - 1)].sprite_name;
 				}
 				else {
@@ -1647,7 +1699,7 @@ namespace casioemu {
 			}
 			inited = true;
 		}
-		if constexpr (hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009) {
+		if constexpr (IsEpsFamily(hardware_id)) {
 			// CPU-visible LCD registers and RAM are owned by EPS6800Core. This
 			// peripheral is only the CasioEmuMsvc presentation/resource layer.
 			return;
@@ -3247,10 +3299,10 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 #ifdef __EMSCRIPTEN__
 		tick();
 #elif defined(TEST_BUILD)
-		if constexpr (hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009)
+		if constexpr (IsEpsFamily(hardware_id))
 			tick();
 #endif
-		if constexpr (hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009) {
+		if constexpr (IsEpsFamily(hardware_id)) {
 			std::lock_guard<std::mutex> lock(eps_screen_alpha_mutex);
 			std::copy(eps_screen_ink_alpha.begin(), eps_screen_ink_alpha.end(), screen_ink_alpha);
 		}
@@ -3409,6 +3461,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			return new Screen<HW_EPS6800>(emulator);
 		case HW_EPS6009:
 			return new Screen<HW_EPS6009>(emulator);
+		case HW_EPS9500:
+			return new Screen<HW_EPS9500>(emulator);
 		default:
 			PANIC("Unknown hardware id\n");
 		}

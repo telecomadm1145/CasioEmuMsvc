@@ -96,8 +96,26 @@ void machine_state_debug_get_snapshot(
 	mmio_write_byte_state(&state->mmio, REG_POSTID, postid);
 	mmio_suppress_debug_access_state(&state->mmio, false);
 	memcpy(snapshot->wbk_registers, state->mmio.ram_wbk, sizeof(snapshot->wbk_registers));
-	memcpy(snapshot->stack, state->cpu.stack, sizeof(snapshot->stack));
-	snapshot->stack_pointer = snapshot->registers[REG_STKPTR] & (MACHINE_DEBUG_STACK_DEPTH - 1);
+	if (eps_variant_is_9500(state->mmio.variant)) {
+		const uint8_t raw_sp = snapshot->registers[REG_STKPTR];
+		const uint8_t depth = (uint8_t)(0u - raw_sp) / 2u;
+		const uint8_t copied = depth < MACHINE_DEBUG_STACK_DEPTH
+			? depth : MACHINE_DEBUG_STACK_DEPTH;
+		uint8_t i;
+		memset(snapshot->stack, 0, sizeof(snapshot->stack));
+		/* Present the stack in the adapter's conventional oldest-to-newest
+		 * order even though ePS9500 stores the newest return at raw STKPTR. */
+		for (i = 0; i < copied; ++i) {
+			const uint8_t raw_index = (uint8_t)(0xfeu - 2u * i);
+			snapshot->stack[i] = state->cpu.stack[raw_index];
+		}
+		snapshot->stack_pointer = copied;
+	}
+	else {
+		memcpy(snapshot->stack, state->cpu.stack, sizeof(snapshot->stack));
+		snapshot->stack_pointer = snapshot->registers[REG_STKPTR] &
+			(MACHINE_DEBUG_STACK_DEPTH - 1);
+	}
 }
 
 uint8_t machine_state_debug_read_byte(struct machine_state *state, uint8_t addr) {
@@ -123,7 +141,8 @@ void machine_state_debug_write_byte(struct machine_state *state, uint8_t addr, u
 		byte &= 0x3f;
 		break;
 	case REG_STKPTR:
-		byte &= MACHINE_DEBUG_STACK_DEPTH - 1;
+		if (!eps_variant_is_9500(state->mmio.variant))
+			byte &= MACHINE_DEBUG_STACK_DEPTH - 1;
 		break;
 	case REG_CPUCON:
 		byte &= BIT_WBK | BIT_GLINT | BIT_MS1 | BIT_MS0;

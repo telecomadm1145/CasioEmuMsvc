@@ -25,6 +25,14 @@ static uint16_t lcd_data_address(const struct lcd_state *state) {
 	if (eps_variant_is_6009(state->mmio->variant)) {
 		return state->reg[eps_reg_lcdarl(state->mmio->variant)] % (uint16_t)eps_lcd_raw_size(state->mmio->variant);
 	}
+	if (eps_variant_is_9500(state->mmio->variant)) {
+		/* Official mode-4 sub_420F00/sub_422870 address LCDDAT as
+		 * LCDARL + 98 * (LCDARH & 3), directly in the 392-byte store. */
+		if (state->reg[REG_LCDARL] >= 98u)
+			return (uint16_t)eps_lcd_raw_size(state->mmio->variant);
+		return (uint16_t)(state->reg[REG_LCDARL] +
+			98u * (state->reg[REG_LCDARH] & MASK_LCD_ADDRESS_HIGH));
+	}
 	return (uint16_t)(((uint16_t)(state->reg[REG_LCDARH] & MASK_LCD_ADDRESS_HIGH) << LCD_ADDRH_SHIFT) |
 		state->reg[REG_LCDARL]);
 }
@@ -58,8 +66,10 @@ static void lcd_decrement_address(struct lcd_state *state) {
 uint8_t lcd_read_byte_state(struct lcd_state *state, uint8_t addr) {
 	uint8_t byte;
 	if (addr < LCD_REG_COUNT) {
-		if (addr == eps_reg_lcddat(state->mmio->variant))
-			return state->fb[lcd_data_address(state)];
+		if (addr == eps_reg_lcddat(state->mmio->variant)) {
+			const uint16_t data_addr = lcd_data_address(state);
+			return data_addr < eps_lcd_raw_size(state->mmio->variant) ? state->fb[data_addr] : 0;
+		}
 		switch (addr) {
 		case REG_LCDDAT:
 			byte = state->fb[lcd_data_address(state)];
@@ -96,7 +106,9 @@ void lcd_write_byte_state(struct lcd_state *state, uint8_t addr, uint8_t byte) {
 		/* Keep the debugger's flat SFR view synchronized with the peripheral. */
 		lcd_bus_write_internal(state, addr, byte);
 		if (addr == eps_reg_lcddat(state->mmio->variant)) {
-			state->fb[lcd_data_address(state)] = byte;
+			const uint16_t data_addr = lcd_data_address(state);
+			if (data_addr < eps_lcd_raw_size(state->mmio->variant))
+				state->fb[data_addr] = byte;
 			return;
 		}
 		switch (addr) {
@@ -112,6 +124,8 @@ void lcd_write_byte_state(struct lcd_state *state, uint8_t addr, uint8_t byte) {
 
 uint8_t lcd_ram_read_byte_state(const struct lcd_state *state, uint16_t addr) {
 	if (eps_variant_is_6009(state->mmio->variant))
+		return addr < eps_lcd_raw_size(state->mmio->variant) ? state->fb[addr] : LCD_INVALID_READ_VALUE;
+	if (eps_variant_is_9500(state->mmio->variant))
 		return addr < eps_lcd_raw_size(state->mmio->variant) ? state->fb[addr] : LCD_INVALID_READ_VALUE;
 	return state->fb[lcd_visible_address(addr)];
 }

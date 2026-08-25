@@ -352,11 +352,15 @@ namespace casioemu {
 		}
 
 		void ValidateStatusIndicators(const ModelInfo& model) {
-			if (model.hardware_id != HW_EPS6800)
+			if (model.hardware_id != HW_EPS6800 && model.hardware_id != HW_EPS9500)
 				return;
+			const size_t status_size = model.hardware_id == HW_EPS9500
+				? EPS9500_STATUS_SIZE
+				: EPS6800_STATUS_SIZE;
+			const char* hardware_name = model.hardware_id == HW_EPS9500 ? "EPS9500" : "EPS6800";
 			for (const auto& indicator : model.status_indicators) {
-				if (indicator.byte_offset >= EPS6800_STATUS_SIZE)
-					throw std::runtime_error("EPS6800 status byte is outside the 12-byte LCD status area for sprite " + indicator.sprite_name + ".");
+				if (indicator.byte_offset >= status_size)
+					throw std::runtime_error(std::string(hardware_name) + " status byte is outside the LCD status area for sprite " + indicator.sprite_name + ".");
 			}
 		}
 	}
@@ -514,8 +518,8 @@ namespace casioemu {
 					const SpriteInfo interface_sprite = RequireBoardInterfaceSprite(value);
 					model = LoadSvgBoardModelInfo(model_path, hardware_id, requested_board, requested_interface, requested_rom, requested_flash, interface_sprite.src, interface_sprite.dest, display_w, display_h, screen_scale_y, requested_status_indexes);
 					ApplyModelInfoJsonValue(value, model, false);
-					if (hardware_id == HW_EPS6800 && model.status_indicators.size() != requested_status_indexes.size())
-						throw std::runtime_error("EPS6800 board SVG must define data-status-byte and data-status-bit for every status sprite.");
+					if ((hardware_id == HW_EPS6800 || hardware_id == HW_EPS9500) && model.status_indicators.size() != requested_status_indexes.size())
+						throw std::runtime_error("EPS board SVG must define data-status-byte and data-status-bit for every status sprite.");
 				}
 				else {
 					RequireSpriteModelFields(value);
@@ -564,8 +568,8 @@ namespace casioemu {
 					requested_flash, interface_sprite.src, interface_sprite.dest, display_w, display_h, screen_scale_y,
 					requested_status_indexes);
 				ApplyModelInfoJsonValue(value, model, false);
-				if (hardware_id == HW_EPS6800 && model.status_indicators.size() != requested_status_indexes.size())
-					throw std::runtime_error("EPS6800 board SVG must define data-status-byte and data-status-bit for every status sprite.");
+				if ((hardware_id == HW_EPS6800 || hardware_id == HW_EPS9500) && model.status_indicators.size() != requested_status_indexes.size())
+					throw std::runtime_error("EPS board SVG must define data-status-byte and data-status-bit for every status sprite.");
 			}
 			else {
 				RequireSpriteModelFields(value);

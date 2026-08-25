@@ -683,6 +683,62 @@ namespace {
 		return machine.ReadByte(kPortC) == 0xf0;
 	}
 
+	bool Eps9500KeyboardAndStackSmoke() {
+		constexpr uint8_t kAccumulator = 0x0a;
+		constexpr uint8_t kDirectionA = 0x33;
+		constexpr uint8_t kPaWake = 0x34;
+		constexpr uint8_t kDirectionB = 0x39;
+		constexpr uint8_t kPortB = 0x37;
+
+		std::vector<uint8_t> wake_rom(0x30000, 0);
+		SetPackedRomWord(wake_rom, 0, 0x0002); // SLEP; ePS9500 resumes at word 1.
+		SetPackedRomWord(wake_rom, 1, 0x4e5a); // MOV A,#5Ah after matrix wake.
+		casioemu::ePSCPU wake_machine(casioemu::EpsVariant::Eps9500);
+		if (!wake_machine.LoadRom(wake_rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+			return false;
+		wake_machine.Reset();
+		if (wake_machine.ReadByte(0x0f) != 0xc0 ||
+			(wake_machine.ReadByte(0x20) & 0x10) == 0 ||
+			wake_machine.ReadByte(0x30) != 0x20 ||
+			wake_machine.ReadByte(0x31) != 0xff ||
+			wake_machine.ReadByte(0x37) != 0xff ||
+			wake_machine.ReadByte(0x3a) != 0xff ||
+			wake_machine.ReadByte(0x3c) != 0xff)
+			return false;
+		wake_machine.WriteByte(0x30, 0x80); // STBCON.KE
+		wake_machine.WriteByte(kDirectionA, 0xff);
+		wake_machine.WriteByte(kDirectionB, 0x00);
+		wake_machine.WriteByte(kPortB, 0xfe); // Select matrix row PB0.
+		wake_machine.WriteByte(kPaWake, 0x01);
+		wake_machine.Next();
+		if ((wake_machine.PC() >> 1) != 1)
+			return false;
+		wake_machine.KeyDown(0);
+		for (int i = 0; i < 1100; ++i)
+			wake_machine.Next();
+		if (wake_machine.ReadByte(kAccumulator) != 0x5a)
+			return false;
+
+		std::vector<uint8_t> stack_rom(0x30000, 0);
+		SetPackedRomWord(stack_rom, 0, 0xe004); // SCALL word 4.
+		SetPackedRomWord(stack_rom, 1, 0x0000); // Return target.
+		SetPackedRomWord(stack_rom, 4, 0x2bfe); // RET.
+		casioemu::ePSCPU stack_machine(casioemu::EpsVariant::Eps9500);
+		if (!stack_machine.LoadRom(stack_rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+			return false;
+		stack_machine.Reset();
+		stack_machine.Next();
+		const auto snapshot = stack_machine.DebugSnapshot();
+		if (stack_machine.ReadByte(0x06) != 0xfe || snapshot.stack_pointer != 1 ||
+			snapshot.stack[0] != 1 || stack_machine.GetBacktrace().find("<- 1") == std::string::npos)
+			return false;
+		if (!stack_machine.RequestStepOut() || !stack_machine.RunFrame() ||
+			stack_machine.LastDebugStop().reason != casioemu::Eps6800DebugStopReason::StepOut ||
+			(stack_machine.ProgramCounter() >> 1) != 1)
+			return false;
+		return true;
+	}
+
 	bool Eps6009PortBInputSmoke() {
 		constexpr uint8_t kPortB = 0x11;
 		constexpr uint8_t kPortBControl = 0x2d;
@@ -966,6 +1022,10 @@ int main(int argc, char** argv) {
 		std::cerr << "EPS6800 keyboard matrix/ghosting regression\n";
 		return 1;
 	}
+	if (!Eps9500KeyboardAndStackSmoke()) {
+		std::cerr << "EPS9500 keyboard/stack regression\n";
+		return 1;
+	}
 	if (!TimerSmoke()) {
 		std::cerr << "EPS6800 timer regression\n";
 		return 1;
@@ -990,6 +1050,51 @@ int main(int argc, char** argv) {
 		std::cerr << "EPS6800 hook/RAM persistence regression\n";
 		return 1;
 	}
+
+	/* Official EL_W506T.SegLcd geometry: four 98-byte pages. Device zero
+	 * carries one annunciator byte, devices 1..96 carry dot columns, and
+	 * device 97 is exported padding. Keep the status bus independent from
+	 * the 96x32 dot-matrix layer. */
+	std::array<uint8_t, casioemu::EPS9500_LCD_RAW_SIZE> eps9500_lcd{};
+	eps9500_lcd[0] = 0x20;
+	eps9500_lcd[casioemu::EPS9500_LCD_DEVICE_COUNT] = 0xe0;
+	eps9500_lcd[2 * casioemu::EPS9500_LCD_DEVICE_COUNT] = 0xff;
+	eps9500_lcd[3 * casioemu::EPS9500_LCD_DEVICE_COUNT] = 0x81;
+	eps9500_lcd[casioemu::EPS9500_LCD_VISIBLE_DEVICE_FIRST] = 0x01;
+	eps9500_lcd[3 * casioemu::EPS9500_LCD_DEVICE_COUNT +
+		casioemu::EPS9500_LCD_VISIBLE_DEVICE_FIRST + 95] = 0x80;
+	for (size_t page = 0; page < casioemu::EPS9500_LCD_PAGE_COUNT; ++page)
+		eps9500_lcd[(page + 1) * casioemu::EPS9500_LCD_DEVICE_COUNT - 1] = 0xff;
+	const auto eps9500_frame = casioemu::DecodeEps9500Display(eps9500_lcd.data(), eps9500_lcd.size());
+	const size_t eps9500_lit_pixels = static_cast<size_t>(std::count(
+		eps9500_frame.pixels.begin(), eps9500_frame.pixels.end(), uint8_t{1}));
+	if (eps9500_frame.status != std::array<uint8_t, 4>{0x20, 0xe0, 0xff, 0x81} ||
+		eps9500_frame.pixels[31 * casioemu::EPS9500_LCD_WIDTH] != 1 ||
+		eps9500_frame.pixels[95] != 1 || eps9500_lit_pixels != 2) {
+		std::cerr << "EPS9500 status/dot-matrix mapping regression\n";
+		return 1;
+	}
+
+	casioemu::ePSCPU eps9500_lcd_machine(casioemu::EpsVariant::Eps9500);
+	eps9500_lcd_machine.Reset();
+	eps9500_lcd_machine.WriteByte(0x22, 0x00);
+	eps9500_lcd_machine.WriteByte(0x23, 0x02);
+	eps9500_lcd_machine.WriteByte(0x0e, 0xa5);
+	eps9500_lcd_machine.WriteByte(0x22, 0x61);
+	eps9500_lcd_machine.WriteByte(0x23, 0x03);
+	eps9500_lcd_machine.WriteByte(0x0e, 0x5a);
+	eps9500_lcd_machine.WriteByte(0x22, 0x62);
+	eps9500_lcd_machine.WriteByte(0x23, 0x00);
+	eps9500_lcd_machine.WriteByte(0x0e, 0xff);
+	std::array<uint8_t, casioemu::EPS9500_LCD_RAW_SIZE> eps9500_lcd_copy{};
+	if (eps9500_lcd_machine.CopyLcd(eps9500_lcd_copy.data(), eps9500_lcd_copy.size()) !=
+			eps9500_lcd_copy.size() ||
+		eps9500_lcd_copy[2 * 98] != 0xa5 || eps9500_lcd_copy[3 * 98 + 97] != 0x5a ||
+		eps9500_lcd_machine.ReadByte(0x0e) != 0) {
+		std::cerr << "EPS9500 LCDDAT address mapping regression\n";
+		return 1;
+	}
+
 	if (argc < 2) {
 		std::cout << "EPS6800 synthetic checks passed (no golden ROM provided; "
 			"skipping golden/status/LCD scenarios).\n";

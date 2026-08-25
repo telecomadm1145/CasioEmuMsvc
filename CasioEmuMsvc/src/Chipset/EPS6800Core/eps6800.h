@@ -10,7 +10,10 @@
 
 enum eps_variant {
 	EPS_VARIANT_6800 = 0,
-	EPS_VARIANT_6009 = 1
+	EPS_VARIANT_6009 = 1,
+	/* The EL-W531TL official simulator selects CIce core mode 4, the same
+	 * CPU/SFR family as ePS6800, with a 0x18000-word ROM and 98x4 LCD RAM. */
+	EPS_VARIANT_9500 = 2
 };
 
 enum {
@@ -189,6 +192,10 @@ static inline int eps_variant_is_6009(enum eps_variant variant) {
 	return variant == EPS_VARIANT_6009;
 }
 
+static inline int eps_variant_is_9500(enum eps_variant variant) {
+	return variant == EPS_VARIANT_9500;
+}
+
 static inline uint8_t eps_reg_cpucon(enum eps_variant variant) {
 	return eps_variant_is_6009(variant) ? 0x31u : REG_CPUCON;
 }
@@ -302,7 +309,11 @@ static inline int eps_has_indf2(enum eps_variant variant) {
 }
 
 static inline size_t eps_lcd_raw_size(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x88u : (size_t)(96u * 4u);
+	if (eps_variant_is_6009(variant))
+		return 0x88u;
+	if (eps_variant_is_9500(variant))
+		return (size_t)(98u * 4u);
+	return (size_t)(96u * 4u);
 }
 
 #endif /* FX_EMU_CORE_EPS6800_H */

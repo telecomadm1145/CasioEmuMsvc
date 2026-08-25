@@ -72,8 +72,21 @@ namespace {
 		return word == 0x2bfeu || word == 0x2bffu;
 	}
 
+	uint8_t EpsStackDepth(uint8_t raw_stack_pointer, casioemu::EpsVariant variant) {
+		return variant == casioemu::EpsVariant::Eps9500
+			? static_cast<uint8_t>(0u - raw_stack_pointer) / 2u
+			: raw_stack_pointer & 0x1fu;
+	}
+
 	enum eps_variant ToCoreVariant(casioemu::EpsVariant variant) {
-		return variant == casioemu::EpsVariant::Eps6009 ? EPS_VARIANT_6009 : EPS_VARIANT_6800;
+		switch (variant) {
+		case casioemu::EpsVariant::Eps6009:
+			return EPS_VARIANT_6009;
+		case casioemu::EpsVariant::Eps9500:
+			return EPS_VARIANT_9500;
+		default:
+			return EPS_VARIANT_6800;
+		}
 	}
 
 	uint8_t EpsInstructionWords(uint16_t word, casioemu::EpsVariant variant) {
@@ -309,7 +322,8 @@ namespace casioemu {
 			return true;
 		memory_break_pending_ = false;
 		const uint32_t pc_before = state_->cpu.pc;
-		const uint8_t stack_pointer_before = state_->mmio.regs[REG_STKPTR] & 0x1f;
+		const uint8_t stack_pointer_before = EpsStackDepth(
+			state_->mmio.regs[REG_STKPTR], variant_);
 		const uint8_t interrupt_pending = state_->cpu.int_pending;
 		const uint32_t instruction = machine_state_debug_fetch_instruction(state_, pc_before);
 		const uint16_t word = static_cast<uint16_t>(instruction >> 16);
@@ -327,11 +341,16 @@ namespace casioemu {
 		++instruction_count_;
 
 		const uint32_t pc_after = state_->cpu.pc;
+		if (variant_ == EpsVariant::Eps9500 && pc_after == 0 && pc_before != 0) {
+			std::fprintf(stderr, "[EPS9500 diag] control reached zero from PC=%05X instr=%04X SP=%02X\n",
+				pc_before, word, state_->mmio.regs[REG_STKPTR]);
+		}
 		uint8_t elapsed_cycles = base_cycles;
 		if (elapsed_cycles == 1 && pc_after != pc_before + EpsInstructionWords(word, variant_))
 			elapsed_cycles = 2; // ePS6800 control-flow / PC-write penalty.
 		cycle_count_ += elapsed_cycles;
-		const uint8_t stack_pointer_after = state_->mmio.regs[REG_STKPTR] & 0x1f;
+		const uint8_t stack_pointer_after = EpsStackDepth(
+			state_->mmio.regs[REG_STKPTR], variant_);
 		RecordTraceLocked(pc_before, instruction, pc_after);
 		if (function_hook_ && IsEpsCallInstruction(word)) {
 			function_hook_(pc_after, pc_before + EpsInstructionWords(word, variant_), true,
@@ -460,7 +479,7 @@ namespace casioemu {
 		entry.program_counter = pc_before;
 		entry.instruction = instruction;
 		entry.next_program_counter = pc_after;
-		entry.stack_pointer = state_->mmio.regs[REG_STKPTR] & 0x1f;
+		entry.stack_pointer = EpsStackDepth(state_->mmio.regs[REG_STKPTR], variant_);
 		entry.accumulator = state_->mmio.regs[REG_ACC];
 		entry.status = state_->cpu.status;
 		entry.instruction_count = instruction_count_;
@@ -575,10 +594,18 @@ namespace casioemu {
 
 	std::string ePSCPU::BacktraceLocked() const {
 		std::ostringstream stream;
-		const uint8_t depth = state_->mmio.regs[REG_STKPTR] & 0x1f;
+		const uint8_t raw_stack_pointer = state_->mmio.regs[REG_STKPTR];
+		const uint8_t depth = EpsStackDepth(raw_stack_pointer, variant_);
 		stream << "PC=" << std::hex << state_->cpu.pc;
-		for (uint8_t i = depth; i > 0; --i)
-			stream << " <- " << state_->cpu.stack[i - 1];
+		if (variant_ == EpsVariant::Eps9500) {
+			for (uint8_t i = 0; i < depth; ++i)
+				stream << " <- " << state_->cpu.stack[
+					static_cast<uint8_t>(raw_stack_pointer + 2u * i)];
+		}
+		else {
+			for (uint8_t i = depth; i > 0; --i)
+				stream << " <- " << state_->cpu.stack[i - 1];
+		}
 		return stream.str();
 	}
 
@@ -649,17 +676,21 @@ namespace casioemu {
 		}
 		debug_run_mode_ = DebugRunMode::StepOver;
 		debug_target_pc_ = pc + EpsInstructionWords(word, variant_);
-		debug_target_stack_pointer_ = state_->mmio.regs[REG_STKPTR] & 0x1f;
+		debug_target_stack_pointer_ = EpsStackDepth(
+			state_->mmio.regs[REG_STKPTR], variant_);
 	}
 
 	bool ePSCPU::RequestStepOut() {
 		const std::lock_guard lock(state_mutex_);
-		const uint8_t stack_pointer = state_->mmio.regs[REG_STKPTR] & 0x1f;
+		const uint8_t raw_stack_pointer = state_->mmio.regs[REG_STKPTR];
+		const uint8_t stack_pointer = EpsStackDepth(raw_stack_pointer, variant_);
 		if (stack_pointer == 0)
 			return false;
 		debug_run_mode_ = DebugRunMode::StepOut;
 		debug_target_stack_pointer_ = stack_pointer - 1;
-		debug_target_pc_ = state_->cpu.stack[stack_pointer - 1];
+		debug_target_pc_ = variant_ == EpsVariant::Eps9500
+			? state_->cpu.stack[raw_stack_pointer]
+			: state_->cpu.stack[stack_pointer - 1];
 		honor_execution_breakpoints_ = true;
 		honor_memory_breakpoints_ = true;
 		last_debug_stop_ = {};

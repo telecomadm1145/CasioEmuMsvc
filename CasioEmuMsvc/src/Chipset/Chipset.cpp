@@ -56,7 +56,9 @@ namespace casioemu {
 	}
 
 	void Chipset::SetupEpsCpu() {
-		epscpu = new ePSCPU(emulator.hardware_id == HW_EPS6009 ? EpsVariant::Eps6009 : EpsVariant::Eps6800);
+		const auto variant = emulator.hardware_id == HW_EPS6009 ? EpsVariant::Eps6009 :
+			emulator.hardware_id == HW_EPS9500 ? EpsVariant::Eps9500 : EpsVariant::Eps6800;
+		epscpu = new ePSCPU(variant);
 		auto parse_byte_extra = [&](const char* name, uint8_t fallback) {
 			const auto item = emulator.ModelDefinition.extra.find(name);
 			if (item == emulator.ModelDefinition.extra.end())

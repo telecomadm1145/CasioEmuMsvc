@@ -57,6 +57,8 @@
 | 7 | `HW_TI`          | TI                  |
 | 8 | `HW_SOLARII`     | SOLAR II            |
 | 9 | `HW_EPS6800`     | EPS6800             |
+| 10 | `HW_EPS6009`    | EPS6009             |
+| 11 | `HW_EPS9500`    | EPS9500             |
 
 常见像素屏幕机型组合：
 

@@ -14,6 +14,13 @@ namespace casioemu {
 	constexpr uint8_t EPS6800_CONTRAST_MAX = 0x0f;
 	constexpr uint8_t ESP_CONTRAST_MAX = 0x1f;
 	constexpr float ESP_MIN_SCREEN_BRIGHTNESS = 3.0f;
+	constexpr size_t EPS9500_LCD_DEVICE_COUNT = 98;
+	constexpr size_t EPS9500_LCD_VISIBLE_DEVICE_FIRST = 1;
+	constexpr size_t EPS9500_LCD_WIDTH = 96;
+	constexpr size_t EPS9500_LCD_HEIGHT = 32;
+	constexpr size_t EPS9500_LCD_PAGE_COUNT = 4;
+	constexpr size_t EPS9500_LCD_RAW_SIZE = EPS9500_LCD_DEVICE_COUNT * EPS9500_LCD_PAGE_COUNT;
+	constexpr size_t EPS9500_STATUS_SIZE = EPS9500_LCD_PAGE_COUNT;
 
 	// EPS6800 exposes a four-bit adjustment while the ES Plus controller uses
 	// five bits. Interpolate the EPS value over the complete ES Plus register
@@ -56,6 +63,35 @@ namespace casioemu {
 					}
 					else {
 						frame.pixels[(logical_y - 1) * EPS6800_LCD_WIDTH + x] = 1;
+					}
+				}
+			}
+		}
+		return frame;
+	}
+
+	struct Eps9500DisplayFrame {
+		std::array<uint8_t, EPS9500_STATUS_SIZE> status{};
+		std::array<uint8_t, EPS9500_LCD_WIDTH * EPS9500_LCD_HEIGHT> pixels{};
+	};
+
+	inline Eps9500DisplayFrame DecodeEps9500Display(const uint8_t* lcd, size_t size) {
+		Eps9500DisplayFrame frame{};
+		if (!lcd || size < EPS9500_LCD_RAW_SIZE)
+			return frame;
+
+		/* EL_W506T.SegLcd: SegDevCnt=97. Device 0 carries the 32
+		 * annunciator bits (one byte per page); devices 1..96 carry the
+		 * dot-matrix columns. Bit groups are bottom-to-top. */
+		for (size_t page = 0; page < EPS9500_LCD_PAGE_COUNT; ++page) {
+			frame.status[page] = lcd[page * EPS9500_LCD_DEVICE_COUNT];
+			for (size_t x = 0; x < EPS9500_LCD_WIDTH; ++x) {
+				const uint8_t value = lcd[page * EPS9500_LCD_DEVICE_COUNT +
+					EPS9500_LCD_VISIBLE_DEVICE_FIRST + x];
+				for (size_t bit = 0; bit < 8; ++bit) {
+					if (value & (1u << bit)) {
+						const size_t y = EPS9500_LCD_HEIGHT - 1 - (page * 8 + bit);
+						frame.pixels[y * EPS9500_LCD_WIDTH + x] = 1;
 					}
 				}
 			}
