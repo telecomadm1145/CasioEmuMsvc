@@ -133,6 +133,7 @@ namespace casioemu {
 		void UIEvent(SDL_Event& event);
 		void Uninitialise();
 		void PressButton(Button& button, bool stick, SDL_FingerID fingerId);
+		void ResetEpsCpuForPowerButton(Button& button);
 		void PressAt(int x, int y, bool stick, SDL_FingerID fingerId);
 		void ReleaseAt(int x, int y, SDL_FingerID fingerId);
 		void PressButtonByCode(uint8_t code);
@@ -994,37 +995,9 @@ namespace casioemu {
 			return;
 		}
 
-		if (button.type == Button::BT_POWER && IsEpsFamily(emulator.hardware_id)) {
+		if (button.type == Button::BT_POWER && EpsPowerKeyResetsCpu(emulator.hardware_id)) {
 			if (button.pressed && !old_pressed_state) {
-				const bool was_paused = emulator.GetPaused();
-				emulator.SetPaused(true);
-				const bool power_stuck = button.stuck;
-				const SDL_FingerID power_finger_id = button.pressingFingerId;
-				struct HeldButton {
-					size_t index;
-					bool stuck;
-					SDL_FingerID finger_id;
-				};
-				std::vector<HeldButton> held_buttons;
-				for (size_t index = 0; index < std::size(buttons); ++index) {
-					if (buttons[index].pressed && buttons[index].type == Button::BT_BUTTON)
-						held_buttons.push_back({index, buttons[index].stuck,
-							buttons[index].pressingFingerId});
-				}
-				emulator.chipset.Reset();
-				button.pressed = true;
-				button.stuck = power_stuck;
-				button.pressingFingerId = power_finger_id;
-				for (const auto& held : held_buttons) {
-					auto& restored = buttons[held.index];
-					restored.pressed = true;
-					restored.stuck = held.stuck;
-					restored.pressingFingerId = held.finger_id;
-					const int matrix_index = EpsMatrixIndexForButtonCode(restored.code);
-					if (matrix_index >= 0)
-						emulator.chipset.epscpu->RestoreKeyDown(static_cast<uint8_t>(matrix_index));
-				}
-				emulator.SetPaused(was_paused);
+				ResetEpsCpuForPowerButton(button);
 			}
 			return;
 		}
@@ -1062,6 +1035,38 @@ namespace casioemu {
 				}
 			}
 		}
+	}
+
+	void Keyboard::ResetEpsCpuForPowerButton(Button& button) {
+		const bool was_paused = emulator.GetPaused();
+		emulator.SetPaused(true);
+		const bool power_stuck = button.stuck;
+		const SDL_FingerID power_finger_id = button.pressingFingerId;
+		struct HeldButton {
+			size_t index;
+			bool stuck;
+			SDL_FingerID finger_id;
+		};
+		std::vector<HeldButton> held_buttons;
+		for (size_t index = 0; index < std::size(buttons); ++index) {
+			if (buttons[index].pressed && buttons[index].type == Button::BT_BUTTON)
+				held_buttons.push_back({index, buttons[index].stuck,
+					buttons[index].pressingFingerId});
+		}
+		emulator.chipset.Reset();
+		button.pressed = true;
+		button.stuck = power_stuck;
+		button.pressingFingerId = power_finger_id;
+		for (const auto& held : held_buttons) {
+			auto& restored = buttons[held.index];
+			restored.pressed = true;
+			restored.stuck = held.stuck;
+			restored.pressingFingerId = held.finger_id;
+			const int matrix_index = EpsMatrixIndexForButtonCode(restored.code);
+			if (matrix_index >= 0)
+				emulator.chipset.epscpu->RestoreKeyDown(static_cast<uint8_t>(matrix_index));
+		}
+		emulator.SetPaused(was_paused);
 	}
 
 	void Keyboard::PressAt(int x, int y, bool stick, SDL_FingerID fingerId) {

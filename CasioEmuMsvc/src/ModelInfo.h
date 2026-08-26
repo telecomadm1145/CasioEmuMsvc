@@ -40,6 +40,13 @@ namespace casioemu {
 			hardware_id == HW_EPS9500;
 	}
 
+	inline constexpr bool EpsPowerKeyResetsCpu(unsigned short hardware_id) {
+		// ePS6800/ePS6009 models use the legacy host power-key reset path.
+		// ePS9500 exposes ON/C as a dedicated PA7/PB0 input and must not reset
+		// CPU/SFR state when that contact is pressed.
+		return hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009;
+	}
+
 	inline constexpr bool IsEpsSegmentLcd(unsigned short hardware_id) {
 		return hardware_id == HW_EPS6009;
 	}

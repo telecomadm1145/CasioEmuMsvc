@@ -1,5 +1,6 @@
 #include "ePSCpu.h"
 #include "Eps6800Display.h"
+#include "ModelInfo.h"
 
 #include <algorithm>
 #include <array>
@@ -684,11 +685,48 @@ namespace {
 	}
 
 	bool Eps9500KeyboardAndStackSmoke() {
+		static_assert(casioemu::EpsPowerKeyResetsCpu(casioemu::HW_EPS6800));
+		static_assert(casioemu::EpsPowerKeyResetsCpu(casioemu::HW_EPS6009));
+		static_assert(!casioemu::EpsPowerKeyResetsCpu(casioemu::HW_EPS9500));
+
 		constexpr uint8_t kAccumulator = 0x0a;
+		constexpr uint8_t kPortA = 0x31;
 		constexpr uint8_t kDirectionA = 0x33;
 		constexpr uint8_t kPaWake = 0x34;
 		constexpr uint8_t kDirectionB = 0x39;
 		constexpr uint8_t kPortB = 0x37;
+		constexpr uint8_t kPortCControl = 0x3b;
+		constexpr uint8_t kOnMask = 0x80;
+
+		std::vector<uint8_t> on_rom(0x30000, 0);
+		SetPackedRomWord(on_rom, 0, 0x0002); // SLEP; ePS9500 resumes at word 1.
+		SetPackedRomWord(on_rom, 1, 0x4e5a); // MOV A,#5Ah after ON wake.
+		casioemu::ePSCPU on_machine(casioemu::EpsVariant::Eps9500);
+		if (!on_machine.LoadRom(on_rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+			return false;
+		on_machine.Reset();
+		on_machine.WriteByte(kPaWake, 0x00); // ON is a dedicated wake source.
+		on_machine.WriteByte(kPortCControl, 0x5a);
+		on_machine.WriteByte(0x80, 0xa5);
+		on_machine.Next();
+		const uint32_t sleeping_pc = on_machine.ProgramCounter();
+		if ((sleeping_pc >> 1) != 1)
+			return false;
+		on_machine.OnDown();
+		if (on_machine.ProgramCounter() != sleeping_pc ||
+			on_machine.ReadByte(kPortCControl) != 0x5a || on_machine.ReadByte(0x80) != 0xa5)
+			return false;
+		for (int i = 0; i < 1100; ++i)
+			on_machine.Next();
+		if (on_machine.ReadByte(kAccumulator) != 0x5a ||
+			(on_machine.ReadByte(kPortA) & kOnMask) != 0 ||
+			on_machine.ReadByte(kPortCControl) != 0x5a || on_machine.ReadByte(0x80) != 0xa5)
+			return false;
+		on_machine.OnUp();
+		for (int i = 0; i < 1100; ++i)
+			on_machine.Next();
+		if ((on_machine.ReadByte(kPortA) & kOnMask) == 0)
+			return false;
 
 		std::vector<uint8_t> wake_rom(0x30000, 0);
 		SetPackedRomWord(wake_rom, 0, 0x0002); // SLEP; ePS9500 resumes at word 1.
