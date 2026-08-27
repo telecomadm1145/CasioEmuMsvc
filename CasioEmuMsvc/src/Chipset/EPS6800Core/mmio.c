@@ -485,9 +485,13 @@ static void mmio_carry_fsr0(struct mmio_state *state) {
 }
 
 static void mmio_carry_extended_fsr(struct mmio_state *state, uint8_t bsr_reg, uint8_t fsr_reg) {
-	state->regs[bsr_reg]++;
+	/* ePS9500 folds BSRx[0] into the arithmetic FSRx operand, so an
+	 * eight-bit carry advances the BSRx encoding by two. */
+	state->regs[bsr_reg] += eps_variant_is_9500(state->variant) ? 2u : 1u;
 	if (eps_variant_is_6009(state->variant))
 		state->regs[bsr_reg] &= MMIO_EPS6009_RAM_PAGE_MASK;
+	else if (eps_variant_is_9500(state->variant))
+		state->regs[bsr_reg] &= MMIO_RAM_PAGE_MASK;
 	state->regs[fsr_reg] |= MMIO_RAM_SELECT_MASK;
 }
 
@@ -503,9 +507,14 @@ static void mmio_borrow_fsr0(struct mmio_state *state) {
 }
 
 static void mmio_borrow_extended_fsr(struct mmio_state *state, uint8_t bsr_reg, uint8_t fsr_reg) {
-	state->regs[bsr_reg]--;
+	/* Match the ePS9500 mode-4 interpreter: an eight-bit borrow retreats
+	 * the BSRx encoding by two because BSRx[0] is arithmetic bit 7. */
+	state->regs[bsr_reg] -= eps_variant_is_9500(state->variant) ? 2u : 1u;
 	if (eps_variant_is_6009(state->variant)) {
 		state->regs[bsr_reg] &= MMIO_EPS6009_RAM_PAGE_MASK;
+	}
+	else if (eps_variant_is_9500(state->variant)) {
+		state->regs[bsr_reg] &= MMIO_RAM_PAGE_MASK;
 	}
 	else if (state->regs[bsr_reg] != 0) {
 		state->regs[fsr_reg] |= MMIO_RAM_SELECT_MASK;
@@ -516,6 +525,27 @@ static void mmio_borrow_extended_fsr(struct mmio_state *state, uint8_t bsr_reg, 
 }
 
 void mmio_carry_propagate_state(struct mmio_state *state, uint8_t addr) {
+	if (eps_variant_is_9500(state->variant)) {
+		/* The mode-4 interpreter only chains these four destinations. */
+		switch (addr) {
+		case REG_FSR1:
+			mmio_carry_extended_fsr(state, REG_BSR1, REG_FSR1);
+			break;
+		case REG_PCL:
+			state->regs[REG_PCM]++;
+			break;
+		case REG_TABPTRL:
+			state->regs[REG_TABPTRM]++;
+			break;
+		case REG_FSR2:
+			mmio_carry_extended_fsr(state, REG_BSR2, REG_FSR2);
+			break;
+		default:
+			break;
+		}
+		return;
+	}
+
 	switch (addr) {
 	case REG_FSR0:
 		mmio_carry_fsr0(state);
@@ -546,6 +576,28 @@ void mmio_carry_propagate_state(struct mmio_state *state, uint8_t addr) {
 }
 
 void mmio_borrow_propagate_state(struct mmio_state *state, uint8_t addr) {
+	if (eps_variant_is_9500(state->variant)) {
+		/* Match the mode-4 propagation table.  In particular, FSR0, PCM,
+		 * and TABPTRM do not chain, while TABPTRL borrows exactly one. */
+		switch (addr) {
+		case REG_FSR1:
+			mmio_borrow_extended_fsr(state, REG_BSR1, REG_FSR1);
+			break;
+		case REG_PCL:
+			state->regs[REG_PCM]--;
+			break;
+		case REG_TABPTRL:
+			state->regs[REG_TABPTRM]--;
+			break;
+		case REG_FSR2:
+			mmio_borrow_extended_fsr(state, REG_BSR2, REG_FSR2);
+			break;
+		default:
+			break;
+		}
+		return;
+	}
+
 	switch (addr) {
 	case REG_FSR0:
 		mmio_borrow_fsr0(state);

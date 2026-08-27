@@ -1029,12 +1029,12 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                                 alu_add_state(state, imm8_1, cpu_bus_read_internal(state, REG_ACC)));
                              break;
                 case CPU_OPCODE_ADC_A_R: cpu_bus_write_internal(state, REG_ACC,
-                                alu_adc_state(state, cpu_read_binary_destination_state(state, imm8_1), cpu_bus_read_internal(state, REG_ACC),
+                                alu_adc_state(state, cpu_bus_read(state, imm8_1), cpu_bus_read_internal(state, REG_ACC),
                                 state->status & BIT_STATUS_C));
                              cpu_bus_post_id(state, imm8_1);
                              break;
                 case CPU_OPCODE_ADC_R_A: cpu_bus_write(state, imm8_1,
-                                alu_adc_state(state, cpu_bus_read(state, imm8_1), cpu_bus_read_internal(state, REG_ACC),
+                                alu_adc_state(state, cpu_read_binary_destination_state(state, imm8_1), cpu_bus_read_internal(state, REG_ACC),
                                 state->status & BIT_STATUS_C));
                              if (state->status & BIT_STATUS_C) cpu_bus_carry_propagate(state, imm8_1);
                              cpu_bus_post_id(state, imm8_1);
@@ -1053,11 +1053,11 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                              cpu_bus_post_id(state, imm8_1);
                              break;
                 case CPU_OPCODE_SUB_A_R: cpu_bus_write_internal(state, REG_ACC,
-                                alu_sub_state(state, cpu_read_binary_destination_state(state, imm8_1), cpu_bus_read_internal(state, REG_ACC)));
+                                alu_sub_state(state, cpu_bus_read(state, imm8_1), cpu_bus_read_internal(state, REG_ACC)));
                              cpu_bus_post_id(state, imm8_1);
                              break;
                 case CPU_OPCODE_SUB_R_A: cpu_bus_write(state, imm8_1,
-                                alu_sub_state(state, cpu_bus_read(state, imm8_1), cpu_bus_read_internal(state, REG_ACC)));
+                                alu_sub_state(state, cpu_read_binary_destination_state(state, imm8_1), cpu_bus_read_internal(state, REG_ACC)));
                              if (!(state->status & BIT_STATUS_C)) cpu_bus_borrow_propagate(state, imm8_1);
                              cpu_bus_post_id(state, imm8_1);
                              break;
@@ -1065,12 +1065,12 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                                 alu_sub_state(state, imm8_1, cpu_bus_read_internal(state, REG_ACC)));
                              break;
                 case CPU_OPCODE_SUBB_A_R: cpu_bus_write_internal(state, REG_ACC,
-                                alu_subb_state(state, cpu_read_binary_destination_state(state, imm8_1), cpu_bus_read_internal(state, REG_ACC),
+                                alu_subb_state(state, cpu_bus_read(state, imm8_1), cpu_bus_read_internal(state, REG_ACC),
                                 ((state->status & BIT_STATUS_C)?0:1)));
                              cpu_bus_post_id(state, imm8_1);
                              break;
                 case CPU_OPCODE_SUBB_R_A: cpu_bus_write(state, imm8_1,
-                                alu_subb_state(state, cpu_bus_read(state, imm8_1), cpu_bus_read_internal(state, REG_ACC),
+                                alu_subb_state(state, cpu_read_binary_destination_state(state, imm8_1), cpu_bus_read_internal(state, REG_ACC),
                                 ((state->status & BIT_STATUS_C)?0:1)));
                              if (!(state->status & BIT_STATUS_C)) cpu_bus_borrow_propagate(state, imm8_1);
                              cpu_bus_post_id(state, imm8_1);
@@ -1213,12 +1213,14 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
 							 cpu_bus_write_internal(state, REG_ACC, temp8_1);
                              cpu_bus_post_id(state, imm8_1);
 					         break;
-				case CPU_OPCODE_JDNZ_R: temp8_1 = cpu_bus_read(state, imm8_1) - 1;
+				case CPU_OPCODE_JDNZ_R: temp8_2 = cpu_read_binary_destination_state(state, imm8_1);
+							 temp8_1 = temp8_2 - 1;
 							 if (temp8_1 != 0) { newpc = cpu_replace_pc_low16(newpc, imm16_1); }
 							 else { newpc += 1; }
 							 cpu_bus_write(state, imm8_1, temp8_1);
+							 if (temp8_2 == 0) cpu_bus_borrow_propagate(state, imm8_1);
                              cpu_bus_post_id(state, imm8_1);
-							 break;
+					         break;
 				case CPU_OPCODE_JGE_A_IMM: if (cpu_bus_read_internal(state, REG_ACC) >= imm8_1) { newpc = cpu_replace_pc_low16(newpc, imm16_1); }
 							 else { newpc += 1; }
 							 break;

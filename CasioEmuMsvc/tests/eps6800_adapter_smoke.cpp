@@ -798,6 +798,85 @@ namespace {
 		return true;
 	}
 
+	bool Eps9500ExtendedFsrArithmeticSmoke() {
+		constexpr uint8_t kAccumulator = 0x0a;
+		constexpr uint8_t kStatus = 0x0f;
+		constexpr uint8_t kFsr1 = 0x04;
+		constexpr uint8_t kBsr1 = 0x05;
+		constexpr uint8_t kFsr2 = 0x11;
+		constexpr uint8_t kBsr2 = 0x12;
+		constexpr uint8_t kFsr0 = 0x01;
+		constexpr uint8_t kBsr0 = 0x02;
+		constexpr uint8_t kPcm = 0x08;
+		constexpr uint8_t kPch = 0x09;
+		constexpr uint8_t kTabptrl = 0x0b;
+		constexpr uint8_t kTabptrm = 0x0c;
+		constexpr uint8_t kTabptrh = 0x0d;
+		constexpr uint8_t kInitialStatus = 0xc0;
+
+		const auto Run = [&](uint16_t instruction, uint8_t fsr_reg, uint8_t bsr_reg,
+			uint8_t fsr, uint8_t bsr, uint8_t accumulator, uint8_t status) {
+			casioemu::ePSCPU machine(casioemu::EpsVariant::Eps9500);
+			std::vector<uint8_t> rom(0x30000, 0);
+			SetPackedRomWord(rom, 0, instruction);
+			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+				return std::array<uint8_t, 4>{0xff, 0xff, 0xff, 0xff};
+			machine.Reset();
+			machine.WriteByte(fsr_reg, fsr);
+			machine.WriteByte(bsr_reg, bsr);
+			machine.WriteByte(kAccumulator, accumulator);
+			machine.WriteByte(kStatus, status);
+			machine.Next();
+			return std::array<uint8_t, 4>{machine.ReadByte(fsr_reg),
+				machine.ReadByte(bsr_reg), machine.ReadByte(kStatus),
+				machine.ReadByte(kAccumulator)};
+		};
+
+		/* The ePS9500 mode-4 interpreter folds BSRx[0] into bit 7 only for
+		 * binary operations whose destination is FSRx.  A full eight-bit
+		 * carry or borrow consequently moves the BSRx encoding by two. */
+		const auto fsr1_borrow = Run(0x1700 | kFsr1, kFsr1, kBsr1,
+			0x80, 0x10, 0x01, kInitialStatus);
+		const auto fsr2_borrow = Run(0x1900 | kFsr2, kFsr2, kBsr2,
+			0x80, 0x10, 0x01, kInitialStatus | 0x01);
+		const auto fsr2_carry = Run(0x1100 | kFsr2, kFsr2, kBsr2,
+			0xff, 0x11, 0x01, kInitialStatus);
+		const auto fsr1_jdnz_borrow = Run(0x5100 | kFsr1, kFsr1, kBsr1,
+			0x80, 0x10, 0x00, kInitialStatus);
+		const auto fsr2_jdnz_borrow = Run(0x5100 | kFsr2, kFsr2, kBsr2,
+			0x80, 0x10, 0x00, kInitialStatus);
+		const auto raw_accumulator_source = Run(0x1000 | kFsr2, kFsr2, kBsr2,
+			0x80, 0x10, 0x00, kInitialStatus);
+		const auto raw_decimal_destination = Run(0x1500 | kFsr2, kFsr2, kBsr2,
+			0x80, 0x10, 0x01, kInitialStatus);
+		const auto fsr0_no_borrow_chain = Run(0x1f00 | kFsr0, kFsr0, kBsr0,
+			0x00, 0x10, 0x00, kInitialStatus);
+		const auto fsr0_no_carry_chain = Run(0x1d00 | kFsr0, kFsr0, kBsr0,
+			0xff, 0x10, 0x00, kInitialStatus);
+		const auto pcm_no_borrow_chain = Run(0x1f00 | kPcm, kPcm, kPch,
+			0x00, 0x10, 0x00, kInitialStatus);
+		const auto tabptr_low_borrow = Run(0x1f00 | kTabptrl, kTabptrl, kTabptrm,
+			0x00, 0x10, 0x00, kInitialStatus);
+		const auto tabptr_mid_no_borrow_chain = Run(0x1f00 | kTabptrm, kTabptrm, kTabptrh,
+			0x00, 0x02, 0x00, kInitialStatus);
+
+		return
+			Run(0x1100 | kFsr2, kFsr2, kBsr2, 0x80, 0x10, 0x01, kInitialStatus)[0] == 0x81 &&
+			Run(0x1300 | kFsr2, kFsr2, kBsr2, 0x80, 0x10, 0x01, kInitialStatus | 0x01)[0] == 0x82 &&
+			fsr1_borrow[0] == 0xff && fsr1_borrow[1] == 0x0e &&
+			fsr2_borrow[0] == 0xff && fsr2_borrow[1] == 0x0e &&
+			fsr2_carry[0] == 0x80 && fsr2_carry[1] == 0x13 &&
+			fsr1_jdnz_borrow[0] == 0xff && fsr1_jdnz_borrow[1] == 0x0e &&
+			fsr2_jdnz_borrow[0] == 0xff && fsr2_jdnz_borrow[1] == 0x0e &&
+			raw_accumulator_source[3] == 0x80 && raw_accumulator_source[1] == 0x10 &&
+			raw_decimal_destination[0] == 0x81 && raw_decimal_destination[1] == 0x10 &&
+			fsr0_no_borrow_chain[0] == 0xff && fsr0_no_borrow_chain[1] == 0x10 &&
+			fsr0_no_carry_chain[0] == 0x00 && fsr0_no_carry_chain[1] == 0x10 &&
+			pcm_no_borrow_chain[0] == 0xff && pcm_no_borrow_chain[1] == 0x10 &&
+			tabptr_low_borrow[0] == 0xff && tabptr_low_borrow[1] == 0x0f &&
+			tabptr_mid_no_borrow_chain[0] == 0xff && tabptr_mid_no_borrow_chain[1] == 0x02;
+	}
+
 	bool Eps6009PortBInputSmoke() {
 		constexpr uint8_t kPortB = 0x11;
 		constexpr uint8_t kPortBControl = 0x2d;
@@ -1083,6 +1162,10 @@ int main(int argc, char** argv) {
 	}
 	if (!Eps9500KeyboardAndStackSmoke()) {
 		std::cerr << "EPS9500 keyboard/stack regression\n";
+		return 1;
+	}
+	if (!Eps9500ExtendedFsrArithmeticSmoke()) {
+		std::cerr << "EPS9500 extended FSR arithmetic regression\n";
 		return 1;
 	}
 	if (!TimerSmoke()) {
