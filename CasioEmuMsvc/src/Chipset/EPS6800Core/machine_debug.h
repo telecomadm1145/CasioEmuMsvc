@@ -48,6 +48,12 @@ typedef bool (*machine_debug_memory_access_callback)(
 );
 
 void machine_state_debug_get_state(struct machine_state *machine, struct machine_debug_state *state);
+/* Canonical execution state accessors.  These intentionally expose values,
+ * not the internal cpu/mmio storage used to hold them. */
+uint32_t machine_state_debug_program_counter(const struct machine_state *state);
+void machine_state_debug_set_program_counter(struct machine_state *state, uint32_t word_address);
+uint8_t machine_state_debug_accumulator(const struct machine_state *state);
+uint8_t machine_state_debug_status(const struct machine_state *state);
 uint32_t machine_state_debug_fetch_instruction(const struct machine_state *state, uint32_t pc);
 void machine_state_debug_get_register_overview(
 	struct machine_state *state,
