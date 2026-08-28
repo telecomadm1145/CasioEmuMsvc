@@ -1,11 +1,13 @@
 #include "ePSCpu.h"
 #include "Eps6800Display.h"
 #include "ModelInfo.h"
+#include "machine_snapshot_internal.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <initializer_list>
@@ -85,6 +87,47 @@ namespace {
 		if (!condition)
 			std::cerr << "[eps6800][fail] line " << line << ": " << label << "\n";
 		return condition;
+	}
+
+	bool LegacyPcDestinationReadSmoke() {
+		constexpr uint8_t kPcl = 0x07;
+		constexpr uint8_t kAccumulator = 0x0a;
+		constexpr uint8_t kStatus = 0x0f;
+		const auto Run = [&](uint16_t instruction, uint8_t accumulator, uint8_t status,
+			uint16_t branch_target = 0) {
+			casioemu::ePSCPU machine;
+			std::vector<uint8_t> rom(0x20000, 0);
+			SetPackedRomWord(rom, 0, instruction);
+			if ((instruction & 0xff00u) == 0x5100u)
+				SetPackedRomWord(rom, 1, branch_target);
+			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+				return 0xffffffffu;
+			machine.Reset();
+			machine.WriteByte(kAccumulator, accumulator);
+			machine.WriteByte(kStatus, status);
+			machine.SetPC(0);
+			machine.Next();
+			return machine.ProgramCounter();
+		};
+
+		/* ePS6800's legacy interpreter deliberately mixes the PC+1 direct view
+		 * used by INC/ADD destinations with ordinary SFR reads for ADC/DEC/
+		 * SUB/SUBB/JDNZ. ePS9500's extended-FSR operand fix must not flatten
+		 * those two read modes into one. */
+		return Check(Run(0x1d00u | kPcl, 0, 0) == 0x02u,
+				"legacy INC PCL direct read", __LINE__) &&
+			Check(Run(0x1100u | kPcl, 1, 0) == 0x02u,
+				"legacy ADD PCL direct read", __LINE__) &&
+			Check(Run(0x1300u | kPcl, 1, 0) == 0x01u,
+				"legacy ADC PCL bus read", __LINE__) &&
+			Check(Run(0x1f00u | kPcl, 0, 0) == 0xffffu,
+				"legacy DEC PCL bus read", __LINE__) &&
+			Check(Run(0x1700u | kPcl, 1, 0) == 0xffffu,
+				"legacy SUB PCL bus read", __LINE__) &&
+			Check(Run(0x1900u | kPcl, 1, 0x01u) == 0xffffu,
+				"legacy SUBB PCL bus read", __LINE__) &&
+			Check(Run(0x5100u | kPcl, 0, 0, 0x0042u) == 0xffffu,
+				"legacy JDNZ PCL bus read", __LINE__);
 	}
 
 	bool KeyboardMatrixSmoke() {
@@ -800,6 +843,34 @@ namespace {
 		wbk_machine.WriteByte(0x20, 0x00);
 		if (wbk_machine.ReadByte(0x2e) != 0x32)
 			return false;
+
+		/* The debugger snapshot intentionally exposes only 32 frames, but
+		 * StepOut must use the physical ePS9500 stack top even when the real
+		 * call depth is greater than that presentation limit. */
+		constexpr uint32_t kDeepCallCount = 33;
+		std::vector<uint8_t> deep_rom(0x30000, 0);
+		for (uint32_t i = 0; i < kDeepCallCount; ++i) {
+			const uint32_t call_pc = i * 2u;
+			const uint32_t target = (i + 1u) * 2u;
+			SetPackedRomWord(deep_rom, call_pc, static_cast<uint16_t>(0xe000u | target));
+		}
+		const uint32_t deepest_pc = kDeepCallCount * 2u;
+		const uint32_t deepest_return = (kDeepCallCount - 1u) * 2u + 1u;
+		SetPackedRomWord(deep_rom, deepest_pc, 0x2bfeu); // RET.
+		casioemu::ePSCPU deep_machine(casioemu::EpsVariant::Eps9500);
+		if (!deep_machine.LoadRom(deep_rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+			return false;
+		deep_machine.Reset();
+		for (uint32_t i = 0; i < kDeepCallCount; ++i)
+			deep_machine.Next();
+		const auto deep_snapshot = deep_machine.DebugSnapshot();
+		if (!Check(deep_snapshot.stack_pointer == 32, "eps9500 deep stack snapshot cap", __LINE__) ||
+			!Check(deep_machine.RequestStepOut(), "eps9500 deep step out request", __LINE__) ||
+			!Check(deep_machine.RunFrame(), "eps9500 deep step out stop", __LINE__) ||
+			!Check(deep_machine.LastDebugStop().reason == casioemu::Eps6800DebugStopReason::StepOut &&
+				deep_machine.ProgramCounter() == deepest_return,
+				"eps9500 deep step out target", __LINE__))
+			return false;
 		return true;
 	}
 
@@ -1243,6 +1314,120 @@ namespace {
 				trace.back().next_program_counter == 4, "trace buffer tail", __LINE__);
 	}
 
+	bool Eps9500El531TlGolden(const char* path) {
+		constexpr size_t kEps9500RomSize = 0x30000;
+		auto rom = ReadRom(path);
+		if (rom.size() != kEps9500RomSize) {
+			std::cerr << "EL531TL ROM size mismatch: " << rom.size() << "\n";
+			return false;
+		}
+		casioemu::ePSCPU machine(casioemu::EpsVariant::Eps9500);
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+			return false;
+		machine.Reset();
+		for (uint32_t i = 0; i < 200000; ++i)
+			machine.Next();
+
+		std::array<uint8_t, casioemu::EPS9500_LCD_RAW_SIZE> lcd{};
+		if (machine.CopyLcd(lcd.data(), lcd.size()) != lcd.size())
+			return false;
+		const auto snapshot = machine.DebugSnapshot();
+		const uint32_t pc = machine.ProgramCounter();
+		const uint8_t acc = snapshot.registers[0x0a];
+		const uint8_t status = snapshot.registers[0x0f];
+		const uint32_t hash = Fnv1a(lcd.data(), lcd.size());
+		if (pc != 0x000d28u || acc != 0xffu || status != 0x16u || hash != 0xf9fd943eu) {
+			std::cerr << std::hex << std::setfill('0')
+				<< "EL531TL golden mismatch: pc=0x" << std::setw(6) << pc
+				<< " acc=0x" << std::setw(2) << static_cast<unsigned>(acc)
+				<< " status=0x" << std::setw(2) << static_cast<unsigned>(status)
+				<< " lcd=0x" << std::setw(8) << hash << "\n";
+			return false;
+		}
+		std::cout << "EL531TL golden OK\n";
+		return true;
+	}
+
+	bool SnapshotV3CompatibilitySmoke() {
+		constexpr uint32_t kSnapshotStreamMagic = 0x31535045u; // "EPS1"
+		constexpr uint8_t kAccumulator = 0x0a;
+		casioemu::ePSCPU machine;
+		std::vector<uint8_t> rom(0x20000, 0);
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+			return false;
+		machine.Reset();
+		machine.SetPC(0x1234u);
+		machine.WriteByte(kAccumulator, 0x5au);
+		if (!machine.WriteDebugMemory(0x80u, 0xa5u))
+			return false;
+
+		std::stringstream current(std::ios::in | std::ios::out | std::ios::binary);
+		machine.SaveState(current);
+		const std::string current_blob = current.str();
+		if (current_blob.size() != 8u + sizeof(machine_snapshot))
+			return false;
+		machine_snapshot snapshot{};
+		std::memcpy(&snapshot, current_blob.data() + 8, sizeof(snapshot));
+		if (snapshot.magic != MACHINE_SNAPSHOT_MAGIC || snapshot.version != MACHINE_SNAPSHOT_VERSION)
+			return false;
+
+		const auto RestorePayload = [&](const void* payload, size_t payload_size) {
+			std::stringstream legacy(std::ios::in | std::ios::out | std::ios::binary);
+			const uint32_t encoded_size = static_cast<uint32_t>(payload_size);
+			legacy.write(reinterpret_cast<const char*>(&kSnapshotStreamMagic), sizeof(kSnapshotStreamMagic));
+			legacy.write(reinterpret_cast<const char*>(&encoded_size), sizeof(encoded_size));
+			legacy.write(reinterpret_cast<const char*>(payload), static_cast<std::streamsize>(payload_size));
+			machine.SetPC(0);
+			machine.WriteByte(kAccumulator, 0);
+			machine.WriteDebugMemory(0x80u, 0);
+			legacy.seekg(0);
+			try {
+				machine.LoadState(legacy);
+			}
+			catch (const std::exception&) {
+				return false;
+			}
+			return machine.ProgramCounter() == 0x1234u &&
+				machine.ReadByte(kAccumulator) == 0x5au &&
+				machine.ReadDebugMemory(0x80u) == 0xa5u;
+		};
+
+		machine_snapshot_v3_legacy legacy{};
+		legacy.magic = MACHINE_SNAPSHOT_MAGIC;
+		legacy.version = MACHINE_SNAPSHOT_LEGACY_VERSION;
+		legacy.cpu.pc = snapshot.cpu.pc;
+		std::copy_n(snapshot.cpu.stack, CPU_LEGACY_STACK_DEPTH, legacy.cpu.stack);
+		legacy.cpu.status = snapshot.cpu.status;
+		legacy.cpu.rpt_counter = snapshot.cpu.rpt_counter;
+		legacy.cpu.rpt_target_pc = snapshot.cpu.rpt_target_pc;
+		legacy.cpu.mode = snapshot.cpu.mode;
+		legacy.cpu.int_pending = snapshot.cpu.int_pending;
+		legacy.cpu.sleep_repeat_pc = snapshot.cpu.sleep_repeat_pc;
+		std::copy(std::begin(snapshot.mmio.regs), std::end(snapshot.mmio.regs), std::begin(legacy.mmio.regs));
+		std::copy(std::begin(snapshot.mmio.ram_wbk), std::end(snapshot.mmio.ram_wbk), std::begin(legacy.mmio.ram_wbk));
+		std::copy_n(snapshot.mmio.ram, MMIO_LEGACY_RAM_COUNT, legacy.mmio.ram);
+		legacy.lcd = snapshot.lcd;
+		legacy.timer = snapshot.timer;
+		legacy.kbd = snapshot.kbd;
+
+		machine_snapshot_v3_expanded_stack expanded{};
+		expanded.magic = MACHINE_SNAPSHOT_MAGIC;
+		expanded.version = MACHINE_SNAPSHOT_LEGACY_VERSION;
+		expanded.cpu = snapshot.cpu;
+		std::copy(std::begin(snapshot.mmio.regs), std::end(snapshot.mmio.regs), std::begin(expanded.mmio.regs));
+		std::copy(std::begin(snapshot.mmio.ram_wbk), std::end(snapshot.mmio.ram_wbk), std::begin(expanded.mmio.ram_wbk));
+		std::copy_n(snapshot.mmio.ram, MMIO_LEGACY_RAM_COUNT, expanded.mmio.ram);
+		expanded.lcd = snapshot.lcd;
+		expanded.timer = snapshot.timer;
+		expanded.kbd = snapshot.kbd;
+
+		machine_snapshot transitional = snapshot;
+		transitional.version = MACHINE_SNAPSHOT_LEGACY_VERSION;
+		return Check(RestorePayload(&legacy, sizeof(legacy)), "pre-EPS9500 v3 snapshot migration", __LINE__) &&
+			Check(RestorePayload(&expanded, sizeof(expanded)), "expanded-stack v3 snapshot migration", __LINE__) &&
+			Check(RestorePayload(&transitional, sizeof(transitional)), "expanded-RAM v3 snapshot migration", __LINE__);
+	}
+
 	bool StatusEquals(const casioemu::Eps6800DisplayFrame& frame,
 		std::initializer_list<uint8_t> expected) {
 		return expected.size() == frame.status.size() &&
@@ -1251,8 +1436,8 @@ namespace {
 }
 
 int main(int argc, char** argv) {
-	if (argc > 3) {
-		std::cerr << "usage: Eps6800AdapterSmoke [<hp300s-rom.bin> [<f789sga-rom.bin>]]\n";
+	if (argc > 4) {
+		std::cerr << "usage: Eps6800AdapterSmoke [<hp300s-rom.bin> [<f789sga-rom.bin> [<el531tl-rom.bin>]]]\n";
 		return 2;
 	}
 	if (!DebuggerSmoke()) {
@@ -1261,6 +1446,10 @@ int main(int argc, char** argv) {
 	}
 	if (!ArithmeticFlagsSmoke()) {
 		std::cerr << "EPS6800 arithmetic flags regression\n";
+		return 1;
+	}
+	if (!LegacyPcDestinationReadSmoke()) {
+		std::cerr << "EPS6800 legacy PC destination read regression\n";
 		return 1;
 	}
 	if (!HaltAndIncDecSmoke()) {
@@ -1321,6 +1510,10 @@ int main(int argc, char** argv) {
 	}
 	if (!HookAndRamSmoke()) {
 		std::cerr << "EPS6800 hook/RAM persistence regression\n";
+		return 1;
+	}
+	if (!SnapshotV3CompatibilitySmoke()) {
+		std::cerr << "EPS snapshot v3 compatibility regression\n";
 		return 1;
 	}
 
@@ -1626,6 +1819,12 @@ int main(int argc, char** argv) {
 	if (argc >= 3) {
 		if (!F789SgaFunctionalSmoke(argv[2])) {
 			std::cerr << "F-789SGA functional regression\n";
+			return 1;
+		}
+	}
+	if (argc >= 4) {
+		if (!Eps9500El531TlGolden(argv[3])) {
+			std::cerr << "EL531TL golden regression\n";
 			return 1;
 		}
 	}

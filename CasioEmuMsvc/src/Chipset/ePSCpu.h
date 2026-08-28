@@ -251,6 +251,7 @@ namespace casioemu {
 		void WriteByte(uint8_t address, uint8_t value);
 		uint8_t ReadDebugMemory(uint32_t linear_address) const;
 		bool WriteDebugMemory(uint32_t linear_address, uint8_t value);
+		uint32_t DebugLinearMemorySize() const;
 		uint16_t ReadCodeWord(uint32_t word_address) const;
 		bool WriteCodeWord(uint32_t word_address, uint16_t value);
 		uint8_t ReadLcdMemory(size_t address) const;

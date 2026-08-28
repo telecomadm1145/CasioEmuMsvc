@@ -934,8 +934,10 @@ namespace casioemu {
 		int GetFrameHeight() const override {
 			if constexpr (hardware_id == HW_EPS6009)
 				return std::max(1, emulator.ModelDefinition.screen_height);
+			if constexpr (hardware_id == HW_EPS9500)
+				return 33; // one status row plus 32 dot-matrix rows
 			return hardware_id == HW_FX_5800P || hardware_id == HW_ES_PLUS ||
-				hardware_id == HW_EPS6800 || hardware_id == HW_EPS9500 ? 32 : 64;
+				hardware_id == HW_EPS6800 ? 32 : 64;
 		}
 		void WriteFrameRgba(uint8_t* out, int r, int g, int b) const override {
 			if (!out) return;

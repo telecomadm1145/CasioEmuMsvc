@@ -504,6 +504,11 @@ namespace casioemu {
 		return machine_state_debug_write_memory(state_, linear_address, value);
 	}
 
+	uint32_t ePSCPU::DebugLinearMemorySize() const {
+		const std::lock_guard lock(state_mutex_);
+		return machine_state_debug_linear_memory_size(state_);
+	}
+
 	uint16_t ePSCPU::ReadCodeWord(uint32_t word_address) const {
 		const std::lock_guard lock(state_mutex_);
 		return machine_state_debug_read_rom_word(state_, word_address);
@@ -603,13 +608,13 @@ namespace casioemu {
 
 	bool ePSCPU::RequestStepOut() {
 		const std::lock_guard lock(state_mutex_);
-		machine_debug_snapshot snapshot{};
-		machine_state_debug_get_snapshot(state_, &snapshot);
-		if (snapshot.stack_pointer == 0)
+		uint8_t target_depth = 0;
+		uint32_t return_pc = 0;
+		if (!machine_state_debug_step_out_target(state_, &target_depth, &return_pc))
 			return false;
 		debug_run_mode_ = DebugRunMode::StepOut;
-		debug_target_stack_pointer_ = snapshot.stack_pointer - 1;
-		debug_target_pc_ = snapshot.stack[snapshot.stack_pointer - 1];
+		debug_target_stack_pointer_ = target_depth;
+		debug_target_pc_ = return_pc;
 		honor_execution_breakpoints_ = true;
 		honor_memory_breakpoints_ = true;
 		last_debug_stop_ = {};

@@ -9,12 +9,25 @@
 
 enum {
 	MACHINE_SNAPSHOT_MAGIC = 0x46585353u,
-	MACHINE_SNAPSHOT_VERSION = 3u
+	MACHINE_SNAPSHOT_LEGACY_VERSION = 3u,
+	MACHINE_SNAPSHOT_VERSION = 4u
 };
 
 struct machine_cpu_snapshot {
 	uint32_t pc;
 	uint32_t stack[CPU_STACK_DEPTH];
+	uint8_t status;
+	uint8_t rpt_counter;
+	uint32_t rpt_target_pc;
+	uint8_t mode;
+	uint8_t int_pending;
+	uint8_t sleep_repeat_pc;
+};
+
+/* v3 predates ePS9500 and stored only the 32-entry legacy stack. */
+struct machine_cpu_snapshot_v3_legacy {
+	uint32_t pc;
+	uint32_t stack[CPU_LEGACY_STACK_DEPTH];
 	uint8_t status;
 	uint8_t rpt_counter;
 	uint32_t rpt_target_pc;
@@ -51,6 +64,12 @@ struct machine_mmio_snapshot {
 	uint8_t ram[MMIO_RAM_COUNT];
 };
 
+struct machine_mmio_snapshot_v3_legacy {
+	uint8_t regs[MMIO_REG_COUNT];
+	uint8_t ram_wbk[MMIO_WBK_COUNT];
+	uint8_t ram[MMIO_LEGACY_RAM_COUNT];
+};
+
 struct machine_timer_snapshot {
 	uint8_t reg[TIMER_REG_COUNT];
 	int32_t t0psc, t1psc, t2psc;
@@ -64,6 +83,28 @@ struct machine_snapshot {
 	uint32_t version;
 	struct machine_cpu_snapshot cpu;
 	struct machine_mmio_snapshot mmio;
+	struct machine_lcd_snapshot lcd;
+	struct machine_timer_snapshot timer;
+	struct machine_kbd_snapshot kbd;
+};
+
+/* Layout emitted by v3 builds before ePS9500 support. */
+struct machine_snapshot_v3_legacy {
+	uint32_t magic;
+	uint32_t version;
+	struct machine_cpu_snapshot_v3_legacy cpu;
+	struct machine_mmio_snapshot_v3_legacy mmio;
+	struct machine_lcd_snapshot lcd;
+	struct machine_timer_snapshot timer;
+	struct machine_kbd_snapshot kbd;
+};
+
+/* Layout emitted during early ePS9500 work: expanded stack, legacy RAM. */
+struct machine_snapshot_v3_expanded_stack {
+	uint32_t magic;
+	uint32_t version;
+	struct machine_cpu_snapshot cpu;
+	struct machine_mmio_snapshot_v3_legacy mmio;
 	struct machine_lcd_snapshot lcd;
 	struct machine_timer_snapshot timer;
 	struct machine_kbd_snapshot kbd;

@@ -24,6 +24,34 @@ uint8_t machine_state_debug_stack_depth(const struct machine_state *state) {
 	return eps_stack_depth_from_raw(state->mmio.variant, state->mmio.regs[REG_STKPTR]);
 }
 
+bool machine_state_debug_step_out_target(
+	const struct machine_state *state,
+	uint8_t *target_depth,
+	uint32_t *return_pc
+) {
+	uint8_t depth;
+	uint8_t raw_sp;
+	uint32_t pc;
+
+	if (!state)
+		return false;
+	depth = machine_state_debug_stack_depth(state);
+	if (depth == 0)
+		return false;
+
+	raw_sp = state->mmio.regs[REG_STKPTR];
+	if (eps_stack_is_descending_even(state->mmio.variant))
+		pc = state->cpu.stack[raw_sp];
+	else
+		pc = state->cpu.stack[(uint8_t)(depth - 1u)];
+
+	if (target_depth)
+		*target_depth = (uint8_t)(depth - 1u);
+	if (return_pc)
+		*return_pc = pc;
+	return true;
+}
+
 uint32_t machine_state_debug_program_counter(const struct machine_state *state) {
 	return state ? state->cpu.pc : 0;
 }

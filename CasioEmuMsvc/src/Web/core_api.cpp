@@ -391,6 +391,14 @@ namespace {
 
 	bool UserRamRange(uint32_t& addr, int& len) {
 		if (!g_emulator) return false;
+		if (casioemu::IsEpsFamily(g_emulator->hardware_id)) {
+			if (!g_emulator->chipset.epscpu) return false;
+			const uint32_t linear_size = g_emulator->chipset.epscpu->DebugLinearMemorySize();
+			if (linear_size <= 0x80u) return false;
+			addr = 0x80u;
+			len = static_cast<int>(linear_size - addr);
+			return true;
+		}
 		switch (g_emulator->hardware_id) {
 		case casioemu::HW_CLASSWIZ_II:
 			addr = 0x9000;
@@ -400,10 +408,6 @@ namespace {
 			addr = 0x8000;
 			len = 0x2000;
 			return true;
-		case casioemu::HW_EPS6800:
-			addr = 0x80;
-			len = 0x2000;
-			return g_emulator->chipset.epscpu != nullptr;
 		case casioemu::HW_FX_5800P:
 			addr = static_cast<uint32_t>(casioemu::GetRamBaseAddr(casioemu::HW_FX_5800P));
 			len = static_cast<int>(casioemu::GetRamSize(casioemu::HW_FX_5800P));
@@ -1175,7 +1179,7 @@ int casioemu_core_save_user_ram(uint8_t* out, int max_len) {
 	int len = 0;
 	if (!UserRamRange(addr, len)) return -2;
 	if (max_len < len) return -len;
-	if (g_emulator->hardware_id == casioemu::HW_EPS6800) {
+	if (casioemu::IsEpsFamily(g_emulator->hardware_id)) {
 		if (!g_emulator->chipset.epscpu) return -2;
 		for (int i = 0; i < len; ++i)
 			out[i] = g_emulator->chipset.epscpu->ReadDebugMemory(addr + static_cast<uint32_t>(i));
@@ -1190,7 +1194,7 @@ int casioemu_core_load_user_ram(const uint8_t* in, int len) {
 	int ram_len = 0;
 	if (!UserRamRange(addr, ram_len)) return 2;
 	const int copy_len = std::min(len, ram_len);
-	if (g_emulator->hardware_id == casioemu::HW_EPS6800) {
+	if (casioemu::IsEpsFamily(g_emulator->hardware_id)) {
 		if (!g_emulator->chipset.epscpu) return 2;
 		for (int i = 0; i < copy_len; ++i)
 			g_emulator->chipset.epscpu->WriteDebugMemory(addr + static_cast<uint32_t>(i), in[i]);
