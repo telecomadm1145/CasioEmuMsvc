@@ -71,12 +71,6 @@ namespace {
 		return word == 0x2bfeu || word == 0x2bffu;
 	}
 
-	uint8_t EpsStackDepth(uint8_t raw_stack_pointer, casioemu::EpsVariant variant) {
-		return variant == casioemu::EpsVariant::Eps9500
-			? static_cast<uint8_t>(0u - raw_stack_pointer) / 2u
-			: raw_stack_pointer & 0x1fu;
-	}
-
 	enum eps_variant ToCoreVariant(casioemu::EpsVariant variant) {
 		switch (variant) {
 		case casioemu::EpsVariant::Eps6009:
@@ -212,11 +206,7 @@ namespace casioemu {
 
 	void ePSCPU::ClearRamAndReset() {
 		const std::lock_guard lock(state_mutex_);
-		std::fill(std::begin(state_->mmio.ram), std::end(state_->mmio.ram), 0);
-		std::fill(std::begin(state_->mmio.ram_wbk), std::end(state_->mmio.ram_wbk), 0);
-		std::fill(&state_->mmio.regs[0x13], &state_->mmio.regs[0x20], 0);
-		std::fill(&state_->mmio.regs[0x40], &state_->mmio.regs[0x80], 0);
-		machine_state_reset(state_);
+		machine_state_clear_ram_and_reset(state_);
 		debug_run_mode_ = DebugRunMode::Continue;
 		honor_execution_breakpoints_ = true;
 		honor_memory_breakpoints_ = true;
@@ -321,8 +311,7 @@ namespace casioemu {
 			return true;
 		memory_break_pending_ = false;
 		const uint32_t pc_before = state_->cpu.pc;
-		const uint8_t stack_pointer_before = EpsStackDepth(
-			state_->mmio.regs[REG_STKPTR], variant_);
+		const uint8_t stack_pointer_before = machine_state_debug_stack_depth(state_);
 		const uint8_t interrupt_pending = state_->cpu.int_pending;
 		const uint32_t instruction = machine_state_debug_fetch_instruction(state_, pc_before);
 		const uint16_t word = static_cast<uint16_t>(instruction >> 16);
@@ -344,8 +333,7 @@ namespace casioemu {
 		if (elapsed_cycles == 1 && pc_after != pc_before + EpsInstructionWords(word, variant_))
 			elapsed_cycles = 2; // ePS6800 control-flow / PC-write penalty.
 		cycle_count_ += elapsed_cycles;
-		const uint8_t stack_pointer_after = EpsStackDepth(
-			state_->mmio.regs[REG_STKPTR], variant_);
+		const uint8_t stack_pointer_after = machine_state_debug_stack_depth(state_);
 		RecordTraceLocked(pc_before, instruction, pc_after);
 		if (function_hook_ && IsEpsCallInstruction(word)) {
 			function_hook_(pc_after, pc_before + EpsInstructionWords(word, variant_), true,
@@ -474,7 +462,7 @@ namespace casioemu {
 		entry.program_counter = pc_before;
 		entry.instruction = instruction;
 		entry.next_program_counter = pc_after;
-		entry.stack_pointer = EpsStackDepth(state_->mmio.regs[REG_STKPTR], variant_);
+		entry.stack_pointer = machine_state_debug_stack_depth(state_);
 		entry.accumulator = state_->mmio.regs[REG_ACC];
 		entry.status = state_->cpu.status;
 		entry.instruction_count = instruction_count_;
@@ -588,19 +576,12 @@ namespace casioemu {
 	}
 
 	std::string ePSCPU::BacktraceLocked() const {
+		machine_debug_snapshot snapshot{};
+		machine_state_debug_get_snapshot(state_, &snapshot);
 		std::ostringstream stream;
-		const uint8_t raw_stack_pointer = state_->mmio.regs[REG_STKPTR];
-		const uint8_t depth = EpsStackDepth(raw_stack_pointer, variant_);
-		stream << "PC=" << std::hex << state_->cpu.pc;
-		if (variant_ == EpsVariant::Eps9500) {
-			for (uint8_t i = 0; i < depth; ++i)
-				stream << " <- " << state_->cpu.stack[
-					static_cast<uint8_t>(raw_stack_pointer + 2u * i)];
-		}
-		else {
-			for (uint8_t i = depth; i > 0; --i)
-				stream << " <- " << state_->cpu.stack[i - 1];
-		}
+		stream << "PC=" << std::hex << snapshot.pc;
+		for (uint8_t i = snapshot.stack_pointer; i > 0; --i)
+			stream << " <- " << snapshot.stack[i - 1];
 		return stream.str();
 	}
 
@@ -611,38 +592,15 @@ namespace casioemu {
 
 	std::vector<uint8_t> ePSCPU::ExportRam() const {
 		const std::lock_guard lock(state_mutex_);
-		const size_t bank_ram_size = eps_variant_is_9500(state_->mmio.variant)
-			? MMIO_EPS9500_RAM_COUNT : MMIO_LEGACY_RAM_COUNT;
-		std::vector<uint8_t> data;
-		data.reserve(bank_ram_size + sizeof(state_->mmio.ram_wbk) + 0x0d + 0x40);
-		data.insert(data.end(), std::begin(state_->mmio.ram),
-			std::begin(state_->mmio.ram) + bank_ram_size);
-		data.insert(data.end(), std::begin(state_->mmio.ram_wbk), std::end(state_->mmio.ram_wbk));
-		data.insert(data.end(), &state_->mmio.regs[0x13], &state_->mmio.regs[0x20]);
-		data.insert(data.end(), &state_->mmio.regs[0x40], &state_->mmio.regs[0x80]);
+		std::vector<uint8_t> data(machine_state_ram_image_size(state_));
+		if (!machine_state_export_ram(state_, data.data(), data.size()))
+			return {};
 		return data;
 	}
 
 	bool ePSCPU::ImportRam(const std::vector<uint8_t>& data) {
 		const std::lock_guard lock(state_mutex_);
-		const bool is_eps9500 = eps_variant_is_9500(state_->mmio.variant);
-		const size_t bank_ram_size = is_eps9500
-			? MMIO_EPS9500_RAM_COUNT : MMIO_LEGACY_RAM_COUNT;
-		const size_t legacy_persistent_ram_size = bank_ram_size + sizeof(state_->mmio.ram_wbk);
-		const size_t persistent_ram_size = legacy_persistent_ram_size + 0x0d + 0x40;
-		if (data.size() != bank_ram_size && data.size() != legacy_persistent_ram_size &&
-			data.size() != persistent_ram_size)
-			return false;
-		std::copy_n(data.begin(), bank_ram_size, std::begin(state_->mmio.ram));
-		if (data.size() >= legacy_persistent_ram_size)
-			std::copy_n(data.begin() + bank_ram_size, sizeof(state_->mmio.ram_wbk),
-				std::begin(state_->mmio.ram_wbk));
-		if (data.size() == persistent_ram_size) {
-			auto source = data.begin() + legacy_persistent_ram_size;
-			std::copy_n(source, 0x0d, &state_->mmio.regs[0x13]);
-			std::copy_n(source + 0x0d, 0x40, &state_->mmio.regs[0x40]);
-		}
-		return true;
+		return machine_state_import_ram(state_, data.data(), data.size());
 	}
 
 	void ePSCPU::RequestContinue(bool honor_breakpoints) {
@@ -663,7 +621,9 @@ namespace casioemu {
 
 	void ePSCPU::RequestStepOver() {
 		const std::lock_guard lock(state_mutex_);
-		const uint32_t pc = state_->cpu.pc;
+		machine_debug_state debug_state{};
+		machine_state_debug_get_state(state_, &debug_state);
+		const uint32_t pc = debug_state.pc;
 		const uint16_t word = machine_state_debug_read_rom_word(state_, pc);
 		last_debug_stop_ = {};
 		honor_execution_breakpoints_ = true;
@@ -674,21 +634,18 @@ namespace casioemu {
 		}
 		debug_run_mode_ = DebugRunMode::StepOver;
 		debug_target_pc_ = pc + EpsInstructionWords(word, variant_);
-		debug_target_stack_pointer_ = EpsStackDepth(
-			state_->mmio.regs[REG_STKPTR], variant_);
+		debug_target_stack_pointer_ = machine_state_debug_stack_depth(state_);
 	}
 
 	bool ePSCPU::RequestStepOut() {
 		const std::lock_guard lock(state_mutex_);
-		const uint8_t raw_stack_pointer = state_->mmio.regs[REG_STKPTR];
-		const uint8_t stack_pointer = EpsStackDepth(raw_stack_pointer, variant_);
-		if (stack_pointer == 0)
+		machine_debug_snapshot snapshot{};
+		machine_state_debug_get_snapshot(state_, &snapshot);
+		if (snapshot.stack_pointer == 0)
 			return false;
 		debug_run_mode_ = DebugRunMode::StepOut;
-		debug_target_stack_pointer_ = stack_pointer - 1;
-		debug_target_pc_ = variant_ == EpsVariant::Eps9500
-			? state_->cpu.stack[raw_stack_pointer]
-			: state_->cpu.stack[stack_pointer - 1];
+		debug_target_stack_pointer_ = snapshot.stack_pointer - 1;
+		debug_target_pc_ = snapshot.stack[snapshot.stack_pointer - 1];
 		honor_execution_breakpoints_ = true;
 		honor_memory_breakpoints_ = true;
 		last_debug_stop_ = {};
@@ -764,9 +721,7 @@ namespace casioemu {
 
 	bool ePSCPU::AddMemoryBreakpoint(const Eps6800MemoryBreakpoint& breakpoint) {
 		const std::lock_guard lock(state_mutex_);
-		const uint32_t linear_memory_size = MACHINE_DEBUG_REGISTER_COUNT +
-			(eps_variant_is_9500(state_->mmio.variant) ? MMIO_EPS9500_RAM_COUNT : MMIO_LEGACY_RAM_COUNT);
-		if (breakpoint.address >= linear_memory_size)
+		if (breakpoint.address >= machine_state_debug_linear_memory_size(state_))
 			return false;
 		auto it = std::find_if(memory_breakpoints_.begin(), memory_breakpoints_.end(), [&](const auto& item) {
 			return item.address == breakpoint.address && item.write == breakpoint.write;
