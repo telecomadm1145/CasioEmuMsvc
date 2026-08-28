@@ -12,6 +12,11 @@ enum {
 	MACHINE_DEBUG_POSTID_DISABLED = 0x00
 };
 
+static uint32_t machine_debug_linear_memory_size(const struct machine_state *state) {
+	return MACHINE_DEBUG_REGISTER_COUNT +
+		(eps_variant_is_9500(state->mmio.variant) ? MMIO_EPS9500_RAM_COUNT : MMIO_LEGACY_RAM_COUNT);
+}
+
 static uint32_t machine_debug_read_pc(struct machine_state *state) {
 	return ((uint32_t)mmio_read_byte_internal_state(&state->mmio, REG_PCH) << MACHINE_DEBUG_PC_HIGH_SHIFT) |
 		((uint32_t)mmio_read_byte_internal_state(&state->mmio, REG_PCM) << MACHINE_DEBUG_PC_MID_SHIFT) |
@@ -166,7 +171,7 @@ uint8_t machine_state_debug_peek_memory(struct machine_state *state, uint32_t li
 	uint8_t postid;
 	uint8_t byte;
 
-	if (!state || linear_addr >= MACHINE_DEBUG_LINEAR_MEMORY_SIZE) {
+	if (!state || linear_addr >= machine_debug_linear_memory_size(state)) {
 		return 0xff;
 	}
 	if (linear_addr >= 0x80) {
@@ -183,7 +188,7 @@ uint8_t machine_state_debug_peek_memory(struct machine_state *state, uint32_t li
 }
 
 bool machine_state_debug_write_memory(struct machine_state *state, uint32_t linear_addr, uint8_t byte) {
-	if (!state || linear_addr >= MACHINE_DEBUG_LINEAR_MEMORY_SIZE) {
+	if (!state || linear_addr >= machine_debug_linear_memory_size(state)) {
 		return false;
 	}
 	if (linear_addr >= 0x80) {

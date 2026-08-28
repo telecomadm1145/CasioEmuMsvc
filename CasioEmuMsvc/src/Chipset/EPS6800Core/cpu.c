@@ -231,12 +231,16 @@ static void cpu_bus_post_id(struct cpu_state *state, uint8_t addr) {
 	mmio_post_id_state(state->mmio, addr);
 }
 
-static void cpu_bus_carry_propagate(struct cpu_state *state, uint8_t addr) {
-	mmio_carry_propagate_state(state->mmio, addr);
+static void cpu_bus_finish_carry_writeback(struct cpu_state *state, uint8_t addr, uint8_t result) {
+	mmio_sync_extended_fsr_result_state(state->mmio, addr, result);
+	if (state->status & BIT_STATUS_C)
+		mmio_carry_propagate_state(state->mmio, addr);
 }
 
-static void cpu_bus_borrow_propagate(struct cpu_state *state, uint8_t addr) {
-	mmio_borrow_propagate_state(state->mmio, addr);
+static void cpu_bus_finish_borrow_writeback(struct cpu_state *state, uint8_t addr, uint8_t result) {
+	mmio_sync_extended_fsr_result_state(state->mmio, addr, result);
+	if (!(state->status & BIT_STATUS_C))
+		mmio_borrow_propagate_state(state->mmio, addr);
 }
 
 static void cpu_bus_reset(struct cpu_state *state) {
@@ -1013,16 +1017,17 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                              break;
                 case CPU_OPCODE_INC_R: temp8_1 = alu_inc_state(state, cpu_read_binary_destination_state(state, imm8_1));
                              cpu_bus_write(state, imm8_1, temp8_1);
-                             if (state->status & BIT_STATUS_C) cpu_bus_carry_propagate(state, imm8_1);
+                             cpu_bus_finish_carry_writeback(state, imm8_1, temp8_1);
                              cpu_bus_post_id(state, imm8_1);
                              break;
                 case CPU_OPCODE_ADD_A_R: cpu_bus_write_internal(state, REG_ACC,
                                 alu_add_state(state, cpu_bus_read(state, imm8_1), cpu_bus_read_internal(state, REG_ACC)));
                              cpu_bus_post_id(state, imm8_1);
                              break;
-                case CPU_OPCODE_ADD_R_A: cpu_bus_write(state, imm8_1,
-                                alu_add_state(state, cpu_read_binary_destination_state(state, imm8_1), cpu_bus_read_internal(state, REG_ACC)));
-                             if (state->status & BIT_STATUS_C) cpu_bus_carry_propagate(state, imm8_1);
+                case CPU_OPCODE_ADD_R_A: temp8_1 = alu_add_state(state,
+                                cpu_read_binary_destination_state(state, imm8_1), cpu_bus_read_internal(state, REG_ACC));
+                             cpu_bus_write(state, imm8_1, temp8_1);
+                             cpu_bus_finish_carry_writeback(state, imm8_1, temp8_1);
                              cpu_bus_post_id(state, imm8_1);
                              break;
                 case CPU_OPCODE_ADD_A_IMM: cpu_bus_write_internal(state, REG_ACC,
@@ -1033,10 +1038,11 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                                 state->status & BIT_STATUS_C));
                              cpu_bus_post_id(state, imm8_1);
                              break;
-                case CPU_OPCODE_ADC_R_A: cpu_bus_write(state, imm8_1,
-                                alu_adc_state(state, cpu_read_binary_destination_state(state, imm8_1), cpu_bus_read_internal(state, REG_ACC),
-                                state->status & BIT_STATUS_C));
-                             if (state->status & BIT_STATUS_C) cpu_bus_carry_propagate(state, imm8_1);
+                case CPU_OPCODE_ADC_R_A: temp8_1 = alu_adc_state(state,
+                                cpu_read_binary_destination_state(state, imm8_1), cpu_bus_read_internal(state, REG_ACC),
+                                state->status & BIT_STATUS_C);
+                             cpu_bus_write(state, imm8_1, temp8_1);
+                             cpu_bus_finish_carry_writeback(state, imm8_1, temp8_1);
                              cpu_bus_post_id(state, imm8_1);
                              break;
                 case CPU_OPCODE_ADC_A_IMM: cpu_bus_write_internal(state, REG_ACC,
@@ -1049,16 +1055,17 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                              break;
                 case CPU_OPCODE_DEC_R: temp8_1 = alu_dec_state(state, cpu_read_binary_destination_state(state, imm8_1));
                              cpu_bus_write(state, imm8_1, temp8_1);
-                             if (!(state->status & BIT_STATUS_C)) cpu_bus_borrow_propagate(state, imm8_1);
+                             cpu_bus_finish_borrow_writeback(state, imm8_1, temp8_1);
                              cpu_bus_post_id(state, imm8_1);
                              break;
                 case CPU_OPCODE_SUB_A_R: cpu_bus_write_internal(state, REG_ACC,
                                 alu_sub_state(state, cpu_bus_read(state, imm8_1), cpu_bus_read_internal(state, REG_ACC)));
                              cpu_bus_post_id(state, imm8_1);
                              break;
-                case CPU_OPCODE_SUB_R_A: cpu_bus_write(state, imm8_1,
-                                alu_sub_state(state, cpu_read_binary_destination_state(state, imm8_1), cpu_bus_read_internal(state, REG_ACC)));
-                             if (!(state->status & BIT_STATUS_C)) cpu_bus_borrow_propagate(state, imm8_1);
+                case CPU_OPCODE_SUB_R_A: temp8_1 = alu_sub_state(state,
+                                cpu_read_binary_destination_state(state, imm8_1), cpu_bus_read_internal(state, REG_ACC));
+                             cpu_bus_write(state, imm8_1, temp8_1);
+                             cpu_bus_finish_borrow_writeback(state, imm8_1, temp8_1);
                              cpu_bus_post_id(state, imm8_1);
                              break;
                 case CPU_OPCODE_SUB_A_IMM: cpu_bus_write_internal(state, REG_ACC,
@@ -1069,10 +1076,11 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                                 ((state->status & BIT_STATUS_C)?0:1)));
                              cpu_bus_post_id(state, imm8_1);
                              break;
-                case CPU_OPCODE_SUBB_R_A: cpu_bus_write(state, imm8_1,
-                                alu_subb_state(state, cpu_read_binary_destination_state(state, imm8_1), cpu_bus_read_internal(state, REG_ACC),
-                                ((state->status & BIT_STATUS_C)?0:1)));
-                             if (!(state->status & BIT_STATUS_C)) cpu_bus_borrow_propagate(state, imm8_1);
+                case CPU_OPCODE_SUBB_R_A: temp8_1 = alu_subb_state(state,
+                                cpu_read_binary_destination_state(state, imm8_1), cpu_bus_read_internal(state, REG_ACC),
+                                ((state->status & BIT_STATUS_C)?0:1));
+                             cpu_bus_write(state, imm8_1, temp8_1);
+                             cpu_bus_finish_borrow_writeback(state, imm8_1, temp8_1);
                              cpu_bus_post_id(state, imm8_1);
                              break;
                 case CPU_OPCODE_SUBB_A_IMM: cpu_bus_write_internal(state, REG_ACC,
@@ -1218,7 +1226,8 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
 							 if (temp8_1 != 0) { newpc = cpu_replace_pc_low16(newpc, imm16_1); }
 							 else { newpc += 1; }
 							 cpu_bus_write(state, imm8_1, temp8_1);
-							 if (temp8_2 == 0) cpu_bus_borrow_propagate(state, imm8_1);
+							 mmio_sync_extended_fsr_result_state(state->mmio, imm8_1, temp8_1);
+							 if (temp8_2 == 0) mmio_borrow_propagate_state(state->mmio, imm8_1);
                              cpu_bus_post_id(state, imm8_1);
 					         break;
 				case CPU_OPCODE_JGE_A_IMM: if (cpu_bus_read_internal(state, REG_ACC) >= imm8_1) { newpc = cpu_replace_pc_low16(newpc, imm16_1); }

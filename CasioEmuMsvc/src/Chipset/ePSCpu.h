@@ -90,7 +90,7 @@ namespace casioemu {
 	};
 
 	struct Eps6800MemoryBreakpoint {
-		uint32_t address{}; // 0x00-0x7f SFR, 0x80-0x207f banked RAM
+		uint32_t address{}; // 0x00-0x7f SFR, 0x80-0x20ff banked RAM
 		bool write{};
 		bool enabled{true};
 		bool break_when_hit{true};

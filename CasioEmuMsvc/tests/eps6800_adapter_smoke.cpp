@@ -841,6 +841,10 @@ namespace {
 			0x80, 0x10, 0x01, kInitialStatus | 0x01);
 		const auto fsr2_carry = Run(0x1100 | kFsr2, kFsr2, kBsr2,
 			0xff, 0x11, 0x01, kInitialStatus);
+		const auto fsr1_no_borrow = Run(0x1f00 | kFsr1, kFsr1, kBsr1,
+			0x80, 0x11, 0x00, kInitialStatus);
+		const auto fsr2_no_carry = Run(0x1100 | kFsr2, kFsr2, kBsr2,
+			0xff, 0x10, 0x01, kInitialStatus);
 		const auto fsr1_jdnz_borrow = Run(0x5100 | kFsr1, kFsr1, kBsr1,
 			0x80, 0x10, 0x00, kInitialStatus);
 		const auto fsr2_jdnz_borrow = Run(0x5100 | kFsr2, kFsr2, kBsr2,
@@ -863,11 +867,13 @@ namespace {
 		return
 			Run(0x1100 | kFsr2, kFsr2, kBsr2, 0x80, 0x10, 0x01, kInitialStatus)[0] == 0x81 &&
 			Run(0x1300 | kFsr2, kFsr2, kBsr2, 0x80, 0x10, 0x01, kInitialStatus | 0x01)[0] == 0x82 &&
-			fsr1_borrow[0] == 0xff && fsr1_borrow[1] == 0x0e &&
-			fsr2_borrow[0] == 0xff && fsr2_borrow[1] == 0x0e &&
-			fsr2_carry[0] == 0x80 && fsr2_carry[1] == 0x13 &&
-			fsr1_jdnz_borrow[0] == 0xff && fsr1_jdnz_borrow[1] == 0x0e &&
-			fsr2_jdnz_borrow[0] == 0xff && fsr2_jdnz_borrow[1] == 0x0e &&
+			fsr1_borrow[0] == 0xff && fsr1_borrow[1] == 0x0f &&
+			fsr2_borrow[0] == 0xff && fsr2_borrow[1] == 0x0f &&
+			fsr2_carry[0] == 0x80 && fsr2_carry[1] == 0x12 &&
+			fsr1_no_borrow[0] == 0xff && fsr1_no_borrow[1] == 0x10 &&
+			fsr2_no_carry[0] == 0x80 && fsr2_no_carry[1] == 0x11 &&
+			fsr1_jdnz_borrow[0] == 0xff && fsr1_jdnz_borrow[1] == 0x0f &&
+			fsr2_jdnz_borrow[0] == 0xff && fsr2_jdnz_borrow[1] == 0x0f &&
 			raw_accumulator_source[3] == 0x80 && raw_accumulator_source[1] == 0x10 &&
 			raw_decimal_destination[0] == 0x81 && raw_decimal_destination[1] == 0x10 &&
 			fsr0_no_borrow_chain[0] == 0xff && fsr0_no_borrow_chain[1] == 0x10 &&
@@ -875,6 +881,56 @@ namespace {
 			pcm_no_borrow_chain[0] == 0xff && pcm_no_borrow_chain[1] == 0x10 &&
 			tabptr_low_borrow[0] == 0xff && tabptr_low_borrow[1] == 0x0f &&
 			tabptr_mid_no_borrow_chain[0] == 0xff && tabptr_mid_no_borrow_chain[1] == 0x02;
+	}
+
+	bool Eps9500RamAddressingSmoke() {
+		constexpr size_t kEps9500BankRamSize = 0x2080;
+		constexpr size_t kWbkRamSize = 27;
+		constexpr size_t kPersistentRegisterSize = 0x0d + 0x40;
+
+		casioemu::ePSCPU machine(casioemu::EpsVariant::Eps9500);
+		std::vector<uint8_t> rom(0x30000, 0);
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+			return false;
+		machine.Reset();
+
+		/* Direct B8h at BSR=2 must use 2*80h+B8h, not alias 2*80h+38h. */
+		machine.WriteDebugMemory(0x1b8, 0);
+		machine.WriteDebugMemory(0x238, 0);
+		machine.WriteByte(0x02, 0x02);
+		machine.WriteByte(0xb8, 0x5a);
+		if (machine.ReadDebugMemory(0x1b8) != 0 || machine.ReadDebugMemory(0x238) != 0x5a)
+			return false;
+
+		/* INDF1 uses the same full-width FSR address formula. */
+		machine.WriteDebugMemory(0x1b1, 0);
+		machine.WriteDebugMemory(0x231, 0);
+		machine.WriteByte(0x05, 0x02);
+		machine.WriteByte(0x04, 0xb1);
+		machine.WriteByte(0x03, 0x6b);
+		if (machine.ReadDebugMemory(0x1b1) != 0 || machine.ReadDebugMemory(0x231) != 0x6b)
+			return false;
+
+		/* BSR=3Fh, FSR=FFh reaches physical 207Fh (debug address 20FFh). */
+		machine.WriteByte(0x05, 0x3f);
+		machine.WriteByte(0x04, 0xff);
+		machine.WriteByte(0x03, 0xa5);
+		if (machine.ReadDebugMemory(0x20ff) != 0xa5 ||
+			!machine.WriteDebugMemory(0x20ff, 0x5a) || machine.ReadDebugMemory(0x20ff) != 0x5a ||
+			machine.WriteDebugMemory(0x2100, 0xff))
+			return false;
+
+		casioemu::Eps6800MemoryBreakpoint last_ram_breakpoint{};
+		last_ram_breakpoint.address = 0x20ff;
+		casioemu::Eps6800MemoryBreakpoint out_of_range_breakpoint{};
+		out_of_range_breakpoint.address = 0x2100;
+		if (!machine.AddMemoryBreakpoint(last_ram_breakpoint) ||
+			machine.AddMemoryBreakpoint(out_of_range_breakpoint))
+			return false;
+
+		const auto ram = machine.ExportRam();
+		const size_t persistent_size = kEps9500BankRamSize + kWbkRamSize + kPersistentRegisterSize;
+		return ram.size() == persistent_size && machine.ImportRam(ram);
 	}
 
 	bool Eps6009PortBInputSmoke() {
@@ -1166,6 +1222,10 @@ int main(int argc, char** argv) {
 	}
 	if (!Eps9500ExtendedFsrArithmeticSmoke()) {
 		std::cerr << "EPS9500 extended FSR arithmetic regression\n";
+		return 1;
+	}
+	if (!Eps9500RamAddressingSmoke()) {
+		std::cerr << "EPS9500 RAM addressing regression\n";
 		return 1;
 	}
 	if (!TimerSmoke()) {

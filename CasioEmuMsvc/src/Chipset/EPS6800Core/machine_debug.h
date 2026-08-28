@@ -2,6 +2,8 @@
 #ifndef FX_EMU_CORE_MACHINE_DEBUG_H
 #define FX_EMU_CORE_MACHINE_DEBUG_H
 
+#include "mmio_layout.h"
+
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -14,7 +16,7 @@ extern "C" {
 #define MACHINE_DEBUG_REGISTER_COUNT 0x80
 #define MACHINE_DEBUG_WBK_REGISTER_COUNT 27
 #define MACHINE_DEBUG_STACK_DEPTH 32
-#define MACHINE_DEBUG_BANK_RAM_SIZE (64 * 128)
+#define MACHINE_DEBUG_BANK_RAM_SIZE MMIO_RAM_COUNT
 #define MACHINE_DEBUG_LINEAR_MEMORY_SIZE (0x80 + MACHINE_DEBUG_BANK_RAM_SIZE)
 
 struct machine_debug_state {

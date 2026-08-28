@@ -611,9 +611,12 @@ namespace casioemu {
 
 	std::vector<uint8_t> ePSCPU::ExportRam() const {
 		const std::lock_guard lock(state_mutex_);
+		const size_t bank_ram_size = eps_variant_is_9500(state_->mmio.variant)
+			? MMIO_EPS9500_RAM_COUNT : MMIO_LEGACY_RAM_COUNT;
 		std::vector<uint8_t> data;
-		data.reserve(sizeof(state_->mmio.ram) + sizeof(state_->mmio.ram_wbk) + 0x0d + 0x40);
-		data.insert(data.end(), std::begin(state_->mmio.ram), std::end(state_->mmio.ram));
+		data.reserve(bank_ram_size + sizeof(state_->mmio.ram_wbk) + 0x0d + 0x40);
+		data.insert(data.end(), std::begin(state_->mmio.ram),
+			std::begin(state_->mmio.ram) + bank_ram_size);
 		data.insert(data.end(), std::begin(state_->mmio.ram_wbk), std::end(state_->mmio.ram_wbk));
 		data.insert(data.end(), &state_->mmio.regs[0x13], &state_->mmio.regs[0x20]);
 		data.insert(data.end(), &state_->mmio.regs[0x40], &state_->mmio.regs[0x80]);
@@ -622,11 +625,11 @@ namespace casioemu {
 
 	bool ePSCPU::ImportRam(const std::vector<uint8_t>& data) {
 		const std::lock_guard lock(state_mutex_);
-		const size_t bank_ram_size = sizeof(state_->mmio.ram);
+		const bool is_eps9500 = eps_variant_is_9500(state_->mmio.variant);
+		const size_t bank_ram_size = is_eps9500
+			? MMIO_EPS9500_RAM_COUNT : MMIO_LEGACY_RAM_COUNT;
 		const size_t legacy_persistent_ram_size = bank_ram_size + sizeof(state_->mmio.ram_wbk);
 		const size_t persistent_ram_size = legacy_persistent_ram_size + 0x0d + 0x40;
-		// Older builds wrote only the banked 8 KiB. Keep those images usable while
-		// including the WBK window in all newly written images.
 		if (data.size() != bank_ram_size && data.size() != legacy_persistent_ram_size &&
 			data.size() != persistent_ram_size)
 			return false;
@@ -760,9 +763,11 @@ namespace casioemu {
 	}
 
 	bool ePSCPU::AddMemoryBreakpoint(const Eps6800MemoryBreakpoint& breakpoint) {
-		if (breakpoint.address >= 0x2080u)
-			return false;
 		const std::lock_guard lock(state_mutex_);
+		const uint32_t linear_memory_size = MACHINE_DEBUG_REGISTER_COUNT +
+			(eps_variant_is_9500(state_->mmio.variant) ? MMIO_EPS9500_RAM_COUNT : MMIO_LEGACY_RAM_COUNT);
+		if (breakpoint.address >= linear_memory_size)
+			return false;
 		auto it = std::find_if(memory_breakpoints_.begin(), memory_breakpoints_.end(), [&](const auto& item) {
 			return item.address == breakpoint.address && item.write == breakpoint.write;
 		});

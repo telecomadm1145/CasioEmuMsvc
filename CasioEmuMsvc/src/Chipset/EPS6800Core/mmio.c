@@ -31,6 +31,11 @@ static uint32_t mmio_ram_address(uint8_t page, uint8_t offset) {
 
 static uint32_t mmio_variant_ram_address(const struct mmio_state *state, uint8_t page, uint8_t offset) {
 	const uint8_t page_mask = eps_variant_is_6009(state->variant) ? MMIO_EPS6009_RAM_PAGE_MASK : MMIO_RAM_PAGE_MASK;
+	if (eps_variant_is_9500(state->variant)) {
+		/* The official mode-4 core retains FSR/address bit 7.  Addition is
+		 * intentional: offsets 80h-FFh occupy the following 128-byte slice. */
+		return ((uint32_t)(page & page_mask) << MMIO_RAM_PAGE_SHIFT) + offset;
+	}
 	return ((uint32_t)(page & page_mask) << MMIO_RAM_PAGE_SHIFT) |
 		(offset & MMIO_RAM_OFFSET_MASK);
 }
@@ -522,6 +527,28 @@ static void mmio_borrow_extended_fsr(struct mmio_state *state, uint8_t bsr_reg, 
 	if (eps_variant_is_6009(state->variant)) {
 		state->regs[fsr_reg] |= MMIO_RAM_SELECT_MASK;
 	}
+}
+
+void mmio_sync_extended_fsr_result_state(struct mmio_state *state, uint8_t addr, uint8_t result) {
+	uint8_t bsr_reg;
+
+	if (!eps_variant_is_9500(state->variant))
+		return;
+	if (addr == REG_FSR1)
+		bsr_reg = REG_BSR1;
+	else if (addr == REG_FSR2)
+		bsr_reg = REG_BSR2;
+	else
+		return;
+
+	/* The official mode-4 carry/borrow helpers first copy bit 7 of the
+	 * eight-bit arithmetic result into BSRx[0].  Only after that do they
+	 * add or subtract two when the operation carried or borrowed.  FSRx
+	 * itself keeps bit 7 set as the RAM-select marker, so omitting this
+	 * separate BSR bit makes an extended pointer drift by one 128-byte
+	 * page at every arithmetic boundary. */
+	state->regs[bsr_reg] = (uint8_t)((state->regs[bsr_reg] & (uint8_t)~1u) |
+		((result >> 7) & 1u));
 }
 
 void mmio_carry_propagate_state(struct mmio_state *state, uint8_t addr) {
