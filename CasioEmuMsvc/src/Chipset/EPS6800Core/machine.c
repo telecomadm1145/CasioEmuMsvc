@@ -16,6 +16,167 @@ enum {
 	MACHINE_PERSISTENT_HIGH_REG_END = 0x80
 };
 
+enum machine_reset_target {
+	MACHINE_RESET_TARGET_MMIO = 0,
+	MACHINE_RESET_TARGET_LCD,
+	MACHINE_RESET_TARGET_KBD
+};
+
+enum machine_reset_register {
+	MACHINE_RESET_REG_CPUCON = 0,
+	MACHINE_RESET_REG_POSTID,
+	MACHINE_RESET_REG_STBCON,
+	MACHINE_RESET_REG_PORTA,
+	MACHINE_RESET_REG_PACON,
+	MACHINE_RESET_REG_DCRA,
+	MACHINE_RESET_REG_PORTB,
+	MACHINE_RESET_REG_PBCON,
+	MACHINE_RESET_REG_DCRB,
+	MACHINE_RESET_REG_PORTC,
+	MACHINE_RESET_REG_PCCON,
+	MACHINE_RESET_REG_DCRC,
+	MACHINE_RESET_REG_PAWAKE
+};
+
+enum machine_reset_value_source {
+	MACHINE_RESET_VALUE_LITERAL = 0,
+	MACHINE_RESET_VALUE_CPUCON
+};
+
+struct machine_reset_write {
+	enum machine_reset_target target;
+	enum machine_reset_register reg;
+	enum machine_reset_value_source value_source;
+	uint8_t value;
+};
+
+struct machine_reset_profile {
+	uint8_t cpucon_base;
+	uint8_t cpucon_config_shift;
+	const struct machine_reset_write *writes;
+	size_t write_count;
+};
+
+#define MACHINE_RESET_LITERAL(target_, reg_, value_) \
+	{ target_, reg_, MACHINE_RESET_VALUE_LITERAL, value_ }
+#define MACHINE_RESET_CPUCON(target_, reg_) \
+	{ target_, reg_, MACHINE_RESET_VALUE_CPUCON, 0u }
+
+static const struct machine_reset_write machine_reset_eps6800[] = {
+	MACHINE_RESET_CPUCON(MACHINE_RESET_TARGET_MMIO, MACHINE_RESET_REG_CPUCON),
+	MACHINE_RESET_CPUCON(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_PAWAKE),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_LCD, MACHINE_RESET_REG_POSTID,
+		BIT_FSR0ID | BIT_FSR1ID | BIT_LCDID | BIT_FSR2ID)
+};
+
+static const struct machine_reset_write machine_reset_eps6009[] = {
+	MACHINE_RESET_CPUCON(MACHINE_RESET_TARGET_MMIO, MACHINE_RESET_REG_CPUCON),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_LCD, MACHINE_RESET_REG_POSTID,
+		BIT_FSR0ID | BIT_FSR1ID | BIT_LCDID),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_PACON, 0x0eu),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_PBCON, 0x00u),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_DCRB, 0x03u),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_PORTA, 0xffu),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_PORTB, 0xffu)
+};
+
+static const struct machine_reset_write machine_reset_eps9500[] = {
+	MACHINE_RESET_CPUCON(MACHINE_RESET_TARGET_MMIO, MACHINE_RESET_REG_CPUCON),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_STBCON, 0x20u),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_PORTA, 0xffu),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_PACON, 0x00u),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_DCRA, 0xffu),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_PORTB, 0xffu),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_PBCON, 0x00u),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_DCRB, 0xffu),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_PORTC, 0xffu),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_PCCON, 0x00u),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_DCRC, 0xffu),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_KBD, MACHINE_RESET_REG_PAWAKE, 0x00u),
+	MACHINE_RESET_LITERAL(MACHINE_RESET_TARGET_LCD, MACHINE_RESET_REG_POSTID,
+		BIT_FSR0ID | BIT_FSR1ID | BIT_LCDID | BIT_FSR2ID)
+};
+
+/* enum eps_variant is intentionally contiguous and ordered 6800/6009/9500;
+ * keep this table in the same order so MSVC's C compiler does not need C99
+ * array-designator support. */
+static const struct machine_reset_profile machine_reset_profiles[] = {
+	{
+		0x10u, 9u,
+		machine_reset_eps6800, sizeof(machine_reset_eps6800) / sizeof(machine_reset_eps6800[0])
+	},
+	{
+		0x00u, 1u,
+		machine_reset_eps6009, sizeof(machine_reset_eps6009) / sizeof(machine_reset_eps6009[0])
+	},
+	{
+		0x10u, 9u,
+		machine_reset_eps9500, sizeof(machine_reset_eps9500) / sizeof(machine_reset_eps9500[0])
+	}
+};
+
+static const struct machine_reset_profile *machine_reset_profile(enum eps_variant variant) {
+	const size_t count = sizeof(machine_reset_profiles) / sizeof(machine_reset_profiles[0]);
+	const size_t index = (size_t)variant;
+	return index < count ? &machine_reset_profiles[index] : &machine_reset_profiles[EPS_VARIANT_6800];
+}
+
+static uint8_t machine_reset_register_address(enum eps_variant variant, enum machine_reset_register reg) {
+	switch (reg) {
+	case MACHINE_RESET_REG_CPUCON:
+		return eps_reg_cpucon(variant);
+	case MACHINE_RESET_REG_POSTID:
+		return eps_reg_postid(variant);
+	case MACHINE_RESET_REG_STBCON:
+		return eps_reg_stbcon(variant);
+	case MACHINE_RESET_REG_PORTA:
+		return eps_reg_porta(variant);
+	case MACHINE_RESET_REG_PACON:
+		return eps_reg_pacon(variant);
+	case MACHINE_RESET_REG_DCRA:
+		return REG_DCRA;
+	case MACHINE_RESET_REG_PORTB:
+		return eps_reg_portb(variant);
+	case MACHINE_RESET_REG_PBCON:
+		return eps_reg_pbcon(variant);
+	case MACHINE_RESET_REG_DCRB:
+		return eps_reg_dcrb(variant);
+	case MACHINE_RESET_REG_PORTC:
+		return REG_PORTC;
+	case MACHINE_RESET_REG_PCCON:
+		return REG_PCCON;
+	case MACHINE_RESET_REG_DCRC:
+		return REG_DCRC;
+	case MACHINE_RESET_REG_PAWAKE:
+		return eps_reg_pawake(variant);
+	default:
+		return 0xffu;
+	}
+}
+
+static void machine_apply_reset_write(
+	struct machine_state *state,
+	const struct machine_reset_write *write,
+	uint8_t cpucon
+) {
+	const uint8_t addr = machine_reset_register_address(state->mmio.variant, write->reg);
+	const uint8_t value = write->value_source == MACHINE_RESET_VALUE_CPUCON ? cpucon : write->value;
+
+	switch (write->target) {
+	case MACHINE_RESET_TARGET_MMIO:
+		mmio_write_byte_internal_state(&state->mmio, addr, value);
+		break;
+	case MACHINE_RESET_TARGET_LCD:
+		lcd_write_byte_state(&state->lcd, addr, value);
+		break;
+	case MACHINE_RESET_TARGET_KBD:
+		kbd_write_byte_state(&state->kbd, addr, value);
+		break;
+	default:
+		break;
+	}
+}
+
 static size_t machine_state_legacy_ram_image_size(const struct machine_state *state) {
 	return eps_bank_ram_size(state->mmio.variant) + sizeof(state->mmio.ram_wbk);
 }
@@ -53,6 +214,11 @@ void machine_state_set_variant(struct machine_state *state, enum eps_variant var
 }
 
 void machine_state_reset(struct machine_state *state) {
+	const struct machine_reset_profile *profile;
+	uint16_t config_word;
+	uint8_t cpucon;
+	size_t i;
+
 	if (!state) {
 		return;
 	}
@@ -65,49 +231,14 @@ void machine_state_reset(struct machine_state *state) {
 
 	/* Reference ice.dll CIce::Reset: variant-specific SFRs must be written
 	 * through their owning peripherals so the flat debugger mirror and device
-	 * state stay synchronized. */
-	{
-		uint16_t config_word = rom_read_word(&state->rom, 12);
-		if (eps_variant_is_6009(state->mmio.variant)) {
-			uint8_t cpucon = (uint8_t)((config_word >> 1) & 1u);
-			mmio_write_byte_internal_state(&state->mmio, eps_reg_cpucon(state->mmio.variant), cpucon);
-			lcd_write_byte_state(&state->lcd, eps_reg_postid(state->mmio.variant),
-				BIT_FSR0ID | BIT_FSR1ID | BIT_LCDID);
-			kbd_write_byte_state(&state->kbd, eps_reg_pacon(state->mmio.variant), 0x0eu);
-			kbd_write_byte_state(&state->kbd, eps_reg_pbcon(state->mmio.variant), 0x00u);
-			kbd_write_byte_state(&state->kbd, eps_reg_dcrb(state->mmio.variant), 0x03u);
-			kbd_write_byte_state(&state->kbd, eps_reg_porta(state->mmio.variant), 0xffu);
-			kbd_write_byte_state(&state->kbd, eps_reg_portb(state->mmio.variant), 0xffu);
-		}
-		else if (eps_variant_is_9500(state->mmio.variant)) {
-			/* Official EL-W531TL CIce::Reset core-mode-4 branch
-			 * (sub_422F80).  sub_425C20 only performs the preceding low-level
-			 * SFR clear; these are the final values visible to firmware. */
-			const uint8_t cpucon = 0x10u | (uint8_t)((config_word >> 9) & 1u);
-			mmio_write_byte_internal_state(&state->mmio,
-				eps_reg_cpucon(state->mmio.variant), cpucon);
-			kbd_write_byte_state(&state->kbd, REG_STBCON, 0x20u);
-			kbd_write_byte_state(&state->kbd, REG_PORTA, 0xffu);
-			kbd_write_byte_state(&state->kbd, REG_PACON, 0x00u);
-			kbd_write_byte_state(&state->kbd, REG_DCRA, 0xffu);
-			kbd_write_byte_state(&state->kbd, REG_PORTB, 0xffu);
-			kbd_write_byte_state(&state->kbd, REG_PBCON, 0x00u);
-			kbd_write_byte_state(&state->kbd, REG_DCRB, 0xffu);
-			kbd_write_byte_state(&state->kbd, REG_PORTC, 0xffu);
-			kbd_write_byte_state(&state->kbd, REG_PCCON, 0x00u);
-			kbd_write_byte_state(&state->kbd, REG_DCRC, 0xffu);
-			kbd_write_byte_state(&state->kbd,
-				eps_reg_pawake(state->mmio.variant), 0x00u);
-			lcd_write_byte_state(&state->lcd, eps_reg_postid(state->mmio.variant),
-				BIT_FSR0ID | BIT_FSR1ID | BIT_LCDID | BIT_FSR2ID);
-		}
-		else {
-			uint8_t reset_value = 0x10u | (uint8_t)((config_word >> 9) & 1u);
-			mmio_write_byte_internal_state(&state->mmio, eps_reg_cpucon(state->mmio.variant), reset_value);
-			kbd_write_byte_state(&state->kbd, eps_reg_pawake(state->mmio.variant), reset_value);
-			lcd_write_byte_state(&state->lcd, eps_reg_postid(state->mmio.variant),
-				BIT_FSR0ID | BIT_FSR1ID | BIT_LCDID | BIT_FSR2ID);
-		}
+	 * state stay synchronized.  The ordered profile below preserves those
+	 * side effects while keeping silicon reset policy out of the control flow. */
+	profile = machine_reset_profile(state->mmio.variant);
+	config_word = rom_read_word(&state->rom, 12);
+	cpucon = (uint8_t)(profile->cpucon_base |
+		(uint8_t)((config_word >> profile->cpucon_config_shift) & 1u));
+	for (i = 0; i < profile->write_count; ++i) {
+		machine_apply_reset_write(state, &profile->writes[i], cpucon);
 	}
 }
 
