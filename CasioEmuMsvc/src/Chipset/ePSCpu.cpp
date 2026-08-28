@@ -9,7 +9,6 @@
 #include "EPS6800Core/eps6800.h"
 #include "EPS6800Core/machine.h"
 #include "EPS6800Core/machine_debug.h"
-#include "EPS6800Core/machine_internal.h"
 #include "EPS6800Core/machine_io.h"
 #include "EPS6800Core/machine_rom.h"
 #include "EPS6800Core/machine_snapshot.h"
@@ -253,7 +252,7 @@ namespace casioemu {
 		constexpr uint32_t kLegacyActiveInstructions = 2000;
 		constexpr uint32_t kFrameInstructions = 4000;
 		bool stopped = false;
-		if (state_->cpu.mode == CPU_MODE_SLEEP) {
+		if (machine_state_cpu_mode(state_) == MACHINE_CPU_MODE_SLEEP) {
 			machine_state_advance_cycles_split(state_, kFrameInstructions, false, false);
 			return false;
 		}
@@ -267,7 +266,7 @@ namespace casioemu {
 			return stopped;
 		}
 		const auto now = std::chrono::steady_clock::now();
-		if (state_->cpu.mode == CPU_MODE_IDLE) {
+		if (machine_state_cpu_mode(state_) == MACHINE_CPU_MODE_IDLE) {
 			machine_state_advance_cycles_split(state_, kFrameInstructions, false, false);
 			if (idle_timer_cycles != 0) {
 				// Some EPS6800 models need Timer1 paced from the low-speed
@@ -310,9 +309,9 @@ namespace casioemu {
 		if (ConsumeBreakRequestLocked())
 			return true;
 		memory_break_pending_ = false;
-		const uint32_t pc_before = state_->cpu.pc;
+		const uint32_t pc_before = machine_state_debug_program_counter(state_);
 		const uint8_t stack_pointer_before = machine_state_debug_stack_depth(state_);
-		const uint8_t interrupt_pending = state_->cpu.int_pending;
+		const uint8_t interrupt_pending = machine_state_interrupt_pending(state_);
 		const uint32_t instruction = machine_state_debug_fetch_instruction(state_, pc_before);
 		const uint16_t word = static_cast<uint16_t>(instruction >> 16);
 		const uint8_t base_cycles = EpsInstructionCycles(word, variant_);
@@ -328,19 +327,20 @@ namespace casioemu {
 		machine_state_advance_instruction_cycles(state_, base_cycles, tick_timer, advance_timer);
 		++instruction_count_;
 
-		const uint32_t pc_after = state_->cpu.pc;
+		const uint32_t pc_after = machine_state_debug_program_counter(state_);
 		uint8_t elapsed_cycles = base_cycles;
 		if (elapsed_cycles == 1 && pc_after != pc_before + EpsInstructionWords(word, variant_))
 			elapsed_cycles = 2; // ePS6800 control-flow / PC-write penalty.
 		cycle_count_ += elapsed_cycles;
 		const uint8_t stack_pointer_after = machine_state_debug_stack_depth(state_);
 		RecordTraceLocked(pc_before, instruction, pc_after);
+		const uint8_t accumulator = machine_state_debug_accumulator(state_);
 		if (function_hook_ && IsEpsCallInstruction(word)) {
 			function_hook_(pc_after, pc_before + EpsInstructionWords(word, variant_), true,
-				state_->mmio.regs[REG_ACC], BacktraceLocked());
+				accumulator, BacktraceLocked());
 		}
 		else if (function_hook_ && IsEpsReturnInstruction(word)) {
-			function_hook_(pc_after, pc_after, false, state_->mmio.regs[REG_ACC], BacktraceLocked());
+			function_hook_(pc_after, pc_after, false, accumulator, BacktraceLocked());
 		}
 		if (interrupt_hook_ && interrupt_pending && stack_pointer_after > stack_pointer_before) {
 			interrupt_hook_((interrupt_pending & INT_LEVEL4_TIMINT) ? 4 : 1);
@@ -364,7 +364,7 @@ namespace casioemu {
 	bool ePSCPU::ConsumeBreakRequestLocked() {
 		if (!break_requested_.exchange(false, std::memory_order_acquire))
 			return false;
-		RecordStopLocked(Eps6800DebugStopReason::Break, state_->cpu.pc);
+		RecordStopLocked(Eps6800DebugStopReason::Break, machine_state_debug_program_counter(state_));
 		debug_run_mode_ = DebugRunMode::Continue;
 		return true;
 	}
@@ -441,7 +441,8 @@ namespace casioemu {
 			if (breakpoint.compare_data && ((value & breakpoint.mask) != (breakpoint.data & breakpoint.mask)))
 				continue;
 			++breakpoint.hit_count;
-			memory_breakpoint_hits_.push_back({state_->cpu.pc, address, value, write, instruction_count_ + 1});
+			memory_breakpoint_hits_.push_back({machine_state_debug_program_counter(state_), address, value,
+				write, instruction_count_ + 1});
 			if (memory_breakpoint_hits_.size() > 4096)
 				memory_breakpoint_hits_.pop_front();
 			if (breakpoint.break_when_hit && honor_memory_breakpoints_ &&
@@ -463,8 +464,8 @@ namespace casioemu {
 		entry.instruction = instruction;
 		entry.next_program_counter = pc_after;
 		entry.stack_pointer = machine_state_debug_stack_depth(state_);
-		entry.accumulator = state_->mmio.regs[REG_ACC];
-		entry.status = state_->cpu.status;
+		entry.accumulator = machine_state_debug_accumulator(state_);
+		entry.status = machine_state_debug_status(state_);
 		entry.instruction_count = instruction_count_;
 		entry.cycle_count = cycle_count_;
 		if (trace_buffer_.size() >= trace_capacity_)
@@ -549,15 +550,12 @@ namespace casioemu {
 
 	uint8_t ePSCPU::ReadLcdMemory(size_t address) const {
 		const std::lock_guard lock(state_mutex_);
-		return address < LcdRawSize() ? state_->lcd.fb[address] : 0xff;
+		return machine_state_lcd_read_memory(state_, address);
 	}
 
 	bool ePSCPU::WriteLcdMemory(size_t address, uint8_t value) {
 		const std::lock_guard lock(state_mutex_);
-		if (address >= LcdRawSize())
-			return false;
-		state_->lcd.fb[address] = value;
-		return true;
+		return machine_state_lcd_write_memory(state_, address, value);
 	}
 
 	Eps6800DebugSnapshot ePSCPU::DebugSnapshot() const {
@@ -621,9 +619,7 @@ namespace casioemu {
 
 	void ePSCPU::RequestStepOver() {
 		const std::lock_guard lock(state_mutex_);
-		machine_debug_state debug_state{};
-		machine_state_debug_get_state(state_, &debug_state);
-		const uint32_t pc = debug_state.pc;
+		const uint32_t pc = machine_state_debug_program_counter(state_);
 		const uint16_t word = machine_state_debug_read_rom_word(state_, pc);
 		last_debug_stop_ = {};
 		honor_execution_breakpoints_ = true;
@@ -817,15 +813,12 @@ namespace casioemu {
 
 	uint32_t ePSCPU::ProgramCounter() const {
 		const std::lock_guard lock(state_mutex_);
-		return state_->cpu.pc;
+		return machine_state_debug_program_counter(state_);
 	}
 
 	void ePSCPU::SetPC(uint32_t word_address) {
 		const std::lock_guard lock(state_mutex_);
-		state_->cpu.pc = word_address & 0x00ffffffu;
-		state_->mmio.regs[REG_PCL] = static_cast<uint8_t>(state_->cpu.pc);
-		state_->mmio.regs[REG_PCM] = static_cast<uint8_t>(state_->cpu.pc >> 8);
-		state_->mmio.regs[REG_PCH] = static_cast<uint8_t>(state_->cpu.pc >> 16);
+		machine_state_debug_set_program_counter(state_, word_address);
 	}
 
 	void ePSCPU::SaveState(std::ostream& stream) const {
