@@ -38,6 +38,8 @@ struct machine_lcd_control {
  * depending on the internal cpu_state/timer_state representation. */
 enum machine_cpu_mode machine_state_cpu_mode(const struct machine_state *state);
 uint8_t machine_state_interrupt_pending(const struct machine_state *state);
+size_t machine_state_lcd_raw_size(const struct machine_state *state);
+uint32_t machine_state_idle_timer1_cycles_per_tick(const struct machine_state *state);
 void machine_state_advance_cycles_split(
 	struct machine_state *state,
 	uint32_t cycles,

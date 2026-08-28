@@ -16,8 +16,9 @@ struct machine_state;
 
 /* Lifecycle */
 struct machine_state *machine_state_create(void);
+struct machine_state *machine_state_create_variant(enum eps_variant variant);
 void machine_state_destroy(struct machine_state *state);
-void machine_state_set_variant(struct machine_state *state, enum eps_variant variant);
+enum eps_variant machine_state_variant(const struct machine_state *state);
 void machine_state_reset(struct machine_state *state);
 void machine_state_clear_ram_and_reset(struct machine_state *state);
 

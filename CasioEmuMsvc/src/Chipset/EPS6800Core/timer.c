@@ -26,30 +26,10 @@ enum timer1_model {
 	TIMER1_MODEL_EPS6009
 };
 
-struct timer_variant_profile {
-	enum timer1_model timer1_model;
-	uint8_t t1_control_shift;
-	uint8_t t1_enable_bit;
-	uint8_t t0_interrupt_enable_bit;
-	uint8_t t1_interrupt_enable_bit;
-	uint8_t t2_interrupt_enable_bit;
-	bool shared_interrupt_control;
-	bool counter0_readback;
-};
+#define timer_variant_profile eps_timer_profile
 
 static const struct timer_variant_profile *timer_profile(enum eps_variant variant) {
-	static const struct timer_variant_profile standard_profile = {
-		TIMER1_MODEL_STANDARD, 0u, BIT_T1EN,
-		BIT_TMR0IE, BIT_TMR1IE, BIT_TMR2IE,
-		false, true
-	};
-	static const struct timer_variant_profile eps6009_profile = {
-		TIMER1_MODEL_EPS6009, 4u, 0x40u,
-		BIT_TMR0I, BIT_TMR1I, BIT_TMR2I,
-		true, false
-	};
-
-	return variant == EPS_VARIANT_6009 ? &eps6009_profile : &standard_profile;
+	return &eps_get_variant_traits(variant)->timer;
 }
 
 void timer_connect_bus_state(struct timer_state *state, struct cpu_state *cpu, struct mmio_state *mmio) {

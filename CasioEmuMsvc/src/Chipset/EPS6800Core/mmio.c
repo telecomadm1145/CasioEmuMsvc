@@ -23,22 +23,8 @@ enum {
 	MMIO_DCRDE_RESET = 0x33
 };
 
-struct mmio_route_profile {
-	bool has_direct_normal_registers;
-	bool has_lcd_address_high;
-	bool has_counter0_registers;
-	bool has_standard_gpio_registers;
-};
-
-static const struct mmio_route_profile *mmio_route_profile(enum eps_variant variant) {
-	static const struct mmio_route_profile standard_profile = {
-		false, true, true, true
-	};
-	static const struct mmio_route_profile eps6009_profile = {
-		true, false, false, false
-	};
-
-	return variant == EPS_VARIANT_6009 ? &eps6009_profile : &standard_profile;
+static const struct eps_mmio_profile *mmio_route_profile(enum eps_variant variant) {
+	return &eps_get_variant_traits(variant)->mmio;
 }
 
 static uint32_t mmio_ram_address(uint8_t page, uint8_t offset) {
@@ -48,9 +34,9 @@ static uint32_t mmio_ram_address(uint8_t page, uint8_t offset) {
 
 static uint32_t mmio_variant_ram_address(const struct mmio_state *state, uint8_t page, uint8_t offset) {
 	const uint8_t page_mask = eps_ram_page_mask(state->variant);
-	if (eps_variant_is_9500(state->variant)) {
-		/* The official mode-4 core retains FSR/address bit 7.  Addition is
-		 * intentional: offsets 80h-FFh occupy the following 128-byte slice. */
+	if (mmio_route_profile(state->variant)->ram_offset_uses_bit7) {
+		/* Mode-4 retains FSR/address bit 7. Addition is intentional: offsets
+		 * 80h-FFh occupy the following 128-byte slice. */
 		return ((uint32_t)(page & page_mask) << MMIO_RAM_PAGE_SHIFT) + offset;
 	}
 	return ((uint32_t)(page & page_mask) << MMIO_RAM_PAGE_SHIFT) |
@@ -772,9 +758,9 @@ void mmio_reset_state(struct mmio_state *state) {
 	mmio_apply_reset_defaults(state);
 }
 
-void mmio_init_state(struct mmio_state *state) {
+void mmio_init_state(struct mmio_state *state, enum eps_variant variant) {
 	memset(state->regs, 0x00, sizeof(state->regs));
-	state->variant = EPS_VARIANT_6800;
+	state->variant = variant;
 	mmio_reset_state(state);
 	memset(state->ram_wbk, 0x00, sizeof(state->ram_wbk));
 	memset(state->ram, 0x00, sizeof(state->ram));

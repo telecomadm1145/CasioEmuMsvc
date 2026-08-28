@@ -129,8 +129,6 @@ static const uint32_t CPU_TABPTR_MASK = 0x0003FFFF;
 enum {
 	CPU_PC_LOW_13_BITS_MASK = 0x1FFF,
 	CPU_LONG_BRANCH_ADDRESS_MASK = 0x0001FFFF,
-	CPU_RESET_STATUS = 0xC0,
-	CPU_EPS6009_RESET_STATUS = 0x30,
 	CPU_ROM_HIGH_BYTE_SELECT = 0x01,
 	CPU_OPCODE_SLEEP = 0x0002,
 	CPU_TRACE_FORMAT_BUFFER_SIZE = 256
@@ -167,9 +165,13 @@ static uint16_t cpu_read_rom_word_state(const struct cpu_state *state, uint32_t 
 
 static enum eps_variant cpu_variant(const struct cpu_state *state);
 
+static const struct eps_cpu_profile *cpu_profile(const struct cpu_state *state) {
+	return &eps_get_variant_traits(cpu_variant(state))->cpu;
+}
+
 static uint8_t cpu_read_rom_byte_state(const struct cpu_state *state, uint32_t addr) {
-	if (eps_variant_is_6009(cpu_variant(state))) {
-		/* EPS6009 table reads wrap inside its 64 KiB byte-addressed ROM. */
+	if (cpu_profile(state)->table_read_wrap_16bit) {
+		/* Some EPS variants wrap table reads inside a 64 KiB byte-addressed ROM. */
 		addr &= 0xffffu;
 	}
 	uint16_t word = cpu_read_rom_word_state(state, addr >> 1);
@@ -243,10 +245,6 @@ static void cpu_bus_finish_borrow_writeback(struct cpu_state *state, uint8_t add
 		mmio_borrow_propagate_state(state->mmio, addr);
 }
 
-static void cpu_bus_reset(struct cpu_state *state) {
-	mmio_reset_state(state->mmio);
-}
-
 static void cpu_write_pc_registers_state(struct cpu_state *state) {
 	cpu_bus_write_internal(state, REG_PCL, state->pc & CPU_BYTE_MASK);
 	cpu_bus_write_internal(state, REG_PCM, (state->pc >> CPU_PC_MID_SHIFT) & CPU_BYTE_MASK);
@@ -276,14 +274,14 @@ static uint32_t cpu_read_tabptr_state(struct cpu_state *state) {
 	tabptr |= (uint32_t)cpu_bus_read_internal(state, REG_TABPTRL);
 	/* EPS6009 keeps the complete TBPTH byte even though its 64 KiB ROM
 	 * wraps table reads to the low 16 address bits. */
-	return eps_variant_is_6009(cpu_variant(state)) ? tabptr : (tabptr & CPU_TABPTR_MASK);
+	return cpu_profile(state)->full_tabptrh ? tabptr : (tabptr & CPU_TABPTR_MASK);
 }
 
 static void cpu_write_tabptr_state(struct cpu_state *state, uint32_t tabptr) {
-	if (!eps_variant_is_6009(cpu_variant(state)))
+	if (!cpu_profile(state)->full_tabptrh)
 		tabptr &= CPU_TABPTR_MASK;
 	cpu_bus_write_internal(state, REG_TABPTRH,
-		eps_variant_is_6009(cpu_variant(state)) ?
+		cpu_profile(state)->full_tabptrh ?
 			(uint8_t)(tabptr >> CPU_PC_HIGH_SHIFT) :
 			(uint8_t)((tabptr >> CPU_PC_HIGH_SHIFT) & MASK_TABPTRH));
 	cpu_bus_write_internal(state, REG_TABPTRM, (tabptr >> CPU_PC_MID_SHIFT) & CPU_BYTE_MASK);
@@ -473,7 +471,7 @@ static uint8_t cpu_bit_mask(uint8_t bit_index) {
 
 static void cpu_push_state(struct cpu_state *state, uint32_t dat) {
 	uint8_t stkptr;
-	if (eps_variant_is_9500(cpu_variant(state))) {
+	if (eps_stack_is_descending_even(cpu_variant(state))) {
 		/* The official ePS9500 core uses an 8-bit descending stack pointer.
 		 * Each return address occupies two stack positions: push subtracts two
 		 * (reset 00h -> FEh), while pop reads at SP and then adds two. */
@@ -493,7 +491,7 @@ static void cpu_push_state(struct cpu_state *state, uint32_t dat) {
 
 static uint8_t cpu_read_binary_destination_state(struct cpu_state *state, uint8_t addr) {
 	uint8_t value = cpu_read_direct_state(state, addr);
-	if (!eps_variant_is_9500(cpu_variant(state)))
+	if (!cpu_profile(state)->extended_fsr_binary_destination)
 		return value;
 
 	/* In the official mode-4 interpreter, binary operations that write back
@@ -511,7 +509,7 @@ static uint8_t cpu_read_binary_destination_state(struct cpu_state *state, uint8_
 
 static uint32_t cpu_pop_state(struct cpu_state *state) {
 	uint8_t stkptr;
-	if (eps_variant_is_9500(cpu_variant(state))) {
+	if (eps_stack_is_descending_even(cpu_variant(state))) {
 		stkptr = cpu_bus_read_internal(state, REG_STKPTR);
 		cpu_bus_write_internal(state, REG_STKPTR, (uint8_t)(stkptr + 2u));
 		return state->stack[stkptr];
@@ -619,10 +617,7 @@ void cpu_reset_state(struct cpu_state *state) {
 	state->mode = CPU_MODE_FAST;
 	state->int_pending = 0;
 	state->sleep_repeat_pc = false;
-	cpu_bus_reset(state);
-	cpu_set_status_state(state,
-		eps_variant_is_6009(cpu_variant(state)) ? CPU_EPS6009_RESET_STATUS :
-		CPU_RESET_STATUS);
+	cpu_set_status_state(state, cpu_profile(state)->reset_status);
 }
 
 void cpu_interrupt_state(struct cpu_state *state, uint8_t int_level) {
@@ -882,8 +877,7 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
 			/* The official ePS9500 core advances PC past SLEP before entering
 			 * the stopped state (EL-W531TL rests at 0x0D28 for a SLEP at
 			 * 0x0D27).  EPS6800 keeps the legacy repeat-PC behaviour. */
-			if (eps_variant_is_6009(cpu_variant(state)) ||
-				eps_variant_is_9500(cpu_variant(state))) {
+			if (cpu_profile(state)->sleep_advances_pc) {
 				state->sleep_repeat_pc = false;
 			}
 			else {
@@ -941,7 +935,7 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
                 case CPU_OPCODE_TBPTM_IMM: cpu_bus_write_internal(state, REG_TABPTRM, imm8_1);
                              break;
 				case CPU_OPCODE_TBPTH_IMM: cpu_bus_write_internal(state, REG_TABPTRH,
-						eps_variant_is_6009(cpu_variant(state)) ? imm8_1 : (imm8_1 & MASK_TABPTRH));
+						cpu_profile(state)->full_tabptrh ? imm8_1 : (imm8_1 & MASK_TABPTRH));
                              break;
 				case CPU_OPCODE_TBRD_A_R: temp32 = cpu_read_tabptr_state(state);
 							 temp32 = (temp32 + cpu_bus_read_internal(state, REG_ACC)) & CPU_TABPTR_MASK;

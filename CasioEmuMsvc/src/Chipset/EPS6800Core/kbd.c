@@ -30,38 +30,8 @@ enum kbd_matrix_model {
 	KBD_MATRIX_MODEL_EPS6009
 };
 
-struct kbd_variant_profile {
-	enum kbd_matrix_model matrix_model;
-	uint8_t key_input_mask;
-	uint16_t press_delay_cycles;
-	bool accept_explicit_sleep_mode;
-	bool refresh_on_contact_level;
-	bool level_sensitive_inputs;
-};
-
-static const struct kbd_variant_profile *kbd_profile(enum eps_variant variant) {
-	static const struct kbd_variant_profile eps6800_profile = {
-		KBD_MATRIX_MODEL_GPIO, KBD_KEY_COLUMNS_MASK, KEY_PRESS_DELAY_CYCLES,
-		false, false, false
-	};
-	static const struct kbd_variant_profile eps6009_profile = {
-		KBD_MATRIX_MODEL_EPS6009, KBD_EPS6009_PORTA_KEY_MASK, 0,
-		true, false, true
-	};
-	static const struct kbd_variant_profile eps9500_profile = {
-		KBD_MATRIX_MODEL_GPIO, 0xffu, KEY_PRESS_DELAY_CYCLES,
-		true, true, false
-	};
-
-	switch (variant) {
-	case EPS_VARIANT_6009:
-		return &eps6009_profile;
-	case EPS_VARIANT_9500:
-		return &eps9500_profile;
-	case EPS_VARIANT_6800:
-	default:
-		return &eps6800_profile;
-	}
+static const struct eps_kbd_profile *kbd_profile(enum eps_variant variant) {
+	return &eps_get_variant_traits(variant)->kbd;
 }
 
 static uint8_t kbd_bus_read_internal(struct kbd_state *state, uint8_t addr) {

@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void machine_state_init(struct machine_state *state);
+static void machine_state_init(struct machine_state *state, enum eps_variant variant);
 
 const struct eps_variant_traits *eps_get_variant_traits(enum eps_variant variant) {
 	static const struct eps_variant_traits eps6800_traits = {
@@ -16,7 +16,13 @@ const struct eps_variant_traits *eps_get_variant_traits(enum eps_variant variant
 		REG_TRL1, REG_TR2WCON, REG_TRL2, REG_PORTA, REG_PORTB, REG_STBCON,
 		REG_PACON, REG_PAWAKE, REG_PAINTEN, REG_PAINTSTA, REG_PBCON, REG_DCRB,
 		0x3fu, 1u, 1u, 1u, EPS_STACK_MODEL_LINEAR,
-		MMIO_LEGACY_RAM_COUNT, (size_t)(96u * 4u)
+		MMIO_LEGACY_RAM_COUNT, (size_t)(96u * 4u),
+		{ 0u, 0u, 0u, 0u, 0xc0u },
+		{ 0u, 1u, 1u, 1u, 0u },
+		{ EPS_LCD_ADDRESS_PAGED_128, 0x61u, 0u, 0u, 0u, 1u },
+		{ EPS_KBD_MATRIX_GPIO, 0x7fu, 1000u, 0u, 0u, 0u },
+		{ EPS_TIMER1_STANDARD, 0u, BIT_T1EN, BIT_TMR0IE, BIT_TMR1IE, BIT_TMR2IE,
+			0u, 1u, 1u }
 	};
 	static const struct eps_variant_traits eps6009_traits = {
 		0x31u, 0x30u, 0x09u, REG_LCDDAT, 0xffu, 0x2fu,
@@ -24,7 +30,13 @@ const struct eps_variant_traits *eps_get_variant_traits(enum eps_variant variant
 		0x26u, 0x27u, 0x28u, 0x10u, 0x11u, 0x20u,
 		0x29u, 0x2au, 0x2bu, 0x2cu, 0x2du, 0x2eu,
 		0x0fu, 0u, 0u, 0u, EPS_STACK_MODEL_LINEAR,
-		MMIO_LEGACY_RAM_COUNT, 0x88u
+		MMIO_LEGACY_RAM_COUNT, 0x88u,
+		{ 1u, 1u, 1u, 0u, 0x30u },
+		{ 1u, 0u, 0u, 0u, 0u },
+		{ EPS_LCD_ADDRESS_LINEAR_WRAP, 0x87u, 0u, 0x0fu, 1u, 0u },
+		{ EPS_KBD_MATRIX_EPS6009, 0x0fu, 0u, 1u, 0u, 1u },
+		{ EPS_TIMER1_EPS6009, 4u, 0x40u, BIT_TMR0I, BIT_TMR1I, BIT_TMR2I,
+			1u, 0u, 51u }
 	};
 	static const struct eps_variant_traits eps9500_traits = {
 		REG_CPUCON, REG_POSTID, REG_LCDARL, REG_LCDDAT, REG_LCDARH, REG_LCDCON,
@@ -32,7 +44,13 @@ const struct eps_variant_traits *eps_get_variant_traits(enum eps_variant variant
 		REG_TRL1, REG_TR2WCON, REG_TRL2, REG_PORTA, REG_PORTB, REG_STBCON,
 		REG_PACON, REG_PAWAKE, REG_PAINTEN, REG_PAINTSTA, REG_PBCON, REG_DCRB,
 		0x3fu, 1u, 1u, 1u, EPS_STACK_MODEL_DESCENDING_EVEN,
-		MMIO_EPS9500_RAM_COUNT, (size_t)(98u * 4u)
+		MMIO_EPS9500_RAM_COUNT, (size_t)(98u * 4u),
+		{ 0u, 0u, 1u, 1u, 0xc0u },
+		{ 0u, 1u, 1u, 1u, 1u },
+		{ EPS_LCD_ADDRESS_ROW_MAJOR, 0x61u, 98u, 0u, 1u, 1u },
+		{ EPS_KBD_MATRIX_GPIO, 0xffu, 1000u, 1u, 1u, 0u },
+		{ EPS_TIMER1_STANDARD, 0u, BIT_T1EN, BIT_TMR0IE, BIT_TMR1IE, BIT_TMR2IE,
+			0u, 1u, 1u }
 	};
 
 	switch (variant) {
@@ -219,12 +237,22 @@ static size_t machine_state_legacy_ram_image_size(const struct machine_state *st
 }
 
 struct machine_state *machine_state_create(void) {
-	struct machine_state *state = (struct machine_state *)calloc(1, sizeof(*state));
+	return machine_state_create_variant(EPS_VARIANT_6800);
+}
+
+struct machine_state *machine_state_create_variant(enum eps_variant variant) {
+	struct machine_state *state;
+	if (!eps_variant_is_valid(variant)) {
+		return NULL;
+	}
+
+	state = (struct machine_state *)calloc(1, sizeof(*state));
 	if (!state) {
 		return NULL;
 	}
 
-	machine_state_init(state);
+	machine_state_init(state, variant);
+	machine_state_reset(state);
 	return state;
 }
 
@@ -236,18 +264,14 @@ void machine_state_destroy(struct machine_state *state) {
 	free(state);
 }
 
-static void machine_state_init(struct machine_state *state) {
+static void machine_state_init(struct machine_state *state, enum eps_variant variant) {
 	rom_init(&state->rom);
-	mmio_init_state(&state->mmio);
+	mmio_init_state(&state->mmio, variant);
 	machine_state_bind_modules(state);
 }
 
-void machine_state_set_variant(struct machine_state *state, enum eps_variant variant) {
-	if (!state) {
-		return;
-	}
-
-	state->mmio.variant = variant;
+enum eps_variant machine_state_variant(const struct machine_state *state) {
+	return state ? state->mmio.variant : EPS_VARIANT_6800;
 }
 
 void machine_state_reset(struct machine_state *state) {

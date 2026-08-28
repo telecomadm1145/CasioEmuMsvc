@@ -195,10 +195,72 @@ enum eps_stack_model {
 	EPS_STACK_MODEL_DESCENDING_EVEN = 1
 };
 
+enum eps_lcd_address_model {
+	EPS_LCD_ADDRESS_PAGED_128 = 0,
+	EPS_LCD_ADDRESS_LINEAR_WRAP,
+	EPS_LCD_ADDRESS_ROW_MAJOR
+};
+
+enum eps_kbd_matrix_model {
+	EPS_KBD_MATRIX_GPIO = 0,
+	EPS_KBD_MATRIX_EPS6009
+};
+
+enum eps_timer1_model {
+	EPS_TIMER1_STANDARD = 0,
+	EPS_TIMER1_EPS6009
+};
+
+struct eps_cpu_profile {
+	uint8_t table_read_wrap_16bit;
+	uint8_t full_tabptrh;
+	uint8_t sleep_advances_pc;
+	uint8_t extended_fsr_binary_destination;
+	uint8_t reset_status;
+};
+
+struct eps_mmio_profile {
+	uint8_t has_direct_normal_registers;
+	uint8_t has_lcd_address_high;
+	uint8_t has_counter0_registers;
+	uint8_t has_standard_gpio_registers;
+	uint8_t ram_offset_uses_bit7;
+};
+
+struct eps_lcd_profile {
+	uint8_t address_model;
+	uint8_t address_low_max;
+	uint8_t row_width;
+	uint8_t fixed_contrast;
+	uint8_t host_linear;
+	uint8_t has_address_high;
+};
+
+struct eps_kbd_profile {
+	uint8_t matrix_model;
+	uint8_t key_input_mask;
+	uint16_t press_delay_cycles;
+	uint8_t accept_explicit_sleep_mode;
+	uint8_t refresh_on_contact_level;
+	uint8_t level_sensitive_inputs;
+};
+
+struct eps_timer_profile {
+	uint8_t timer1_model;
+	uint8_t t1_control_shift;
+	uint8_t t1_enable_bit;
+	uint8_t t0_interrupt_enable_bit;
+	uint8_t t1_interrupt_enable_bit;
+	uint8_t t2_interrupt_enable_bit;
+	uint8_t shared_interrupt_control;
+	uint8_t counter0_readback;
+	uint8_t idle_cycles_per_20ms;
+};
+
 /*
- * Static silicon description.  Keep register locations and structural
- * capabilities here so adding another EPS family member does not require
- * growing variant conditionals throughout the core.
+ * Static silicon description. Register locations, structural capabilities,
+ * and module behavior profiles all live here so a new EPS family member is
+ * registered once instead of being rediscovered independently by each module.
  */
 struct eps_variant_traits {
 	uint8_t reg_cpucon;
@@ -232,7 +294,17 @@ struct eps_variant_traits {
 	uint8_t stack_model;
 	size_t bank_ram_size;
 	size_t lcd_raw_size;
+	struct eps_cpu_profile cpu;
+	struct eps_mmio_profile mmio;
+	struct eps_lcd_profile lcd;
+	struct eps_kbd_profile kbd;
+	struct eps_timer_profile timer;
 };
+
+static inline int eps_variant_is_valid(enum eps_variant variant) {
+	return variant == EPS_VARIANT_6800 || variant == EPS_VARIANT_6009 ||
+		variant == EPS_VARIANT_9500;
+}
 
 static inline int eps_variant_is_6009(enum eps_variant variant) {
 	return variant == EPS_VARIANT_6009;
@@ -347,7 +419,7 @@ static inline uint8_t eps_reg_dcrb(enum eps_variant variant) {
 }
 
 static inline int eps_key_input_enabled(enum eps_variant variant, const uint8_t *regs) {
-	return eps_variant_is_6009(variant) ?
+	return eps_get_variant_traits(variant)->kbd.matrix_model == EPS_KBD_MATRIX_EPS6009 ?
 		(((regs[eps_reg_stbcon(variant)] & BIT_AUTO_KEY_SCAN) != 0) ||
 			((regs[eps_reg_pacon(variant)] & 0x01u) != 0)) :
 		((regs[eps_reg_stbcon(variant)] & BIT_KEY_INPUT_ENABLE) != 0);

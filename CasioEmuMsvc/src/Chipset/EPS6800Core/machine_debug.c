@@ -34,7 +34,8 @@ void machine_state_debug_set_program_counter(struct machine_state *state, uint32
 	state->cpu.pc = word_address & 0x00ffffffu;
 	state->mmio.regs[REG_PCL] = (uint8_t)state->cpu.pc;
 	state->mmio.regs[REG_PCM] = (uint8_t)(state->cpu.pc >> 8);
-	state->mmio.regs[REG_PCH] = (uint8_t)(state->cpu.pc >> 16);
+	if (eps_has_pch(state->mmio.variant))
+		state->mmio.regs[REG_PCH] = (uint8_t)(state->cpu.pc >> 16);
 }
 
 uint8_t machine_state_debug_accumulator(const struct machine_state *state) {
@@ -46,9 +47,11 @@ uint8_t machine_state_debug_status(const struct machine_state *state) {
 }
 
 static uint32_t machine_debug_read_pc(struct machine_state *state) {
-	return ((uint32_t)mmio_read_byte_internal_state(&state->mmio, REG_PCH) << MACHINE_DEBUG_PC_HIGH_SHIFT) |
-		((uint32_t)mmio_read_byte_internal_state(&state->mmio, REG_PCM) << MACHINE_DEBUG_PC_MID_SHIFT) |
-		(uint32_t)mmio_read_byte_internal_state(&state->mmio, REG_PCL);
+	uint32_t pc = (uint32_t)mmio_read_byte_internal_state(&state->mmio, REG_PCM) << MACHINE_DEBUG_PC_MID_SHIFT;
+	pc |= (uint32_t)mmio_read_byte_internal_state(&state->mmio, REG_PCL);
+	if (eps_has_pch(state->mmio.variant))
+		pc |= (uint32_t)mmio_read_byte_internal_state(&state->mmio, REG_PCH) << MACHINE_DEBUG_PC_HIGH_SHIFT;
+	return pc;
 }
 
 static uint32_t machine_debug_fetch_instruction_word(const struct machine_state *state, uint32_t pc) {
@@ -122,13 +125,13 @@ void machine_state_debug_get_register_overview(
 
 	/* Reading INDF and LCDDATA can have side effects through POSTID. */
 	mmio_suppress_debug_access_state(&state->mmio, true);
-	postid = mmio_read_byte_state(&state->mmio, REG_POSTID);
-	mmio_write_byte_state(&state->mmio, REG_POSTID, MACHINE_DEBUG_POSTID_DISABLED);
+	postid = mmio_read_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant));
+	mmio_write_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant), MACHINE_DEBUG_POSTID_DISABLED);
 	for (i = 0; i < MACHINE_DEBUG_LOW_REGISTER_COUNT; i++) {
 		overview->low_regs[i] = mmio_read_byte_state(&state->mmio, (uint8_t)i);
 	}
-	overview->cpucon = mmio_read_byte_state(&state->mmio, REG_CPUCON);
-	mmio_write_byte_state(&state->mmio, REG_POSTID, postid);
+	overview->cpucon = mmio_read_byte_state(&state->mmio, eps_reg_cpucon(state->mmio.variant));
+	mmio_write_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant), postid);
 	mmio_suppress_debug_access_state(&state->mmio, false);
 }
 
@@ -149,12 +152,15 @@ void machine_state_debug_get_snapshot(
 
 	snapshot->pc = state->cpu.pc;
 	mmio_suppress_debug_access_state(&state->mmio, true);
-	postid = mmio_read_byte_state(&state->mmio, REG_POSTID);
-	mmio_write_byte_state(&state->mmio, REG_POSTID, MACHINE_DEBUG_POSTID_DISABLED);
+	postid = mmio_read_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant));
+	mmio_write_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant), MACHINE_DEBUG_POSTID_DISABLED);
 	for (i = 0; i < MACHINE_DEBUG_REGISTER_COUNT; i++) {
 		snapshot->registers[i] = mmio_read_byte_state(&state->mmio, (uint8_t)i);
 	}
-	mmio_write_byte_state(&state->mmio, REG_POSTID, postid);
+	/* POSTID is temporarily disabled only to suppress debugger read side
+	 * effects; expose the machine's real register value in the snapshot. */
+	snapshot->registers[eps_reg_postid(state->mmio.variant)] = postid;
+	mmio_write_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant), postid);
 	mmio_suppress_debug_access_state(&state->mmio, false);
 	memcpy(snapshot->wbk_registers, state->mmio.ram_wbk, sizeof(snapshot->wbk_registers));
 	if (eps_stack_is_descending_even(state->mmio.variant)) {
@@ -193,30 +199,29 @@ void machine_state_debug_write_byte(struct machine_state *state, uint8_t addr, u
 	if (!state) {
 		return;
 	}
-	switch (addr) {
-	case REG_BSR:
-	case REG_BSR1:
-	case REG_BSR2:
-		byte &= 0x3f;
-		break;
-	case REG_STKPTR:
+	if (addr == REG_BSR || addr == REG_BSR1 ||
+		(addr == REG_BSR2 && eps_has_indf2(state->mmio.variant))) {
+		byte &= eps_ram_page_mask(state->mmio.variant);
+	}
+	else if (addr == REG_STKPTR) {
 		if (!eps_stack_is_descending_even(state->mmio.variant))
 			byte &= MACHINE_DEBUG_STACK_DEPTH - 1;
-		break;
-	case REG_CPUCON:
-		byte &= BIT_WBK | BIT_GLINT | BIT_MS1 | BIT_MS0;
-		break;
-	case REG_LCDARH:
+	}
+	else if (addr == eps_reg_cpucon(state->mmio.variant)) {
+		byte &= eps_has_wbk(state->mmio.variant)
+			? (BIT_WBK | BIT_GLINT | BIT_MS1 | BIT_MS0)
+			: (BIT_GLINT | BIT_MS1 | BIT_MS0);
+	}
+	else if (eps_get_variant_traits(state->mmio.variant)->reg_lcdarh != 0xffu &&
+		addr == eps_reg_lcdarh(state->mmio.variant)) {
 		byte &= MASK_LCD_CONTRAST | MASK_LCD_ADDRESS_HIGH;
-		break;
-	default:
-		break;
 	}
 
 	mmio_suppress_debug_access_state(&state->mmio, true);
 	mmio_write_byte_state(&state->mmio, addr, byte);
 	mmio_suppress_debug_access_state(&state->mmio, false);
-	if ((addr == REG_PCL) || (addr == REG_PCM) || (addr == REG_PCH)) {
+	if (addr == REG_PCL || addr == REG_PCM ||
+		(addr == REG_PCH && eps_has_pch(state->mmio.variant))) {
 		state->cpu.pc = machine_debug_read_pc(state);
 	}
 }

@@ -53,13 +53,6 @@ namespace {
 		return true;
 	}
 
-	machine_state* CreateMachineOrThrow() {
-		auto* state = machine_state_create();
-		if (!state)
-			throw std::runtime_error("Failed to create EPS6800 machine state");
-		return state;
-	}
-
 	enum eps_variant ToCoreVariant(casioemu::EpsVariant variant) {
 		switch (variant) {
 		case casioemu::EpsVariant::Eps6009:
@@ -69,6 +62,13 @@ namespace {
 		default:
 			return EPS_VARIANT_6800;
 		}
+	}
+
+	machine_state* CreateMachineOrThrow(casioemu::EpsVariant variant) {
+		auto* state = machine_state_create_variant(ToCoreVariant(variant));
+		if (!state)
+			throw std::runtime_error("Failed to create EPS machine state");
+		return state;
 	}
 
 }
@@ -85,8 +85,7 @@ namespace casioemu {
 	}
 
 	ePSCPU::ePSCPU(EpsVariant variant)
-		: state_(CreateMachineOrThrow()), variant_(variant) {
-		machine_state_set_variant(state_, ToCoreVariant(variant_));
+		: state_(CreateMachineOrThrow(variant)) {
 		machine_state_debug_set_memory_access_callback(state_, &ePSCPU::MemoryAccessThunk, this);
 	}
 
@@ -251,13 +250,12 @@ namespace casioemu {
 				 * i.e. 2560 cycles/s; the historical EPS6800 checkpoint
 				 * delivered one cycle per period and effectively stalled
 				 * Timer1 in idle. */
-				constexpr uint32_t kEps6009IdleTimer1CyclesPerTick = 51;
 				const auto elapsed = now - idle_timer_checkpoint_;
 				const auto ticks = static_cast<uint32_t>(elapsed / kIdleTimerPeriod);
 				if (ticks != 0) {
 					idle_timer_checkpoint_ += kIdleTimerPeriod * ticks;
 					machine_state_tick_idle_timer1(state_, ticks *
-						(variant_ == EpsVariant::Eps6009 ? kEps6009IdleTimer1CyclesPerTick : 1));
+						machine_state_idle_timer1_cycles_per_tick(state_));
 				}
 			}
 			return false;
@@ -483,7 +481,7 @@ namespace casioemu {
 	}
 
 	size_t ePSCPU::LcdRawSize() const {
-		return eps_lcd_raw_size(ToCoreVariant(variant_));
+		return machine_state_lcd_raw_size(state_);
 	}
 
 	uint8_t ePSCPU::ReadByte(uint8_t address) {

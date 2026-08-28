@@ -198,7 +198,6 @@ namespace casioemu {
 		std::deque<Eps6800TraceEntry> trace_buffer_;
 		Eps6800RomFormat rom_format_{Eps6800RomFormat::PackedLittleEndian};
 		size_t rom_word_count_{};
-		EpsVariant variant_{EpsVariant::Eps6800};
 		std::atomic_bool break_requested_{};
 		std::function<bool(uint32_t, uint32_t, uint8_t)> instruction_hook_;
 		std::function<void(uint32_t, uint32_t, bool, uint32_t, const std::string&)> function_hook_;

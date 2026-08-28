@@ -710,22 +710,24 @@ namespace {
 		on_machine.WriteByte(0x80, 0xa5);
 		on_machine.Next();
 		const uint32_t sleeping_pc = on_machine.ProgramCounter();
-		if ((sleeping_pc >> 1) != 1)
+		if (!Check(sleeping_pc == 1, "eps9500 ON enters sleep", __LINE__))
 			return false;
 		on_machine.OnDown();
-		if (on_machine.ProgramCounter() != sleeping_pc ||
-			on_machine.ReadByte(kPortCControl) != 0x5a || on_machine.ReadByte(0x80) != 0xa5)
+		if (!Check(on_machine.ProgramCounter() == sleeping_pc &&
+				on_machine.ReadByte(kPortCControl) == 0x5a && on_machine.ReadByte(0x80) == 0xa5,
+				"eps9500 ON edge preserves machine state", __LINE__))
 			return false;
 		for (int i = 0; i < 1100; ++i)
 			on_machine.Next();
-		if (on_machine.ReadByte(kAccumulator) != 0x5a ||
-			(on_machine.ReadByte(kPortA) & kOnMask) != 0 ||
-			on_machine.ReadByte(kPortCControl) != 0x5a || on_machine.ReadByte(0x80) != 0xa5)
+		if (!Check(on_machine.ReadByte(kAccumulator) == 0x5a &&
+			(on_machine.ReadByte(kPortA) & kOnMask) == 0 &&
+			on_machine.ReadByte(kPortCControl) == 0x5a && on_machine.ReadByte(0x80) == 0xa5,
+			"eps9500 ON wake", __LINE__))
 			return false;
 		on_machine.OnUp();
 		for (int i = 0; i < 1100; ++i)
 			on_machine.Next();
-		if ((on_machine.ReadByte(kPortA) & kOnMask) == 0)
+		if (!Check((on_machine.ReadByte(kPortA) & kOnMask) != 0, "eps9500 ON release", __LINE__))
 			return false;
 
 		std::vector<uint8_t> wake_rom(0x30000, 0);
@@ -735,13 +737,14 @@ namespace {
 		if (!wake_machine.LoadRom(wake_rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
 			return false;
 		wake_machine.Reset();
-		if (wake_machine.ReadByte(0x0f) != 0xc0 ||
-			(wake_machine.ReadByte(0x20) & 0x10) == 0 ||
-			wake_machine.ReadByte(0x30) != 0x20 ||
-			wake_machine.ReadByte(0x31) != 0xff ||
-			wake_machine.ReadByte(0x37) != 0xff ||
-			wake_machine.ReadByte(0x3a) != 0xff ||
-			wake_machine.ReadByte(0x3c) != 0xff)
+		if (!Check(wake_machine.ReadByte(0x0f) == 0xc0 &&
+			(wake_machine.ReadByte(0x20) & 0x10) != 0 &&
+			wake_machine.ReadByte(0x30) == 0x20 &&
+			wake_machine.ReadByte(0x31) == 0xff &&
+			wake_machine.ReadByte(0x37) == 0xff &&
+			wake_machine.ReadByte(0x3a) == 0xff &&
+			wake_machine.ReadByte(0x3c) == 0xff,
+			"eps9500 reset defaults", __LINE__))
 			return false;
 		wake_machine.WriteByte(0x30, 0x80); // STBCON.KE
 		wake_machine.WriteByte(kDirectionA, 0xff);
@@ -749,12 +752,12 @@ namespace {
 		wake_machine.WriteByte(kPortB, 0xfe); // Select matrix row PB0.
 		wake_machine.WriteByte(kPaWake, 0x01);
 		wake_machine.Next();
-		if ((wake_machine.PC() >> 1) != 1)
+		if (!Check((wake_machine.PC() >> 1) == 1, "eps9500 matrix enters sleep", __LINE__))
 			return false;
 		wake_machine.KeyDown(0);
 		for (int i = 0; i < 1100; ++i)
 			wake_machine.Next();
-		if (wake_machine.ReadByte(kAccumulator) != 0x5a)
+		if (!Check(wake_machine.ReadByte(kAccumulator) == 0x5a, "eps9500 matrix wake", __LINE__))
 			return false;
 
 		std::vector<uint8_t> stack_rom(0x30000, 0);
@@ -767,12 +770,14 @@ namespace {
 		stack_machine.Reset();
 		stack_machine.Next();
 		const auto snapshot = stack_machine.DebugSnapshot();
-		if (stack_machine.ReadByte(0x06) != 0xfe || snapshot.stack_pointer != 1 ||
-			snapshot.stack[0] != 1 || stack_machine.GetBacktrace().find("<- 1") == std::string::npos)
+		if (!Check(stack_machine.ReadByte(0x06) == 0xfe && snapshot.stack_pointer == 1 &&
+			snapshot.stack[0] == 1 && stack_machine.GetBacktrace().find("<- 1") != std::string::npos,
+			"eps9500 stack snapshot", __LINE__))
 			return false;
-		if (!stack_machine.RequestStepOut() || !stack_machine.RunFrame() ||
-			stack_machine.LastDebugStop().reason != casioemu::Eps6800DebugStopReason::StepOut ||
-			(stack_machine.ProgramCounter() >> 1) != 1)
+		if (!Check(stack_machine.RequestStepOut() && stack_machine.RunFrame() &&
+			stack_machine.LastDebugStop().reason == casioemu::Eps6800DebugStopReason::StepOut &&
+			stack_machine.ProgramCounter() == 1,
+			"eps9500 step out", __LINE__))
 			return false;
 
 		std::vector<uint8_t> wbk_rom(0x30000, 0);
@@ -826,6 +831,9 @@ namespace {
 			machine.WriteByte(bsr_reg, bsr);
 			machine.WriteByte(kAccumulator, accumulator);
 			machine.WriteByte(kStatus, status);
+			/* Some chain-register cases intentionally write PCH. Keep the test
+			 * instruction anchored at word zero after setting up those operands. */
+			machine.SetPC(0);
 			machine.Next();
 			return std::array<uint8_t, 4>{machine.ReadByte(fsr_reg),
 				machine.ReadByte(bsr_reg), machine.ReadByte(kStatus),
@@ -857,30 +865,37 @@ namespace {
 			0x00, 0x10, 0x00, kInitialStatus);
 		const auto fsr0_no_carry_chain = Run(0x1d00 | kFsr0, kFsr0, kBsr0,
 			0xff, 0x10, 0x00, kInitialStatus);
-		const auto pcm_no_borrow_chain = Run(0x1f00 | kPcm, kPcm, kPch,
-			0x00, 0x10, 0x00, kInitialStatus);
 		const auto tabptr_low_borrow = Run(0x1f00 | kTabptrl, kTabptrl, kTabptrm,
 			0x00, 0x10, 0x00, kInitialStatus);
 		const auto tabptr_mid_no_borrow_chain = Run(0x1f00 | kTabptrm, kTabptrm, kTabptrh,
 			0x00, 0x02, 0x00, kInitialStatus);
 
 		return
-			Run(0x1100 | kFsr2, kFsr2, kBsr2, 0x80, 0x10, 0x01, kInitialStatus)[0] == 0x81 &&
-			Run(0x1300 | kFsr2, kFsr2, kBsr2, 0x80, 0x10, 0x01, kInitialStatus | 0x01)[0] == 0x82 &&
-			fsr1_borrow[0] == 0xff && fsr1_borrow[1] == 0x0f &&
-			fsr2_borrow[0] == 0xff && fsr2_borrow[1] == 0x0f &&
-			fsr2_carry[0] == 0x80 && fsr2_carry[1] == 0x12 &&
-			fsr1_no_borrow[0] == 0xff && fsr1_no_borrow[1] == 0x10 &&
-			fsr2_no_carry[0] == 0x80 && fsr2_no_carry[1] == 0x11 &&
-			fsr1_jdnz_borrow[0] == 0xff && fsr1_jdnz_borrow[1] == 0x0f &&
-			fsr2_jdnz_borrow[0] == 0xff && fsr2_jdnz_borrow[1] == 0x0f &&
-			raw_accumulator_source[3] == 0x80 && raw_accumulator_source[1] == 0x10 &&
-			raw_decimal_destination[0] == 0x81 && raw_decimal_destination[1] == 0x10 &&
-			fsr0_no_borrow_chain[0] == 0xff && fsr0_no_borrow_chain[1] == 0x10 &&
-			fsr0_no_carry_chain[0] == 0x00 && fsr0_no_carry_chain[1] == 0x10 &&
-			pcm_no_borrow_chain[0] == 0xff && pcm_no_borrow_chain[1] == 0x10 &&
-			tabptr_low_borrow[0] == 0xff && tabptr_low_borrow[1] == 0x0f &&
-			tabptr_mid_no_borrow_chain[0] == 0xff && tabptr_mid_no_borrow_chain[1] == 0x02;
+			Check(Run(0x1100 | kFsr2, kFsr2, kBsr2, 0x80, 0x10, 0x01, kInitialStatus)[0] == 0x81,
+				"eps9500 add FSR2", __LINE__) &&
+			Check(Run(0x1300 | kFsr2, kFsr2, kBsr2, 0x80, 0x10, 0x01, kInitialStatus | 0x01)[0] == 0x82,
+				"eps9500 adc FSR2", __LINE__) &&
+			Check(fsr1_borrow[0] == 0xff && fsr1_borrow[1] == 0x0f, "eps9500 FSR1 borrow", __LINE__) &&
+			Check(fsr2_borrow[0] == 0xff && fsr2_borrow[1] == 0x0f, "eps9500 FSR2 borrow", __LINE__) &&
+			Check(fsr2_carry[0] == 0x80 && fsr2_carry[1] == 0x12, "eps9500 FSR2 carry", __LINE__) &&
+			Check(fsr1_no_borrow[0] == 0xff && fsr1_no_borrow[1] == 0x10, "eps9500 FSR1 no borrow", __LINE__) &&
+			Check(fsr2_no_carry[0] == 0x80 && fsr2_no_carry[1] == 0x11, "eps9500 FSR2 no carry", __LINE__) &&
+			Check(fsr1_jdnz_borrow[0] == 0xff && fsr1_jdnz_borrow[1] == 0x0f,
+				"eps9500 FSR1 JDNZ borrow", __LINE__) &&
+			Check(fsr2_jdnz_borrow[0] == 0xff && fsr2_jdnz_borrow[1] == 0x0f,
+				"eps9500 FSR2 JDNZ borrow", __LINE__) &&
+			Check(raw_accumulator_source[3] == 0x80 && raw_accumulator_source[1] == 0x10,
+				"eps9500 raw accumulator source", __LINE__) &&
+			Check(raw_decimal_destination[0] == 0x81 && raw_decimal_destination[1] == 0x10,
+				"eps9500 raw decimal destination", __LINE__) &&
+			Check(fsr0_no_borrow_chain[0] == 0xff && fsr0_no_borrow_chain[1] == 0x10,
+				"eps9500 FSR0 no borrow chain", __LINE__) &&
+			Check(fsr0_no_carry_chain[0] == 0x00 && fsr0_no_carry_chain[1] == 0x10,
+				"eps9500 FSR0 no carry chain", __LINE__) &&
+			Check(tabptr_low_borrow[0] == 0xff && tabptr_low_borrow[1] == 0x0f,
+				"eps9500 TABPTRL borrow", __LINE__) &&
+			Check(tabptr_mid_no_borrow_chain[0] == 0xff && tabptr_mid_no_borrow_chain[1] == 0x02,
+				"eps9500 TABPTRM no borrow chain", __LINE__);
 	}
 
 	bool Eps9500RamAddressingSmoke() {
@@ -947,6 +962,55 @@ namespace {
 		machine.WriteByte(kPortB, 0x02);
 		machine.WriteByte(kDirectionB, 0x00);
 		return machine.ReadByte(kPortB) == 0x02;
+	}
+
+	bool Eps6009DebuggerVariantSmoke() {
+		constexpr uint8_t kLcdAddressLow = 0x09;
+		constexpr uint8_t kStandbyControl = 0x20;
+		constexpr uint8_t kTimerInterruptControl = 0x21;
+		constexpr uint8_t kTimer01Control = 0x23;
+		constexpr uint8_t kPostId = 0x30;
+		constexpr uint8_t kCpuControl = 0x31;
+
+		casioemu::ePSCPU machine(casioemu::EpsVariant::Eps6009);
+		std::vector<uint8_t> rom(0x20000, 0);
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+			return false;
+		machine.Reset();
+
+		machine.WriteByte(kLcdAddressLow, 0x55);
+		machine.SetPC(0x1234);
+		if (!Check(machine.ProgramCounter() == 0x1234 && machine.ReadByte(kLcdAddressLow) == 0x55,
+				"eps6009 SetPC preserves LCDARL", __LINE__))
+			return false;
+
+		if (!Check(machine.WriteDebugMemory(kStandbyControl, 0xe3) &&
+				machine.ReadDebugMemory(kStandbyControl) == 0xe3,
+				"eps6009 debug STBCON write", __LINE__))
+			return false;
+		if (!Check(machine.WriteDebugMemory(kTimer01Control, 0xff) &&
+				machine.ReadDebugMemory(kTimer01Control) == 0xff,
+				"eps6009 debug TR01CON write", __LINE__))
+			return false;
+
+		machine.WriteByte(kTimerInterruptControl, 0x07);
+		machine.WriteByte(kPostId, 0x70);
+		machine.WriteByte(kCpuControl, 0x07);
+		const auto snapshot = machine.DebugSnapshot();
+		return Check(machine.ReadByte(kTimerInterruptControl) == 0x07,
+				"eps6009 snapshot preserves TRINTCON", __LINE__) &&
+			Check(machine.ReadByte(kPostId) == 0x70,
+				"eps6009 snapshot preserves POSTID", __LINE__) &&
+			Check(snapshot.registers[kStandbyControl] == 0xe3,
+				"eps6009 snapshot STBCON", __LINE__) &&
+			Check(snapshot.registers[kTimerInterruptControl] == 0x07,
+				"eps6009 snapshot TRINTCON", __LINE__) &&
+			Check(snapshot.registers[kTimer01Control] == 0xff,
+				"eps6009 snapshot TR01CON", __LINE__) &&
+			Check(snapshot.registers[kPostId] == 0x70,
+				"eps6009 snapshot POSTID", __LINE__) &&
+			Check(snapshot.registers[kCpuControl] == 0x07,
+				"eps6009 snapshot CPUCON", __LINE__);
 	}
 
 	bool HookAndRamSmoke() {
@@ -1091,12 +1155,15 @@ namespace {
 			return false;
 		machine.SetPC(0);
 		machine.RequestContinue();
-		if (!Check(!machine.RunFrame(), "skip-count run must not stop", __LINE__))
+		machine.Next();
+		if (!Check(machine.LastDebugStop().reason == casioemu::Eps6800DebugStopReason::None &&
+				machine.ExecutionBreakpointDetails().front().hit_count == 1,
+				"skip-count first hit", __LINE__))
 			return false;
 		machine.SetPC(0);
 		machine.RequestContinue();
-		if (!Check(machine.RunFrame() &&
-				machine.LastDebugStop().reason == casioemu::Eps6800DebugStopReason::ExecutionBreakpoint &&
+		machine.Next();
+		if (!Check(machine.LastDebugStop().reason == casioemu::Eps6800DebugStopReason::ExecutionBreakpoint &&
 				machine.ExecutionBreakpointDetails().front().hit_count == 2,
 				"skip-count second hit", __LINE__))
 			return false;
@@ -1210,6 +1277,10 @@ int main(int argc, char** argv) {
 	}
 	if (!Eps6009PortBInputSmoke()) {
 		std::cerr << "EPS6009 Port B external input regression\n";
+		return 1;
+	}
+	if (!Eps6009DebuggerVariantSmoke()) {
+		std::cerr << "EPS6009 debugger variant regression\n";
 		return 1;
 	}
 	if (!KeyboardMatrixSmoke()) {

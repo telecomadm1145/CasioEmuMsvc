@@ -24,6 +24,14 @@ uint8_t machine_state_interrupt_pending(const struct machine_state *state) {
 	return state ? state->cpu.int_pending : 0;
 }
 
+size_t machine_state_lcd_raw_size(const struct machine_state *state) {
+	return state ? eps_lcd_raw_size(state->mmio.variant) : 0;
+}
+
+uint32_t machine_state_idle_timer1_cycles_per_tick(const struct machine_state *state) {
+	return state ? eps_get_variant_traits(state->mmio.variant)->timer.idle_cycles_per_20ms : 0;
+}
+
 size_t machine_state_lcd_copy_display(
 	const struct machine_state *state,
 	uint8_t *data,
