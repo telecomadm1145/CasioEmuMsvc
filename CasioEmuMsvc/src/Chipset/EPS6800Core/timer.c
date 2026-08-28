@@ -21,6 +21,37 @@ static const int32_t TIMER0_PRESCALERS[] = { 1, 4, 16, 64 };
 static const int32_t TIMER1_PRESCALERS[] = { 4, 16, 64, 256 };
 static const int32_t TIMER2_PRESCALERS[] = { 1, 2, 4, 8 };
 
+enum timer1_model {
+	TIMER1_MODEL_STANDARD = 0,
+	TIMER1_MODEL_EPS6009
+};
+
+struct timer_variant_profile {
+	enum timer1_model timer1_model;
+	uint8_t t1_control_shift;
+	uint8_t t1_enable_bit;
+	uint8_t t0_interrupt_enable_bit;
+	uint8_t t1_interrupt_enable_bit;
+	uint8_t t2_interrupt_enable_bit;
+	bool shared_interrupt_control;
+	bool counter0_readback;
+};
+
+static const struct timer_variant_profile *timer_profile(enum eps_variant variant) {
+	static const struct timer_variant_profile standard_profile = {
+		TIMER1_MODEL_STANDARD, 0u, BIT_T1EN,
+		BIT_TMR0IE, BIT_TMR1IE, BIT_TMR2IE,
+		false, true
+	};
+	static const struct timer_variant_profile eps6009_profile = {
+		TIMER1_MODEL_EPS6009, 4u, 0x40u,
+		BIT_TMR0I, BIT_TMR1I, BIT_TMR2I,
+		true, false
+	};
+
+	return variant == EPS_VARIANT_6009 ? &eps6009_profile : &standard_profile;
+}
+
 void timer_connect_bus_state(struct timer_state *state, struct cpu_state *cpu, struct mmio_state *mmio) {
 	state->cpu = cpu;
 	state->mmio = mmio;
@@ -68,20 +99,18 @@ static bool timer_enabled(uint8_t control, uint8_t enable_bit) {
 }
 
 static uint8_t timer_t1_prescaler_control(const struct timer_state *state) {
+	const struct timer_variant_profile *profile = timer_profile(state->mmio->variant);
 	const uint8_t control = state->reg[eps_reg_tr1con(state->mmio->variant)];
-	return eps_variant_is_6009(state->mmio->variant) ? (uint8_t)(control >> 4) : control;
+	return (uint8_t)(control >> profile->t1_control_shift);
 }
 
-static uint8_t timer_bit_t1en(const struct timer_state *state) {
-	return eps_variant_is_6009(state->mmio->variant) ? 0x40u : BIT_T1EN;
-}
-
-static uint8_t timer_bit_t1ie(const struct timer_state *state) {
-	return eps_variant_is_6009(state->mmio->variant) ? BIT_TMR1I : BIT_TMR1IE;
-}
-
-static uint8_t timer_bit_t2ie(const struct timer_state *state) {
-	return eps_variant_is_6009(state->mmio->variant) ? BIT_TMR2I : BIT_TMR2IE;
+static uint8_t timer_interrupt_control(
+	const struct timer_state *state,
+	uint8_t local_control
+) {
+	const struct timer_variant_profile *profile = timer_profile(state->mmio->variant);
+	return profile->shared_interrupt_control ?
+		state->reg[eps_reg_trintcon(state->mmio->variant)] : local_control;
 }
 
 static int32_t timer_eps6009_t1_reload(const struct timer_state *state) {
@@ -180,21 +209,21 @@ static void timer_recalc_0(struct timer_state *state) {
 }
 
 static void timer_recalc_1(struct timer_state *state) {
-	if (eps_variant_is_6009(state->mmio->variant)) {
-		state->t1prl = timer_selected_prescaler(TIMER1_PRESCALERS, timer_t1_prescaler_control(state));
+	const struct timer_variant_profile *profile = timer_profile(state->mmio->variant);
+	state->t1prl = timer_selected_prescaler(TIMER1_PRESCALERS, timer_t1_prescaler_control(state));
+	if (profile->timer1_model == TIMER1_MODEL_EPS6009) {
 		state->t1crl = timer_eps6009_t1_reload(state);
 		state->t1psc = 0;
-		state->t1cnt = state->t1crl;
-		return;
 	}
-	state->t1prl = timer_selected_prescaler(TIMER1_PRESCALERS, timer_t1_prescaler_control(state));
-	state->t1crl = state->reg[eps_reg_trl1(state->mmio->variant)];
-	state->t1psc = state->t1prl;
+	else {
+		state->t1crl = state->reg[eps_reg_trl1(state->mmio->variant)];
+		state->t1psc = state->t1prl;
+	}
 	state->t1cnt = state->t1crl;
 }
 
 static void timer_update_1_reload(struct timer_state *state) {
-	if (eps_variant_is_6009(state->mmio->variant)) {
+	if (timer_profile(state->mmio->variant)->timer1_model == TIMER1_MODEL_EPS6009) {
 		state->t1prl = timer_selected_prescaler(TIMER1_PRESCALERS, timer_t1_prescaler_control(state));
 		state->t1crl = timer_eps6009_t1_reload(state);
 		return;
@@ -215,13 +244,14 @@ static void timer_recalc_2(struct timer_state *state) {
 
 uint8_t timer_read_byte_state(struct timer_state *state, uint8_t addr) {
 	uint8_t byte;
+	const struct timer_variant_profile *profile = timer_profile(state->mmio->variant);
 	if (addr < TIMER_REG_COUNT) {
 		switch (addr) {
 		case REG_T0CH:
-			byte = eps_variant_is_6009(state->mmio->variant) ? state->reg[addr] : timer_counter_high_byte(state->t0cnt);
+			byte = profile->counter0_readback ? timer_counter_high_byte(state->t0cnt) : state->reg[addr];
 			break;
 		case REG_T0CL:
-			byte = eps_variant_is_6009(state->mmio->variant) ? state->reg[addr] : timer_counter_low_byte(state->t0cnt);
+			byte = profile->counter0_readback ? timer_counter_low_byte(state->t0cnt) : state->reg[addr];
 			break;
 		default:
 			byte = state->reg[addr];
@@ -235,15 +265,16 @@ uint8_t timer_read_byte_state(struct timer_state *state, uint8_t addr) {
 }
 
 void timer_write_byte_state(struct timer_state *state, uint8_t addr, uint8_t byte) {
+	const struct timer_variant_profile *profile = timer_profile(state->mmio->variant);
 	if (addr < TIMER_REG_COUNT) {
-		if (eps_variant_is_6009(state->mmio->variant)) {
+		if (profile->timer1_model == TIMER1_MODEL_EPS6009) {
 			const uint8_t old_byte = state->reg[addr];
 			state->reg[addr] = byte;
 			if (addr == eps_reg_tr0con(state->mmio->variant)) {
 				if (!timer_enabled(old_byte, BIT_T0EN) && timer_enabled(byte, BIT_T0EN)) {
 					timer_recalc_0(state);
 				}
-				if (!timer_enabled(old_byte, timer_bit_t1en(state)) && timer_enabled(byte, timer_bit_t1en(state))) {
+				if (!timer_enabled(old_byte, profile->t1_enable_bit) && timer_enabled(byte, profile->t1_enable_bit)) {
 					timer_recalc_1(state);
 				}
 				else {
@@ -292,26 +323,28 @@ void timer_reset_state(struct timer_state *state) {
 }
 
 static void timer_tick_0_state(struct timer_state *state, uint32_t cycles) {
+	const struct timer_variant_profile *profile = timer_profile(state->mmio->variant);
 	const uint8_t reg_tr0con = eps_reg_tr0con(state->mmio->variant);
 	const uint8_t control = state->reg[reg_tr0con];
-	const uint8_t interrupt_control = eps_variant_is_6009(state->mmio->variant) ? state->reg[0x21] : control;
+	const uint8_t interrupt_control = timer_interrupt_control(state, control);
 	if (timer_enabled(control, BIT_T0EN)) {
 		if (timer_tick_counter(&state->t0psc, state->t0prl, &state->t0cnt, state->t0crl, cycles)) {
-			timer_signal_interrupt(state, BIT_TMR0I, interrupt_control, eps_variant_is_6009(state->mmio->variant) ? BIT_TMR0I : BIT_TMR0IE);
+			timer_signal_interrupt(state, BIT_TMR0I, interrupt_control, profile->t0_interrupt_enable_bit);
 		}
 	}
 }
 
 static void timer_tick_1_state(struct timer_state *state, uint32_t cycles) {
+	const struct timer_variant_profile *profile = timer_profile(state->mmio->variant);
 	const uint8_t reg_tr1con = eps_reg_tr1con(state->mmio->variant);
 	const uint8_t control = state->reg[reg_tr1con];
-	const uint8_t interrupt_control = eps_variant_is_6009(state->mmio->variant) ? state->reg[0x21] : control;
-	if (timer_enabled(control, timer_bit_t1en(state))) {
-		const bool overflow = eps_variant_is_6009(state->mmio->variant) ?
+	const uint8_t interrupt_control = timer_interrupt_control(state, control);
+	if (timer_enabled(control, profile->t1_enable_bit)) {
+		const bool overflow = profile->timer1_model == TIMER1_MODEL_EPS6009 ?
 			timer_tick_eps6009_t1_counter(state, cycles) :
 			timer_tick_counter(&state->t1psc, state->t1prl, &state->t1cnt, state->t1crl, cycles);
 		if (overflow) {
-			timer_signal_interrupt(state, BIT_TMR1I, interrupt_control, timer_bit_t1ie(state));
+			timer_signal_interrupt(state, BIT_TMR1I, interrupt_control, profile->t1_interrupt_enable_bit);
 			if (control & BIT_T1WKEN) {
 				timer_cpu_wake(state, WAKE_TIMER);
 			}
@@ -320,12 +353,13 @@ static void timer_tick_1_state(struct timer_state *state, uint32_t cycles) {
 }
 
 static void timer_tick_2_state(struct timer_state *state, uint32_t cycles) {
+	const struct timer_variant_profile *profile = timer_profile(state->mmio->variant);
 	const uint8_t reg_tr2wcon = eps_reg_tr2wcon(state->mmio->variant);
 	const uint8_t control = state->reg[reg_tr2wcon];
-	const uint8_t interrupt_control = eps_variant_is_6009(state->mmio->variant) ? state->reg[0x21] : control;
+	const uint8_t interrupt_control = timer_interrupt_control(state, control);
 	if (timer_enabled(control, BIT_T2EN)) {
 		if (timer_tick_counter(&state->t2psc, state->t2prl, &state->t2cnt, state->t2crl, cycles)) {
-			timer_signal_interrupt(state, BIT_TMR2I, interrupt_control, timer_bit_t2ie(state));
+			timer_signal_interrupt(state, BIT_TMR2I, interrupt_control, profile->t2_interrupt_enable_bit);
 		}
 	}
 }
@@ -346,5 +380,4 @@ void timer_tick_idle_state(struct timer_state *state, uint32_t cycles) {
 	 * Timer2 are driven only while the CPU oscillator is running. */
 	timer_tick_1_state(state, cycles);
 }
-
 

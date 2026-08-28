@@ -77,6 +77,34 @@ uint32_t machine_state_debug_fetch_instruction(const struct machine_state *state
 	return machine_debug_fetch_instruction_word(state, pc);
 }
 
+void machine_state_debug_decode_instruction(
+	const struct machine_state *state,
+	uint16_t word,
+	struct machine_debug_instruction_info *info
+) {
+	const uint8_t high = (uint8_t)(word >> 8);
+	const bool long_control = (word & 0xfff0u) == 0x0020u ||
+		(word & 0xfff0u) == 0x0030u;
+	const bool long_conditional = (high >= 0x50u && high <= 0x51u) ||
+		(high >= 0x55u && high <= 0x67u) ||
+		(high >= 0x47u && high <= 0x49u);
+
+	(void)state;
+	if (!info)
+		return;
+
+	info->words = (long_control || long_conditional) ? 2u : 1u;
+	info->cycles = (long_control || long_conditional ||
+		(high >= 0x2cu && high <= 0x2fu)) ? 2u : 1u;
+	info->flags = 0;
+	if ((word & 0xf000u) == 0x3000u ||
+		(word & 0xe000u) == 0xe000u ||
+		(word & 0xfff0u) == 0x0030u)
+		info->flags |= MACHINE_DEBUG_INSTRUCTION_CALL;
+	if (word == 0x2bfeu || word == 0x2bffu)
+		info->flags |= MACHINE_DEBUG_INSTRUCTION_RETURN;
+}
+
 void machine_state_debug_get_register_overview(
 	struct machine_state *state,
 	struct machine_debug_register_overview *overview

@@ -242,42 +242,13 @@ static inline int eps_variant_is_9500(enum eps_variant variant) {
 	return variant == EPS_VARIANT_9500;
 }
 
-static inline const struct eps_variant_traits *eps_get_variant_traits(enum eps_variant variant) {
-	static const struct eps_variant_traits eps6800_traits = {
-		REG_CPUCON, REG_POSTID, REG_LCDARL, REG_LCDDAT, REG_LCDARH, REG_LCDCON,
-		REG_INTSTA, REG_INTSTA, REG_TR0CON, REG_TR1CON, REG_TRL0L, REG_TRL0H,
-		REG_TRL1, REG_TR2WCON, REG_TRL2, REG_PORTA, REG_PORTB, REG_STBCON,
-		REG_PACON, REG_PAWAKE, REG_PAINTEN, REG_PAINTSTA, REG_PBCON, REG_DCRB,
-		0x3fu, 1u, 1u, 1u, EPS_STACK_MODEL_LINEAR,
-		MMIO_LEGACY_RAM_COUNT, (size_t)(96u * 4u)
-	};
-	static const struct eps_variant_traits eps6009_traits = {
-		0x31u, 0x30u, 0x09u, REG_LCDDAT, 0xffu, 0x2fu,
-		0x22u, 0x21u, 0x23u, 0x23u, 0x24u, 0x25u,
-		0x26u, 0x27u, 0x28u, 0x10u, 0x11u, 0x20u,
-		0x29u, 0x2au, 0x2bu, 0x2cu, 0x2du, 0x2eu,
-		0x0fu, 0u, 0u, 0u, EPS_STACK_MODEL_LINEAR,
-		MMIO_LEGACY_RAM_COUNT, 0x88u
-	};
-	static const struct eps_variant_traits eps9500_traits = {
-		REG_CPUCON, REG_POSTID, REG_LCDARL, REG_LCDDAT, REG_LCDARH, REG_LCDCON,
-		REG_INTSTA, REG_INTSTA, REG_TR0CON, REG_TR1CON, REG_TRL0L, REG_TRL0H,
-		REG_TRL1, REG_TR2WCON, REG_TRL2, REG_PORTA, REG_PORTB, REG_STBCON,
-		REG_PACON, REG_PAWAKE, REG_PAINTEN, REG_PAINTSTA, REG_PBCON, REG_DCRB,
-		0x3fu, 1u, 1u, 1u, EPS_STACK_MODEL_DESCENDING_EVEN,
-		MMIO_EPS9500_RAM_COUNT, (size_t)(98u * 4u)
-	};
-
-	switch (variant) {
-	case EPS_VARIANT_6009:
-		return &eps6009_traits;
-	case EPS_VARIANT_9500:
-		return &eps9500_traits;
-	case EPS_VARIANT_6800:
-	default:
-		return &eps6800_traits;
-	}
+#ifdef __cplusplus
+extern "C" {
+#endif
+const struct eps_variant_traits *eps_get_variant_traits(enum eps_variant variant);
+#ifdef __cplusplus
 }
+#endif
 
 static inline uint8_t eps_reg_cpucon(enum eps_variant variant) {
 	return eps_get_variant_traits(variant)->reg_cpucon;

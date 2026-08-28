@@ -60,16 +60,6 @@ namespace {
 		return state;
 	}
 
-	bool IsEpsCallInstruction(uint16_t word) {
-		return (word & 0xf000u) == 0x3000u || // S0CALL
-			(word & 0xe000u) == 0xe000u || // SCALL
-			(word & 0xfff0u) == 0x0030u; // LCALL
-	}
-
-	bool IsEpsReturnInstruction(uint16_t word) {
-		return word == 0x2bfeu || word == 0x2bffu;
-	}
-
 	enum eps_variant ToCoreVariant(casioemu::EpsVariant variant) {
 		switch (variant) {
 		case casioemu::EpsVariant::Eps6009:
@@ -79,29 +69,6 @@ namespace {
 		default:
 			return EPS_VARIANT_6800;
 		}
-	}
-
-	uint8_t EpsInstructionWords(uint16_t word, casioemu::EpsVariant variant) {
-		if ((word & 0xfff0u) == 0x0020u || (word & 0xfff0u) == 0x0030u)
-			return 2;
-		const uint8_t high = static_cast<uint8_t>(word >> 8);
-		(void)variant;
-		if ((high >= 0x50 && high <= 0x51) ||
-			(high >= 0x55 && high <= 0x67) ||
-			(high >= 0x47 && high <= 0x49))
-			return 2;
-		return 1;
-	}
-
-	uint8_t EpsInstructionCycles(uint16_t word, casioemu::EpsVariant variant) {
-		const uint8_t high = static_cast<uint8_t>(word >> 8);
-		if ((word & 0xfff0u) == 0x0020u || (word & 0xfff0u) == 0x0030u ||
-			(high >= 0x2c && high <= 0x2f) ||
-			(high >= 0x50 && high <= 0x51) ||
-			(high >= 0x55 && high <= 0x67) ||
-			(high >= 0x47 && high <= 0x49))
-			return 2;
-		return 1;
 	}
 
 }
@@ -314,7 +281,9 @@ namespace casioemu {
 		const uint8_t interrupt_pending = machine_state_interrupt_pending(state_);
 		const uint32_t instruction = machine_state_debug_fetch_instruction(state_, pc_before);
 		const uint16_t word = static_cast<uint16_t>(instruction >> 16);
-		const uint8_t base_cycles = EpsInstructionCycles(word, variant_);
+		machine_debug_instruction_info instruction_info{};
+		machine_state_debug_decode_instruction(state_, word, &instruction_info);
+		const uint8_t base_cycles = instruction_info.cycles;
 		bool advance_timer = false;
 		if (tick_timer && ++timer_cycle_phase_ >= timer_cycle_divisor_) {
 			timer_cycle_phase_ = 0;
@@ -329,17 +298,17 @@ namespace casioemu {
 
 		const uint32_t pc_after = machine_state_debug_program_counter(state_);
 		uint8_t elapsed_cycles = base_cycles;
-		if (elapsed_cycles == 1 && pc_after != pc_before + EpsInstructionWords(word, variant_))
+		if (elapsed_cycles == 1 && pc_after != pc_before + instruction_info.words)
 			elapsed_cycles = 2; // ePS6800 control-flow / PC-write penalty.
 		cycle_count_ += elapsed_cycles;
 		const uint8_t stack_pointer_after = machine_state_debug_stack_depth(state_);
 		RecordTraceLocked(pc_before, instruction, pc_after);
 		const uint8_t accumulator = machine_state_debug_accumulator(state_);
-		if (function_hook_ && IsEpsCallInstruction(word)) {
-			function_hook_(pc_after, pc_before + EpsInstructionWords(word, variant_), true,
+		if (function_hook_ && (instruction_info.flags & MACHINE_DEBUG_INSTRUCTION_CALL)) {
+			function_hook_(pc_after, pc_before + instruction_info.words, true,
 				accumulator, BacktraceLocked());
 		}
-		else if (function_hook_ && IsEpsReturnInstruction(word)) {
+		else if (function_hook_ && (instruction_info.flags & MACHINE_DEBUG_INSTRUCTION_RETURN)) {
 			function_hook_(pc_after, pc_after, false, accumulator, BacktraceLocked());
 		}
 		if (interrupt_hook_ && interrupt_pending && stack_pointer_after > stack_pointer_before) {
@@ -506,8 +475,7 @@ namespace casioemu {
 		if (control) {
 			control->lcdarh = raw_control.lcdarh;
 			control->lcdcon = raw_control.lcdcon;
-			control->contrast = variant_ == EpsVariant::Eps6009 ? 0x0f : static_cast<uint8_t>(
-				(raw_control.lcdarh & MASK_LCD_CONTRAST) >> SHIFT_LCD_CONTRAST);
+			control->contrast = raw_control.contrast;
 			control->display_on = (raw_control.lcdcon & BIT_LCD_ON) != 0;
 			control->blanked = (raw_control.lcdcon & BIT_LCD_BLANK) != 0;
 		}
@@ -621,15 +589,17 @@ namespace casioemu {
 		const std::lock_guard lock(state_mutex_);
 		const uint32_t pc = machine_state_debug_program_counter(state_);
 		const uint16_t word = machine_state_debug_read_rom_word(state_, pc);
+		machine_debug_instruction_info instruction_info{};
+		machine_state_debug_decode_instruction(state_, word, &instruction_info);
 		last_debug_stop_ = {};
 		honor_execution_breakpoints_ = true;
 		honor_memory_breakpoints_ = true;
-		if (!IsEpsCallInstruction(word)) {
+		if (!(instruction_info.flags & MACHINE_DEBUG_INSTRUCTION_CALL)) {
 			debug_run_mode_ = DebugRunMode::StepInto;
 			return;
 		}
 		debug_run_mode_ = DebugRunMode::StepOver;
-		debug_target_pc_ = pc + EpsInstructionWords(word, variant_);
+		debug_target_pc_ = pc + instruction_info.words;
 		debug_target_stack_pointer_ = machine_state_debug_stack_depth(state_);
 	}
 

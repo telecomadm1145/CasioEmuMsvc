@@ -31,6 +31,7 @@ enum machine_cpu_mode {
 struct machine_lcd_control {
 	uint8_t lcdarh;
 	uint8_t lcdcon;
+	uint8_t contrast;
 };
 
 /* Host execution boundary.  Callers can schedule the machine without
@@ -54,7 +55,7 @@ void machine_state_run_frame(struct machine_state *state);
 
 /* Copies page-major visible LCD bytes: page * MACHINE_LCD_VISIBLE_WIDTH + column. */
 size_t machine_state_lcd_copy_framebuffer(const struct machine_state *state, uint8_t *data, size_t size);
-/* Copies the visible framebuffer and its associated control registers together. */
+/* Copies the visible framebuffer and normalized display control state together. */
 size_t machine_state_lcd_copy_display(
 	const struct machine_state *state,
 	uint8_t *data,

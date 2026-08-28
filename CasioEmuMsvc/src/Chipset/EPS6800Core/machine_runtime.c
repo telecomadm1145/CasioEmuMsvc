@@ -24,24 +24,40 @@ void machine_state_bind_modules(struct machine_state *state) {
 	mmio_connect_peripherals_state(&state->mmio, &state->kbd, &state->lcd, &state->timer);
 }
 
+static void machine_state_tick_scheduled_peripherals(
+	struct machine_state *state,
+	uint32_t timer_cycles,
+	uint32_t keyboard_cycles,
+	bool tick_fast_timers,
+	bool tick_timer1
+) {
+	const enum cpu_mode mode = state->cpu.mode;
+
+	if (mode == CPU_MODE_IDLE) {
+		if (tick_timer1)
+			timer_tick_idle_state(&state->timer, timer_cycles);
+	}
+	else if (mode != CPU_MODE_SLEEP) {
+		if (tick_fast_timers)
+			timer_tick_fast_state(&state->timer, timer_cycles);
+		if (tick_timer1)
+			timer_tick_idle_state(&state->timer, timer_cycles);
+	}
+	kbd_tick_state(&state->kbd, keyboard_cycles);
+}
+
 void machine_state_advance_cycles_split(
 	struct machine_state *state,
 	uint32_t cycles,
 	bool tick_fast_timers,
 	bool tick_timer1
 ) {
+	if (!state)
+		return;
+
 	cpu_loop_state(&state->cpu, cycles);
-	if (state->cpu.mode == CPU_MODE_IDLE) {
-		if (tick_timer1)
-			timer_tick_idle_state(&state->timer, cycles);
-	}
-	else if (state->cpu.mode != CPU_MODE_SLEEP) {
-		if (tick_fast_timers)
-			timer_tick_fast_state(&state->timer, cycles);
-		if (tick_timer1)
-			timer_tick_idle_state(&state->timer, cycles);
-	}
-	kbd_tick_state(&state->kbd, cycles);
+	machine_state_tick_scheduled_peripherals(
+		state, cycles, cycles, tick_fast_timers, tick_timer1);
 }
 
 void machine_state_advance_instruction_cycles(
@@ -50,22 +66,12 @@ void machine_state_advance_instruction_cycles(
 	bool tick_fast_timers,
 	bool tick_timer1
 ) {
-	if (!state) {
+	if (!state)
 		return;
-	}
 
 	cpu_loop_state(&state->cpu, 1);
-	if (state->cpu.mode == CPU_MODE_IDLE) {
-		if (tick_timer1)
-			timer_tick_idle_state(&state->timer, timer_cycles);
-	}
-	else if (state->cpu.mode != CPU_MODE_SLEEP) {
-		if (tick_fast_timers)
-			timer_tick_fast_state(&state->timer, timer_cycles);
-		if (tick_timer1)
-			timer_tick_idle_state(&state->timer, timer_cycles);
-	}
-	kbd_tick_state(&state->kbd, 1);
+	machine_state_tick_scheduled_peripherals(
+		state, timer_cycles, 1, tick_fast_timers, tick_timer1);
 }
 
 void machine_state_tick_idle_timer1(struct machine_state *state, uint32_t cycles) {

@@ -1,6 +1,5 @@
 /* Emulated machine host I/O wrappers */
 
-#include "eps6800.h"
 #include "machine_internal.h"
 #include "machine_io.h"
 
@@ -31,22 +30,16 @@ size_t machine_state_lcd_copy_display(
 	size_t size,
 	struct machine_lcd_control *control
 ) {
-	size_t i;
-	size_t copy_size;
-
-	if (!state || !data) {
+	if (!state || !data)
 		return 0;
-	}
 
-	copy_size = (size < eps_lcd_raw_size(state->mmio.variant)) ? size : eps_lcd_raw_size(state->mmio.variant);
-	for (i = 0; i < copy_size; i++) {
-		data[i] = lcd_ram_read_byte_state(&state->lcd, (uint16_t)i);
-	}
-	if (control) {
-		control->lcdarh = eps_variant_is_6009(state->mmio.variant) ? 0 : state->lcd.reg[eps_reg_lcdarh(state->mmio.variant)];
-		control->lcdcon = state->lcd.reg[eps_reg_lcdcon(state->mmio.variant)];
-	}
-	return copy_size;
+	return lcd_copy_display_state(
+		&state->lcd,
+		data,
+		size,
+		control ? &control->lcdarh : NULL,
+		control ? &control->lcdcon : NULL,
+		control ? &control->contrast : NULL);
 }
 
 size_t machine_state_lcd_copy_framebuffer(const struct machine_state *state, uint8_t *data, size_t size) {
@@ -54,16 +47,11 @@ size_t machine_state_lcd_copy_framebuffer(const struct machine_state *state, uin
 }
 
 uint8_t machine_state_lcd_read_memory(const struct machine_state *state, size_t address) {
-	if (!state || address >= eps_lcd_raw_size(state->mmio.variant))
-		return 0xff;
-	return state->lcd.fb[address];
+	return state ? lcd_raw_read_byte_state(&state->lcd, address) : 0xff;
 }
 
 bool machine_state_lcd_write_memory(struct machine_state *state, size_t address, uint8_t value) {
-	if (!state || address >= eps_lcd_raw_size(state->mmio.variant))
-		return false;
-	state->lcd.fb[address] = value;
-	return true;
+	return state ? lcd_raw_write_byte_state(&state->lcd, address, value) : false;
 }
 
 void machine_state_keydown(struct machine_state *state, uint8_t key) {

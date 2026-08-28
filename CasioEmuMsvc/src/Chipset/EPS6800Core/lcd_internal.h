@@ -4,6 +4,8 @@
 
 #include "lcd_geometry.h"
 
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 enum {
@@ -28,6 +30,16 @@ uint8_t lcd_read_byte_state(struct lcd_state *state, uint8_t addr);
 void lcd_write_byte_state(struct lcd_state *state, uint8_t addr, uint8_t byte);
 void lcd_process_postid_state(struct lcd_state *state);
 uint8_t lcd_ram_read_byte_state(const struct lcd_state *state, uint16_t addr);
+size_t lcd_copy_display_state(
+	const struct lcd_state *state,
+	uint8_t *data,
+	size_t size,
+	uint8_t *lcdarh,
+	uint8_t *lcdcon,
+	uint8_t *contrast
+);
+uint8_t lcd_raw_read_byte_state(const struct lcd_state *state, size_t addr);
+bool lcd_raw_write_byte_state(struct lcd_state *state, size_t addr, uint8_t value);
 void lcd_reset_state(struct lcd_state *state);
 
 #endif /* FX_EMU_CORE_LCD_INTERNAL_H */

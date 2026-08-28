@@ -19,6 +19,17 @@ extern "C" {
 #define MACHINE_DEBUG_BANK_RAM_SIZE MMIO_RAM_COUNT
 #define MACHINE_DEBUG_LINEAR_MEMORY_SIZE (0x80 + MACHINE_DEBUG_BANK_RAM_SIZE)
 
+enum machine_debug_instruction_flags {
+	MACHINE_DEBUG_INSTRUCTION_CALL = 0x01,
+	MACHINE_DEBUG_INSTRUCTION_RETURN = 0x02
+};
+
+struct machine_debug_instruction_info {
+	uint8_t words;
+	uint8_t cycles;
+	uint8_t flags;
+};
+
 struct machine_debug_state {
 	uint32_t pc;
 	uint8_t acc;
@@ -55,6 +66,13 @@ void machine_state_debug_set_program_counter(struct machine_state *state, uint32
 uint8_t machine_state_debug_accumulator(const struct machine_state *state);
 uint8_t machine_state_debug_status(const struct machine_state *state);
 uint32_t machine_state_debug_fetch_instruction(const struct machine_state *state, uint32_t pc);
+/* Canonical instruction geometry/classification used by debugger and scheduler
+ * clients so opcode semantics remain owned by the EPS core. */
+void machine_state_debug_decode_instruction(
+	const struct machine_state *state,
+	uint16_t word,
+	struct machine_debug_instruction_info *info
+);
 void machine_state_debug_get_register_overview(
 	struct machine_state *state,
 	struct machine_debug_register_overview *overview
