@@ -2,6 +2,8 @@
 #ifndef FX_EMU_CORE_EPS6800_H
 #define FX_EMU_CORE_EPS6800_H
 
+#include "mmio_layout.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -188,6 +190,50 @@ enum {
 	ADDR_TIMINT = 0x00000008
 };
 
+enum eps_stack_model {
+	EPS_STACK_MODEL_LINEAR = 0,
+	EPS_STACK_MODEL_DESCENDING_EVEN = 1
+};
+
+/*
+ * Static silicon description.  Keep register locations and structural
+ * capabilities here so adding another EPS family member does not require
+ * growing variant conditionals throughout the core.
+ */
+struct eps_variant_traits {
+	uint8_t reg_cpucon;
+	uint8_t reg_postid;
+	uint8_t reg_lcdarl;
+	uint8_t reg_lcddat;
+	uint8_t reg_lcdarh;
+	uint8_t reg_lcdcon;
+	uint8_t reg_trintsta;
+	uint8_t reg_trintcon;
+	uint8_t reg_tr0con;
+	uint8_t reg_tr1con;
+	uint8_t reg_trl0l;
+	uint8_t reg_trl0h;
+	uint8_t reg_trl1;
+	uint8_t reg_tr2wcon;
+	uint8_t reg_trl2;
+	uint8_t reg_porta;
+	uint8_t reg_portb;
+	uint8_t reg_stbcon;
+	uint8_t reg_pacon;
+	uint8_t reg_pawake;
+	uint8_t reg_painten;
+	uint8_t reg_paintsta;
+	uint8_t reg_pbcon;
+	uint8_t reg_dcrb;
+	uint8_t ram_page_mask;
+	uint8_t has_pch;
+	uint8_t has_indf2;
+	uint8_t has_wbk;
+	uint8_t stack_model;
+	size_t bank_ram_size;
+	size_t lcd_raw_size;
+};
+
 static inline int eps_variant_is_6009(enum eps_variant variant) {
 	return variant == EPS_VARIANT_6009;
 }
@@ -196,101 +242,137 @@ static inline int eps_variant_is_9500(enum eps_variant variant) {
 	return variant == EPS_VARIANT_9500;
 }
 
+static inline const struct eps_variant_traits *eps_get_variant_traits(enum eps_variant variant) {
+	static const struct eps_variant_traits eps6800_traits = {
+		REG_CPUCON, REG_POSTID, REG_LCDARL, REG_LCDDAT, REG_LCDARH, REG_LCDCON,
+		REG_INTSTA, REG_INTSTA, REG_TR0CON, REG_TR1CON, REG_TRL0L, REG_TRL0H,
+		REG_TRL1, REG_TR2WCON, REG_TRL2, REG_PORTA, REG_PORTB, REG_STBCON,
+		REG_PACON, REG_PAWAKE, REG_PAINTEN, REG_PAINTSTA, REG_PBCON, REG_DCRB,
+		0x3fu, 1u, 1u, 1u, EPS_STACK_MODEL_LINEAR,
+		MMIO_LEGACY_RAM_COUNT, (size_t)(96u * 4u)
+	};
+	static const struct eps_variant_traits eps6009_traits = {
+		0x31u, 0x30u, 0x09u, REG_LCDDAT, 0xffu, 0x2fu,
+		0x22u, 0x21u, 0x23u, 0x23u, 0x24u, 0x25u,
+		0x26u, 0x27u, 0x28u, 0x10u, 0x11u, 0x20u,
+		0x29u, 0x2au, 0x2bu, 0x2cu, 0x2du, 0x2eu,
+		0x0fu, 0u, 0u, 0u, EPS_STACK_MODEL_LINEAR,
+		MMIO_LEGACY_RAM_COUNT, 0x88u
+	};
+	static const struct eps_variant_traits eps9500_traits = {
+		REG_CPUCON, REG_POSTID, REG_LCDARL, REG_LCDDAT, REG_LCDARH, REG_LCDCON,
+		REG_INTSTA, REG_INTSTA, REG_TR0CON, REG_TR1CON, REG_TRL0L, REG_TRL0H,
+		REG_TRL1, REG_TR2WCON, REG_TRL2, REG_PORTA, REG_PORTB, REG_STBCON,
+		REG_PACON, REG_PAWAKE, REG_PAINTEN, REG_PAINTSTA, REG_PBCON, REG_DCRB,
+		0x3fu, 1u, 1u, 1u, EPS_STACK_MODEL_DESCENDING_EVEN,
+		MMIO_EPS9500_RAM_COUNT, (size_t)(98u * 4u)
+	};
+
+	switch (variant) {
+	case EPS_VARIANT_6009:
+		return &eps6009_traits;
+	case EPS_VARIANT_9500:
+		return &eps9500_traits;
+	case EPS_VARIANT_6800:
+	default:
+		return &eps6800_traits;
+	}
+}
+
 static inline uint8_t eps_reg_cpucon(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x31u : REG_CPUCON;
+	return eps_get_variant_traits(variant)->reg_cpucon;
 }
 
 static inline uint8_t eps_reg_postid(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x30u : REG_POSTID;
+	return eps_get_variant_traits(variant)->reg_postid;
 }
 
 static inline uint8_t eps_reg_lcdarl(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x09u : REG_LCDARL;
+	return eps_get_variant_traits(variant)->reg_lcdarl;
 }
 
 static inline uint8_t eps_reg_lcddat(enum eps_variant variant) {
-	(void)variant;
-	return REG_LCDDAT;
+	return eps_get_variant_traits(variant)->reg_lcddat;
 }
 
 static inline uint8_t eps_reg_lcdarh(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0xffu : REG_LCDARH;
+	return eps_get_variant_traits(variant)->reg_lcdarh;
 }
 
 static inline uint8_t eps_reg_lcdcon(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x2fu : REG_LCDCON;
+	return eps_get_variant_traits(variant)->reg_lcdcon;
 }
 
 static inline uint8_t eps_reg_trintsta(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x22u : REG_INTSTA;
+	return eps_get_variant_traits(variant)->reg_trintsta;
 }
 
 static inline uint8_t eps_reg_trintcon(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x21u : REG_INTSTA;
+	return eps_get_variant_traits(variant)->reg_trintcon;
 }
 
 static inline uint8_t eps_reg_tr0con(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x23u : REG_TR0CON;
+	return eps_get_variant_traits(variant)->reg_tr0con;
 }
 
 static inline uint8_t eps_reg_tr1con(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x23u : REG_TR1CON;
+	return eps_get_variant_traits(variant)->reg_tr1con;
 }
 
 static inline uint8_t eps_reg_trl0l(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x24u : REG_TRL0L;
+	return eps_get_variant_traits(variant)->reg_trl0l;
 }
 
 static inline uint8_t eps_reg_trl0h(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x25u : REG_TRL0H;
+	return eps_get_variant_traits(variant)->reg_trl0h;
 }
 
 static inline uint8_t eps_reg_trl1(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x26u : REG_TRL1;
+	return eps_get_variant_traits(variant)->reg_trl1;
 }
 
 static inline uint8_t eps_reg_tr2wcon(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x27u : REG_TR2WCON;
+	return eps_get_variant_traits(variant)->reg_tr2wcon;
 }
 
 static inline uint8_t eps_reg_trl2(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x28u : REG_TRL2;
+	return eps_get_variant_traits(variant)->reg_trl2;
 }
 
 static inline uint8_t eps_reg_porta(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x10u : REG_PORTA;
+	return eps_get_variant_traits(variant)->reg_porta;
 }
 
 static inline uint8_t eps_reg_portb(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x11u : REG_PORTB;
+	return eps_get_variant_traits(variant)->reg_portb;
 }
 
 static inline uint8_t eps_reg_stbcon(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x20u : REG_STBCON;
+	return eps_get_variant_traits(variant)->reg_stbcon;
 }
 
 static inline uint8_t eps_reg_pacon(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x29u : REG_PACON;
+	return eps_get_variant_traits(variant)->reg_pacon;
 }
 
 static inline uint8_t eps_reg_pawake(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x2au : REG_PAWAKE;
+	return eps_get_variant_traits(variant)->reg_pawake;
 }
 
 static inline uint8_t eps_reg_painten(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x2bu : REG_PAINTEN;
+	return eps_get_variant_traits(variant)->reg_painten;
 }
 
 static inline uint8_t eps_reg_paintsta(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x2cu : REG_PAINTSTA;
+	return eps_get_variant_traits(variant)->reg_paintsta;
 }
 
 static inline uint8_t eps_reg_pbcon(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x2du : REG_PBCON;
+	return eps_get_variant_traits(variant)->reg_pbcon;
 }
 
 static inline uint8_t eps_reg_dcrb(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x2eu : REG_DCRB;
+	return eps_get_variant_traits(variant)->reg_dcrb;
 }
 
 static inline int eps_key_input_enabled(enum eps_variant variant, const uint8_t *regs) {
@@ -301,19 +383,37 @@ static inline int eps_key_input_enabled(enum eps_variant variant, const uint8_t 
 }
 
 static inline int eps_has_pch(enum eps_variant variant) {
-	return !eps_variant_is_6009(variant);
+	return eps_get_variant_traits(variant)->has_pch != 0;
 }
 
 static inline int eps_has_indf2(enum eps_variant variant) {
-	return !eps_variant_is_6009(variant);
+	return eps_get_variant_traits(variant)->has_indf2 != 0;
+}
+
+static inline int eps_has_wbk(enum eps_variant variant) {
+	return eps_get_variant_traits(variant)->has_wbk != 0;
+}
+
+static inline uint8_t eps_ram_page_mask(enum eps_variant variant) {
+	return eps_get_variant_traits(variant)->ram_page_mask;
+}
+
+static inline size_t eps_bank_ram_size(enum eps_variant variant) {
+	return eps_get_variant_traits(variant)->bank_ram_size;
 }
 
 static inline size_t eps_lcd_raw_size(enum eps_variant variant) {
-	if (eps_variant_is_6009(variant))
-		return 0x88u;
-	if (eps_variant_is_9500(variant))
-		return (size_t)(98u * 4u);
-	return (size_t)(96u * 4u);
+	return eps_get_variant_traits(variant)->lcd_raw_size;
+}
+
+static inline int eps_stack_is_descending_even(enum eps_variant variant) {
+	return eps_get_variant_traits(variant)->stack_model == EPS_STACK_MODEL_DESCENDING_EVEN;
+}
+
+static inline uint8_t eps_stack_depth_from_raw(enum eps_variant variant, uint8_t raw_stack_pointer) {
+	if (eps_stack_is_descending_even(variant))
+		return (uint8_t)(0u - raw_stack_pointer) / 2u;
+	return raw_stack_pointer & 0x1fu;
 }
 
 #endif /* FX_EMU_CORE_EPS6800_H */
