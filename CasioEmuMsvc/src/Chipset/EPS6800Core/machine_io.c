@@ -4,6 +4,27 @@
 #include "machine_internal.h"
 #include "machine_io.h"
 
+enum machine_cpu_mode machine_state_cpu_mode(const struct machine_state *state) {
+	if (!state)
+		return MACHINE_CPU_MODE_SLEEP;
+
+	switch (state->cpu.mode) {
+	case CPU_MODE_SLOW:
+		return MACHINE_CPU_MODE_SLOW;
+	case CPU_MODE_FAST:
+		return MACHINE_CPU_MODE_FAST;
+	case CPU_MODE_IDLE:
+		return MACHINE_CPU_MODE_IDLE;
+	case CPU_MODE_SLEEP:
+	default:
+		return MACHINE_CPU_MODE_SLEEP;
+	}
+}
+
+uint8_t machine_state_interrupt_pending(const struct machine_state *state) {
+	return state ? state->cpu.int_pending : 0;
+}
+
 size_t machine_state_lcd_copy_display(
 	const struct machine_state *state,
 	uint8_t *data,
@@ -30,6 +51,19 @@ size_t machine_state_lcd_copy_display(
 
 size_t machine_state_lcd_copy_framebuffer(const struct machine_state *state, uint8_t *data, size_t size) {
 	return machine_state_lcd_copy_display(state, data, size, NULL);
+}
+
+uint8_t machine_state_lcd_read_memory(const struct machine_state *state, size_t address) {
+	if (!state || address >= eps_lcd_raw_size(state->mmio.variant))
+		return 0xff;
+	return state->lcd.fb[address];
+}
+
+bool machine_state_lcd_write_memory(struct machine_state *state, size_t address, uint8_t value) {
+	if (!state || address >= eps_lcd_raw_size(state->mmio.variant))
+		return false;
+	state->lcd.fb[address] = value;
+	return true;
 }
 
 void machine_state_keydown(struct machine_state *state, uint8_t key) {
