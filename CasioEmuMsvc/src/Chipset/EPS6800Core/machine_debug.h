@@ -57,6 +57,9 @@ void machine_state_debug_get_snapshot(
 	struct machine_state *state,
 	struct machine_debug_snapshot *snapshot
 );
+/* Variant-aware debugger geometry. */
+uint32_t machine_state_debug_linear_memory_size(const struct machine_state *state);
+uint8_t machine_state_debug_stack_depth(const struct machine_state *state);
 uint8_t machine_state_debug_read_byte(struct machine_state *state, uint8_t addr);
 void machine_state_debug_write_byte(struct machine_state *state, uint8_t addr, uint8_t byte);
 uint8_t machine_state_debug_peek_memory(struct machine_state *state, uint32_t linear_addr);
