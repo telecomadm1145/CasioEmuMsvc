@@ -12,9 +12,16 @@ enum {
 	MACHINE_DEBUG_POSTID_DISABLED = 0x00
 };
 
-static uint32_t machine_debug_linear_memory_size(const struct machine_state *state) {
-	return MACHINE_DEBUG_REGISTER_COUNT +
-		(eps_variant_is_9500(state->mmio.variant) ? MMIO_EPS9500_RAM_COUNT : MMIO_LEGACY_RAM_COUNT);
+uint32_t machine_state_debug_linear_memory_size(const struct machine_state *state) {
+	if (!state)
+		return 0;
+	return MACHINE_DEBUG_REGISTER_COUNT + (uint32_t)eps_bank_ram_size(state->mmio.variant);
+}
+
+uint8_t machine_state_debug_stack_depth(const struct machine_state *state) {
+	if (!state)
+		return 0;
+	return eps_stack_depth_from_raw(state->mmio.variant, state->mmio.regs[REG_STKPTR]);
 }
 
 static uint32_t machine_debug_read_pc(struct machine_state *state) {
@@ -66,13 +73,13 @@ void machine_state_debug_get_register_overview(
 
 	/* Reading INDF and LCDDATA can have side effects through POSTID. */
 	mmio_suppress_debug_access_state(&state->mmio, true);
-	postid = mmio_read_byte_state(&state->mmio, REG_POSTID);
-	mmio_write_byte_state(&state->mmio, REG_POSTID, MACHINE_DEBUG_POSTID_DISABLED);
+	postid = mmio_read_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant));
+	mmio_write_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant), MACHINE_DEBUG_POSTID_DISABLED);
 	for (i = 0; i < MACHINE_DEBUG_LOW_REGISTER_COUNT; i++) {
 		overview->low_regs[i] = mmio_read_byte_state(&state->mmio, (uint8_t)i);
 	}
-	overview->cpucon = mmio_read_byte_state(&state->mmio, REG_CPUCON);
-	mmio_write_byte_state(&state->mmio, REG_POSTID, postid);
+	overview->cpucon = mmio_read_byte_state(&state->mmio, eps_reg_cpucon(state->mmio.variant));
+	mmio_write_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant), postid);
 	mmio_suppress_debug_access_state(&state->mmio, false);
 }
 
@@ -93,33 +100,31 @@ void machine_state_debug_get_snapshot(
 
 	snapshot->pc = state->cpu.pc;
 	mmio_suppress_debug_access_state(&state->mmio, true);
-	postid = mmio_read_byte_state(&state->mmio, REG_POSTID);
-	mmio_write_byte_state(&state->mmio, REG_POSTID, MACHINE_DEBUG_POSTID_DISABLED);
+	postid = mmio_read_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant));
+	mmio_write_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant), MACHINE_DEBUG_POSTID_DISABLED);
 	for (i = 0; i < MACHINE_DEBUG_REGISTER_COUNT; i++) {
 		snapshot->registers[i] = mmio_read_byte_state(&state->mmio, (uint8_t)i);
 	}
-	mmio_write_byte_state(&state->mmio, REG_POSTID, postid);
+	mmio_write_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant), postid);
 	mmio_suppress_debug_access_state(&state->mmio, false);
 	memcpy(snapshot->wbk_registers, state->mmio.ram_wbk, sizeof(snapshot->wbk_registers));
-	if (eps_variant_is_9500(state->mmio.variant)) {
-		const uint8_t raw_sp = snapshot->registers[REG_STKPTR];
-		const uint8_t depth = (uint8_t)(0u - raw_sp) / 2u;
+	if (eps_stack_is_descending_even(state->mmio.variant)) {
+		const uint8_t depth = machine_state_debug_stack_depth(state);
 		const uint8_t copied = depth < MACHINE_DEBUG_STACK_DEPTH
 			? depth : MACHINE_DEBUG_STACK_DEPTH;
-		uint8_t i;
+		uint8_t stack_index;
 		memset(snapshot->stack, 0, sizeof(snapshot->stack));
 		/* Present the stack in the adapter's conventional oldest-to-newest
-		 * order even though ePS9500 stores the newest return at raw STKPTR. */
-		for (i = 0; i < copied; ++i) {
-			const uint8_t raw_index = (uint8_t)(0xfeu - 2u * i);
-			snapshot->stack[i] = state->cpu.stack[raw_index];
+		 * order even when the silicon stores the newest return at raw STKPTR. */
+		for (stack_index = 0; stack_index < copied; ++stack_index) {
+			const uint8_t raw_index = (uint8_t)(0xfeu - 2u * stack_index);
+			snapshot->stack[stack_index] = state->cpu.stack[raw_index];
 		}
 		snapshot->stack_pointer = copied;
 	}
 	else {
 		memcpy(snapshot->stack, state->cpu.stack, sizeof(snapshot->stack));
-		snapshot->stack_pointer = snapshot->registers[REG_STKPTR] &
-			(MACHINE_DEBUG_STACK_DEPTH - 1);
+		snapshot->stack_pointer = machine_state_debug_stack_depth(state);
 	}
 }
 
@@ -143,10 +148,10 @@ void machine_state_debug_write_byte(struct machine_state *state, uint8_t addr, u
 	case REG_BSR:
 	case REG_BSR1:
 	case REG_BSR2:
-		byte &= 0x3f;
+		byte &= eps_ram_page_mask(state->mmio.variant);
 		break;
 	case REG_STKPTR:
-		if (!eps_variant_is_9500(state->mmio.variant))
+		if (!eps_stack_is_descending_even(state->mmio.variant))
 			byte &= MACHINE_DEBUG_STACK_DEPTH - 1;
 		break;
 	case REG_CPUCON:
@@ -171,7 +176,7 @@ uint8_t machine_state_debug_peek_memory(struct machine_state *state, uint32_t li
 	uint8_t postid;
 	uint8_t byte;
 
-	if (!state || linear_addr >= machine_debug_linear_memory_size(state)) {
+	if (!state || linear_addr >= machine_state_debug_linear_memory_size(state)) {
 		return 0xff;
 	}
 	if (linear_addr >= 0x80) {
@@ -188,7 +193,7 @@ uint8_t machine_state_debug_peek_memory(struct machine_state *state, uint32_t li
 }
 
 bool machine_state_debug_write_memory(struct machine_state *state, uint32_t linear_addr, uint8_t byte) {
-	if (!state || linear_addr >= machine_debug_linear_memory_size(state)) {
+	if (!state || linear_addr >= machine_state_debug_linear_memory_size(state)) {
 		return false;
 	}
 	if (linear_addr >= 0x80) {
