@@ -24,6 +24,27 @@ uint8_t machine_state_debug_stack_depth(const struct machine_state *state) {
 	return eps_stack_depth_from_raw(state->mmio.variant, state->mmio.regs[REG_STKPTR]);
 }
 
+uint32_t machine_state_debug_program_counter(const struct machine_state *state) {
+	return state ? state->cpu.pc : 0;
+}
+
+void machine_state_debug_set_program_counter(struct machine_state *state, uint32_t word_address) {
+	if (!state)
+		return;
+	state->cpu.pc = word_address & 0x00ffffffu;
+	state->mmio.regs[REG_PCL] = (uint8_t)state->cpu.pc;
+	state->mmio.regs[REG_PCM] = (uint8_t)(state->cpu.pc >> 8);
+	state->mmio.regs[REG_PCH] = (uint8_t)(state->cpu.pc >> 16);
+}
+
+uint8_t machine_state_debug_accumulator(const struct machine_state *state) {
+	return state ? state->mmio.regs[REG_ACC] : 0;
+}
+
+uint8_t machine_state_debug_status(const struct machine_state *state) {
+	return state ? state->cpu.status : 0;
+}
+
 static uint32_t machine_debug_read_pc(struct machine_state *state) {
 	return ((uint32_t)mmio_read_byte_internal_state(&state->mmio, REG_PCH) << MACHINE_DEBUG_PC_HIGH_SHIFT) |
 		((uint32_t)mmio_read_byte_internal_state(&state->mmio, REG_PCM) << MACHINE_DEBUG_PC_MID_SHIFT) |
