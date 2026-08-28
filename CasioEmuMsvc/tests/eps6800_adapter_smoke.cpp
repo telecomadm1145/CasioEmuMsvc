@@ -1324,6 +1324,22 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
+	/* EPS6800 LCDDAT uses four 128-byte hardware pages even though CopyLcd
+	 * exports only 96 visible bytes per page. Page 3 therefore starts at
+	 * internal address 0x180, beyond the 384-byte host-visible image. */
+	casioemu::ePSCPU eps6800_lcd_machine;
+	eps6800_lcd_machine.Reset();
+	eps6800_lcd_machine.WriteByte(0x22, 0x00); // LCDARL.
+	eps6800_lcd_machine.WriteByte(0x23, 0x03); // LCDARH page 3.
+	eps6800_lcd_machine.WriteByte(0x0e, 0xa5); // LCDDAT.
+	std::array<uint8_t, casioemu::EPS6800_LCD_RAW_SIZE> eps6800_lcd_copy{};
+	if (eps6800_lcd_machine.CopyLcd(eps6800_lcd_copy.data(), eps6800_lcd_copy.size()) !=
+			eps6800_lcd_copy.size() || eps6800_lcd_copy[3 * casioemu::EPS6800_LCD_WIDTH] != 0xa5 ||
+			eps6800_lcd_machine.ReadByte(0x0e) != 0xa5) {
+		std::cerr << "EPS6800 LCDDAT page-3 mapping regression\n";
+		return 1;
+	}
+
 	/* Official EL_W506T.SegLcd geometry: four 98-byte pages. Device zero
 	 * carries one annunciator byte, devices 1..96 carry dot columns, and
 	 * device 97 is exported padding. Keep the status bus independent from

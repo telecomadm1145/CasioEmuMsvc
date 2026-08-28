@@ -48,6 +48,18 @@ static uint16_t lcd_data_address(const struct lcd_state *state) {
 	}
 }
 
+static bool lcd_data_address_valid(const struct lcd_state *state, uint16_t addr) {
+	const enum eps_variant variant = state->mmio->variant;
+	const struct eps_lcd_profile *profile = lcd_profile(variant);
+
+	/* EPS6800 exposes 96 visible bytes per page to the host, but LCDDAT is
+	 * addressed through four 128-byte hardware pages.  The fourth page starts
+	 * at 0x180, which is already beyond the 384-byte host-visible image. */
+	if (profile->address_model == EPS_LCD_ADDRESS_PAGED_128)
+		return addr < LCD_FB_SIZE;
+	return addr < eps_lcd_raw_size(variant);
+}
+
 static uint16_t lcd_visible_address(uint16_t addr) {
 	return (uint16_t)((addr / LCD_VISIBLE_WIDTH) * LCD_FB_STRIDE + (addr % LCD_VISIBLE_WIDTH));
 }
@@ -81,7 +93,7 @@ uint8_t lcd_read_byte_state(struct lcd_state *state, uint8_t addr) {
 	if (addr < LCD_REG_COUNT) {
 		if (addr == eps_reg_lcddat(state->mmio->variant)) {
 			const uint16_t data_addr = lcd_data_address(state);
-			return data_addr < eps_lcd_raw_size(state->mmio->variant) ? state->fb[data_addr] : 0;
+			return lcd_data_address_valid(state, data_addr) ? state->fb[data_addr] : 0;
 		}
 		byte = state->reg[addr];
 	}
@@ -113,7 +125,7 @@ void lcd_write_byte_state(struct lcd_state *state, uint8_t addr, uint8_t byte) {
 		lcd_bus_write_internal(state, addr, byte);
 		if (addr == eps_reg_lcddat(state->mmio->variant)) {
 			const uint16_t data_addr = lcd_data_address(state);
-			if (data_addr < eps_lcd_raw_size(state->mmio->variant))
+			if (lcd_data_address_valid(state, data_addr))
 				state->fb[data_addr] = byte;
 		}
 	}
