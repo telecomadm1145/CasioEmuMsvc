@@ -73,13 +73,13 @@ void machine_state_debug_get_register_overview(
 
 	/* Reading INDF and LCDDATA can have side effects through POSTID. */
 	mmio_suppress_debug_access_state(&state->mmio, true);
-	postid = mmio_read_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant));
-	mmio_write_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant), MACHINE_DEBUG_POSTID_DISABLED);
+	postid = mmio_read_byte_state(&state->mmio, REG_POSTID);
+	mmio_write_byte_state(&state->mmio, REG_POSTID, MACHINE_DEBUG_POSTID_DISABLED);
 	for (i = 0; i < MACHINE_DEBUG_LOW_REGISTER_COUNT; i++) {
 		overview->low_regs[i] = mmio_read_byte_state(&state->mmio, (uint8_t)i);
 	}
-	overview->cpucon = mmio_read_byte_state(&state->mmio, eps_reg_cpucon(state->mmio.variant));
-	mmio_write_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant), postid);
+	overview->cpucon = mmio_read_byte_state(&state->mmio, REG_CPUCON);
+	mmio_write_byte_state(&state->mmio, REG_POSTID, postid);
 	mmio_suppress_debug_access_state(&state->mmio, false);
 }
 
@@ -100,12 +100,12 @@ void machine_state_debug_get_snapshot(
 
 	snapshot->pc = state->cpu.pc;
 	mmio_suppress_debug_access_state(&state->mmio, true);
-	postid = mmio_read_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant));
-	mmio_write_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant), MACHINE_DEBUG_POSTID_DISABLED);
+	postid = mmio_read_byte_state(&state->mmio, REG_POSTID);
+	mmio_write_byte_state(&state->mmio, REG_POSTID, MACHINE_DEBUG_POSTID_DISABLED);
 	for (i = 0; i < MACHINE_DEBUG_REGISTER_COUNT; i++) {
 		snapshot->registers[i] = mmio_read_byte_state(&state->mmio, (uint8_t)i);
 	}
-	mmio_write_byte_state(&state->mmio, eps_reg_postid(state->mmio.variant), postid);
+	mmio_write_byte_state(&state->mmio, REG_POSTID, postid);
 	mmio_suppress_debug_access_state(&state->mmio, false);
 	memcpy(snapshot->wbk_registers, state->mmio.ram_wbk, sizeof(snapshot->wbk_registers));
 	if (eps_stack_is_descending_even(state->mmio.variant)) {
@@ -148,7 +148,7 @@ void machine_state_debug_write_byte(struct machine_state *state, uint8_t addr, u
 	case REG_BSR:
 	case REG_BSR1:
 	case REG_BSR2:
-		byte &= eps_ram_page_mask(state->mmio.variant);
+		byte &= 0x3f;
 		break;
 	case REG_STKPTR:
 		if (!eps_stack_is_descending_even(state->mmio.variant))
