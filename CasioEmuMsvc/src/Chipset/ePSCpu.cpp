@@ -55,12 +55,14 @@ namespace {
 
 	enum eps_variant ToCoreVariant(casioemu::EpsVariant variant) {
 		switch (variant) {
+		case casioemu::EpsVariant::Eps6800:
+			return EPS_VARIANT_6800;
 		case casioemu::EpsVariant::Eps6009:
 			return EPS_VARIANT_6009;
 		case casioemu::EpsVariant::Eps9500:
 			return EPS_VARIANT_9500;
 		default:
-			return EPS_VARIANT_6800;
+			throw std::invalid_argument("Invalid EPS variant");
 		}
 	}
 

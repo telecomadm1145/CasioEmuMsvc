@@ -34,7 +34,7 @@ static uint32_t mmio_ram_address(uint8_t page, uint8_t offset) {
 
 static uint32_t mmio_variant_ram_address(const struct mmio_state *state, uint8_t page, uint8_t offset) {
 	const uint8_t page_mask = eps_ram_page_mask(state->variant);
-	if (mmio_route_profile(state->variant)->ram_offset_uses_bit7) {
+	if (eps_get_variant_traits(state->variant)->ram.offset_uses_bit7) {
 		/* Mode-4 retains FSR/address bit 7. Addition is intentional: offsets
 		 * 80h-FFh occupy the following 128-byte slice. */
 		return ((uint32_t)(page & page_mask) << MMIO_RAM_PAGE_SHIFT) + offset;

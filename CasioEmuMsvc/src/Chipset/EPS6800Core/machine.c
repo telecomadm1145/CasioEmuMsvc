@@ -15,10 +15,11 @@ const struct eps_variant_traits *eps_get_variant_traits(enum eps_variant variant
 		REG_INTSTA, REG_INTSTA, REG_TR0CON, REG_TR1CON, REG_TRL0L, REG_TRL0H,
 		REG_TRL1, REG_TR2WCON, REG_TRL2, REG_PORTA, REG_PORTB, REG_STBCON,
 		REG_PACON, REG_PAWAKE, REG_PAINTEN, REG_PAINTSTA, REG_PBCON, REG_DCRB,
-		0x3fu, 1u, 1u, 1u, EPS_STACK_MODEL_LINEAR,
-		MMIO_LEGACY_RAM_COUNT, (size_t)(96u * 4u),
+		1u, 1u, 1u, EPS_STACK_MODEL_LINEAR,
+		{ 0x3fu, 0u, MMIO_LEGACY_RAM_COUNT, {{ 0x13u, 0x20u }, { 0x40u, 0x80u }} },
+		(size_t)(96u * 4u),
 		{ 0u, 0u, 0u, 0u, 0xc0u },
-		{ 0u, 1u, 1u, 1u, 0u },
+		{ 0u, 1u, 1u, 1u },
 		{ EPS_LCD_ADDRESS_PAGED_128, 0x61u, 0u, 0u, 0u, 1u },
 		{ EPS_KBD_MATRIX_GPIO, 0x7fu, 1000u, 0u, 0u, 0u },
 		{ EPS_TIMER1_STANDARD, 0u, BIT_T1EN, BIT_TMR0IE, BIT_TMR1IE, BIT_TMR2IE,
@@ -29,10 +30,11 @@ const struct eps_variant_traits *eps_get_variant_traits(enum eps_variant variant
 		0x22u, 0x21u, 0x23u, 0x23u, 0x24u, 0x25u,
 		0x26u, 0x27u, 0x28u, 0x10u, 0x11u, 0x20u,
 		0x29u, 0x2au, 0x2bu, 0x2cu, 0x2du, 0x2eu,
-		0x0fu, 0u, 0u, 0u, EPS_STACK_MODEL_LINEAR,
-		MMIO_LEGACY_RAM_COUNT, 0x88u,
+		0u, 0u, 0u, EPS_STACK_MODEL_LINEAR,
+		{ 0x0fu, 0u, MMIO_LEGACY_RAM_COUNT, {{ 0x12u, 0x20u }, { 0x32u, 0x80u }} },
+		0x88u,
 		{ 1u, 1u, 1u, 0u, 0x30u },
-		{ 1u, 0u, 0u, 0u, 0u },
+		{ 1u, 0u, 0u, 0u },
 		{ EPS_LCD_ADDRESS_LINEAR_WRAP, 0x87u, 0u, 0x0fu, 1u, 0u },
 		{ EPS_KBD_MATRIX_EPS6009, 0x0fu, 0u, 1u, 0u, 1u },
 		{ EPS_TIMER1_EPS6009, 4u, 0x40u, BIT_TMR0I, BIT_TMR1I, BIT_TMR2I,
@@ -43,10 +45,11 @@ const struct eps_variant_traits *eps_get_variant_traits(enum eps_variant variant
 		REG_INTSTA, REG_INTSTA, REG_TR0CON, REG_TR1CON, REG_TRL0L, REG_TRL0H,
 		REG_TRL1, REG_TR2WCON, REG_TRL2, REG_PORTA, REG_PORTB, REG_STBCON,
 		REG_PACON, REG_PAWAKE, REG_PAINTEN, REG_PAINTSTA, REG_PBCON, REG_DCRB,
-		0x3fu, 1u, 1u, 1u, EPS_STACK_MODEL_DESCENDING_EVEN,
-		MMIO_EPS9500_RAM_COUNT, (size_t)(98u * 4u),
+		1u, 1u, 1u, EPS_STACK_MODEL_DESCENDING_EVEN,
+		{ 0x3fu, 1u, MMIO_EPS9500_RAM_COUNT, {{ 0x13u, 0x20u }, { 0x40u, 0x80u }} },
+		(size_t)(98u * 4u),
 		{ 0u, 0u, 1u, 1u, 0xc0u },
-		{ 0u, 1u, 1u, 1u, 1u },
+		{ 0u, 1u, 1u, 1u },
 		{ EPS_LCD_ADDRESS_ROW_MAJOR, 0x61u, 98u, 0u, 1u, 1u },
 		{ EPS_KBD_MATRIX_GPIO, 0xffu, 1000u, 1u, 1u, 0u },
 		{ EPS_TIMER1_STANDARD, 0u, BIT_T1EN, BIT_TMR0IE, BIT_TMR1IE, BIT_TMR2IE,
@@ -63,13 +66,6 @@ const struct eps_variant_traits *eps_get_variant_traits(enum eps_variant variant
 		return &eps6800_traits;
 	}
 }
-
-enum {
-	MACHINE_PERSISTENT_LOW_REG_BEGIN = 0x13,
-	MACHINE_PERSISTENT_LOW_REG_END = 0x20,
-	MACHINE_PERSISTENT_HIGH_REG_BEGIN = 0x40,
-	MACHINE_PERSISTENT_HIGH_REG_END = 0x80
-};
 
 enum machine_reset_target {
 	MACHINE_RESET_TARGET_MMIO = 0,
@@ -232,10 +228,6 @@ static void machine_apply_reset_write(
 	}
 }
 
-static size_t machine_state_legacy_ram_image_size(const struct machine_state *state) {
-	return eps_bank_ram_size(state->mmio.variant) + sizeof(state->mmio.ram_wbk);
-}
-
 struct machine_state *machine_state_create(void) {
 	return machine_state_create_variant(EPS_VARIANT_6800);
 }
@@ -304,6 +296,9 @@ void machine_state_reset(struct machine_state *state) {
 }
 
 void machine_state_clear_ram_and_reset(struct machine_state *state) {
+	const struct eps_ram_profile *ram_profile;
+	size_t i;
+
 	if (!state)
 		return;
 
@@ -311,19 +306,18 @@ void machine_state_clear_ram_and_reset(struct machine_state *state) {
 	 * variant-visible window, matching the historical adapter behavior. */
 	memset(state->mmio.ram, 0, sizeof(state->mmio.ram));
 	memset(state->mmio.ram_wbk, 0, sizeof(state->mmio.ram_wbk));
-	memset(&state->mmio.regs[MACHINE_PERSISTENT_LOW_REG_BEGIN], 0,
-		MACHINE_PERSISTENT_LOW_REG_END - MACHINE_PERSISTENT_LOW_REG_BEGIN);
-	memset(&state->mmio.regs[MACHINE_PERSISTENT_HIGH_REG_BEGIN], 0,
-		MACHINE_PERSISTENT_HIGH_REG_END - MACHINE_PERSISTENT_HIGH_REG_BEGIN);
+	ram_profile = &eps_get_variant_traits(state->mmio.variant)->ram;
+	for (i = 0; i < EPS_PERSISTENT_REGISTER_RANGE_COUNT; ++i) {
+		const struct eps_register_range *range = &ram_profile->persistent_registers[i];
+		memset(&state->mmio.regs[range->begin], 0, (size_t)(range->end - range->begin));
+	}
 	machine_state_reset(state);
 }
 
 size_t machine_state_ram_image_size(const struct machine_state *state) {
 	if (!state)
 		return 0;
-	return machine_state_legacy_ram_image_size(state) +
-		(MACHINE_PERSISTENT_LOW_REG_END - MACHINE_PERSISTENT_LOW_REG_BEGIN) +
-		(MACHINE_PERSISTENT_HIGH_REG_END - MACHINE_PERSISTENT_HIGH_REG_BEGIN);
+	return eps_bank_ram_size(state->mmio.variant) + sizeof(state->mmio.ram_wbk) + MMIO_REG_COUNT;
 }
 
 bool machine_state_export_ram(
@@ -332,6 +326,8 @@ bool machine_state_export_ram(
 	size_t size
 ) {
 	size_t bank_ram_size;
+	const struct eps_ram_profile *ram_profile;
+	size_t i;
 	uint8_t *output;
 
 	if (!state || !data || size < machine_state_ram_image_size(state))
@@ -343,11 +339,13 @@ bool machine_state_export_ram(
 	output += bank_ram_size;
 	memcpy(output, state->mmio.ram_wbk, sizeof(state->mmio.ram_wbk));
 	output += sizeof(state->mmio.ram_wbk);
-	memcpy(output, &state->mmio.regs[MACHINE_PERSISTENT_LOW_REG_BEGIN],
-		MACHINE_PERSISTENT_LOW_REG_END - MACHINE_PERSISTENT_LOW_REG_BEGIN);
-	output += MACHINE_PERSISTENT_LOW_REG_END - MACHINE_PERSISTENT_LOW_REG_BEGIN;
-	memcpy(output, &state->mmio.regs[MACHINE_PERSISTENT_HIGH_REG_BEGIN],
-		MACHINE_PERSISTENT_HIGH_REG_END - MACHINE_PERSISTENT_HIGH_REG_BEGIN);
+	memset(output, 0, MMIO_REG_COUNT);
+	ram_profile = &eps_get_variant_traits(state->mmio.variant)->ram;
+	for (i = 0; i < EPS_PERSISTENT_REGISTER_RANGE_COUNT; ++i) {
+		const struct eps_register_range *range = &ram_profile->persistent_registers[i];
+		memcpy(&output[range->begin], &state->mmio.regs[range->begin],
+			(size_t)(range->end - range->begin));
+	}
 	return true;
 }
 
@@ -357,32 +355,29 @@ bool machine_state_import_ram(
 	size_t size
 ) {
 	size_t bank_ram_size;
-	size_t legacy_size;
 	size_t full_size;
+	const struct eps_ram_profile *ram_profile;
+	size_t i;
 	const uint8_t *input;
 
 	if (!state || !data)
 		return false;
 
 	bank_ram_size = eps_bank_ram_size(state->mmio.variant);
-	legacy_size = machine_state_legacy_ram_image_size(state);
 	full_size = machine_state_ram_image_size(state);
-	if (size != bank_ram_size && size != legacy_size && size != full_size)
+	if (size != full_size)
 		return false;
 
 	input = data;
 	memcpy(state->mmio.ram, input, bank_ram_size);
 	input += bank_ram_size;
-	if (size >= legacy_size) {
-		memcpy(state->mmio.ram_wbk, input, sizeof(state->mmio.ram_wbk));
-		input += sizeof(state->mmio.ram_wbk);
-	}
-	if (size == full_size) {
-		memcpy(&state->mmio.regs[MACHINE_PERSISTENT_LOW_REG_BEGIN], input,
-			MACHINE_PERSISTENT_LOW_REG_END - MACHINE_PERSISTENT_LOW_REG_BEGIN);
-		input += MACHINE_PERSISTENT_LOW_REG_END - MACHINE_PERSISTENT_LOW_REG_BEGIN;
-		memcpy(&state->mmio.regs[MACHINE_PERSISTENT_HIGH_REG_BEGIN], input,
-			MACHINE_PERSISTENT_HIGH_REG_END - MACHINE_PERSISTENT_HIGH_REG_BEGIN);
+	memcpy(state->mmio.ram_wbk, input, sizeof(state->mmio.ram_wbk));
+	input += sizeof(state->mmio.ram_wbk);
+	ram_profile = &eps_get_variant_traits(state->mmio.variant)->ram;
+	for (i = 0; i < EPS_PERSISTENT_REGISTER_RANGE_COUNT; ++i) {
+		const struct eps_register_range *range = &ram_profile->persistent_registers[i];
+		memcpy(&state->mmio.regs[range->begin], &input[range->begin],
+			(size_t)(range->end - range->begin));
 	}
 	return true;
 }

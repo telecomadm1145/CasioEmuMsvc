@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include "EpsVariant.h"
+
 #include <atomic>
 #include <array>
 #include <chrono>
@@ -33,12 +35,6 @@ namespace casioemu {
 	};
 
 	const char* Eps6800RomFormatName(Eps6800RomFormat format);
-
-	enum class EpsVariant : uint8_t {
-		Eps6800,
-		Eps6009,
-		Eps9500
-	};
 
 	struct Eps6800LcdControl {
 		uint8_t lcdarh{};

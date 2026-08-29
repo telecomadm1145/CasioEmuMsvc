@@ -130,7 +130,6 @@ class ModelEditor : public UIWindow {
 	casioemu::ModelInfo mi;
 	int v;
 	int k;
-	static constexpr const char* items[11] = {"##1", "##2", "##3", "ES(P)", "CWX", "CWII", "Fx5800p", "TI", "SolarII", "EPS6800", "EPS6009"};
 	char path1[260];
 	char path2[260];
 	char path3[260];
@@ -386,14 +385,12 @@ public:
 					}
 					ImGui::TextUnformatted("ModelEditor.HardwareType"_lc);
 					ImGui::SetNextItemWidth(80);
-					const int current_hardware_id = static_cast<int>(mi.hardware_id);
-					const bool valid_hardware_id = current_hardware_id >= casioemu::HW_MIN &&
-						current_hardware_id <= casioemu::HW_MAX;
-					if (ImGui::BeginCombo("##cb", valid_hardware_id ? items[current_hardware_id] : "Invalid")) {
-						for (int n = casioemu::HW_MIN; n <= casioemu::HW_MAX; n++) {
-							bool is_selected = (mi.hardware_id == n);
-							if (ImGui::Selectable(items[n], is_selected)) {
-								mi.hardware_id = static_cast<unsigned short>(n);
+					const auto* selected_descriptor = casioemu::FindHardwareDescriptor(mi.hardware_id);
+					if (ImGui::BeginCombo("##cb", selected_descriptor ? selected_descriptor->display_name : "Invalid")) {
+						for (const auto& descriptor : casioemu::HARDWARE_DESCRIPTORS) {
+							bool is_selected = (mi.hardware_id == descriptor.hardware_id);
+							if (ImGui::Selectable(descriptor.display_name, is_selected)) {
+								mi.hardware_id = descriptor.hardware_id;
 							}
 							if (is_selected)
 								ImGui::SetItemDefaultFocus();
@@ -867,38 +864,7 @@ namespace casioemu {
 							mod.path = dir;
 							mod.name = mi.model_name;
 							mod.realhw = mi.real_hardware;
-							switch (mi.hardware_id) {
-							case HW_ES_PLUS:
-								mod.type = "ESP";
-								break;
-							case HW_CLASSWIZ:
-								mod.type = "CWX";
-								break;
-							case HW_CLASSWIZ_II:
-								mod.type = "CWII";
-								break;
-							case HW_FX_5800P:
-								mod.type = "Fx5800p";
-								break;
-							case HW_TI:
-								mod.type = "TI";
-								break;
-							case HW_SOLARII:
-								mod.type = "SolarII";
-								break;
-							case HW_EPS6800:
-								mod.type = "EPS6800";
-								break;
-							case HW_EPS6009:
-								mod.type = "EPS6009";
-								break;
-							case HW_EPS9500:
-								mod.type = "EPS9500";
-								break;
-							default:
-								mod.type = "Unknown";
-								break;
-							}
+							mod.type = HardwareStartupFilter(mi.hardware_id);
 							{
 								std::filesystem::path romPath = dir.path() / mi.rom_path;
 								if (mi.rom_path.empty() || !std::filesystem::exists(romPath) || !std::filesystem::is_regular_file(romPath, ec))
@@ -1643,10 +1609,14 @@ namespace casioemu {
 				ImGui::InputText("StartupUI.SearchBoxHeader"_lc, search_txt, 200);
 				ImGui::SameLine();
 
-				const char* items[] = {"##", "ES", "ESP", "ESP2nd", "CWX", "CWII", "Fx5800p", "TI", "SolarII", "EPS6800", "EPS6009"};
+				std::vector<const char*> items = {"##", "ES", "ESP", "ESP2nd"};
+				for (const auto& descriptor : HARDWARE_DESCRIPTORS) {
+					if (descriptor.hardware_id != HW_ES_PLUS)
+						items.push_back(descriptor.startup_filter);
+				}
 				ImGui::SetNextItemWidth(filterWidth);
 				if (ImGui::BeginCombo("##cb", current_filter)) {
-					for (int n = 0; n < IM_ARRAYSIZE(items); n++) {
+					for (size_t n = 0; n < items.size(); n++) {
 						bool is_selected = (current_filter == items[n]);
 						if (ImGui::Selectable(items[n], is_selected))
 							current_filter = items[n];

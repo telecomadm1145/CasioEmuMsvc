@@ -224,7 +224,22 @@ struct eps_mmio_profile {
 	uint8_t has_lcd_address_high;
 	uint8_t has_counter0_registers;
 	uint8_t has_standard_gpio_registers;
-	uint8_t ram_offset_uses_bit7;
+};
+
+struct eps_register_range {
+	uint8_t begin;
+	uint8_t end;
+};
+
+enum {
+	EPS_PERSISTENT_REGISTER_RANGE_COUNT = 2
+};
+
+struct eps_ram_profile {
+	uint8_t page_mask;
+	uint8_t offset_uses_bit7;
+	size_t bank_size;
+	struct eps_register_range persistent_registers[EPS_PERSISTENT_REGISTER_RANGE_COUNT];
 };
 
 struct eps_lcd_profile {
@@ -287,12 +302,11 @@ struct eps_variant_traits {
 	uint8_t reg_paintsta;
 	uint8_t reg_pbcon;
 	uint8_t reg_dcrb;
-	uint8_t ram_page_mask;
 	uint8_t has_pch;
 	uint8_t has_indf2;
 	uint8_t has_wbk;
 	uint8_t stack_model;
-	size_t bank_ram_size;
+	struct eps_ram_profile ram;
 	size_t lcd_raw_size;
 	struct eps_cpu_profile cpu;
 	struct eps_mmio_profile mmio;
@@ -438,11 +452,11 @@ static inline int eps_has_wbk(enum eps_variant variant) {
 }
 
 static inline uint8_t eps_ram_page_mask(enum eps_variant variant) {
-	return eps_get_variant_traits(variant)->ram_page_mask;
+	return eps_get_variant_traits(variant)->ram.page_mask;
 }
 
 static inline size_t eps_bank_ram_size(enum eps_variant variant) {
-	return eps_get_variant_traits(variant)->bank_ram_size;
+	return eps_get_variant_traits(variant)->ram.bank_size;
 }
 
 static inline size_t eps_lcd_raw_size(enum eps_variant variant) {

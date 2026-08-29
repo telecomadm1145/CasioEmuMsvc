@@ -972,7 +972,7 @@ namespace {
 	bool Eps9500RamAddressingSmoke() {
 		constexpr size_t kEps9500BankRamSize = 0x2080;
 		constexpr size_t kWbkRamSize = 27;
-		constexpr size_t kPersistentRegisterSize = 0x0d + 0x40;
+		constexpr size_t kPersistentRegisterSize = 0x80;
 
 		casioemu::ePSCPU machine(casioemu::EpsVariant::Eps9500);
 		std::vector<uint8_t> rom(0x30000, 0);
@@ -1068,7 +1068,7 @@ namespace {
 		machine.WriteByte(kPostId, 0x70);
 		machine.WriteByte(kCpuControl, 0x07);
 		const auto snapshot = machine.DebugSnapshot();
-		return Check(machine.ReadByte(kTimerInterruptControl) == 0x07,
+		if (!Check(machine.ReadByte(kTimerInterruptControl) == 0x07,
 				"eps6009 snapshot preserves TRINTCON", __LINE__) &&
 			Check(machine.ReadByte(kPostId) == 0x70,
 				"eps6009 snapshot preserves POSTID", __LINE__) &&
@@ -1081,7 +1081,37 @@ namespace {
 			Check(snapshot.registers[kPostId] == 0x70,
 				"eps6009 snapshot POSTID", __LINE__) &&
 			Check(snapshot.registers[kCpuControl] == 0x07,
-				"eps6009 snapshot CPUCON", __LINE__);
+				"eps6009 snapshot CPUCON", __LINE__))
+			return false;
+
+		constexpr std::array<std::pair<uint8_t, uint8_t>, 3> persistent_registers{{
+			{0x12, 0x5a}, {0x32, 0xa5}, {0x3f, 0x6b},
+		}};
+		for (const auto [address, value] : persistent_registers) {
+			if (!machine.WriteDebugMemory(address, value))
+				return false;
+		}
+		const auto ram = machine.ExportRam();
+		if (ram.size() < 0x80)
+			return false;
+		const size_t register_image = ram.size() - 0x80;
+		for (const auto [address, value] : persistent_registers) {
+			if (!Check(ram[register_image + address] == value,
+					"eps6009 export preserves variant register range", __LINE__))
+				return false;
+		}
+
+		casioemu::ePSCPU restored(casioemu::EpsVariant::Eps6009);
+		if (!restored.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian) ||
+			!restored.ImportRam(ram))
+			return false;
+		const auto restored_ram = restored.ExportRam();
+		for (const auto [address, value] : persistent_registers) {
+			if (!Check(restored_ram[register_image + address] == value,
+					"eps6009 import preserves variant register range", __LINE__))
+				return false;
+		}
+		return true;
 	}
 
 	bool HookAndRamSmoke() {
@@ -1163,7 +1193,7 @@ namespace {
 		auto ram = machine.ExportRam();
 		constexpr size_t kBankRamSize = 8192;
 		constexpr size_t kWbkRamSize = 27;
-		constexpr size_t kPersistentRamSize = kBankRamSize + kWbkRamSize + 0x0d + 0x40;
+		constexpr size_t kPersistentRamSize = kBankRamSize + kWbkRamSize + 0x80;
 		if (ram.size() != kPersistentRamSize || ram[kBankRamSize] != 0x5a ||
 			machine.ImportRam(std::vector<uint8_t>(1, 0)))
 			return false;
@@ -1178,9 +1208,9 @@ namespace {
 			machine.ReadDebugMemory(0x3f) != 0x6b)
 			return false;
 
-		// RAM files produced by older builds contain only the 8 KiB banked area.
+		// Development builds intentionally reject obsolete short RAM images.
 		ram.resize(kBankRamSize);
-		return machine.ImportRam(ram);
+		return !machine.ImportRam(ram);
 	}
 
 	bool DebuggerSmoke() {

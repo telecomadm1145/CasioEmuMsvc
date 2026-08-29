@@ -26,13 +26,9 @@ namespace casioemu {
 		constexpr int EPS_KBD_COL_COUNT = 8;
 		constexpr int EPS_MATRIX_SLOT_COUNT = EPS_KBD_ROW_COUNT * EPS_KBD_COL_COUNT;
 		constexpr int BUTTON_SLOT_COUNT = EPS_MATRIX_SLOT_COUNT + 2;
-		constexpr uint32_t DEFAULT_MIN_PRESS_MS = 25;
-		constexpr uint32_t EPS6800_MIN_PRESS_MS = 60;
-
 		uint32_t MinimumPressDuration(int hardware_id) {
-			if (hardware_id == HW_EPS6009)
-				return 0;
-			return hardware_id == HW_EPS6800 ? EPS6800_MIN_PRESS_MS : DEFAULT_MIN_PRESS_MS;
+			const auto* descriptor = FindHardwareDescriptor(static_cast<unsigned short>(hardware_id));
+			return descriptor ? descriptor->minimum_press_ms : 25;
 		}
 
 		SDL_Rect ExpandRect(const SDL_Rect& rect, int padding) {

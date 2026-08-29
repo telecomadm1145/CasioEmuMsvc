@@ -56,9 +56,10 @@ namespace casioemu {
 	}
 
 	void Chipset::SetupEpsCpu() {
-		const auto variant = emulator.hardware_id == HW_EPS6009 ? EpsVariant::Eps6009 :
-			emulator.hardware_id == HW_EPS9500 ? EpsVariant::Eps9500 : EpsVariant::Eps6800;
-		epscpu = new ePSCPU(variant);
+		const auto* descriptor = FindHardwareDescriptor(emulator.hardware_id);
+		if (!descriptor || descriptor->eps_variant == EpsVariant::None)
+			PANIC("Missing EPS hardware descriptor for id %u\n", emulator.hardware_id);
+		epscpu = new ePSCPU(descriptor->eps_variant);
 		auto parse_byte_extra = [&](const char* name, uint8_t fallback) {
 			const auto item = emulator.ModelDefinition.extra.find(name);
 			if (item == emulator.ModelDefinition.extra.end())
