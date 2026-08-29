@@ -976,6 +976,8 @@ namespace {
 
 		casioemu::ePSCPU machine(casioemu::EpsVariant::Eps9500);
 		std::vector<uint8_t> rom(0x30000, 0);
+		SetPackedRomWord(rom, 0, 0x2003); // MOV A,INDF1.
+		SetPackedRomWord(rom, 1, 0x2010); // MOV A,INDF2.
 		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
 			return false;
 		machine.Reset();
@@ -1004,6 +1006,24 @@ namespace {
 		if (machine.ReadDebugMemory(0x20ff) != 0xa5 ||
 			!machine.WriteDebugMemory(0x20ff, 0x5a) || machine.ReadDebugMemory(0x20ff) != 0x5a ||
 			machine.WriteDebugMemory(0x2100, 0xff))
+			return false;
+
+		/* POSTID extended-FSR stepping must wrap the visible EPS9500 page. */
+		machine.WriteByte(0x21, 0x22); // FSR1 post-increment.
+		machine.WriteByte(0x05, 0x3f);
+		machine.WriteByte(0x04, 0xff);
+		machine.SetPC(0);
+		machine.Next();
+		if (!Check(machine.ReadByte(0x05) == 0x00 && machine.ReadByte(0x04) == 0x80,
+				"eps9500 FSR1 page increment wrap", __LINE__))
+			return false;
+		machine.WriteByte(0x21, 0x08); // FSR2 post-decrement.
+		machine.WriteByte(0x12, 0x00);
+		machine.WriteByte(0x11, 0x80);
+		machine.SetPC(1);
+		machine.Next();
+		if (!Check(machine.ReadByte(0x12) == 0x3f && machine.ReadByte(0x11) == 0xff,
+				"eps9500 FSR2 page decrement wrap", __LINE__))
 			return false;
 
 		casioemu::Eps6800MemoryBreakpoint last_ram_breakpoint{};
@@ -1069,18 +1089,18 @@ namespace {
 		machine.WriteByte(kCpuControl, 0x07);
 		const auto snapshot = machine.DebugSnapshot();
 		if (!Check(machine.ReadByte(kTimerInterruptControl) == 0x07,
-				"eps6009 snapshot preserves TRINTCON", __LINE__) &&
-			Check(machine.ReadByte(kPostId) == 0x70,
-				"eps6009 snapshot preserves POSTID", __LINE__) &&
-			Check(snapshot.registers[kStandbyControl] == 0xe3,
-				"eps6009 snapshot STBCON", __LINE__) &&
-			Check(snapshot.registers[kTimerInterruptControl] == 0x07,
-				"eps6009 snapshot TRINTCON", __LINE__) &&
-			Check(snapshot.registers[kTimer01Control] == 0xff,
-				"eps6009 snapshot TR01CON", __LINE__) &&
-			Check(snapshot.registers[kPostId] == 0x70,
-				"eps6009 snapshot POSTID", __LINE__) &&
-			Check(snapshot.registers[kCpuControl] == 0x07,
+				"eps6009 snapshot preserves TRINTCON", __LINE__) ||
+			!Check(machine.ReadByte(kPostId) == 0x70,
+				"eps6009 snapshot preserves POSTID", __LINE__) ||
+			!Check(snapshot.registers[kStandbyControl] == 0xe3,
+				"eps6009 snapshot STBCON", __LINE__) ||
+			!Check(snapshot.registers[kTimerInterruptControl] == 0x07,
+				"eps6009 snapshot TRINTCON", __LINE__) ||
+			!Check(snapshot.registers[kTimer01Control] == 0xff,
+				"eps6009 snapshot TR01CON", __LINE__) ||
+			!Check(snapshot.registers[kPostId] == 0x70,
+				"eps6009 snapshot POSTID", __LINE__) ||
+			!Check(snapshot.registers[kCpuControl] == 0x07,
 				"eps6009 snapshot CPUCON", __LINE__))
 			return false;
 

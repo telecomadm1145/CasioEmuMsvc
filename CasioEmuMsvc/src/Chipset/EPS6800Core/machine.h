@@ -22,8 +22,8 @@ enum eps_variant machine_state_variant(const struct machine_state *state);
 void machine_state_reset(struct machine_state *state);
 void machine_state_clear_ram_and_reset(struct machine_state *state);
 
-/* Host-persisted RAM image.  The core owns the physical RAM/SFR layout and
- * keeps compatibility with the historical short RAM image forms on import. */
+/* Host-persisted RAM image.  Import requires exactly the size returned by
+ * machine_state_ram_image_size(state). */
 size_t machine_state_ram_image_size(const struct machine_state *state);
 bool machine_state_export_ram(
 	const struct machine_state *state,

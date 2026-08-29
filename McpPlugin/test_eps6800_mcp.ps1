@@ -300,7 +300,7 @@ try {
 		$null = Invoke-McpTool 621 "resume"
 		Start-Sleep -Milliseconds 750
 		$null = Invoke-McpTool 622 "pause"
-		$beforeOnButton = Invoke-McpTool 623 "get_status"
+		$beforeOnButton = Wait-StatusPaused 623
 		Assert-True ($beforeOnButton.program_counter -ne 0) "EPS9500 ON test did not leave the reset vector."
 		$sfrBeforeOnButton = Invoke-McpTool 624 "read_memory" @{ address = 0x31; size = 15 }
 		$null = Invoke-McpTool 625 "write_memory" @{ address = 0x80; bytes = @(0xA5) }
@@ -317,13 +317,15 @@ try {
 		$null = Invoke-McpTool 630 "resume"
 		Start-Sleep -Milliseconds 80
 		$null = Invoke-McpTool 631 "pause"
-		$portaWhileOnHeld = Invoke-McpTool 632 "read_memory" @{ address = 0x31; size = 1 }
+		$null = Wait-StatusPaused 632
+		$portaWhileOnHeld = Invoke-McpTool 633 "read_memory" @{ address = 0x31; size = 1 }
 		Assert-True (($portaWhileOnHeld.bytes[0] -band 0x80) -eq 0) "EPS9500 ON did not drive PA7 low."
-		$null = Invoke-McpTool 633 "keyboard_code" @{ code = 0xFF; pressed = $false }
-		$null = Invoke-McpTool 634 "resume"
+		$null = Invoke-McpTool 634 "keyboard_code" @{ code = 0xFF; pressed = $false }
+		$null = Invoke-McpTool 635 "resume"
 		Start-Sleep -Milliseconds 80
-		$null = Invoke-McpTool 635 "pause"
-		$portaAfterOnRelease = Invoke-McpTool 636 "read_memory" @{ address = 0x31; size = 1 }
+		$null = Invoke-McpTool 636 "pause"
+		$null = Wait-StatusPaused 637
+		$portaAfterOnRelease = Invoke-McpTool 638 "read_memory" @{ address = 0x31; size = 1 }
 		Assert-True (($portaAfterOnRelease.bytes[0] -band 0x80) -ne 0) "EPS9500 ON release did not restore PA7 high."
 		[pscustomobject]@{
 			Result = "PASS"

@@ -338,7 +338,7 @@ static void mmio_postid_step_fsr0(struct mmio_state *state) {
 }
 
 static void mmio_increment_extended_fsr(struct mmio_state *state, uint8_t bsr_reg, uint8_t fsr_reg) {
-	if (eps_variant_is_6009(state->variant)) {
+	if (eps_variant_is_6009(state->variant) || eps_variant_is_9500(state->variant)) {
 		if (state->regs[fsr_reg] == MMIO_FSR_RAM_END) {
 			state->regs[bsr_reg] = (uint8_t)((state->regs[bsr_reg] + 1u) & eps_ram_page_mask(state->variant));
 			state->regs[fsr_reg] = MMIO_RAM_SELECT_MASK;
@@ -358,7 +358,7 @@ static void mmio_increment_extended_fsr(struct mmio_state *state, uint8_t bsr_re
 }
 
 static void mmio_decrement_extended_fsr(struct mmio_state *state, uint8_t bsr_reg, uint8_t fsr_reg) {
-	if (eps_variant_is_6009(state->variant)) {
+	if (eps_variant_is_6009(state->variant) || eps_variant_is_9500(state->variant)) {
 		if (state->regs[fsr_reg] == MMIO_RAM_SELECT_MASK) {
 			state->regs[bsr_reg] = (uint8_t)((state->regs[bsr_reg] - 1u) & eps_ram_page_mask(state->variant));
 			state->regs[fsr_reg] = MMIO_FSR_RAM_END;
