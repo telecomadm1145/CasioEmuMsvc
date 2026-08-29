@@ -979,15 +979,32 @@ namespace casioemu {
 
 		if (button.type == Button::BT_RESET) {
 			if (button.pressed && !old_pressed_state) {
-				// Chipset reset clears the keyboard peripheral and its UI state.
-				// Restore only the held RESET contact afterwards so its normal
-				// pressed overlay remains visible until mouse/finger release.
+				// A physical RESET clears the EPS keyboard peripheral, but matrix
+				// contacts held by the user remain electrically closed.  Snapshot
+				// them before reset and restore them without generating fresh key
+				// edges so reset-vector key-combination checks can observe them.
 				const bool reset_stuck = button.stuck;
 				const SDL_FingerID reset_finger_id = button.pressingFingerId;
-				if (IsEpsFamily(emulator.hardware_id) && emulator.chipset.epscpu)
+				if (IsEpsFamily(emulator.hardware_id) && emulator.chipset.epscpu) {
+					const bool was_paused = emulator.GetPaused();
+					emulator.SetPaused(true);
+					std::vector<uint8_t> held_matrix_indices;
+					for (const auto& held_button : buttons) {
+						if (!held_button.pressed || held_button.type != Button::BT_BUTTON)
+							continue;
+						const int matrix_index = EpsMatrixIndexForButtonCode(held_button.code);
+						if (matrix_index >= 0)
+							held_matrix_indices.push_back(static_cast<uint8_t>(matrix_index));
+					}
 					emulator.chipset.epscpu->ClearRamAndReset();
+					for (const uint8_t matrix_index : held_matrix_indices)
+						emulator.chipset.epscpu->RestoreKeyDown(matrix_index);
+					emulator.SetPaused(was_paused);
+				}
 				else
 					emulator.chipset.Reset();
+				// Restore only the RESET UI state; held matrix-button UI state was
+				// never cleared by the EPS core reset.
 				button.pressed = true;
 				button.stuck = reset_stuck;
 				button.pressingFingerId = reset_finger_id;
