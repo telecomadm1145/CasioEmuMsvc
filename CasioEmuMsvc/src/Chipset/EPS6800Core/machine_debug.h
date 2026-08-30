@@ -2,6 +2,8 @@
 #ifndef FX_EMU_CORE_MACHINE_DEBUG_H
 #define FX_EMU_CORE_MACHINE_DEBUG_H
 
+#include "mmio_layout.h"
+
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -14,8 +16,19 @@ extern "C" {
 #define MACHINE_DEBUG_REGISTER_COUNT 0x80
 #define MACHINE_DEBUG_WBK_REGISTER_COUNT 27
 #define MACHINE_DEBUG_STACK_DEPTH 32
-#define MACHINE_DEBUG_BANK_RAM_SIZE (64 * 128)
+#define MACHINE_DEBUG_BANK_RAM_SIZE MMIO_RAM_COUNT
 #define MACHINE_DEBUG_LINEAR_MEMORY_SIZE (0x80 + MACHINE_DEBUG_BANK_RAM_SIZE)
+
+enum machine_debug_instruction_flags {
+	MACHINE_DEBUG_INSTRUCTION_CALL = 0x01,
+	MACHINE_DEBUG_INSTRUCTION_RETURN = 0x02
+};
+
+struct machine_debug_instruction_info {
+	uint8_t words;
+	uint8_t cycles;
+	uint8_t flags;
+};
 
 struct machine_debug_state {
 	uint32_t pc;
@@ -46,7 +59,20 @@ typedef bool (*machine_debug_memory_access_callback)(
 );
 
 void machine_state_debug_get_state(struct machine_state *machine, struct machine_debug_state *state);
+/* Canonical execution state accessors.  These intentionally expose values,
+ * not the internal cpu/mmio storage used to hold them. */
+uint32_t machine_state_debug_program_counter(const struct machine_state *state);
+void machine_state_debug_set_program_counter(struct machine_state *state, uint32_t word_address);
+uint8_t machine_state_debug_accumulator(const struct machine_state *state);
+uint8_t machine_state_debug_status(const struct machine_state *state);
 uint32_t machine_state_debug_fetch_instruction(const struct machine_state *state, uint32_t pc);
+/* Canonical instruction geometry/classification used by debugger and scheduler
+ * clients so opcode semantics remain owned by the EPS core. */
+void machine_state_debug_decode_instruction(
+	const struct machine_state *state,
+	uint16_t word,
+	struct machine_debug_instruction_info *info
+);
 void machine_state_debug_get_register_overview(
 	struct machine_state *state,
 	struct machine_debug_register_overview *overview
@@ -54,6 +80,14 @@ void machine_state_debug_get_register_overview(
 void machine_state_debug_get_snapshot(
 	struct machine_state *state,
 	struct machine_debug_snapshot *snapshot
+);
+/* Variant-aware debugger geometry. */
+uint32_t machine_state_debug_linear_memory_size(const struct machine_state *state);
+uint8_t machine_state_debug_stack_depth(const struct machine_state *state);
+bool machine_state_debug_step_out_target(
+	const struct machine_state *state,
+	uint8_t *target_depth,
+	uint32_t *return_pc
 );
 uint8_t machine_state_debug_read_byte(struct machine_state *state, uint8_t addr);
 void machine_state_debug_write_byte(struct machine_state *state, uint8_t addr, uint8_t byte);

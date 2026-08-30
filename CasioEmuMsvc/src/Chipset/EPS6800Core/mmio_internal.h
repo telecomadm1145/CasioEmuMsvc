@@ -55,9 +55,10 @@ void mmio_write_byte_state(struct mmio_state *state, uint8_t addr, uint8_t byte)
 void mmio_write_byte_internal_state(struct mmio_state *state, uint8_t addr, uint8_t byte);
 uint8_t mmio_read_byte_internal_state(struct mmio_state *state, uint8_t addr);
 void mmio_post_id_state(struct mmio_state *state, uint8_t addr);
+void mmio_sync_extended_fsr_result_state(struct mmio_state *state, uint8_t addr, uint8_t result);
 void mmio_carry_propagate_state(struct mmio_state *state, uint8_t addr);
 void mmio_borrow_propagate_state(struct mmio_state *state, uint8_t addr);
-void mmio_init_state(struct mmio_state *state);
+void mmio_init_state(struct mmio_state *state, enum eps_variant variant);
 void mmio_reset_state(struct mmio_state *state);
 void mmio_trace_snapshot_state(
 	const struct mmio_state *state,

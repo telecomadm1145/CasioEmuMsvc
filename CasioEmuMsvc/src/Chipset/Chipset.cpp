@@ -56,7 +56,10 @@ namespace casioemu {
 	}
 
 	void Chipset::SetupEpsCpu() {
-		epscpu = new ePSCPU(emulator.hardware_id == HW_EPS6009 ? EpsVariant::Eps6009 : EpsVariant::Eps6800);
+		const auto* descriptor = FindHardwareDescriptor(emulator.hardware_id);
+		if (!descriptor || descriptor->eps_variant == EpsVariant::None)
+			PANIC("Missing EPS hardware descriptor for id %u\n", emulator.hardware_id);
+		epscpu = new ePSCPU(descriptor->eps_variant);
 		auto parse_byte_extra = [&](const char* name, uint8_t fallback) {
 			const auto item = emulator.ModelDefinition.extra.find(name);
 			if (item == emulator.ModelDefinition.extra.end())
@@ -75,6 +78,9 @@ namespace casioemu {
 		};
 		const uint8_t port_c_input_mask = parse_byte_extra("port_c_input_mask", 0);
 		const uint8_t port_c_input_value = parse_byte_extra("port_c_input_value", 0);
+		const uint8_t port_b_input_mask = parse_byte_extra("port_b_input_mask", 0);
+		const uint8_t port_b_input_value = parse_byte_extra("port_b_input_value", 0);
+		epscpu->SetPortBInput(port_b_input_mask, port_b_input_value);
 		epscpu->SetPortCInput(port_c_input_mask, port_c_input_value);
 		const auto ice_timer_entry = emulator.ModelDefinition.extra.find("ice_timer_scheduling");
 		const bool ice_timer_scheduling = ice_timer_entry != emulator.ModelDefinition.extra.end() &&

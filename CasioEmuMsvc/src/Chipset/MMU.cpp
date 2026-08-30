@@ -105,6 +105,7 @@ namespace casioemu {
 			return 0xFFFF;
 		case HW_EPS6800:
 		case HW_EPS6009:
+		case HW_EPS9500:
 			return emulator.chipset.epscpu
 				/* ReadCode uses byte offsets on the legacy paths; convert to the
 				 * word address expected by the EPS core. */

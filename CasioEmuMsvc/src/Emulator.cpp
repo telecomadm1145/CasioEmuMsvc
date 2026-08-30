@@ -79,9 +79,8 @@ namespace casioemu {
 		}
 
 		unsigned int GetTimerInterval(int hardware_id) {
-			if (hardware_id == HW_EPS6009)
-				return 4;
-			return hardware_id == HW_EPS6800 ? 40 : 20;
+			const auto* descriptor = FindHardwareDescriptor(static_cast<unsigned short>(hardware_id));
+			return descriptor ? descriptor->timer_interval_ms : 20;
 		}
 
 		bool HasSvgExtension(const std::string& path) {

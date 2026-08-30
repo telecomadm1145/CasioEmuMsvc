@@ -2,6 +2,8 @@
 #ifndef FX_EMU_CORE_EPS6800_H
 #define FX_EMU_CORE_EPS6800_H
 
+#include "mmio_layout.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -10,7 +12,10 @@
 
 enum eps_variant {
 	EPS_VARIANT_6800 = 0,
-	EPS_VARIANT_6009 = 1
+	EPS_VARIANT_6009 = 1,
+	/* The EL-W531TL official simulator selects CIce core mode 4, the same
+	 * CPU/SFR family as ePS6800, with a 0x18000-word ROM and 98x4 LCD RAM. */
+	EPS_VARIANT_9500 = 2
 };
 
 enum {
@@ -185,124 +190,287 @@ enum {
 	ADDR_TIMINT = 0x00000008
 };
 
+enum eps_stack_model {
+	EPS_STACK_MODEL_LINEAR = 0,
+	EPS_STACK_MODEL_DESCENDING_EVEN = 1
+};
+
+enum eps_lcd_address_model {
+	EPS_LCD_ADDRESS_PAGED_128 = 0,
+	EPS_LCD_ADDRESS_LINEAR_WRAP,
+	EPS_LCD_ADDRESS_ROW_MAJOR
+};
+
+enum eps_kbd_matrix_model {
+	EPS_KBD_MATRIX_GPIO = 0,
+	EPS_KBD_MATRIX_EPS6009
+};
+
+enum eps_timer1_model {
+	EPS_TIMER1_STANDARD = 0,
+	EPS_TIMER1_EPS6009
+};
+
+struct eps_cpu_profile {
+	uint8_t table_read_wrap_16bit;
+	uint8_t full_tabptrh;
+	uint8_t sleep_advances_pc;
+	uint8_t extended_fsr_binary_destination;
+	uint8_t reset_status;
+};
+
+struct eps_mmio_profile {
+	uint8_t has_direct_normal_registers;
+	uint8_t has_lcd_address_high;
+	uint8_t has_counter0_registers;
+	uint8_t has_standard_gpio_registers;
+};
+
+struct eps_register_range {
+	uint8_t begin;
+	uint8_t end;
+};
+
+enum {
+	EPS_PERSISTENT_REGISTER_RANGE_COUNT = 2
+};
+
+struct eps_ram_profile {
+	uint8_t page_mask;
+	uint8_t offset_uses_bit7;
+	size_t bank_size;
+	struct eps_register_range persistent_registers[EPS_PERSISTENT_REGISTER_RANGE_COUNT];
+};
+
+struct eps_lcd_profile {
+	uint8_t address_model;
+	uint8_t address_low_max;
+	uint8_t row_width;
+	uint8_t fixed_contrast;
+	uint8_t host_linear;
+	uint8_t has_address_high;
+};
+
+struct eps_kbd_profile {
+	uint8_t matrix_model;
+	uint8_t key_input_mask;
+	uint16_t press_delay_cycles;
+	uint8_t accept_explicit_sleep_mode;
+	uint8_t refresh_on_contact_level;
+	uint8_t level_sensitive_inputs;
+};
+
+struct eps_timer_profile {
+	uint8_t timer1_model;
+	uint8_t t1_control_shift;
+	uint8_t t1_enable_bit;
+	uint8_t t0_interrupt_enable_bit;
+	uint8_t t1_interrupt_enable_bit;
+	uint8_t t2_interrupt_enable_bit;
+	uint8_t shared_interrupt_control;
+	uint8_t counter0_readback;
+	uint8_t idle_cycles_per_20ms;
+};
+
+/*
+ * Static silicon description. Register locations, structural capabilities,
+ * and module behavior profiles all live here so a new EPS family member is
+ * registered once instead of being rediscovered independently by each module.
+ */
+struct eps_variant_traits {
+	uint8_t reg_cpucon;
+	uint8_t reg_postid;
+	uint8_t reg_lcdarl;
+	uint8_t reg_lcddat;
+	uint8_t reg_lcdarh;
+	uint8_t reg_lcdcon;
+	uint8_t reg_trintsta;
+	uint8_t reg_trintcon;
+	uint8_t reg_tr0con;
+	uint8_t reg_tr1con;
+	uint8_t reg_trl0l;
+	uint8_t reg_trl0h;
+	uint8_t reg_trl1;
+	uint8_t reg_tr2wcon;
+	uint8_t reg_trl2;
+	uint8_t reg_porta;
+	uint8_t reg_portb;
+	uint8_t reg_stbcon;
+	uint8_t reg_pacon;
+	uint8_t reg_pawake;
+	uint8_t reg_painten;
+	uint8_t reg_paintsta;
+	uint8_t reg_pbcon;
+	uint8_t reg_dcrb;
+	uint8_t has_pch;
+	uint8_t has_indf2;
+	uint8_t has_wbk;
+	uint8_t stack_model;
+	struct eps_ram_profile ram;
+	size_t lcd_raw_size;
+	struct eps_cpu_profile cpu;
+	struct eps_mmio_profile mmio;
+	struct eps_lcd_profile lcd;
+	struct eps_kbd_profile kbd;
+	struct eps_timer_profile timer;
+};
+
+static inline int eps_variant_is_valid(enum eps_variant variant) {
+	return variant == EPS_VARIANT_6800 || variant == EPS_VARIANT_6009 ||
+		variant == EPS_VARIANT_9500;
+}
+
 static inline int eps_variant_is_6009(enum eps_variant variant) {
 	return variant == EPS_VARIANT_6009;
 }
 
+static inline int eps_variant_is_9500(enum eps_variant variant) {
+	return variant == EPS_VARIANT_9500;
+}
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+const struct eps_variant_traits *eps_get_variant_traits(enum eps_variant variant);
+#ifdef __cplusplus
+}
+#endif
+
 static inline uint8_t eps_reg_cpucon(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x31u : REG_CPUCON;
+	return eps_get_variant_traits(variant)->reg_cpucon;
 }
 
 static inline uint8_t eps_reg_postid(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x30u : REG_POSTID;
+	return eps_get_variant_traits(variant)->reg_postid;
 }
 
 static inline uint8_t eps_reg_lcdarl(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x09u : REG_LCDARL;
+	return eps_get_variant_traits(variant)->reg_lcdarl;
 }
 
 static inline uint8_t eps_reg_lcddat(enum eps_variant variant) {
-	(void)variant;
-	return REG_LCDDAT;
+	return eps_get_variant_traits(variant)->reg_lcddat;
 }
 
 static inline uint8_t eps_reg_lcdarh(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0xffu : REG_LCDARH;
+	return eps_get_variant_traits(variant)->reg_lcdarh;
 }
 
 static inline uint8_t eps_reg_lcdcon(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x2fu : REG_LCDCON;
+	return eps_get_variant_traits(variant)->reg_lcdcon;
 }
 
 static inline uint8_t eps_reg_trintsta(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x22u : REG_INTSTA;
+	return eps_get_variant_traits(variant)->reg_trintsta;
 }
 
 static inline uint8_t eps_reg_trintcon(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x21u : REG_INTSTA;
+	return eps_get_variant_traits(variant)->reg_trintcon;
 }
 
 static inline uint8_t eps_reg_tr0con(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x23u : REG_TR0CON;
+	return eps_get_variant_traits(variant)->reg_tr0con;
 }
 
 static inline uint8_t eps_reg_tr1con(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x23u : REG_TR1CON;
+	return eps_get_variant_traits(variant)->reg_tr1con;
 }
 
 static inline uint8_t eps_reg_trl0l(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x24u : REG_TRL0L;
+	return eps_get_variant_traits(variant)->reg_trl0l;
 }
 
 static inline uint8_t eps_reg_trl0h(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x25u : REG_TRL0H;
+	return eps_get_variant_traits(variant)->reg_trl0h;
 }
 
 static inline uint8_t eps_reg_trl1(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x26u : REG_TRL1;
+	return eps_get_variant_traits(variant)->reg_trl1;
 }
 
 static inline uint8_t eps_reg_tr2wcon(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x27u : REG_TR2WCON;
+	return eps_get_variant_traits(variant)->reg_tr2wcon;
 }
 
 static inline uint8_t eps_reg_trl2(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x28u : REG_TRL2;
+	return eps_get_variant_traits(variant)->reg_trl2;
 }
 
 static inline uint8_t eps_reg_porta(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x10u : REG_PORTA;
+	return eps_get_variant_traits(variant)->reg_porta;
 }
 
 static inline uint8_t eps_reg_portb(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x11u : REG_PORTB;
+	return eps_get_variant_traits(variant)->reg_portb;
 }
 
 static inline uint8_t eps_reg_stbcon(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x20u : REG_STBCON;
+	return eps_get_variant_traits(variant)->reg_stbcon;
 }
 
 static inline uint8_t eps_reg_pacon(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x29u : REG_PACON;
+	return eps_get_variant_traits(variant)->reg_pacon;
 }
 
 static inline uint8_t eps_reg_pawake(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x2au : REG_PAWAKE;
+	return eps_get_variant_traits(variant)->reg_pawake;
 }
 
 static inline uint8_t eps_reg_painten(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x2bu : REG_PAINTEN;
+	return eps_get_variant_traits(variant)->reg_painten;
 }
 
 static inline uint8_t eps_reg_paintsta(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x2cu : REG_PAINTSTA;
+	return eps_get_variant_traits(variant)->reg_paintsta;
 }
 
 static inline uint8_t eps_reg_pbcon(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x2du : REG_PBCON;
+	return eps_get_variant_traits(variant)->reg_pbcon;
 }
 
 static inline uint8_t eps_reg_dcrb(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x2eu : REG_DCRB;
+	return eps_get_variant_traits(variant)->reg_dcrb;
 }
 
 static inline int eps_key_input_enabled(enum eps_variant variant, const uint8_t *regs) {
-	return eps_variant_is_6009(variant) ?
+	return eps_get_variant_traits(variant)->kbd.matrix_model == EPS_KBD_MATRIX_EPS6009 ?
 		(((regs[eps_reg_stbcon(variant)] & BIT_AUTO_KEY_SCAN) != 0) ||
 			((regs[eps_reg_pacon(variant)] & 0x01u) != 0)) :
 		((regs[eps_reg_stbcon(variant)] & BIT_KEY_INPUT_ENABLE) != 0);
 }
 
 static inline int eps_has_pch(enum eps_variant variant) {
-	return !eps_variant_is_6009(variant);
+	return eps_get_variant_traits(variant)->has_pch != 0;
 }
 
 static inline int eps_has_indf2(enum eps_variant variant) {
-	return !eps_variant_is_6009(variant);
+	return eps_get_variant_traits(variant)->has_indf2 != 0;
+}
+
+static inline int eps_has_wbk(enum eps_variant variant) {
+	return eps_get_variant_traits(variant)->has_wbk != 0;
+}
+
+static inline uint8_t eps_ram_page_mask(enum eps_variant variant) {
+	return eps_get_variant_traits(variant)->ram.page_mask;
+}
+
+static inline size_t eps_bank_ram_size(enum eps_variant variant) {
+	return eps_get_variant_traits(variant)->ram.bank_size;
 }
 
 static inline size_t eps_lcd_raw_size(enum eps_variant variant) {
-	return eps_variant_is_6009(variant) ? 0x88u : (size_t)(96u * 4u);
+	return eps_get_variant_traits(variant)->lcd_raw_size;
+}
+
+static inline int eps_stack_is_descending_even(enum eps_variant variant) {
+	return eps_get_variant_traits(variant)->stack_model == EPS_STACK_MODEL_DESCENDING_EVEN;
+}
+
+static inline uint8_t eps_stack_depth_from_raw(enum eps_variant variant, uint8_t raw_stack_pointer) {
+	if (eps_stack_is_descending_even(variant))
+		return (uint8_t)(0u - raw_stack_pointer) / 2u;
+	return raw_stack_pointer & 0x1fu;
 }
 
 #endif /* FX_EMU_CORE_EPS6800_H */

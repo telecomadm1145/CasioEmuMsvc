@@ -1,4 +1,6 @@
 #pragma once
+#include <array>
+#include <cstddef>
 #include <iosfwd>
 #include <map>
 #include <istream>
@@ -7,6 +9,7 @@
 #include <vector>
 
 #include "Binary.h"
+#include "EpsVariant.h"
 struct Rect {
 	int x, y;
 	int w, h;
@@ -31,15 +34,100 @@ namespace casioemu {
 		// our test ends here, so we can add new models without worrying about breaking old configs
 		HW_EPS6800 = 9,
 		HW_EPS6009 = 10,
-		HW_MAX = HW_EPS6009,
+		HW_EPS9500 = 11,
+		HW_MAX = HW_EPS9500,
 	};
 
+	enum class EpsDisplayKind : unsigned char {
+		None,
+		DotMatrix6800,
+		Segment6009,
+		DotMatrix9500
+	};
+
+	enum class EpsPowerKeyBehavior : unsigned char {
+		None,
+		HostCpuReset,
+		CoreContact
+	};
+
+	struct HardwareDescriptor {
+		unsigned short hardware_id;
+		const char* display_name;
+		const char* startup_filter;
+		EpsVariant eps_variant;
+		EpsDisplayKind eps_display;
+		EpsPowerKeyBehavior eps_power_key;
+		unsigned int timer_interval_ms;
+		unsigned int minimum_press_ms;
+		size_t eps_status_size;
+	};
+
+	inline constexpr std::array<HardwareDescriptor, 9> HARDWARE_DESCRIPTORS{{
+		{HW_ES_PLUS, "ES(P)", "ESP", EpsVariant::None, EpsDisplayKind::None,
+			EpsPowerKeyBehavior::None, 20, 25, 0},
+		{HW_CLASSWIZ, "CWX", "CWX", EpsVariant::None, EpsDisplayKind::None,
+			EpsPowerKeyBehavior::None, 20, 25, 0},
+		{HW_CLASSWIZ_II, "CWII", "CWII", EpsVariant::None, EpsDisplayKind::None,
+			EpsPowerKeyBehavior::None, 20, 25, 0},
+		{HW_FX_5800P, "Fx5800p", "Fx5800p", EpsVariant::None, EpsDisplayKind::None,
+			EpsPowerKeyBehavior::None, 20, 25, 0},
+		{HW_TI, "TI", "TI", EpsVariant::None, EpsDisplayKind::None,
+			EpsPowerKeyBehavior::None, 20, 25, 0},
+		{HW_SOLARII, "SolarII", "SolarII", EpsVariant::None, EpsDisplayKind::None,
+			EpsPowerKeyBehavior::None, 20, 25, 0},
+		{HW_EPS6800, "EPS6800", "EPS6800", EpsVariant::Eps6800, EpsDisplayKind::DotMatrix6800,
+			EpsPowerKeyBehavior::HostCpuReset, 40, 60, 12},
+		{HW_EPS6009, "EPS6009", "EPS6009", EpsVariant::Eps6009, EpsDisplayKind::Segment6009,
+			EpsPowerKeyBehavior::HostCpuReset, 4, 0, 0},
+		{HW_EPS9500, "EPS9500", "EPS9500", EpsVariant::Eps9500, EpsDisplayKind::DotMatrix9500,
+			EpsPowerKeyBehavior::CoreContact, 20, 25, 4},
+	}};
+	static_assert(HARDWARE_DESCRIPTORS.size() == static_cast<size_t>(HW_MAX - HW_MIN + 1));
+
+	inline constexpr bool HardwareDescriptorsAreComplete() {
+		for (size_t index = 0; index < HARDWARE_DESCRIPTORS.size(); ++index) {
+			if (HARDWARE_DESCRIPTORS[index].hardware_id != HW_MIN + index)
+				return false;
+		}
+		return true;
+	}
+	static_assert(HardwareDescriptorsAreComplete());
+
+	inline constexpr const HardwareDescriptor* FindHardwareDescriptor(unsigned short hardware_id) {
+		for (const auto& descriptor : HARDWARE_DESCRIPTORS) {
+			if (descriptor.hardware_id == hardware_id)
+				return &descriptor;
+		}
+		return nullptr;
+	}
+
+	inline constexpr const char* HardwareDisplayName(unsigned short hardware_id) {
+		const auto* descriptor = FindHardwareDescriptor(hardware_id);
+		return descriptor ? descriptor->display_name : "Invalid";
+	}
+
+	inline constexpr const char* HardwareStartupFilter(unsigned short hardware_id) {
+		const auto* descriptor = FindHardwareDescriptor(hardware_id);
+		return descriptor ? descriptor->startup_filter : "Unknown";
+	}
+
 	inline constexpr bool IsEpsFamily(unsigned short hardware_id) {
-		return hardware_id == HW_EPS6800 || hardware_id == HW_EPS6009;
+		const auto* descriptor = FindHardwareDescriptor(hardware_id);
+		return descriptor && descriptor->eps_variant != EpsVariant::None;
+	}
+
+	inline constexpr bool EpsPowerKeyResetsCpu(unsigned short hardware_id) {
+		// ePS6800/ePS6009 models use the legacy host power-key reset path.
+		// ePS9500 exposes ON/C as a dedicated PA7/PB0 input and must not reset
+		// CPU/SFR state when that contact is pressed.
+		const auto* descriptor = FindHardwareDescriptor(hardware_id);
+		return descriptor && descriptor->eps_power_key == EpsPowerKeyBehavior::HostCpuReset;
 	}
 
 	inline constexpr bool IsEpsSegmentLcd(unsigned short hardware_id) {
-		return hardware_id == HW_EPS6009;
+		const auto* descriptor = FindHardwareDescriptor(hardware_id);
+		return descriptor && descriptor->eps_display == EpsDisplayKind::Segment6009;
 	}
 	struct SpriteInfo {
 		Rect src, dest;

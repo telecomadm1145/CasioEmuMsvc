@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include "EpsVariant.h"
+
 #include <atomic>
 #include <array>
 #include <chrono>
@@ -33,11 +35,6 @@ namespace casioemu {
 	};
 
 	const char* Eps6800RomFormatName(Eps6800RomFormat format);
-
-	enum class EpsVariant : uint8_t {
-		Eps6800,
-		Eps6009
-	};
 
 	struct Eps6800LcdControl {
 		uint8_t lcdarh{};
@@ -89,7 +86,7 @@ namespace casioemu {
 	};
 
 	struct Eps6800MemoryBreakpoint {
-		uint32_t address{}; // 0x00-0x7f SFR, 0x80-0x207f banked RAM
+		uint32_t address{}; // 0x00-0x7f SFR, 0x80-0x20ff banked RAM
 		bool write{};
 		bool enabled{true};
 		bool break_when_hit{true};
@@ -197,7 +194,6 @@ namespace casioemu {
 		std::deque<Eps6800TraceEntry> trace_buffer_;
 		Eps6800RomFormat rom_format_{Eps6800RomFormat::PackedLittleEndian};
 		size_t rom_word_count_{};
-		EpsVariant variant_{EpsVariant::Eps6800};
 		std::atomic_bool break_requested_{};
 		std::function<bool(uint32_t, uint32_t, uint8_t)> instruction_hook_;
 		std::function<void(uint32_t, uint32_t, bool, uint32_t, const std::string&)> function_hook_;
@@ -234,6 +230,7 @@ namespace casioemu {
 		void ClearRamAndReset();
 		void SetTimerCycleDivisor(uint32_t divisor);
 		void SetIceTimerScheduling(bool enabled);
+		void SetPortBInput(uint8_t mask, uint8_t value);
 		void SetPortCInput(uint8_t mask, uint8_t value);
 		void Next();
 		bool RunFrame(uint32_t idle_timer_cycles = 0);
@@ -250,6 +247,7 @@ namespace casioemu {
 		void WriteByte(uint8_t address, uint8_t value);
 		uint8_t ReadDebugMemory(uint32_t linear_address) const;
 		bool WriteDebugMemory(uint32_t linear_address, uint8_t value);
+		uint32_t DebugLinearMemorySize() const;
 		uint16_t ReadCodeWord(uint32_t word_address) const;
 		bool WriteCodeWord(uint32_t word_address, uint16_t value);
 		uint8_t ReadLcdMemory(size_t address) const;

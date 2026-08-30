@@ -26,13 +26,9 @@ namespace casioemu {
 		constexpr int EPS_KBD_COL_COUNT = 8;
 		constexpr int EPS_MATRIX_SLOT_COUNT = EPS_KBD_ROW_COUNT * EPS_KBD_COL_COUNT;
 		constexpr int BUTTON_SLOT_COUNT = EPS_MATRIX_SLOT_COUNT + 2;
-		constexpr uint32_t DEFAULT_MIN_PRESS_MS = 25;
-		constexpr uint32_t EPS6800_MIN_PRESS_MS = 60;
-
 		uint32_t MinimumPressDuration(int hardware_id) {
-			if (hardware_id == HW_EPS6009)
-				return 0;
-			return hardware_id == HW_EPS6800 ? EPS6800_MIN_PRESS_MS : DEFAULT_MIN_PRESS_MS;
+			const auto* descriptor = FindHardwareDescriptor(static_cast<unsigned short>(hardware_id));
+			return descriptor ? descriptor->minimum_press_ms : 25;
 		}
 
 		SDL_Rect ExpandRect(const SDL_Rect& rect, int padding) {
@@ -133,6 +129,7 @@ namespace casioemu {
 		void UIEvent(SDL_Event& event);
 		void Uninitialise();
 		void PressButton(Button& button, bool stick, SDL_FingerID fingerId);
+		void ResetEpsCpuForPowerButton(Button& button);
 		void PressAt(int x, int y, bool stick, SDL_FingerID fingerId);
 		void ReleaseAt(int x, int y, SDL_FingerID fingerId);
 		void PressButtonByCode(uint8_t code);
@@ -978,15 +975,32 @@ namespace casioemu {
 
 		if (button.type == Button::BT_RESET) {
 			if (button.pressed && !old_pressed_state) {
-				// Chipset reset clears the keyboard peripheral and its UI state.
-				// Restore only the held RESET contact afterwards so its normal
-				// pressed overlay remains visible until mouse/finger release.
+				// A physical RESET clears the EPS keyboard peripheral, but matrix
+				// contacts held by the user remain electrically closed.  Snapshot
+				// them before reset and restore them without generating fresh key
+				// edges so reset-vector key-combination checks can observe them.
 				const bool reset_stuck = button.stuck;
 				const SDL_FingerID reset_finger_id = button.pressingFingerId;
-				if (IsEpsFamily(emulator.hardware_id) && emulator.chipset.epscpu)
+				if (IsEpsFamily(emulator.hardware_id) && emulator.chipset.epscpu) {
+					const bool was_paused = emulator.GetPaused();
+					emulator.SetPaused(true);
+					std::vector<uint8_t> held_matrix_indices;
+					for (const auto& held_button : buttons) {
+						if (!held_button.pressed || held_button.type != Button::BT_BUTTON)
+							continue;
+						const int matrix_index = EpsMatrixIndexForButtonCode(held_button.code);
+						if (matrix_index >= 0)
+							held_matrix_indices.push_back(static_cast<uint8_t>(matrix_index));
+					}
 					emulator.chipset.epscpu->ClearRamAndReset();
+					for (const uint8_t matrix_index : held_matrix_indices)
+						emulator.chipset.epscpu->RestoreKeyDown(matrix_index);
+					emulator.SetPaused(was_paused);
+				}
 				else
 					emulator.chipset.Reset();
+				// Restore only the RESET UI state; held matrix-button UI state was
+				// never cleared by the EPS core reset.
 				button.pressed = true;
 				button.stuck = reset_stuck;
 				button.pressingFingerId = reset_finger_id;
@@ -994,37 +1008,9 @@ namespace casioemu {
 			return;
 		}
 
-		if (button.type == Button::BT_POWER && IsEpsFamily(emulator.hardware_id)) {
+		if (button.type == Button::BT_POWER && EpsPowerKeyResetsCpu(emulator.hardware_id)) {
 			if (button.pressed && !old_pressed_state) {
-				const bool was_paused = emulator.GetPaused();
-				emulator.SetPaused(true);
-				const bool power_stuck = button.stuck;
-				const SDL_FingerID power_finger_id = button.pressingFingerId;
-				struct HeldButton {
-					size_t index;
-					bool stuck;
-					SDL_FingerID finger_id;
-				};
-				std::vector<HeldButton> held_buttons;
-				for (size_t index = 0; index < std::size(buttons); ++index) {
-					if (buttons[index].pressed && buttons[index].type == Button::BT_BUTTON)
-						held_buttons.push_back({index, buttons[index].stuck,
-							buttons[index].pressingFingerId});
-				}
-				emulator.chipset.Reset();
-				button.pressed = true;
-				button.stuck = power_stuck;
-				button.pressingFingerId = power_finger_id;
-				for (const auto& held : held_buttons) {
-					auto& restored = buttons[held.index];
-					restored.pressed = true;
-					restored.stuck = held.stuck;
-					restored.pressingFingerId = held.finger_id;
-					const int matrix_index = EpsMatrixIndexForButtonCode(restored.code);
-					if (matrix_index >= 0)
-						emulator.chipset.epscpu->RestoreKeyDown(static_cast<uint8_t>(matrix_index));
-				}
-				emulator.SetPaused(was_paused);
+				ResetEpsCpuForPowerButton(button);
 			}
 			return;
 		}
@@ -1062,6 +1048,38 @@ namespace casioemu {
 				}
 			}
 		}
+	}
+
+	void Keyboard::ResetEpsCpuForPowerButton(Button& button) {
+		const bool was_paused = emulator.GetPaused();
+		emulator.SetPaused(true);
+		const bool power_stuck = button.stuck;
+		const SDL_FingerID power_finger_id = button.pressingFingerId;
+		struct HeldButton {
+			size_t index;
+			bool stuck;
+			SDL_FingerID finger_id;
+		};
+		std::vector<HeldButton> held_buttons;
+		for (size_t index = 0; index < std::size(buttons); ++index) {
+			if (buttons[index].pressed && buttons[index].type == Button::BT_BUTTON)
+				held_buttons.push_back({index, buttons[index].stuck,
+					buttons[index].pressingFingerId});
+		}
+		emulator.chipset.Reset();
+		button.pressed = true;
+		button.stuck = power_stuck;
+		button.pressingFingerId = power_finger_id;
+		for (const auto& held : held_buttons) {
+			auto& restored = buttons[held.index];
+			restored.pressed = true;
+			restored.stuck = held.stuck;
+			restored.pressingFingerId = held.finger_id;
+			const int matrix_index = EpsMatrixIndexForButtonCode(restored.code);
+			if (matrix_index >= 0)
+				emulator.chipset.epscpu->RestoreKeyDown(static_cast<uint8_t>(matrix_index));
+		}
+		emulator.SetPaused(was_paused);
 	}
 
 	void Keyboard::PressAt(int x, int y, bool stick, SDL_FingerID fingerId) {
