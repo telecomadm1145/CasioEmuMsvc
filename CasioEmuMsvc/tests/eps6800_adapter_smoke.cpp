@@ -1368,7 +1368,7 @@ namespace {
 		constexpr size_t kEps9500RomSize = 0x30000;
 		auto rom = ReadRom(path);
 		if (rom.size() != kEps9500RomSize) {
-			std::cerr << "EL531TL ROM size mismatch: " << rom.size() << "\n";
+			std::cerr << "ELW531TL ROM size mismatch: " << rom.size() << "\n";
 			return false;
 		}
 		casioemu::ePSCPU machine(casioemu::EpsVariant::Eps9500);
@@ -1388,13 +1388,13 @@ namespace {
 		const uint32_t hash = Fnv1a(lcd.data(), lcd.size());
 		if (pc != 0x000d28u || acc != 0xffu || status != 0x16u || hash != 0xf9fd943eu) {
 			std::cerr << std::hex << std::setfill('0')
-				<< "EL531TL golden mismatch: pc=0x" << std::setw(6) << pc
+				<< "ELW531TL golden mismatch: pc=0x" << std::setw(6) << pc
 				<< " acc=0x" << std::setw(2) << static_cast<unsigned>(acc)
 				<< " status=0x" << std::setw(2) << static_cast<unsigned>(status)
 				<< " lcd=0x" << std::setw(8) << hash << "\n";
 			return false;
 		}
-		std::cout << "EL531TL golden OK\n";
+		std::cout << "ELW531TL golden OK\n";
 		return true;
 	}
 
@@ -1874,7 +1874,7 @@ int main(int argc, char** argv) {
 	}
 	if (argc >= 4) {
 		if (!Eps9500El531TlGolden(argv[3])) {
-			std::cerr << "EL531TL golden regression\n";
+			std::cerr << "ELW531TL golden regression\n";
 			return 1;
 		}
 	}
