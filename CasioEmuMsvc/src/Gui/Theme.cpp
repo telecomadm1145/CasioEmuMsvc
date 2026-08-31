@@ -11,7 +11,7 @@
 #include <fstream>
 #include <string>
 #include <vibration.h>
-#ifndef CASIOEMU_CORE_WEB
+#if !defined(CASIOEMU_CORE_WEB) && !defined(TEST_BUILD)
 #include "Ext/DiscordRPC.h"
 #endif
 
@@ -196,7 +196,7 @@ public:
 			}
 		}
 		
-#ifndef CASIOEMU_CORE_WEB
+#if !defined(CASIOEMU_CORE_WEB) && !defined(TEST_BUILD)
 		UIHelpers::SectionHeader("Integrations");
 		if (ImGui::Checkbox("Theme.EnableDiscordRPC"_lc, &settings.enableDiscordRPC)) {
 			tm.SaveSettings();
