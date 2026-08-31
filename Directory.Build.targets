@@ -37,7 +37,10 @@
 
     <!-- Core CPU/MMU sources, including the EPS6800/EPS9500 C core. -->
     <ClCompile Include="$(CasioEmuSourceRoot)Chipset\*.cpp" />
-    <ClCompile Include="$(CasioEmuSourceRoot)Chipset\EPS6800Core\*.c" />
+    <ClCompile Include="$(CasioEmuSourceRoot)Chipset\EPS6800Core\*.c">
+      <!-- cpu.c/CPU.cpp and timer.c/Timer.cpp otherwise collide on Windows. -->
+      <ObjectFileName>$(IntDir)EPS6800Core_%(Filename).obj</ObjectFileName>
+    </ClCompile>
 
     <!-- Keep the same test-build feature surface as the old UnitTest project. -->
     <ClCompile Include="$(CasioEmuSourceRoot)Ext\*.cpp"
