@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--
+    CasioEmuTests historically referenced Unix symlinks under UnitTest1.
+    Those links are not usable in a normal Windows checkout and several of
+    their targets also predate the move to CasioEmuMsvc/src.
+
+    Keep the legacy .vcxproj usable, but replace its symlink-backed compile
+    items with the current source tree at MSBuild evaluation time. CMake
+    remains the source of truth for the source layout.
+  -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)'=='UnitTest1'">
+    <CasioEmuRepoRoot>$(MSBuildThisFileDirectory)</CasioEmuRepoRoot>
+    <CasioEmuProjectRoot>$(CasioEmuRepoRoot)CasioEmuMsvc\</CasioEmuProjectRoot>
+    <CasioEmuSourceRoot>$(CasioEmuProjectRoot)src\</CasioEmuSourceRoot>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup Condition="'$(MSBuildProjectName)'=='UnitTest1'">
+    <ClCompile>
+      <PreprocessorDefinitions>TEST_BUILD;ASMJIT_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(CasioEmuSourceRoot);$(CasioEmuSourceRoot)Chipset;$(CasioEmuSourceRoot)Chipset\EPS6800Core;$(CasioEmuSourceRoot)Containers;$(CasioEmuSourceRoot)Ext;$(CasioEmuSourceRoot)Gui;$(CasioEmuSourceRoot)Gui\imgui;$(CasioEmuSourceRoot)Peripheral;$(CasioEmuSourceRoot)StartupUi;$(CasioEmuSourceRoot)locales;$(CasioEmuProjectRoot)third_party;$(CasioEmuProjectRoot)third_party\asmjit\src;$(CasioEmuProjectRoot)third_party\miniz;$(CasioEmuProjectRoot)third_party\tinyxml2;$(CasioEmuRepoRoot)discord-rpc\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 /Zm200 /bigobj %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectName)'=='UnitTest1'">
+    <!-- Remove source items whose paths depend on UnitTest1's Unix symlinks. -->
+    <ClCompile Remove="Chipset\**\*.cpp;Emulator.cpp;Ext\**\*.cpp;Gui\**\*.cpp;Peripheral\**\*.cpp;sdl_win32_extra.cpp" />
+
+    <!-- Current root sources needed by the emulator core used by the tests. -->
+    <ClCompile Include="$(CasioEmuSourceRoot)Emulator.cpp" />
+    <ClCompile Include="$(CasioEmuSourceRoot)ModelConfig.cpp" />
+    <ClCompile Include="$(CasioEmuSourceRoot)ModelResourceStore.cpp" />
+    <ClCompile Include="$(CasioEmuSourceRoot)QrCode.cpp" />
+    <ClCompile Include="$(CasioEmuSourceRoot)SvgBoardModelLoader.cpp" />
+    <ClCompile Include="$(CasioEmuSourceRoot)sdl_win32_extra.cpp" />
+
+    <!-- Core CPU/MMU sources, including the EPS6800/EPS9500 C core. -->
+    <ClCompile Include="$(CasioEmuSourceRoot)Chipset\*.cpp" />
+    <ClCompile Include="$(CasioEmuSourceRoot)Chipset\EPS6800Core\*.c" />
+
+    <!-- Keep the same test-build feature surface as the old UnitTest project. -->
+    <ClCompile Include="$(CasioEmuSourceRoot)Ext\*.cpp"
+               Exclude="$(CasioEmuSourceRoot)Ext\DiscordRPC.cpp" />
+    <ClCompile Include="$(CasioEmuSourceRoot)Gui\*.cpp"
+               Exclude="$(CasioEmuSourceRoot)Gui\AndroidSystemFont.cpp;$(CasioEmuSourceRoot)Gui\PluginLogWindow.cpp;$(CasioEmuSourceRoot)Gui\SnapshotWindow.cpp" />
+    <ClCompile Include="$(CasioEmuSourceRoot)Gui\imgui\*.cpp" />
+    <ClCompile Include="$(CasioEmuSourceRoot)Peripheral\*.cpp" />
+
+    <!-- Sources required by the current model/config implementation. -->
+    <ClCompile Include="$(CasioEmuProjectRoot)third_party\miniz\miniz.c" />
+    <ClCompile Include="$(CasioEmuProjectRoot)third_party\miniz\miniz_tdef.c" />
+    <ClCompile Include="$(CasioEmuProjectRoot)third_party\miniz\miniz_tinfl.c" />
+    <ClCompile Include="$(CasioEmuProjectRoot)third_party\tinyxml2\tinyxml2.cpp" />
+  </ItemGroup>
+</Project>
