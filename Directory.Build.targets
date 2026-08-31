@@ -17,7 +17,7 @@
 
   <ItemDefinitionGroup Condition="'$(MSBuildProjectName)'=='UnitTest1'">
     <ClCompile>
-      <PreprocessorDefinitions>TEST_BUILD;ASMJIT_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>TEST_BUILD;DISABLE_SENTRY;ASMJIT_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(CasioEmuSourceRoot);$(CasioEmuSourceRoot)Chipset;$(CasioEmuSourceRoot)Chipset\EPS6800Core;$(CasioEmuSourceRoot)Containers;$(CasioEmuSourceRoot)Ext;$(CasioEmuSourceRoot)Gui;$(CasioEmuSourceRoot)Gui\imgui;$(CasioEmuSourceRoot)Peripheral;$(CasioEmuSourceRoot)StartupUi;$(CasioEmuSourceRoot)locales;$(CasioEmuProjectRoot)third_party;$(CasioEmuProjectRoot)third_party\asmjit\src;$(CasioEmuProjectRoot)third_party\miniz;$(CasioEmuProjectRoot)third_party\tinyxml2;$(CasioEmuRepoRoot)discord-rpc\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 /Zm200 /bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
