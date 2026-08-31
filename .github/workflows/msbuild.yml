@@ -1,10 +1,8 @@
 name: MSBuild
 
 on:
-  # pull_request:
-    # branches: [ "stable" ]
-  # push:
-    # branches: [ "stable" ]
+  push:
+    branches: [ "stable", "fix/vs-msbuild-sync" ]
   workflow_dispatch:
 
 env:
@@ -25,6 +23,8 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4.1.7
+      with:
+        submodules: recursive
 
     - name: Configure and build x64
       working-directory: ${{env.GITHUB_WORKSPACE}}
@@ -51,3 +51,27 @@ jobs:
         name: Release-x64
         path: build-x64\CasioEmuMsvc\${{env.BUILD_CONFIGURATION}}
         if-no-files-found: error
+
+  casioemu-tests-msbuild:
+    name: Build CasioEmuTests with MSBuild
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4.1.7
+      with:
+        submodules: recursive
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v2
+
+    - name: Restore CasioEmuTests packages
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: nuget restore UnitTest1\packages.config -PackagesDirectory packages -NonInteractive
+
+    - name: Build CasioEmuTests x64
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: msbuild UnitTest1\UnitTest1.vcxproj /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=x64 /v:minimal
