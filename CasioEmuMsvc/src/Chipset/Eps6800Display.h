@@ -21,6 +21,12 @@ namespace casioemu {
 	constexpr size_t EPS9500_LCD_PAGE_COUNT = 4;
 	constexpr size_t EPS9500_LCD_RAW_SIZE = EPS9500_LCD_DEVICE_COUNT * EPS9500_LCD_PAGE_COUNT;
 	constexpr size_t EPS9500_STATUS_SIZE = EPS9500_LCD_PAGE_COUNT;
+	constexpr size_t EPS6800_W192_LCD_WIDTH = 192;
+	constexpr size_t EPS6800_W192_LCD_HEIGHT = 63;
+	constexpr size_t EPS6800_W192_LCD_PAGE_COUNT = 8;
+	constexpr size_t EPS6800_W192_LCD_RAW_SIZE =
+		EPS6800_W192_LCD_WIDTH * EPS6800_W192_LCD_PAGE_COUNT;
+	constexpr size_t EPS6800_W192_STATUS_SIZE = EPS6800_W192_LCD_WIDTH / 8;
 
 	// EPS6800 exposes a four-bit adjustment while the ES Plus controller uses
 	// five bits. Interpolate the EPS value over the complete ES Plus register
@@ -93,6 +99,36 @@ namespace casioemu {
 						const size_t y = EPS9500_LCD_HEIGHT - 1 - (page * 8 + bit);
 						frame.pixels[y * EPS9500_LCD_WIDTH + x] = 1;
 					}
+				}
+			}
+		}
+		return frame;
+	}
+
+	struct Eps6800W192DisplayFrame {
+		std::array<uint8_t, EPS6800_W192_STATUS_SIZE> status{};
+		std::array<uint8_t, EPS6800_W192_LCD_WIDTH * EPS6800_W192_LCD_HEIGHT> pixels{};
+	};
+
+	inline Eps6800W192DisplayFrame DecodeEps6800W192Display(const uint8_t* lcd, size_t size) {
+		Eps6800W192DisplayFrame frame{};
+		if (!lcd || size < EPS6800_W192_LCD_RAW_SIZE)
+			return frame;
+		for (size_t page = 0; page < EPS6800_W192_LCD_PAGE_COUNT; ++page) {
+			for (size_t x = 0; x < EPS6800_W192_LCD_WIDTH; ++x) {
+				const uint8_t value = lcd[page * EPS6800_W192_LCD_WIDTH + x];
+				for (size_t bit = 0; bit < 8; ++bit) {
+					if (!(value & (1u << bit)))
+						continue;
+					/* IQV9.exe sub_416840 stores page 0 bit 0 in its
+					 * dedicated status row.  Its pixel-table indices run in the
+					 * opposite direction to the Y coordinates initialized by
+					 * sub_416580, so serial bit 1 is the top visible row. */
+					const size_t serial_y = page * 8 + bit;
+					if (serial_y == 0)
+						frame.status[x >> 3] |= static_cast<uint8_t>(1u << (x & 7));
+					else
+						frame.pixels[(serial_y - 1) * EPS6800_W192_LCD_WIDTH + x] = 1;
 				}
 			}
 		}

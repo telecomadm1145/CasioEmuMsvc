@@ -1483,6 +1483,46 @@ namespace {
 		return expected.size() == frame.status.size() &&
 			std::equal(expected.begin(), expected.end(), frame.status.begin());
 	}
+
+	bool Eps6800W192LcdReadRecoverySmoke() {
+		constexpr uint8_t kPortD = 0x3d;
+		constexpr uint8_t kPortE = 0x3e;
+		casioemu::ePSCPU machine(casioemu::EpsVariant::Eps6800W192);
+		machine.Reset();
+
+		/* Match IQV9 ROM 0xB98C: select the controller, start a status read,
+		 * then return WR high.  The official IQV9.exe sub_410020 transitions
+		 * bus state 17 back to idle at that final edge. */
+		machine.WriteByte(kPortD, 0xef);
+		machine.WriteByte(kPortD, 0xaf);
+		machine.WriteByte(kPortD, 0xae);
+		const uint8_t status = machine.ReadByte(kPortE);
+		machine.WriteByte(kPortD, 0xaf);
+
+		const auto command = [&](uint8_t value) {
+			machine.WriteByte(kPortD, 0xaf);
+			machine.WriteByte(kPortE, value);
+			machine.WriteByte(kPortD, 0x2f);
+			machine.WriteByte(kPortD, 0xaf);
+		};
+		command(0xb0);
+		command(0x10);
+		command(0x00);
+		command(0xaf);
+
+		machine.WriteByte(kPortD, 0xef);
+		machine.WriteByte(kPortE, 0x5a);
+		machine.WriteByte(kPortD, 0x6f);
+		machine.WriteByte(kPortD, 0xef);
+
+		std::array<uint8_t, casioemu::EPS6800_W192_LCD_RAW_SIZE> lcd{};
+		casioemu::Eps6800LcdControl control{};
+		return Check((status & 0x10u) == 0, "W192 LCD ready status", __LINE__) &&
+			Check(machine.CopyLcd(lcd.data(), lcd.size(), &control) == lcd.size(),
+				"W192 LCD copy after status read", __LINE__) &&
+			Check(control.visible(), "W192 display-on command after status read", __LINE__) &&
+			Check(lcd[0] == 0x5a, "W192 data write after status read", __LINE__);
+	}
 }
 
 int main(int argc, char** argv) {
@@ -1565,6 +1605,23 @@ int main(int argc, char** argv) {
 	if (!SnapshotV3CompatibilitySmoke()) {
 		std::cerr << "EPS snapshot v3 compatibility regression\n";
 		return 1;
+	}
+	if (!Eps6800W192LcdReadRecoverySmoke()) {
+		std::cerr << "EPS6800 W192 LCD read-cycle recovery regression\n";
+		return 1;
+	}
+	{
+		std::array<uint8_t, casioemu::EPS6800_W192_LCD_RAW_SIZE> raw{};
+		raw[0] = 0x03;
+		raw[raw.size() - 1] = 0x80;
+		const auto frame = casioemu::DecodeEps6800W192Display(raw.data(), raw.size());
+		if (frame.status[0] != 0x01 ||
+			frame.pixels[0] != 1 ||
+			frame.pixels[62 * casioemu::EPS6800_W192_LCD_WIDTH +
+				casioemu::EPS6800_W192_LCD_WIDTH - 1] != 1) {
+			std::cerr << "EPS6800 W192 pixel-table row mapping regression\n";
+			return 1;
+		}
 	}
 
 	/* EPS6800 LCDDAT uses four 128-byte hardware pages even though CopyLcd

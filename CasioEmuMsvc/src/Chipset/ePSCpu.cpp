@@ -61,6 +61,8 @@ namespace {
 			return EPS_VARIANT_6009;
 		case casioemu::EpsVariant::Eps9500:
 			return EPS_VARIANT_9500;
+		case casioemu::EpsVariant::Eps6800W192:
+			return EPS_VARIANT_6800_W192;
 		default:
 			throw std::invalid_argument("Invalid EPS variant");
 		}

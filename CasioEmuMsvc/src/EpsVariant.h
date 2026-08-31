@@ -7,6 +7,7 @@
 		None,
 		Eps6800,
 		Eps6009,
-		Eps9500
+		Eps9500,
+		Eps6800W192
 	};
 }

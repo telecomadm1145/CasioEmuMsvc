@@ -55,12 +55,31 @@ const struct eps_variant_traits *eps_get_variant_traits(enum eps_variant variant
 		{ EPS_TIMER1_STANDARD, 0u, BIT_T1EN, BIT_TMR0IE, BIT_TMR1IE, BIT_TMR2IE,
 			0u, 1u, 1u }
 	};
+	static const struct eps_variant_traits eps6800_w192_traits = {
+		REG_CPUCON, REG_POSTID, REG_LCDARL, REG_LCDDAT, REG_LCDARH, REG_LCDCON,
+		REG_INTSTA, REG_INTSTA, REG_TR0CON, REG_TR1CON, REG_TRL0L, REG_TRL0H,
+		REG_TRL1, REG_TR2WCON, REG_TRL2, REG_PORTA, REG_PORTB, REG_STBCON,
+		REG_PACON, REG_PAWAKE, REG_PAINTEN, REG_PAINTSTA, REG_PBCON, REG_DCRB,
+		1u, 1u, 1u, EPS_STACK_MODEL_LINEAR,
+		{ 0x3fu, 0u, MMIO_LEGACY_RAM_COUNT, {{ 0x13u, 0x20u }, { 0x40u, 0x80u }} },
+		(size_t)(192u * 8u),
+		{ 0u, 0u, 0u, 0u, 0xc0u },
+		{ 0u, 1u, 1u, 1u },
+		/* The internal LCDDAT block is retained as an SFR-compatible stub;
+		 * visible pixels are supplied by the external PortD/PortE controller. */
+		{ EPS_LCD_ADDRESS_PAGED_128, 0x61u, 0u, 0u, 0u, 1u },
+		{ EPS_KBD_MATRIX_GPIO, 0x7fu, 1000u, 0u, 0u, 0u },
+		{ EPS_TIMER1_STANDARD, 0u, BIT_T1EN, BIT_TMR0IE, BIT_TMR1IE, BIT_TMR2IE,
+			0u, 1u, 1u }
+	};
 
 	switch (variant) {
 	case EPS_VARIANT_6009:
 		return &eps6009_traits;
 	case EPS_VARIANT_9500:
 		return &eps9500_traits;
+	case EPS_VARIANT_6800_W192:
+		return &eps6800_w192_traits;
 	case EPS_VARIANT_6800:
 	default:
 		return &eps6800_traits;
@@ -148,7 +167,7 @@ static const struct machine_reset_write machine_reset_eps9500[] = {
 		BIT_FSR0ID | BIT_FSR1ID | BIT_LCDID | BIT_FSR2ID)
 };
 
-/* enum eps_variant is intentionally contiguous and ordered 6800/6009/9500;
+/* enum eps_variant is intentionally contiguous and ordered 6800/6009/9500/6800_W192;
  * keep this table in the same order so MSVC's C compiler does not need C99
  * array-designator support. */
 static const struct machine_reset_profile machine_reset_profiles[] = {
@@ -163,6 +182,10 @@ static const struct machine_reset_profile machine_reset_profiles[] = {
 	{
 		0x10u, 9u,
 		machine_reset_eps9500, sizeof(machine_reset_eps9500) / sizeof(machine_reset_eps9500[0])
+	},
+	{
+		0x10u, 9u,
+		machine_reset_eps6800, sizeof(machine_reset_eps6800) / sizeof(machine_reset_eps6800[0])
 	}
 };
 

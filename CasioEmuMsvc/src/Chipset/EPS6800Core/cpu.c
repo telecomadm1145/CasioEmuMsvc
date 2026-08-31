@@ -1307,16 +1307,16 @@ static void cpu_interpret_instruction_state(struct cpu_state *state, uint32_t in
 													 break;
 										case CPU_OPCODE_MOVRP: imm5 = (instr1 & CPU_MOVR_PAGE_MASK) >> CPU_PC_MID_SHIFT;
                                                      /* If imm5 and imm8_1 are the same, we are in trouble. */
-                                                     cpu_bus_write(state, imm5, cpu_bus_read(state, imm8_1));
+											 cpu_bus_write(state, imm5, cpu_bus_read(state, imm8_1));
                                                      cpu_bus_post_id(state, imm5);
                                                      cpu_bus_post_id(state, imm8_1);
-													 break;
+											 break;
 										case CPU_OPCODE_MOVPR: imm5 = (instr1 & CPU_MOVR_PAGE_MASK) >> CPU_PC_MID_SHIFT;
-													 temp8_1 = cpu_bus_read(state, imm5);
-													 cpu_bus_write(state, imm8_1, temp8_1);
-													 cpu_bus_post_id(state, imm5);
-													 cpu_bus_post_id(state, imm8_1);
-													 break;
+											 temp8_1 = cpu_bus_read(state, imm5);
+											 cpu_bus_write(state, imm8_1, temp8_1);
+											 cpu_bus_post_id(state, imm5);
+											 cpu_bus_post_id(state, imm8_1);
+											 break;
 										default:
 											core_diag_printf_state(&state->diag, "[Warning] Invalid instruction @ %4xh!\n", state->pc);
 											break;

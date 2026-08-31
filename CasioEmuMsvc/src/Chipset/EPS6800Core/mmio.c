@@ -158,6 +158,11 @@ static bool mmio_kbd_register(const struct mmio_state *state, uint8_t addr) {
 	return false;
 }
 
+static bool mmio_w192_lcd_register(const struct mmio_state *state, uint8_t addr) {
+	return eps_variant_is_6800_w192(state->variant) &&
+		(addr == REG_PORTD || addr == REG_PORTE || addr == REG_DCRDE);
+}
+
 static uint8_t mmio_read_indf0(struct mmio_state *state) {
 	if (state->regs[REG_FSR0] & MMIO_RAM_SELECT_MASK) {
 		return state->ram[mmio_fsr0_ram_address(state)];
@@ -206,6 +211,10 @@ static void mmio_write_indf2(struct mmio_state *state, uint8_t byte) {
 }
 
 static bool mmio_read_peripheral(struct mmio_state *state, uint8_t addr, uint8_t *byte) {
+	if (mmio_w192_lcd_register(state, addr)) {
+		*byte = lcd_gpio_read_byte_state(state->lcd, addr);
+		return true;
+	}
 	if (mmio_lcd_register(state, addr)) {
 		*byte = lcd_read_byte_state(state->lcd, addr);
 		return true;
@@ -223,6 +232,10 @@ static bool mmio_read_peripheral(struct mmio_state *state, uint8_t addr, uint8_t
 }
 
 static bool mmio_write_peripheral(struct mmio_state *state, uint8_t addr, uint8_t byte) {
+	if (mmio_w192_lcd_register(state, addr)) {
+		lcd_gpio_write_byte_state(state->lcd, addr, byte);
+		return true;
+	}
 	if (mmio_lcd_register(state, addr)) {
 		lcd_write_byte_state(state->lcd, addr, byte);
 		return true;
