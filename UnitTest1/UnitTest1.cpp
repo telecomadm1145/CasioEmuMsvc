@@ -1,8 +1,8 @@
 #include "pch.h"
 #include "CppUnitTest.h"
-#include "Emulator.hpp"
-#include "Chipset.hpp"
-#include "MMU.hpp"
+#include "../CasioEmuMsvc/src/Emulator.hpp"
+#include "../CasioEmuMsvc/src/Chipset/Chipset.hpp"
+#include "../CasioEmuMsvc/src/Chipset/MMU.hpp"
 
 
 bool low_perf_ext = false;
