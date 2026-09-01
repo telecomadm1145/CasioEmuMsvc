@@ -1561,6 +1561,17 @@ namespace {
 		command(0x10);
 		command(0x00);
 		command(0xaf);
+		bool contrast_commands_ok = true;
+		for (uint8_t raw = 0; raw < 0x40u; ++raw) {
+			command((uint8_t)(0x40u | raw));
+			std::array<uint8_t, casioemu::EPS6800_W192_LCD_RAW_SIZE> contrast_lcd{};
+			casioemu::Eps6800LcdControl contrast_control{};
+			contrast_commands_ok = contrast_commands_ok &&
+				machine.CopyLcd(contrast_lcd.data(), contrast_lcd.size(), &contrast_control) ==
+					contrast_lcd.size() &&
+				contrast_control.contrast == (uint8_t)(raw >> 2);
+		}
+		command(0x5fu); /* Restore the reset-level render contrast (31 >> 2 == 7). */
 
 		machine.WriteByte(kPortD, 0xef);
 		machine.WriteByte(kPortE, 0x5a);
@@ -1585,6 +1596,10 @@ namespace {
 		std::stringstream saved(std::ios::in | std::ios::out | std::ios::binary);
 		machine.SaveState(saved);
 		machine.WriteByte(kPortE, 0x99);
+		command(0x7fu);
+		std::array<uint8_t, casioemu::EPS6800_W192_LCD_RAW_SIZE> changed_lcd{};
+		casioemu::Eps6800LcdControl changed_control{};
+		machine.CopyLcd(changed_lcd.data(), changed_lcd.size(), &changed_control);
 		saved.seekg(0);
 		machine.LoadState(saved);
 		const uint8_t snapshot_output_latch = machine.ReadByte(kPortE);
@@ -1592,9 +1607,13 @@ namespace {
 		std::array<uint8_t, casioemu::EPS6800_W192_LCD_RAW_SIZE> lcd{};
 		casioemu::Eps6800LcdControl control{};
 		return Check((status & 0x10u) == 0, "W192 LCD ready status", __LINE__) &&
+			Check(contrast_commands_ok, "W192 six-bit contrast command mapping", __LINE__) &&
+			Check(changed_control.contrast == casioemu::EPS6800_CONTRAST_MAX,
+				"W192 maximum contrast command", __LINE__) &&
 			Check(machine.CopyLcd(lcd.data(), lcd.size(), &control) == lcd.size(),
 				"W192 LCD copy after status read", __LINE__) &&
 			Check(control.visible(), "W192 display-on command after status read", __LINE__) &&
+			Check(control.contrast == 7u, "W192 contrast snapshot", __LINE__) &&
 			Check(lcd[0] == 0x5a, "W192 data write after status read", __LINE__) &&
 			Check(lcd_readback == 0x5a, "W192 LCD data readback", __LINE__) &&
 			Check(restored_output_latch == 0x3c, "W192 Port E output latch recovery", __LINE__) &&

@@ -22,7 +22,10 @@ enum {
 	LCD_W192_PORTD_WRITE = 0x01,
 	LCD_W192_PORTD_SELECT = 0x10,
 	LCD_W192_PORTD_DATA = 0x40,
-	LCD_W192_PORTD_ENABLE = 0x80
+	LCD_W192_PORTD_ENABLE = 0x80,
+	LCD_W192_CONTRAST_COMMAND = 0x81,
+	LCD_W192_CONTRAST_LEVEL_MASK = 0x3f,
+	LCD_W192_CONTRAST_DEFAULT = 0x26
 };
 
 static bool lcd_w192_address(const struct lcd_state *state, size_t *address) {
@@ -43,7 +46,17 @@ static void lcd_w192_advance_column(struct lcd_state *state) {
 }
 
 static void lcd_w192_command(struct lcd_state *state, uint8_t byte) {
-	if ((byte & 0xf0u) == 0xb0u) {
+	/* IQV9 ROM sends the electronic-volume command as 81h followed by a
+	 * six-bit parameter.  Preserve the controller value without folding it
+	 * into the four-bit internal-EPS6800 LCDARH representation. */
+	if (state->w192_contrast_pending) {
+		state->w192_contrast = (uint8_t)(byte & LCD_W192_CONTRAST_LEVEL_MASK);
+		state->w192_contrast_pending = 0;
+	}
+	else if (byte == LCD_W192_CONTRAST_COMMAND) {
+		state->w192_contrast_pending = 1u;
+	}
+	else if ((byte & 0xf0u) == 0xb0u) {
 		state->w192_page = (uint8_t)(byte & 0x0fu);
 		state->w192_read_valid = 0;
 	}
@@ -399,7 +412,7 @@ void lcd_reset_state(struct lcd_state *state) {
 	state->w192_rmw_active = 0;
 	state->w192_segment_reverse = 0;
 	state->w192_com_reverse = 0;
-	state->w192_contrast = 7u;
+	state->w192_contrast = LCD_W192_CONTRAST_DEFAULT;
 	state->w192_contrast_pending = 0;
 	state->w192_read_valid = 0;
 	state->w192_bus_phase = 0;

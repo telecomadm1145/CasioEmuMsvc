@@ -1121,8 +1121,8 @@ namespace casioemu {
 				if (!emulator.chipset.epscpu ||
 					emulator.chipset.epscpu->CopyLcd(lcd.data(), lcd.size(), &control) != lcd.size())
 					return;
-				float ink_alpha_on = Eps6800ActiveAlpha(control.contrast);
-				float ink_alpha_off = Eps6800InactiveAlpha(control.contrast);
+				float ink_alpha_on = Eps6800W192ActiveAlpha(control.contrast);
+				float ink_alpha_off = Eps6800W192InactiveAlpha(control.contrast);
 				ink_alpha_off = screen_residual_enabled ? ink_alpha_off * screen_residual_alpha_scale : 0.0f;
 				if (!control.visible()) {
 					ink_alpha_on = 0.0f;

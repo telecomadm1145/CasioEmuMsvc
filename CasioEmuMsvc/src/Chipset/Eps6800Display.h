@@ -12,6 +12,7 @@ namespace casioemu {
 	constexpr size_t EPS6800_LCD_RAW_SIZE = EPS6800_LCD_WIDTH * EPS6800_LCD_PAGE_COUNT;
 	constexpr size_t EPS6800_STATUS_SIZE = EPS6800_LCD_WIDTH / 8;
 	constexpr uint8_t EPS6800_CONTRAST_MAX = 0x0f;
+	constexpr uint8_t EPS6800_W192_CONTRAST_MAX = 0x3f;
 	constexpr uint8_t ESP_CONTRAST_MAX = 0x1f;
 	constexpr float ESP_MIN_SCREEN_BRIGHTNESS = 3.0f;
 	constexpr size_t EPS9500_LCD_DEVICE_COUNT = 98;
@@ -103,6 +104,23 @@ namespace casioemu {
 			}
 		}
 		return frame;
+	}
+
+	inline float Eps6800W192AsEspContrast(uint8_t contrast) {
+		return static_cast<float>(contrast & EPS6800_W192_CONTRAST_MAX) *
+			static_cast<float>(ESP_CONTRAST_MAX) /
+			static_cast<float>(EPS6800_W192_CONTRAST_MAX);
+	}
+
+	inline float Eps6800W192ActiveAlpha(uint8_t contrast) {
+		const float esp_contrast = Eps6800W192AsEspContrast(contrast);
+		return std::max(0.0f, -240.0f + esp_contrast * 28.0f - ESP_MIN_SCREEN_BRIGHTNESS * 8.0f);
+	}
+
+	inline float Eps6800W192InactiveAlpha(uint8_t contrast) {
+		const float esp_contrast = Eps6800W192AsEspContrast(contrast);
+		return std::max(0.0f, -240.0f + 20.0f + esp_contrast * 17.0f -
+			ESP_MIN_SCREEN_BRIGHTNESS * 13.0f);
 	}
 
 	struct Eps6800W192DisplayFrame {
