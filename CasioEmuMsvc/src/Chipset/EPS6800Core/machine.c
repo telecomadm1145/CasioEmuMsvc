@@ -18,7 +18,7 @@ const struct eps_variant_traits *eps_get_variant_traits(enum eps_variant variant
 		1u, 1u, 1u, EPS_STACK_MODEL_LINEAR,
 		{ 0x3fu, 0u, MMIO_LEGACY_RAM_COUNT, {{ 0x13u, 0x20u }, { 0x40u, 0x80u }} },
 		(size_t)(96u * 4u),
-		{ 0u, 0u, 0u, 0u, 0xc0u },
+		{ 0u, 0u, 0u, 1u, 0xc0u },
 		{ 0u, 1u, 1u, 1u },
 		{ EPS_LCD_ADDRESS_PAGED_128, 0x61u, 0u, 0u, 0u, 1u },
 		{ EPS_KBD_MATRIX_GPIO, 0x7fu, 1000u, 0u, 0u, 0u },
