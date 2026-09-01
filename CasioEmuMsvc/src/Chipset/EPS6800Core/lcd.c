@@ -25,12 +25,11 @@ enum {
 	LCD_W192_PORTD_ENABLE = 0x80
 };
 
-static uint8_t lcd_w192_read_valid;
-static uint8_t lcd_w192_bus_phase;
-
-static size_t lcd_w192_address(const struct lcd_state *state) {
-	return (size_t)(state->w192_page & 7u) * LCD_W192_WIDTH +
-		(state->w192_column % LCD_W192_WIDTH);
+static bool lcd_w192_address(const struct lcd_state *state, size_t *address) {
+	if (state->w192_page >= LCD_W192_PAGE_COUNT || state->w192_column >= LCD_W192_WIDTH)
+		return false;
+	*address = (size_t)state->w192_page * LCD_W192_WIDTH + state->w192_column;
+	return true;
 }
 
 static void lcd_w192_advance_column(struct lcd_state *state) {
@@ -38,57 +37,63 @@ static void lcd_w192_advance_column(struct lcd_state *state) {
 		state->w192_column++;
 	}
 	else {
-		/* IQ-V9 clears and uploads the complete 192x64 RAM as one
-		 * 1536-byte stream after selecting page 0.  The controller wraps
-		 * column 191 to column 0 of the following page. */
 		state->w192_column = 0;
-		state->w192_page = (uint8_t)((state->w192_page + 1u) & 7u);
+		state->w192_page++;
 	}
 }
 
 static void lcd_w192_command(struct lcd_state *state, uint8_t byte) {
-	if (state->w192_contrast_pending) {
-		state->w192_contrast = (uint8_t)((byte & 0x3fu) >> 2);
-		state->w192_contrast_pending = 0;
-	}
-	else if ((byte & 0xf8u) == 0xb0u) {
-		state->w192_page = (uint8_t)(byte & 7u);
-		lcd_w192_read_valid = 0;
+	if ((byte & 0xf0u) == 0xb0u) {
+		state->w192_page = (uint8_t)(byte & 0x0fu);
+		state->w192_read_valid = 0;
 	}
 	else if ((byte & 0xf0u) == 0x10u) {
 		state->w192_column = (uint8_t)(((byte & 0x0fu) << 4) |
 			(state->w192_column & 0x0fu));
-		lcd_w192_read_valid = 0;
+		state->w192_read_valid = 0;
 	}
 	else if ((byte & 0xf0u) == 0x00u) {
 		state->w192_column = (uint8_t)((state->w192_column & 0xf0u) | (byte & 0x0fu));
-		lcd_w192_read_valid = 0;
+		state->w192_read_valid = 0;
 	}
 	else if (byte == 0xaeu || byte == 0xafu) {
 		state->w192_display_on = (uint8_t)(byte == 0xafu);
 	}
-	else if (byte == 0xa4u || byte == 0xa5u) {
-		state->w192_all_pixels_on = (uint8_t)(byte == 0xa5u);
-	}
-	else if (byte == 0xa0u || byte == 0xa1u) {
-		state->w192_segment_reverse = (uint8_t)(byte == 0xa1u);
-	}
-	else if (byte == 0xc0u || byte == 0xc8u) {
-		state->w192_com_reverse = (uint8_t)(byte == 0xc8u);
-	}
-	else if (byte == 0x81u) {
-		state->w192_contrast_pending = 1u;
-	}
 	else if (byte == 0xe0u) {
 		state->w192_rmw_column = state->w192_column;
 		state->w192_rmw_active = 1u;
-		lcd_w192_read_valid = 0;
+		state->w192_read_valid = 0;
 	}
 	else if (byte == 0xeeu && state->w192_rmw_active) {
 		state->w192_column = state->w192_rmw_column;
 		state->w192_rmw_active = 0u;
-		lcd_w192_read_valid = 0;
+		state->w192_read_valid = 0;
 	}
+}
+
+static uint8_t lcd_w192_direction_mask(uint8_t selector) {
+	switch (selector & 3u) {
+	case 1u:
+		return 0x0fu;
+	case 2u:
+		return 0xf0u;
+	case 3u:
+		return 0xffu;
+	default:
+		return 0u;
+	}
+}
+
+static void lcd_w192_update_gpio(struct lcd_state *state) {
+	const uint8_t portd_input = lcd_w192_direction_mask(state->w192_dcrde);
+	const uint8_t portd_input_level = lcd_w192_direction_mask(state->w192_dcrde >> 2);
+	const uint8_t porte_input = lcd_w192_direction_mask(state->w192_dcrde >> 4);
+	const uint8_t porte_input_level = lcd_w192_direction_mask(state->w192_dcrde >> 6);
+
+	state->w192_portd = (uint8_t)((portd_input_level & portd_input) |
+		(state->w192_portd_latch & (uint8_t)~portd_input));
+	state->w192_porte = (uint8_t)((porte_input_level & porte_input) |
+		(state->w192_porte_latch & (uint8_t)~porte_input));
 }
 
 uint8_t lcd_gpio_read_byte_state(struct lcd_state *state, uint8_t addr) {
@@ -101,72 +106,87 @@ uint8_t lcd_gpio_read_byte_state(struct lcd_state *state, uint8_t addr) {
 
 void lcd_gpio_write_byte_state(struct lcd_state *state, uint8_t addr, uint8_t byte) {
 	if (addr == REG_PORTE) {
-		state->w192_porte = byte;
+		state->w192_porte_latch = byte;
+		lcd_w192_update_gpio(state);
 		return;
 	}
 	if (addr == REG_DCRDE) {
 		state->w192_dcrde = byte;
+		lcd_w192_update_gpio(state);
 		return;
 	}
 	if (addr == REG_PORTD) {
-		state->w192_portd = byte;
-		if (lcd_w192_bus_phase == 0 || lcd_w192_bus_phase == 1) {
+		size_t address;
+		state->w192_portd_latch = byte;
+		lcd_w192_update_gpio(state);
+		byte = state->w192_portd;
+		if (state->w192_bus_phase == 0) {
+			if (!(byte & LCD_W192_PORTD_SELECT))
+				state->w192_bus_phase = 1;
+		}
+		else if (state->w192_bus_phase == 1) {
 			if (byte & LCD_W192_PORTD_SELECT) {
-				lcd_w192_bus_phase = 0;
+				state->w192_bus_phase = 0;
 			}
 			else if (byte & LCD_W192_PORTD_DATA) {
 				if (byte & LCD_W192_PORTD_WRITE) {
 					if (!(byte & LCD_W192_PORTD_ENABLE))
-						lcd_w192_bus_phase = 32;
+						state->w192_bus_phase = 32;
 				}
 				else if (byte & LCD_W192_PORTD_ENABLE) {
-					if (lcd_w192_read_valid) {
-						state->w192_porte = state->w192_fb[lcd_w192_address(state)];
+					if (state->w192_read_valid && lcd_w192_address(state, &address)) {
+						/* The controller drives the effective Port E pins.  It must not
+						 * overwrite the CPU's output latch. */
+						state->w192_porte = state->w192_fb[address];
 						if (!state->w192_rmw_active)
 							lcd_w192_advance_column(state);
 					}
-					lcd_w192_bus_phase = 33;
+					state->w192_bus_phase = 33;
 				}
 			}
 			else if (byte & LCD_W192_PORTD_WRITE) {
 				if (!(byte & LCD_W192_PORTD_ENABLE))
-					lcd_w192_bus_phase = 16;
+					state->w192_bus_phase = 16;
 			}
 			else if (byte & LCD_W192_PORTD_ENABLE) {
 				/* IQV9.exe CIce::RunLCD (sub_410020) drives Port E bit 4
 				 * low while servicing a command/status read: not busy. */
 				state->w192_porte &= (uint8_t)~0x10u;
-				lcd_w192_bus_phase = 17;
+				state->w192_bus_phase = 17;
 			}
 		}
-		else if (lcd_w192_bus_phase == 16) {
+		else if (state->w192_bus_phase == 16) {
 			if (byte & LCD_W192_PORTD_ENABLE) {
 				lcd_w192_command(state, state->w192_porte);
-				lcd_w192_bus_phase = 1;
+				state->w192_bus_phase = 1;
 			}
 		}
-		else if (lcd_w192_bus_phase == 17) {
+		else if (state->w192_bus_phase == 17) {
 			/* IQV9.exe CIce::RunLCD (sub_410020, state 17) completes
 			 * a command/status read cycle when WR returns high. */
 			if (byte & LCD_W192_PORTD_WRITE)
-				lcd_w192_bus_phase = 1;
+				state->w192_bus_phase = 1;
 		}
-		else if (lcd_w192_bus_phase == 32) {
+		else if (state->w192_bus_phase == 32) {
 			if (byte & LCD_W192_PORTD_SELECT) {
-				lcd_w192_bus_phase = 1;
+				state->w192_bus_phase = 1;
 			}
 			else if ((byte & (LCD_W192_PORTD_DATA | LCD_W192_PORTD_WRITE |
 				LCD_W192_PORTD_ENABLE)) == (LCD_W192_PORTD_DATA |
 				LCD_W192_PORTD_WRITE | LCD_W192_PORTD_ENABLE)) {
-				state->w192_fb[lcd_w192_address(state)] = state->w192_porte;
+				if (lcd_w192_address(state, &address))
+					state->w192_fb[address] = state->w192_porte;
 				lcd_w192_advance_column(state);
-				lcd_w192_bus_phase = 1;
+				state->w192_bus_phase = 1;
+			}
+			else {
+				state->w192_bus_phase = 1;
 			}
 		}
-		else if (lcd_w192_bus_phase == 33) {
+		else if (state->w192_bus_phase == 33) {
 			if (byte & LCD_W192_PORTD_WRITE) {
-				lcd_w192_read_valid = 1;
-				lcd_w192_bus_phase = 1;
+				state->w192_read_valid = 1;
+				state->w192_bus_phase = 1;
 			}
 		}
 	}
@@ -371,6 +391,8 @@ void lcd_reset_state(struct lcd_state *state) {
 	state->w192_rmw_column = 0;
 	state->w192_portd = 0xffu;
 	state->w192_porte = 0xffu;
+	state->w192_portd_latch = 0xffu;
+	state->w192_porte_latch = 0xffu;
 	state->w192_dcrde = 0x33u;
 	state->w192_display_on = 0;
 	state->w192_all_pixels_on = 0;
@@ -379,7 +401,8 @@ void lcd_reset_state(struct lcd_state *state) {
 	state->w192_com_reverse = 0;
 	state->w192_contrast = 7u;
 	state->w192_contrast_pending = 0;
-	lcd_w192_read_valid = 0;
-	lcd_w192_bus_phase = 0;
+	state->w192_read_valid = 0;
+	state->w192_bus_phase = 0;
+	lcd_w192_update_gpio(state);
 }
 

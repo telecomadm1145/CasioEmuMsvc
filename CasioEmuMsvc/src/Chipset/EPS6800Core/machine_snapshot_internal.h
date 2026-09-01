@@ -11,7 +11,8 @@ enum {
 	MACHINE_SNAPSHOT_MAGIC = 0x46585353u,
 	MACHINE_SNAPSHOT_LEGACY_VERSION = 3u,
 	MACHINE_SNAPSHOT_V4_VERSION = 4u,
-	MACHINE_SNAPSHOT_VERSION = 5u
+	MACHINE_SNAPSHOT_V5_VERSION = 5u,
+	MACHINE_SNAPSHOT_VERSION = 6u
 };
 
 struct machine_cpu_snapshot {
@@ -59,7 +60,7 @@ struct machine_lcd_snapshot_v4 {
 	uint8_t reg[LCD_REG_COUNT];
 };
 
-struct machine_lcd_snapshot {
+struct machine_lcd_snapshot_v5 {
 	uint8_t fb[LCD_FB_SIZE];
 	uint8_t reg[LCD_REG_COUNT];
 	uint8_t w192_fb[LCD_W192_FB_SIZE];
@@ -69,6 +70,29 @@ struct machine_lcd_snapshot {
 	uint8_t w192_portd;
 	uint8_t w192_porte;
 	uint8_t w192_dcrde;
+	uint8_t w192_display_on;
+	uint8_t w192_all_pixels_on;
+	uint8_t w192_rmw_active;
+	uint8_t w192_segment_reverse;
+	uint8_t w192_com_reverse;
+	uint8_t w192_contrast;
+	uint8_t w192_contrast_pending;
+};
+
+struct machine_lcd_snapshot {
+	uint8_t fb[LCD_FB_SIZE];
+	uint8_t reg[LCD_REG_COUNT];
+	uint8_t w192_fb[LCD_W192_FB_SIZE];
+	uint8_t w192_page;
+	uint8_t w192_column;
+	uint8_t w192_rmw_column;
+	uint8_t w192_portd;
+	uint8_t w192_porte;
+	uint8_t w192_portd_latch;
+	uint8_t w192_porte_latch;
+	uint8_t w192_dcrde;
+	uint8_t w192_read_valid;
+	uint8_t w192_bus_phase;
 	uint8_t w192_display_on;
 	uint8_t w192_all_pixels_on;
 	uint8_t w192_rmw_active;
@@ -114,6 +138,16 @@ struct machine_snapshot_v4 {
 	struct machine_cpu_snapshot cpu;
 	struct machine_mmio_snapshot mmio;
 	struct machine_lcd_snapshot_v4 lcd;
+	struct machine_timer_snapshot timer;
+	struct machine_kbd_snapshot kbd;
+};
+
+struct machine_snapshot_v5 {
+	uint32_t magic;
+	uint32_t version;
+	struct machine_cpu_snapshot cpu;
+	struct machine_mmio_snapshot mmio;
+	struct machine_lcd_snapshot_v5 lcd;
 	struct machine_timer_snapshot timer;
 	struct machine_kbd_snapshot kbd;
 };

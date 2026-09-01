@@ -508,12 +508,14 @@ static void mmio_carry_fsr0(struct mmio_state *state) {
 }
 
 static void mmio_carry_extended_fsr(struct mmio_state *state, uint8_t bsr_reg, uint8_t fsr_reg) {
-	/* ePS9500 folds BSRx[0] into the arithmetic FSRx operand, so an
+	const bool extended = eps_get_variant_traits(state->variant)->cpu.extended_fsr_binary_destination != 0;
+	/* Mode 0/4 folds BSRx[0] into the arithmetic FSRx operand, so an
 	 * eight-bit carry advances the BSRx encoding by two. */
-	state->regs[bsr_reg] += eps_variant_is_9500(state->variant) ? 2u : 1u;
+	state->regs[bsr_reg] += extended ? 2u : 1u;
 	if (eps_variant_is_6009(state->variant) || eps_variant_is_9500(state->variant))
 		state->regs[bsr_reg] &= eps_ram_page_mask(state->variant);
-	state->regs[fsr_reg] |= MMIO_RAM_SELECT_MASK;
+	if (!extended || eps_variant_is_9500(state->variant))
+		state->regs[fsr_reg] |= MMIO_RAM_SELECT_MASK;
 }
 
 static void mmio_borrow_fsr0(struct mmio_state *state) {
@@ -528,16 +530,17 @@ static void mmio_borrow_fsr0(struct mmio_state *state) {
 }
 
 static void mmio_borrow_extended_fsr(struct mmio_state *state, uint8_t bsr_reg, uint8_t fsr_reg) {
-	/* Match the ePS9500 mode-4 interpreter: an eight-bit borrow retreats
-	 * the BSRx encoding by two because BSRx[0] is arithmetic bit 7. */
-	state->regs[bsr_reg] -= eps_variant_is_9500(state->variant) ? 2u : 1u;
+	const bool extended = eps_get_variant_traits(state->variant)->cpu.extended_fsr_binary_destination != 0;
+	/* Mode 0/4 retreats the BSRx encoding by two because BSRx[0] is
+	 * arithmetic bit 7. */
+	state->regs[bsr_reg] -= extended ? 2u : 1u;
 	if (eps_variant_is_6009(state->variant)) {
 		state->regs[bsr_reg] &= eps_ram_page_mask(state->variant);
 	}
 	else if (eps_variant_is_9500(state->variant)) {
 		state->regs[bsr_reg] &= eps_ram_page_mask(state->variant);
 	}
-	else if (state->regs[bsr_reg] != 0) {
+	else if (!extended && state->regs[bsr_reg] != 0) {
 		state->regs[fsr_reg] |= MMIO_RAM_SELECT_MASK;
 	}
 	if (eps_variant_is_6009(state->variant)) {
@@ -548,7 +551,7 @@ static void mmio_borrow_extended_fsr(struct mmio_state *state, uint8_t bsr_reg, 
 void mmio_sync_extended_fsr_result_state(struct mmio_state *state, uint8_t addr, uint8_t result) {
 	uint8_t bsr_reg;
 
-	if (!eps_variant_is_9500(state->variant))
+	if (!eps_get_variant_traits(state->variant)->cpu.extended_fsr_binary_destination)
 		return;
 	if (addr == REG_FSR1)
 		bsr_reg = REG_BSR1;

@@ -79,7 +79,11 @@ static void machine_snapshot_save_lcd(struct machine_lcd_snapshot *snapshot, con
 	snapshot->w192_rmw_column = state->w192_rmw_column;
 	snapshot->w192_portd = state->w192_portd;
 	snapshot->w192_porte = state->w192_porte;
+	snapshot->w192_portd_latch = state->w192_portd_latch;
+	snapshot->w192_porte_latch = state->w192_porte_latch;
 	snapshot->w192_dcrde = state->w192_dcrde;
+	snapshot->w192_read_valid = state->w192_read_valid;
+	snapshot->w192_bus_phase = state->w192_bus_phase;
 	snapshot->w192_display_on = state->w192_display_on;
 	snapshot->w192_all_pixels_on = state->w192_all_pixels_on;
 	snapshot->w192_rmw_active = state->w192_rmw_active;
@@ -98,7 +102,11 @@ static void machine_snapshot_load_lcd(struct lcd_state *state, const struct mach
 	state->w192_rmw_column = snapshot->w192_rmw_column;
 	state->w192_portd = snapshot->w192_portd;
 	state->w192_porte = snapshot->w192_porte;
+	state->w192_portd_latch = snapshot->w192_portd_latch;
+	state->w192_porte_latch = snapshot->w192_porte_latch;
 	state->w192_dcrde = snapshot->w192_dcrde;
+	state->w192_read_valid = snapshot->w192_read_valid;
+	state->w192_bus_phase = snapshot->w192_bus_phase;
 	state->w192_display_on = snapshot->w192_display_on;
 	state->w192_all_pixels_on = snapshot->w192_all_pixels_on;
 	state->w192_rmw_active = snapshot->w192_rmw_active;

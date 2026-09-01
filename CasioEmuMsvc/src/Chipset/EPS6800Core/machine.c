@@ -63,7 +63,7 @@ const struct eps_variant_traits *eps_get_variant_traits(enum eps_variant variant
 		1u, 1u, 1u, EPS_STACK_MODEL_LINEAR,
 		{ 0x3fu, 0u, MMIO_LEGACY_RAM_COUNT, {{ 0x13u, 0x20u }, { 0x40u, 0x80u }} },
 		(size_t)(192u * 8u),
-		{ 0u, 0u, 0u, 0u, 0xc0u },
+		{ 0u, 0u, 0u, 1u, 0xc0u },
 		{ 0u, 1u, 1u, 1u },
 		/* The internal LCDDAT block is retained as an SFR-compatible stub;
 		 * visible pixels are supplied by the external PortD/PortE controller. */

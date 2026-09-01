@@ -31,7 +31,11 @@ struct lcd_state {
 	uint8_t w192_rmw_column;
 	uint8_t w192_portd;
 	uint8_t w192_porte;
+	uint8_t w192_portd_latch;
+	uint8_t w192_porte_latch;
 	uint8_t w192_dcrde;
+	uint8_t w192_read_valid;
+	uint8_t w192_bus_phase;
 	uint8_t w192_display_on;
 	uint8_t w192_all_pixels_on;
 	uint8_t w192_rmw_active;

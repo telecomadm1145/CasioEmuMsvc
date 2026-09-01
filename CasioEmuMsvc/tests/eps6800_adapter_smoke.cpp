@@ -969,6 +969,40 @@ namespace {
 				"eps9500 TABPTRM no borrow chain", __LINE__);
 	}
 
+	bool Eps6800W192ExtendedFsrArithmeticSmoke() {
+		constexpr uint8_t kAccumulator = 0x0a;
+		constexpr uint8_t kStatus = 0x0f;
+		constexpr uint8_t kFsr2 = 0x11;
+		constexpr uint8_t kBsr2 = 0x12;
+
+		const auto Run = [&](uint16_t instruction, uint8_t fsr, uint8_t bsr,
+			uint8_t accumulator, uint8_t status) {
+			casioemu::ePSCPU machine(casioemu::EpsVariant::Eps6800W192);
+			std::vector<uint8_t> rom(0x30000, 0);
+			SetPackedRomWord(rom, 0, instruction);
+			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+				return std::array<uint8_t, 2>{0xff, 0xff};
+			machine.Reset();
+			machine.WriteByte(kFsr2, fsr);
+			machine.WriteByte(kBsr2, bsr);
+			machine.WriteByte(kAccumulator, accumulator);
+			machine.WriteByte(kStatus, status);
+			machine.SetPC(0);
+			machine.Next();
+			return std::array<uint8_t, 2>{machine.ReadByte(kFsr2), machine.ReadByte(kBsr2)};
+		};
+
+		const auto carry = Run(0x1100u | kFsr2, 0xff, 0x11, 0x01, 0xc0);
+		const auto no_carry = Run(0x1100u | kFsr2, 0x80, 0x10, 0x01, 0xc0);
+		const auto borrow = Run(0x1700u | kFsr2, 0x80, 0x10, 0x01, 0xc0);
+		return Check(carry[0] == 0x00 && carry[1] == 0x12,
+			"W192 mode-0 FSR2 carry", __LINE__) &&
+			Check(no_carry[0] == 0x01 && no_carry[1] == 0x10,
+				"W192 mode-0 FSR2 no carry", __LINE__) &&
+			Check(borrow[0] == 0xff && borrow[1] == 0x0f,
+				"W192 mode-0 FSR2 borrow", __LINE__);
+	}
+
 	bool Eps9500RamAddressingSmoke() {
 		constexpr size_t kEps9500BankRamSize = 0x2080;
 		constexpr size_t kWbkRamSize = 27;
@@ -1456,7 +1490,8 @@ namespace {
 		std::copy(std::begin(snapshot.mmio.regs), std::end(snapshot.mmio.regs), std::begin(legacy.mmio.regs));
 		std::copy(std::begin(snapshot.mmio.ram_wbk), std::end(snapshot.mmio.ram_wbk), std::begin(legacy.mmio.ram_wbk));
 		std::copy_n(snapshot.mmio.ram, MMIO_LEGACY_RAM_COUNT, legacy.mmio.ram);
-		legacy.lcd = snapshot.lcd;
+		std::copy(std::begin(snapshot.lcd.fb), std::end(snapshot.lcd.fb), std::begin(legacy.lcd.fb));
+		std::copy(std::begin(snapshot.lcd.reg), std::end(snapshot.lcd.reg), std::begin(legacy.lcd.reg));
 		legacy.timer = snapshot.timer;
 		legacy.kbd = snapshot.kbd;
 
@@ -1467,7 +1502,8 @@ namespace {
 		std::copy(std::begin(snapshot.mmio.regs), std::end(snapshot.mmio.regs), std::begin(expanded.mmio.regs));
 		std::copy(std::begin(snapshot.mmio.ram_wbk), std::end(snapshot.mmio.ram_wbk), std::begin(expanded.mmio.ram_wbk));
 		std::copy_n(snapshot.mmio.ram, MMIO_LEGACY_RAM_COUNT, expanded.mmio.ram);
-		expanded.lcd = snapshot.lcd;
+		std::copy(std::begin(snapshot.lcd.fb), std::end(snapshot.lcd.fb), std::begin(expanded.lcd.fb));
+		std::copy(std::begin(snapshot.lcd.reg), std::end(snapshot.lcd.reg), std::begin(expanded.lcd.reg));
 		expanded.timer = snapshot.timer;
 		expanded.kbd = snapshot.kbd;
 
@@ -1487,8 +1523,10 @@ namespace {
 	bool Eps6800W192LcdReadRecoverySmoke() {
 		constexpr uint8_t kPortD = 0x3d;
 		constexpr uint8_t kPortE = 0x3e;
+		constexpr uint8_t kDcrde = 0x3f;
 		casioemu::ePSCPU machine(casioemu::EpsVariant::Eps6800W192);
 		machine.Reset();
+		machine.WriteByte(kDcrde, 0xc0);
 
 		/* Match IQV9 ROM 0xB98C: select the controller, start a status read,
 		 * then return WR high.  The official IQV9.exe sub_410020 transitions
@@ -1515,13 +1553,38 @@ namespace {
 		machine.WriteByte(kPortD, 0x6f);
 		machine.WriteByte(kPortD, 0xef);
 
+		/* The LCD may drive Port E during a read, but restoring output mode
+		 * must recover the CPU's independent output latch. */
+		command(0xb0);
+		command(0x10);
+		command(0x00);
+		command(0xe0);
+		machine.WriteByte(kPortE, 0x3c);
+		machine.WriteByte(kDcrde, 0xf0);
+		machine.WriteByte(kPortD, 0xee);
+		machine.WriteByte(kPortD, 0xef);
+		machine.WriteByte(kPortD, 0xee);
+		const uint8_t lcd_readback = machine.ReadByte(kPortE);
+		machine.WriteByte(kPortD, 0xef);
+		machine.WriteByte(kDcrde, 0xc0);
+		const uint8_t restored_output_latch = machine.ReadByte(kPortE);
+		std::stringstream saved(std::ios::in | std::ios::out | std::ios::binary);
+		machine.SaveState(saved);
+		machine.WriteByte(kPortE, 0x99);
+		saved.seekg(0);
+		machine.LoadState(saved);
+		const uint8_t snapshot_output_latch = machine.ReadByte(kPortE);
+
 		std::array<uint8_t, casioemu::EPS6800_W192_LCD_RAW_SIZE> lcd{};
 		casioemu::Eps6800LcdControl control{};
 		return Check((status & 0x10u) == 0, "W192 LCD ready status", __LINE__) &&
 			Check(machine.CopyLcd(lcd.data(), lcd.size(), &control) == lcd.size(),
 				"W192 LCD copy after status read", __LINE__) &&
 			Check(control.visible(), "W192 display-on command after status read", __LINE__) &&
-			Check(lcd[0] == 0x5a, "W192 data write after status read", __LINE__);
+			Check(lcd[0] == 0x5a, "W192 data write after status read", __LINE__) &&
+			Check(lcd_readback == 0x5a, "W192 LCD data readback", __LINE__) &&
+			Check(restored_output_latch == 0x3c, "W192 Port E output latch recovery", __LINE__) &&
+			Check(snapshot_output_latch == 0x3c, "W192 Port E latch snapshot", __LINE__);
 	}
 }
 
@@ -1572,6 +1635,10 @@ int main(int argc, char** argv) {
 	}
 	if (!Eps9500ExtendedFsrArithmeticSmoke()) {
 		std::cerr << "EPS9500 extended FSR arithmetic regression\n";
+		return 1;
+	}
+	if (!Eps6800W192ExtendedFsrArithmeticSmoke()) {
+		std::cerr << "EPS6800 W192 extended FSR arithmetic regression\n";
 		return 1;
 	}
 	if (!Eps9500RamAddressingSmoke()) {

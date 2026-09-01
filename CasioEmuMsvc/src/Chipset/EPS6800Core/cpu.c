@@ -497,7 +497,7 @@ static uint8_t cpu_adjust_binary_destination_state(
 	if (!cpu_profile(state)->extended_fsr_binary_destination)
 		return value;
 
-	/* In the official mode-4 interpreter, binary operations that write back
+	/* In the official mode-0 and mode-4 interpreters, binary operations that write back
 	 * to FSR1/FSR2 expose the low eight bits of the extended RAM address:
 	 * offset bits 0..6 plus the low bit of the corresponding BSR.  Keep the
 	 * caller-selected legacy read semantics for every other destination: on
