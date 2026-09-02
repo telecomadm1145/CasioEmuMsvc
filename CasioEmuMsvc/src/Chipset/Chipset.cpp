@@ -684,6 +684,21 @@ namespace casioemu {
 				Eps6800RomFormat::PackedLittleEndian;
 			if (!epscpu || !epscpu->LoadRom(rom_data, rom_format))
 				PANIC("Invalid EPS6800 ROM for configured format %s\n", Eps6800RomFormatName(rom_format));
+			if (!emulator.ModelDefinition.flash_path.empty()) {
+				try {
+					flash_data = emulator.ReadModelResource(emulator.ModelDefinition.flash_path);
+				}
+				catch (const std::exception& error) {
+					PANIC("Failed to read EPS flash: %s\n", error.what());
+				}
+				constexpr size_t eps_flash_bytes = 0x10000;
+				if (flash_data.size() < eps_flash_bytes)
+					PANIC("Invalid EPS flash size %zu (expected at least %zu bytes)\n",
+						flash_data.size(), eps_flash_bytes);
+				flash_data.resize(eps_flash_bytes);
+				if (!epscpu->LoadFlash(flash_data))
+					PANIC("Failed to load EPS flash image\n");
+			}
 		#ifndef CASIOEMU_DISABLE_RAM_IMAGE
 			if (emulator.HasModelResource("ram.dmp")) {
 				try {

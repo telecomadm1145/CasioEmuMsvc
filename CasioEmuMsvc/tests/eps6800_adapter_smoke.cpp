@@ -1622,6 +1622,59 @@ namespace {
 			Check(restored_output_latch == 0x3c, "W192 Port E output latch recovery", __LINE__) &&
 			Check(snapshot_output_latch == 0x3c, "W192 Port E latch snapshot", __LINE__);
 	}
+
+	bool Eps6800W192FlashProgramSpaceSmoke() {
+		constexpr uint32_t kFlashBaseWord = 0x18000;
+		constexpr size_t kFlashBytes = 0x10000;
+		casioemu::ePSCPU machine(casioemu::EpsVariant::Eps6800W192);
+		std::vector<uint8_t> rom(0x30000, 0);
+		std::vector<uint8_t> flash(kFlashBytes, 0xff);
+		SetPackedRomWord(rom, 0, 0x0000);
+		SetPackedRomWord(flash, 0, 0x4e5a); // MOV A,#5Ah from flash program space.
+		SetPackedRomWord(flash, 0x7fff, 0xabcd);
+		if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian) ||
+			!machine.LoadFlash(flash)) {
+			return Check(false, "W192 flash images load", __LINE__);
+		}
+		if (!Check(machine.ReadCodeWord(kFlashBaseWord) == 0x4e5a,
+				"W192 flash first word", __LINE__) ||
+			!Check(machine.ReadCodeWord(kFlashBaseWord + 0x7fff) == 0xabcd,
+				"W192 flash last word", __LINE__) ||
+			!Check(machine.RomWordCount() == 0x20000,
+				"W192 combined program-space size", __LINE__) ||
+			!Check(machine.ReadCodeWord(kFlashBaseWord - 1) == 0,
+				"W192 mask-ROM boundary", __LINE__)) {
+			return false;
+		}
+
+		machine.SetPC(kFlashBaseWord);
+		machine.Next();
+		const auto flash_execution = machine.DebugSnapshot();
+		if (!Check(flash_execution.program_counter == kFlashBaseWord + 1 &&
+				flash_execution.registers[0x0a] == 0x5a,
+				"W192 execute instruction from flash", __LINE__)) {
+			return false;
+		}
+
+		// Hot ROM reload must not discard an independently loaded flash image.
+		SetPackedRomWord(rom, 0, 0x4e11);
+		if (!Check(machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian),
+				"W192 reload mask ROM with flash attached", __LINE__) ||
+			!Check(machine.ReadCodeWord(kFlashBaseWord) == 0x4e5a &&
+				machine.ReadCodeWord(kFlashBaseWord + 0x7fff) == 0xabcd &&
+				machine.RomWordCount() == 0x20000,
+				"W192 flash survives mask-ROM reload", __LINE__)) {
+			return false;
+		}
+
+		if (!machine.WriteCodeWord(kFlashBaseWord + 1, 0x55aa) ||
+			!machine.WriteFlashImageWord(flash, 1, 0x55aa)) {
+			return Check(false, "W192 debugger flash write", __LINE__);
+		}
+		return Check(machine.ReadCodeWord(kFlashBaseWord + 1) == 0x55aa &&
+				flash[2] == 0xaa && flash[3] == 0x55,
+			"W192 debugger flash write/image sync", __LINE__);
+	}
 }
 
 int main(int argc, char** argv) {
@@ -1711,6 +1764,10 @@ int main(int argc, char** argv) {
 	}
 	if (!Eps6800W192LcdReadRecoverySmoke()) {
 		std::cerr << "EPS6800 W192 LCD read-cycle recovery regression\n";
+		return 1;
+	}
+	if (!Eps6800W192FlashProgramSpaceSmoke()) {
+		std::cerr << "EPS6800 W192 flash program-space regression\n";
 		return 1;
 	}
 	{

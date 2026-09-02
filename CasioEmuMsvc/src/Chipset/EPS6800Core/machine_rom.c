@@ -11,4 +11,12 @@ bool machine_state_load_rom_image(struct machine_state *state, const uint8_t *da
 	return rom_load_image(&state->rom, data, size);
 }
 
+bool machine_state_load_flash_image(struct machine_state *state, const uint8_t *data, size_t size) {
+	if (!state) {
+		return false;
+	}
+
+	return rom_load_flash_image(&state->rom, data, size);
+}
+
 

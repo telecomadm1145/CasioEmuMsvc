@@ -8,6 +8,12 @@
 #include "Ui.hpp"
 #include "hex.hpp"
 #include "ePSCpu.h"
+
+namespace {
+	constexpr uint32_t kEpsFlashBaseWord = 0x18000;
+	constexpr size_t kEpsFlashBaseByte = static_cast<size_t>(kEpsFlashBaseWord) * 2;
+}
+
 float ram_edit_ov[0x100000]{};
 struct HexEditor : public UIWindow, public MemoryEditor {
 	void* data{};
@@ -129,6 +135,31 @@ inline auto EPS_ROM_Hex(auto he) {
 	};
 	return he;
 }
+inline auto EPS_FLASH_Hex(auto he) {
+	he->ReadFn = [](const ImU8*, size_t off) -> ImU8 {
+		if (!m_emu->chipset.epscpu)
+			return 0xff;
+		const auto word = m_emu->chipset.epscpu->ReadCodeWord(
+			kEpsFlashBaseWord + static_cast<uint32_t>(off / 2));
+		return static_cast<ImU8>((off & 1) ? word : (word >> 8));
+	};
+	he->WriteFn = [](ImU8*, size_t off, ImU8 value) {
+		auto* eps = m_emu->chipset.epscpu;
+		if (!eps)
+			return;
+		const uint32_t flash_word_offset = static_cast<uint32_t>(off / 2);
+		const uint32_t word_address = kEpsFlashBaseWord + flash_word_offset;
+		auto word = eps->ReadCodeWord(word_address);
+		word = (off & 1)
+			? static_cast<uint16_t>((word & 0xff00) | value)
+			: static_cast<uint16_t>((word & 0x00ff) | (static_cast<uint16_t>(value) << 8));
+		if (!eps->WriteCodeWord(word_address, word))
+			return;
+		eps->WriteFlashImageWord(m_emu->chipset.flash_data, flash_word_offset, word);
+	};
+	return he;
+}
+
 inline auto EPS_VRAM_Hex(auto he) {
 	he->ReadFn = [](const ImU8*, size_t off) -> ImU8 {
 		return m_emu->chipset.epscpu ? m_emu->chipset.epscpu->ReadLcdMemory(off) : 0xff;
@@ -147,7 +178,12 @@ std::vector<UIWindow*> GetEditors() {
 	});
 	std::vector<UIWindow*> windows;
 	if (casioemu::IsEpsFamily(m_emu->hardware_id)) {
-		windows.push_back(EPS_ROM_Hex(new HexEditor{"Rom", nullptr, 0x20000, 0}));
+		const size_t rom_display_bytes = m_emu->chipset.epscpu->RomFormat() == casioemu::Eps6800RomFormat::UnpackedNibbles
+			? m_emu->chipset.rom_data.size() / 2
+			: m_emu->chipset.rom_data.size();
+		windows.push_back(EPS_ROM_Hex(new HexEditor{"Rom", nullptr, rom_display_bytes, 0}));
+		if (!m_emu->chipset.flash_data.empty())
+			windows.push_back(EPS_FLASH_Hex(new HexEditor{"Flash", nullptr, m_emu->chipset.flash_data.size(), kEpsFlashBaseByte}));
 		windows.push_back(MMU_Hex(new HexEditor{"Ram", nullptr, 0x2080, 0}));
 		windows.push_back(MMU_Hex(new HexEditor{"Regs", nullptr, 0x80, 0}));
 		windows.push_back(EPS_VRAM_Hex(new HexEditor{"VRam", nullptr, m_emu->chipset.epscpu->LcdRawSize(), 0}));

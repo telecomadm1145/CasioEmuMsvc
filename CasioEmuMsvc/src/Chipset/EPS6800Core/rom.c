@@ -17,8 +17,8 @@ static void rom_clear(struct rom_state *state) {
 	memset(state->data, 0, sizeof(state->data));
 }
 
-static bool rom_image_fits_packed_storage(const struct rom_state *state, size_t size) {
-	return size > 0 && size % ROM_BYTES_PER_WORD == 0 && size <= sizeof(state->data);
+static bool rom_image_fits_packed_storage(size_t size, size_t capacity) {
+	return size > 0 && size % ROM_BYTES_PER_WORD == 0 && size <= capacity;
 }
 
 void rom_init(struct rom_state *state) {
@@ -63,11 +63,21 @@ bool rom_load_image(struct rom_state *state, const uint8_t *data, size_t size) {
 		return false;
 	}
 
-	if (!rom_image_fits_packed_storage(state, size)) {
+	if (!rom_image_fits_packed_storage(size, ROM_MASK_BYTES)) {
 		return false;
 	}
 
-	rom_clear(state);
+	memset(state->data, 0, ROM_MASK_BYTES);
 	memcpy(state->data, data, size);
+	return true;
+}
+
+bool rom_load_flash_image(struct rom_state *state, const uint8_t *data, size_t size) {
+	if (!state || !data || !rom_image_fits_packed_storage(size, ROM_FLASH_BYTES)) {
+		return false;
+	}
+
+	memset(state->data + ROM_MASK_BYTES, 0xff, ROM_FLASH_BYTES);
+	memcpy(state->data + ROM_MASK_BYTES, data, size);
 	return true;
 }

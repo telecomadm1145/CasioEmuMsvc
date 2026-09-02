@@ -13,6 +13,7 @@ extern "C" {
 struct machine_state;
 
 bool machine_state_load_rom_image(struct machine_state *state, const uint8_t *data, size_t size);
+bool machine_state_load_flash_image(struct machine_state *state, const uint8_t *data, size_t size);
 
 #ifdef __cplusplus
 }
