@@ -107,7 +107,15 @@ namespace casioemu {
 	}
 
 	inline float Eps6800W192AsEspContrast(uint8_t contrast) {
-		return static_cast<float>(contrast & EPS6800_W192_CONTRAST_MAX) *
+		constexpr float default_contrast = 0x26;
+		constexpr float contrast_slope = 0.25f;
+		float level = static_cast<float>(contrast & EPS6800_W192_CONTRAST_MAX);
+		/* Keep the power-on appearance unchanged, but compress both ends of
+		 * the electronic-volume range around it.  A linear mapping through
+		 * the ES Plus curve makes low settings lose active pixels and makes
+		 * the ROM diagnostic screen's 3Dh setting almost completely black. */
+		level = default_contrast + (level - default_contrast) * contrast_slope;
+		return level *
 			static_cast<float>(ESP_CONTRAST_MAX) /
 			static_cast<float>(EPS6800_W192_CONTRAST_MAX);
 	}
