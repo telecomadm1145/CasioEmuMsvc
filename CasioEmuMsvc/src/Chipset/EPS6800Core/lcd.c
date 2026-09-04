@@ -4,7 +4,6 @@
 #include "lcd_internal.h"
 #include "mmio_internal.h"
 
-#include <stdio.h>
 #include <string.h>
 
 enum {
@@ -68,6 +67,9 @@ static void lcd_w192_command(struct lcd_state *state, uint8_t byte) {
 	else if ((byte & 0xf0u) == 0x00u) {
 		state->w192_column = (uint8_t)((state->w192_column & 0xf0u) | (byte & 0x0fu));
 		state->w192_read_valid = 0;
+	}
+	else if (byte == 0xa4u || byte == 0xa5u) {
+		state->w192_all_pixels_on = (uint8_t)(byte == 0xa5u);
 	}
 	else if (byte == 0xaeu || byte == 0xafu) {
 		state->w192_display_on = (uint8_t)(byte == 0xafu);
@@ -349,18 +351,6 @@ size_t lcd_copy_display_state(
 		 * SEG/COM remapping here rotates the logical display a second time. */
 		for (i = 0; i < copy_size; ++i)
 			data[i] = state->w192_all_pixels_on ? 0xffu : state->w192_fb[i];
-		{
-			size_t nonzero = 0;
-			for (i = 0; i < copy_size; ++i)
-				nonzero += state->w192_fb[i] != 0;
-			if (nonzero > 300) {
-				FILE *fp = fopen("w192-fb.bin", "wb");
-				if (fp) {
-					fwrite(state->w192_fb, 1, copy_size, fp);
-					fclose(fp);
-				}
-			}
-		}
 	}
 	else {
 		for (i = 0; i < copy_size; ++i)

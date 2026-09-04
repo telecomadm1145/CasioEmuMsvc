@@ -148,7 +148,9 @@ struct machine_snapshot *machine_snapshot_from_data(const void *data, size_t siz
 	if (size == sizeof(struct machine_snapshot_v4)) {
 		struct machine_snapshot_v4 legacy;
 		memcpy(&legacy, data, sizeof(legacy));
-		if (legacy.magic != MACHINE_SNAPSHOT_MAGIC || legacy.version != MACHINE_SNAPSHOT_V4_VERSION)
+		if (legacy.magic != MACHINE_SNAPSHOT_MAGIC ||
+			(legacy.version != MACHINE_SNAPSHOT_V4_VERSION &&
+			 legacy.version != MACHINE_SNAPSHOT_LEGACY_VERSION))
 			return NULL;
 		snapshot = machine_snapshot_alloc_internal();
 		if (!snapshot)
