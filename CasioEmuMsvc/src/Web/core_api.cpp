@@ -913,15 +913,20 @@ void WebDebuggerQueueDownload(const char* path, const char* name) {
 	int InitRealRomCore(const uint8_t* rom, int len, const uint8_t* flash, int flash_len, int pd_value, int model_type, int legacy_ko) {
 		if (!rom || len <= 0) return -1;
 		const auto hardware_id = HardwareIdFromCoreType(model_type);
-		if (hardware_id == casioemu::HW_FX_5800P && (!flash || flash_len <= 0)) return -4;
+		const bool has_flash = flash && flash_len > 0;
+		if (hardware_id == casioemu::HW_FX_5800P && !has_flash) return -4;
 		try {
 			EnsureSdl();
 			StopMainLoop();
 			GuiResetState();
 			g_emulator.reset();
 			if (!WriteRomFile(rom, len)) return -2;
-			if (flash && flash_len > 0 && !WriteFlashFile(flash, flash_len)) return -4;
+			if (has_flash && !WriteFlashFile(flash, flash_len)) return -4;
 			auto model = MakeWebModel(true, false, pd_value, model_type, legacy_ko != 0);
+			// EPS W192 models may or may not have an external flash image. Only
+			// attach the resource when the caller actually supplied one.
+			if (has_flash && casioemu::IsEpsFamily(hardware_id))
+				model.flash_path = kFlashPath;
 			const auto model_dir = CurrentWebModelDir();
 			std::filesystem::create_directories(model_dir);
 			g_emulator = std::make_unique<casioemu::Emulator>(model, false, true, model_dir);

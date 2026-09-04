@@ -386,8 +386,6 @@ bool lcd_raw_write_byte_state(struct lcd_state *state, size_t addr, uint8_t valu
 }
 
 void lcd_reset_state(struct lcd_state *state) {
-	memset(state->fb, 0, sizeof(state->fb));
-	memset(state->w192_fb, 0, sizeof(state->w192_fb));
 	memset(state->reg, 0, sizeof(state->reg));
 	state->w192_page = 0;
 	state->w192_column = 0;
