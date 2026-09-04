@@ -915,6 +915,7 @@ void WebDebuggerQueueDownload(const char* path, const char* name) {
 		const auto hardware_id = HardwareIdFromCoreType(model_type);
 		const bool has_flash = flash && flash_len > 0;
 		if (hardware_id == casioemu::HW_FX_5800P && !has_flash) return -4;
+		if (has_flash && casioemu::IsEpsFamily(hardware_id) && flash_len < 0x10000) return -4;
 		try {
 			EnsureSdl();
 			StopMainLoop();
