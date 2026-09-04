@@ -15,7 +15,9 @@ enum eps_variant {
 	EPS_VARIANT_6009 = 1,
 	/* The EL-W531TL official simulator selects CIce core mode 4, the same
 	 * CPU/SFR family as ePS6800, with a 0x18000-word ROM and 98x4 LCD RAM. */
-	EPS_VARIANT_9500 = 2
+	EPS_VARIANT_9500 = 2,
+	/* EPS6800 CPU/SFR core with a GPIO-attached 192x64 page LCD. */
+	EPS_VARIANT_6800_W192 = 3
 };
 
 enum {
@@ -317,7 +319,7 @@ struct eps_variant_traits {
 
 static inline int eps_variant_is_valid(enum eps_variant variant) {
 	return variant == EPS_VARIANT_6800 || variant == EPS_VARIANT_6009 ||
-		variant == EPS_VARIANT_9500;
+		variant == EPS_VARIANT_9500 || variant == EPS_VARIANT_6800_W192;
 }
 
 static inline int eps_variant_is_6009(enum eps_variant variant) {
@@ -326,6 +328,10 @@ static inline int eps_variant_is_6009(enum eps_variant variant) {
 
 static inline int eps_variant_is_9500(enum eps_variant variant) {
 	return variant == EPS_VARIANT_9500;
+}
+
+static inline int eps_variant_is_6800_w192(enum eps_variant variant) {
+	return variant == EPS_VARIANT_6800_W192;
 }
 
 #ifdef __cplusplus

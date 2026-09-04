@@ -73,11 +73,47 @@ static void machine_snapshot_load_mmio(struct mmio_state *state, const struct ma
 static void machine_snapshot_save_lcd(struct machine_lcd_snapshot *snapshot, const struct lcd_state *state) {
 	memcpy(snapshot->fb, state->fb, sizeof(snapshot->fb));
 	memcpy(snapshot->reg, state->reg, sizeof(snapshot->reg));
+	memcpy(snapshot->w192_fb, state->w192_fb, sizeof(snapshot->w192_fb));
+	snapshot->w192_page = state->w192_page;
+	snapshot->w192_column = state->w192_column;
+	snapshot->w192_rmw_column = state->w192_rmw_column;
+	snapshot->w192_portd = state->w192_portd;
+	snapshot->w192_porte = state->w192_porte;
+	snapshot->w192_portd_latch = state->w192_portd_latch;
+	snapshot->w192_porte_latch = state->w192_porte_latch;
+	snapshot->w192_dcrde = state->w192_dcrde;
+	snapshot->w192_read_valid = state->w192_read_valid;
+	snapshot->w192_bus_phase = state->w192_bus_phase;
+	snapshot->w192_display_on = state->w192_display_on;
+	snapshot->w192_all_pixels_on = state->w192_all_pixels_on;
+	snapshot->w192_rmw_active = state->w192_rmw_active;
+	snapshot->w192_segment_reverse = state->w192_segment_reverse;
+	snapshot->w192_com_reverse = state->w192_com_reverse;
+	snapshot->w192_contrast = state->w192_contrast;
+	snapshot->w192_contrast_pending = state->w192_contrast_pending;
 }
 
 static void machine_snapshot_load_lcd(struct lcd_state *state, const struct machine_lcd_snapshot *snapshot) {
 	memcpy(state->fb, snapshot->fb, sizeof(state->fb));
 	memcpy(state->reg, snapshot->reg, sizeof(state->reg));
+	memcpy(state->w192_fb, snapshot->w192_fb, sizeof(state->w192_fb));
+	state->w192_page = snapshot->w192_page;
+	state->w192_column = snapshot->w192_column;
+	state->w192_rmw_column = snapshot->w192_rmw_column;
+	state->w192_portd = snapshot->w192_portd;
+	state->w192_porte = snapshot->w192_porte;
+	state->w192_portd_latch = snapshot->w192_portd_latch;
+	state->w192_porte_latch = snapshot->w192_porte_latch;
+	state->w192_dcrde = snapshot->w192_dcrde;
+	state->w192_read_valid = snapshot->w192_read_valid;
+	state->w192_bus_phase = snapshot->w192_bus_phase;
+	state->w192_display_on = snapshot->w192_display_on;
+	state->w192_all_pixels_on = snapshot->w192_all_pixels_on;
+	state->w192_rmw_active = snapshot->w192_rmw_active;
+	state->w192_segment_reverse = snapshot->w192_segment_reverse;
+	state->w192_com_reverse = snapshot->w192_com_reverse;
+	state->w192_contrast = snapshot->w192_contrast;
+	state->w192_contrast_pending = snapshot->w192_contrast_pending;
 	state->mmio = NULL;
 }
 

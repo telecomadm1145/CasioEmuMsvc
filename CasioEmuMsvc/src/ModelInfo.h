@@ -35,14 +35,16 @@ namespace casioemu {
 		HW_EPS6800 = 9,
 		HW_EPS6009 = 10,
 		HW_EPS9500 = 11,
-		HW_MAX = HW_EPS9500,
+		HW_EPS6800_W192 = 12,
+		HW_MAX = HW_EPS6800_W192,
 	};
 
 	enum class EpsDisplayKind : unsigned char {
 		None,
 		DotMatrix6800,
 		Segment6009,
-		DotMatrix9500
+		DotMatrix9500,
+		DotMatrix6800W192
 	};
 
 	enum class EpsPowerKeyBehavior : unsigned char {
@@ -63,7 +65,7 @@ namespace casioemu {
 		size_t eps_status_size;
 	};
 
-	inline constexpr std::array<HardwareDescriptor, 9> HARDWARE_DESCRIPTORS{{
+	inline constexpr std::array<HardwareDescriptor, 10> HARDWARE_DESCRIPTORS{{
 		{HW_ES_PLUS, "ES(P)", "ESP", EpsVariant::None, EpsDisplayKind::None,
 			EpsPowerKeyBehavior::None, 20, 25, 0},
 		{HW_CLASSWIZ, "CWX", "CWX", EpsVariant::None, EpsDisplayKind::None,
@@ -82,6 +84,8 @@ namespace casioemu {
 			EpsPowerKeyBehavior::HostCpuReset, 4, 0, 0},
 		{HW_EPS9500, "EPS9500", "EPS9500", EpsVariant::Eps9500, EpsDisplayKind::DotMatrix9500,
 			EpsPowerKeyBehavior::CoreContact, 20, 25, 4},
+		{HW_EPS6800_W192, "EPS6800_W192", "EPS6800_W192", EpsVariant::Eps6800W192, EpsDisplayKind::DotMatrix6800W192,
+			EpsPowerKeyBehavior::HostCpuReset, 40, 60, 24},
 	}};
 	static_assert(HARDWARE_DESCRIPTORS.size() == static_cast<size_t>(HW_MAX - HW_MIN + 1));
 

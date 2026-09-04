@@ -1114,6 +1114,42 @@ namespace casioemu {
 				}
 				return;
 			}
+			else if (hardware_id == HW_EPS6800_W192) {
+				ratio = 0.80f;
+				std::array<uint8_t, EPS6800_W192_LCD_RAW_SIZE> lcd{};
+				Eps6800LcdControl control{};
+				if (!emulator.chipset.epscpu ||
+					emulator.chipset.epscpu->CopyLcd(lcd.data(), lcd.size(), &control) != lcd.size())
+					return;
+				float ink_alpha_on = Eps6800W192ActiveAlpha(control.contrast);
+				float ink_alpha_off = Eps6800W192InactiveAlpha(control.contrast);
+				ink_alpha_off = screen_residual_enabled ? ink_alpha_off * screen_residual_alpha_scale : 0.0f;
+				if (!control.visible()) {
+					ink_alpha_on = 0.0f;
+					ink_alpha_off = 0.0f;
+				}
+				const float transition_ratio = screen_residual_enabled ? ratio : 0.0f;
+				std::lock_guard<std::mutex> lock(eps_screen_alpha_mutex);
+				const auto decoded = DecodeEps6800W192Display(lcd.data(), lcd.size());
+				for (size_t y = 0; y < EPS6800_W192_LCD_HEIGHT; ++y) {
+					for (size_t x = 0; x < EPS6800_W192_LCD_WIDTH; ++x) {
+						const bool on = decoded.pixels[y * EPS6800_W192_LCD_WIDTH + x] != 0;
+						auto& alpha = eps_screen_ink_alpha[(y + 1) * 192 + x];
+						alpha = alpha * transition_ratio +
+							(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
+					}
+				}
+				const auto& status_indicators = emulator.ModelDefinition.status_indicators;
+				for (size_t ix = 0; ix < status_indicators.size(); ++ix) {
+					const auto& indicator = status_indicators[ix];
+					const bool on = indicator.byte_offset < decoded.status.size() &&
+						(decoded.status[indicator.byte_offset] & (1u << indicator.bit)) != 0;
+					auto& alpha = eps_screen_ink_alpha[ix];
+					alpha = alpha * transition_ratio +
+						(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
+				}
+				return;
+			}
 			else if (hardware_id == HW_EPS9500) {
 				ratio = 0.80f;
 				std::array<uint8_t, EPS9500_LCD_RAW_SIZE> lcd{};
@@ -1512,6 +1548,17 @@ namespace casioemu {
 	const int Screen<HW_EPS6800>::SPR_MAX = 1;
 
 	template <>
+	const int Screen<HW_EPS6800_W192>::N_ROW = 63;
+	template <>
+	const int Screen<HW_EPS6800_W192>::ROW_SIZE = 24;
+	template <>
+	const int Screen<HW_EPS6800_W192>::OFFSET = 0;
+	template <>
+	const int Screen<HW_EPS6800_W192>::ROW_SIZE_DISP = 24;
+	template <>
+	const int Screen<HW_EPS6800_W192>::SPR_MAX = 1;
+
+	template <>
 	const int Screen<HW_EPS6009>::N_ROW = 0;
 	template <>
 	const int Screen<HW_EPS6009>::ROW_SIZE = 1;
@@ -1628,6 +1675,10 @@ namespace casioemu {
 
 	template <>
 	const SpriteBitmap Screen<HW_EPS6800>::sprite_bitmap[] = {
+		{"rsd_pixel", 0, 0} };
+
+	template <>
+	const SpriteBitmap Screen<HW_EPS6800_W192>::sprite_bitmap[] = {
 		{"rsd_pixel", 0, 0} };
 
 	template <>
@@ -3461,6 +3512,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			return new Screen<HW_TI>(emulator);
 		case HW_EPS6800:
 			return new Screen<HW_EPS6800>(emulator);
+		case HW_EPS6800_W192:
+			return new Screen<HW_EPS6800_W192>(emulator);
 		case HW_EPS6009:
 			return new Screen<HW_EPS6009>(emulator);
 		case HW_EPS9500:

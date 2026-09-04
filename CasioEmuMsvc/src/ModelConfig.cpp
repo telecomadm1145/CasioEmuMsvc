@@ -18,6 +18,7 @@
 namespace casioemu {
 	static_assert(FindHardwareDescriptor(HW_EPS6800)->eps_status_size == EPS6800_STATUS_SIZE);
 	static_assert(FindHardwareDescriptor(HW_EPS9500)->eps_status_size == EPS9500_STATUS_SIZE);
+	static_assert(FindHardwareDescriptor(HW_EPS6800_W192)->eps_status_size == EPS6800_W192_STATUS_SIZE);
 
 	namespace {
 		using json = nlohmann::json;

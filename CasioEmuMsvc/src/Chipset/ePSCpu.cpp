@@ -31,6 +31,7 @@ namespace {
 	constexpr size_t kPackedBytesPerWord = 2;
 	constexpr size_t kUnpackedBytesPerWord = 4;
 	constexpr size_t kMaximumRomWords = 96 * 1024;
+	constexpr size_t kFlashWords = 32 * 1024;
 
 	bool ConvertUnpackedNibbles(const std::vector<unsigned char>& source,
 		std::vector<unsigned char>& packed) {
@@ -61,6 +62,8 @@ namespace {
 			return EPS_VARIANT_6009;
 		case casioemu::EpsVariant::Eps9500:
 			return EPS_VARIANT_9500;
+		case casioemu::EpsVariant::Eps6800W192:
+			return EPS_VARIANT_6800_W192;
 		default:
 			throw std::invalid_argument("Invalid EPS variant");
 		}
@@ -113,7 +116,18 @@ namespace casioemu {
 		if (!machine_state_load_rom_image(state_, data, size))
 			return false;
 		rom_format_ = format;
-		rom_word_count_ = size / kPackedBytesPerWord;
+		rom_word_count_ = flash_loaded_ ? kMaximumRomWords + kFlashWords : size / kPackedBytesPerWord;
+		return true;
+	}
+
+	bool ePSCPU::LoadFlash(const std::vector<unsigned char>& flash) {
+		const std::lock_guard lock(state_mutex_);
+		if (flash.size() != kFlashWords * kPackedBytesPerWord)
+			return false;
+		if (!machine_state_load_flash_image(state_, flash.data(), flash.size()))
+			return false;
+		flash_loaded_ = true;
+		rom_word_count_ = kMaximumRomWords + kFlashWords;
 		return true;
 	}
 
@@ -152,6 +166,17 @@ namespace casioemu {
 			return false;
 		rom[offset] = static_cast<unsigned char>(value);
 		rom[offset + 1] = static_cast<unsigned char>(value >> 8);
+		return true;
+	}
+
+	bool ePSCPU::WriteFlashImageWord(std::vector<unsigned char>& flash, uint32_t word_offset,
+		uint16_t value) const {
+		const std::lock_guard lock(state_mutex_);
+		const size_t offset = static_cast<size_t>(word_offset) * kPackedBytesPerWord;
+		if (offset + 1 >= flash.size())
+			return false;
+		flash[offset] = static_cast<unsigned char>(value);
+		flash[offset + 1] = static_cast<unsigned char>(value >> 8);
 		return true;
 	}
 
