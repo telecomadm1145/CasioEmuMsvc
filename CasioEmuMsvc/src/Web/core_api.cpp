@@ -69,6 +69,17 @@ namespace {
 	std::vector<uint8_t> g_source_frame_rgba;
 	std::vector<uint8_t> g_status_alpha;
 	std::vector<casioemu::StatusIndicatorInfo> g_web_status_indicators;
+	struct WebEpsConfig {
+		int port_b_mask = 0;
+		int port_b_value = 0;
+		int port_c_mask = 0;
+		int port_c_value = 0;
+		int cycles_per_second = 0;
+		int timer1_source_hz = 0;
+		int timer_cycle_divisor = 0;
+		bool ice_timer_scheduling = false;
+	};
+	WebEpsConfig g_web_eps_config;
 	std::vector<uint8_t> g_snapshot_buffer;
 	bool g_qr_active = false;
 	int g_qr_version = 0;
@@ -301,6 +312,25 @@ namespace {
 		model.ink_color = {0, 0, 0};
 		if (casioemu::IsEpsFamily(hardware_id))
 			model.status_indicators = g_web_status_indicators;
+		if (casioemu::IsEpsFamily(hardware_id)) {
+			auto hexByte = [](int value) {
+				char buffer[8]{};
+				std::snprintf(buffer, sizeof(buffer), "0x%02X", static_cast<unsigned int>(value));
+				return std::string(buffer);
+			};
+			model.extra["port_b_input_mask"] = hexByte(g_web_eps_config.port_b_mask);
+			model.extra["port_b_input_value"] = hexByte(g_web_eps_config.port_b_value);
+			model.extra["port_c_input_mask"] = hexByte(g_web_eps_config.port_c_mask);
+			model.extra["port_c_input_value"] = hexByte(g_web_eps_config.port_c_value);
+			if (g_web_eps_config.cycles_per_second > 0)
+				model.extra["cycles_per_second"] = std::to_string(g_web_eps_config.cycles_per_second);
+			if (g_web_eps_config.timer1_source_hz > 0)
+				model.extra["timer1_source_hz"] = std::to_string(g_web_eps_config.timer1_source_hz);
+			if (g_web_eps_config.timer_cycle_divisor > 0)
+				model.extra["timer_cycle_divisor"] = std::to_string(g_web_eps_config.timer_cycle_divisor);
+			if (g_web_eps_config.ice_timer_scheduling)
+				model.extra["ice_timer_scheduling"] = "1";
+		}
 		if (!real_hardware) {
 			model.extra["limit_spd"] = "1";
 		}
@@ -966,6 +996,22 @@ int casioemu_core_set_status_indicators(const uint32_t* packed, int count) {
 		indicators.push_back({"status" + std::to_string(i), byte_offset, bit});
 	}
 	g_web_status_indicators = std::move(indicators);
+	return 0;
+}
+
+int casioemu_core_set_eps_config(
+	int port_b_mask, int port_b_value, int port_c_mask, int port_c_value,
+	int cycles_per_second, int timer1_source_hz, int timer_cycle_divisor,
+	int ice_timer_scheduling) {
+	if (port_b_mask < 0 || port_b_mask > 0xff || port_b_value < 0 || port_b_value > 0xff
+		|| port_c_mask < 0 || port_c_mask > 0xff || port_c_value < 0 || port_c_value > 0xff
+		|| cycles_per_second < 0 || timer1_source_hz < 0 || timer_cycle_divisor < 0
+		|| (ice_timer_scheduling != 0 && ice_timer_scheduling != 1)) return 1;
+	g_web_eps_config = {
+		port_b_mask, port_b_value, port_c_mask, port_c_value,
+		cycles_per_second, timer1_source_hz, timer_cycle_divisor,
+		ice_timer_scheduling != 0,
+	};
 	return 0;
 }
 
