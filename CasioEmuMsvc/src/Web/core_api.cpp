@@ -304,6 +304,11 @@ namespace {
 			model.flash_path = kFlashPath;
 		}
 		model.enable_new_screen = false;
+		if (hardware_id == casioemu::HW_EPS6009) {
+			model.screen_width = 96;
+			model.screen_height = 31;
+			model.screen_scale_y = 1.0f;
+		}
 		model.is_sample_rom = is_sample_rom;
 		model.legacy_ko = legacy_ko;
 		model.u16_mode = hardware_id == casioemu::HW_CLASSWIZ || hardware_id == casioemu::HW_CLASSWIZ_II || hardware_id == casioemu::HW_TI;
@@ -1189,8 +1194,9 @@ int casioemu_core_update_frame() {
 	g_source_frame_rgba.resize(static_cast<size_t>(g_frame_width) * static_cast<size_t>(g_frame_height) * 4);
 	const auto& color = g_emulator->ModelDefinition.ink_color;
 	g_screen_provider->WriteFrameRgba(g_source_frame_rgba.data(), color.r, color.g, color.b);
-	const int display_height = std::max(0, g_frame_height - 1);
-	const int source_start_row = 1;
+	const bool has_embedded_status_row = g_emulator->hardware_id != casioemu::HW_EPS6009;
+	const int source_start_row = has_embedded_status_row ? 1 : 0;
+	const int display_height = std::max(0, g_frame_height - source_start_row);
 	g_frame_rgba.resize(static_cast<size_t>(g_frame_width) * static_cast<size_t>(display_height) * 4);
 	for (int y = 0; y < display_height; ++y) {
 		const auto* src = g_source_frame_rgba.data() + (static_cast<size_t>(source_start_row + y) * g_frame_width * 4);
