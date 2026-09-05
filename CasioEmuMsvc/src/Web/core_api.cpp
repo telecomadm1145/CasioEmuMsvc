@@ -26,6 +26,7 @@
 #include <fstream>
 #include <sstream>
 #include <memory>
+#include <set>
 #include <string>
 #include <typeinfo>
 #include <vector>
@@ -67,6 +68,7 @@ namespace {
 	std::vector<uint8_t> g_frame_rgba;
 	std::vector<uint8_t> g_source_frame_rgba;
 	std::vector<uint8_t> g_status_alpha;
+	std::vector<casioemu::StatusIndicatorInfo> g_web_status_indicators;
 	std::vector<uint8_t> g_snapshot_buffer;
 	bool g_qr_active = false;
 	int g_qr_version = 0;
@@ -294,17 +296,16 @@ namespace {
 		model.is_sample_rom = is_sample_rom;
 		model.legacy_ko = legacy_ko;
 		model.u16_mode = hardware_id == casioemu::HW_CLASSWIZ || hardware_id == casioemu::HW_CLASSWIZ_II || hardware_id == casioemu::HW_TI;
-		model.LARGE_model = hardware_id != casioemu::HW_SOLARII;
-		model.ml620_mirroring = hardware_id != casioemu::HW_CLASSWIZ;
+		model.LARGE_model = hardware_id != casioemu::HW_SOLARII && !casioemu::IsEpsFamily(hardware_id);
+		model.ml620_mirroring = hardware_id != casioemu::HW_CLASSWIZ && !casioemu::IsEpsFamily(hardware_id);
 		model.ink_color = {0, 0, 0};
+		if (casioemu::IsEpsFamily(hardware_id))
+			model.status_indicators = g_web_status_indicators;
 		if (!real_hardware) {
 			model.extra["limit_spd"] = "1";
 		}
-		if (hardware_id == casioemu::HW_EPS6800) {
-			// The legacy web EPS6800 entry point receives HP-style ROM resources.
-			model.extra["is_unpacked_nibbles"] = "1";
-		}
-		for (int ko = 0; ko < 8; ++ko) {
+		const int ko_count = casioemu::IsEpsFamily(hardware_id) ? 16 : 8;
+		for (int ko = 0; ko < ko_count; ++ko) {
 			for (int ki = 0; ki < 8; ++ki) {
 				casioemu::ButtonInfo button{};
 				button.kiko = (ko << 4) | ki;
@@ -316,6 +317,12 @@ namespace {
 		on.kiko = 0xFF;
 		on.keyname = "";
 		model.buttons.push_back(on);
+		if (casioemu::IsEpsFamily(hardware_id)) {
+			casioemu::ButtonInfo reset{};
+			reset.kiko = casioemu::BUTTON_KIKO_RESET;
+			reset.keyname = "";
+			model.buttons.push_back(reset);
+		}
 		return model;
 	}
 
@@ -946,6 +953,21 @@ void WebDebuggerQueueDownload(const char* path, const char* name) {
 	}
 
 extern "C" {
+
+int casioemu_core_set_status_indicators(const uint32_t* packed, int count) {
+	if (count < 0 || count > 4096 || (count > 0 && !packed)) return 1;
+	std::vector<casioemu::StatusIndicatorInfo> indicators;
+	indicators.reserve(static_cast<size_t>(count));
+	std::set<std::pair<unsigned short, unsigned char>> used;
+	for (int i = 0; i < count; ++i) {
+		const auto byte_offset = static_cast<unsigned short>(packed[i] >> 8);
+		const auto bit = static_cast<unsigned char>(packed[i] & 0xff);
+		if (bit > 7 || !used.emplace(byte_offset, bit).second) return 2;
+		indicators.push_back({"status" + std::to_string(i), byte_offset, bit});
+	}
+	g_web_status_indicators = std::move(indicators);
+	return 0;
+}
 
 int casioemu_core_set_model_id(const char* model_id) {
 	SetCoreModelId(model_id);
