@@ -1072,9 +1072,11 @@ namespace casioemu {
 				return;
 			}
 			else if (hardware_id == HW_EPS6800) {
+				#ifndef __EMSCRIPTEN__
 				// Match the deterministic ES Plus low-performance cadence: one
 				// update every 10 ms, retaining 80% of the preceding LCD state.
 				ratio = 0.80f;
+				#endif
 				std::array<uint8_t, EPS6800_LCD_RAW_SIZE> lcd{};
 				Eps6800LcdControl control{};
 				if (!emulator.chipset.epscpu ||
@@ -1115,7 +1117,9 @@ namespace casioemu {
 				return;
 			}
 			else if (hardware_id == HW_EPS6800_W192) {
+				#ifndef __EMSCRIPTEN__
 				ratio = 0.80f;
+				#endif
 				std::array<uint8_t, EPS6800_W192_LCD_RAW_SIZE> lcd{};
 				Eps6800LcdControl control{};
 				if (!emulator.chipset.epscpu ||
@@ -1151,7 +1155,9 @@ namespace casioemu {
 				return;
 			}
 			else if (hardware_id == HW_EPS9500) {
+				#ifndef __EMSCRIPTEN__
 				ratio = 0.80f;
+				#endif
 				std::array<uint8_t, EPS9500_LCD_RAW_SIZE> lcd{};
 				Eps6800LcdControl control{};
 				if (!emulator.chipset.epscpu ||
@@ -1187,7 +1193,9 @@ namespace casioemu {
 				return;
 			}
 			else if (hardware_id == HW_EPS6009) {
+				#ifndef __EMSCRIPTEN__
 				ratio = 0.80f;
+				#endif
 				std::array<uint8_t, 0x88> lcd{};
 				Eps6800LcdControl control{};
 				if (!emulator.chipset.epscpu ||
