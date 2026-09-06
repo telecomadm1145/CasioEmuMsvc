@@ -23,7 +23,8 @@ namespace casioemu {
 		}
 
 		bool AllowedName(const std::string& name) {
-			return name == "config.json" || name == "board.svg" || name == "face.svg" || name == "face.png" || name == "rom.bin";
+			return name == "config.json" || name == "board.svg" || name == "face.svg" || name == "face.png" ||
+				name == "rom.bin" || name == "spif.bin";
 		}
 
 		std::uint16_t Read16(const std::vector<std::uint8_t>& data, size_t offset) {
@@ -137,8 +138,18 @@ namespace casioemu {
 		if (!LoadModelInfoFromResourceStore(*resources, model, &error))
 			throw std::runtime_error("Invalid online model configuration: " + error);
 		if (model.board_path != "board.svg" || model.rom_path != "rom.bin" ||
-			(model.interface_path != "face.svg" && model.interface_path != "face.png") || !model.flash_path.empty())
+			(model.interface_path != "face.svg" && model.interface_path != "face.png") ||
+			(model.flash_path != "" && model.flash_path != "spif.bin"))
 			throw std::runtime_error("Online model configuration references unsupported paths.");
+		const bool has_flash = names.contains("spif.bin");
+		if (has_flash != (model.flash_path == "spif.bin"))
+			throw std::runtime_error("Online model ZIP flash file does not match flash_path.");
+		if (model.hardware_id == HW_FX_5800P) {
+			if (!has_flash)
+				throw std::runtime_error("FX-5800P online models require spif.bin.");
+			if (resources->Read("spif.bin").size() != 0x80000)
+				throw std::runtime_error("FX-5800P spif.bin has an invalid size.");
+		}
 		return resources;
 	}
 }

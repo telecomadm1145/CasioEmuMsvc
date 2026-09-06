@@ -735,24 +735,18 @@ namespace casioemu {
 			return;
 		}
 		if (emulator.hardware_id == HW_FX_5800P) {
-			if (emulator.ModelDefinition.flash_path.empty()) {
-				if (rom_data.size() > 0x20000) {
-					flash_data.assign(rom_data.begin() + 0x20000, rom_data.end());
-					rom_data.resize(0x20000);
-				}
-				else {
-					flash_data.clear();
-				}
+			if (emulator.ModelDefinition.flash_path.empty())
+				PANIC("FX-5800P requires a separate flash image\n");
+			try {
+				flash_data = emulator.ReadModelResource(emulator.ModelDefinition.flash_path);
 			}
-			else {
-				try {
-					flash_data = emulator.ReadModelResource(emulator.ModelDefinition.flash_path);
-				}
-				catch (const std::exception& error) {
-					PANIC("Failed to read flash: %s\n", error.what());
-				}
+			catch (const std::exception& error) {
+				PANIC("Failed to read flash: %s\n", error.what());
 			}
-			flash_data.resize(0x80000, 0xff);
+			constexpr size_t fx5800p_flash_bytes = 0x80000;
+			if (flash_data.size() != fx5800p_flash_bytes)
+				PANIC("Invalid FX-5800P flash size %zu (expected %zu bytes)\n",
+					flash_data.size(), fx5800p_flash_bytes);
 			//memset(&flash_data[0x20000], 0xff, 0x10000); // TODO: check clear ram flag
 			//memset(&flash_data[0x30000], 0, 0x8000);
 			//memset(&flash_data[0x38000], 0xff, 0x8000);
