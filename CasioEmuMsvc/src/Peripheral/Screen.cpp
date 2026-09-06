@@ -21,11 +21,10 @@
 #include "ScreenOutput.hpp"
 #include "ScreenRenderSupport.hpp"
 #include "SolarIIScreen.hpp"
+#include "EpsScreen.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Chipset/MMU.hpp"
 #include "Chipset/MMURegion.hpp"
-#include "Chipset/ePSCpu.h"
-#include "Chipset/Eps6800Display.h"
 #include "Emulator.hpp"
 #include "Ext/Random.hpp"
 #include "Gui/HwController.h"
@@ -87,7 +86,13 @@ namespace casioemu {
 		const char* name;
 		uint8_t mask, offset;
 	};
-	inline int update_screen_scan_alpha(float* screen_scan_alpha, Uint64 t, int screen_refresh_rate) {
+	inline int update_screen_scan_alpha(
+		float* screen_scan_alpha,
+		std::array<float, 64>& screen_scan_curve,
+		float& screen_scan_curve_coeff,
+		bool& screen_scan_curve_valid,
+		Uint64 t,
+		int screen_refresh_rate) {
 		int n = (static_cast<Uint64>((t * screen_refresh_rate) / 250)) % 64;
 
 		if (screen_refresh_rate < screen_flashing_threshold) {
@@ -97,18 +102,27 @@ namespace casioemu {
 			return n;
 		}
 
-		// 计算归一化所需的归一化因子
-		float normalization_factor = 0.0f;
-		std::vector<float> exp_values(64);
+		const float brightness_coeff = screen_flashing_brightness_coeff;
+		if (!screen_scan_curve_valid || screen_scan_curve_coeff != brightness_coeff) {
+			// 计算归一化所需的归一化因子
+			float normalization_factor = 0.0f;
+			std::array<float, 64> exp_values{};
 
-		for (size_t i = 0; i < 64; i++) {
-			exp_values[i] = std::exp(-screen_flashing_brightness_coeff * i / 64.0f);
-			normalization_factor += exp_values[i];
+			for (size_t i = 0; i < 64; i++) {
+				exp_values[i] = std::exp(-brightness_coeff * i / 64.0f);
+				normalization_factor += exp_values[i];
+			}
+
+			// 归一化
+			for (size_t i = 0; i < 64; i++) {
+				screen_scan_curve[i] = std::pow(exp_values[i] / normalization_factor * 80., 0.2);
+			}
+			screen_scan_curve_coeff = brightness_coeff;
+			screen_scan_curve_valid = true;
 		}
 
-		// 归一化
 		for (size_t i = 0; i < 64; i++) {
-			screen_scan_alpha[(i + n) % 64] = std::pow(exp_values[i] / normalization_factor * 80., 0.2);
+			screen_scan_alpha[(i + n) % 64] = screen_scan_curve[i];
 		}
 
 		return n;
@@ -145,6 +159,9 @@ namespace casioemu {
 		int ti_port5{};
 
 		float screen_scan_alpha[64]{};
+		std::array<float, 64> screen_scan_curve{};
+		float screen_scan_curve_coeff = 0.0f;
+		bool screen_scan_curve_valid = false;
 		float position = 0;
 		SDL_Renderer* renderer{};
 		SDL_Texture* interface_texture{};
@@ -355,15 +372,21 @@ namespace casioemu {
 #endif
 		}
 		int GetFrameWidth() const override {
-			if constexpr (hardware_id == HW_EPS6009)
-				return std::max(1, emulator.ModelDefinition.screen_width);
+			if constexpr (IsEpsFamily(hardware_id)) {
+				return GetEpsScreenSpec(
+					hardware_id,
+					emulator.ModelDefinition.screen_width,
+					emulator.ModelDefinition.screen_height).export_width;
+			}
 			return hardware_id == HW_EPS6800 || hardware_id == HW_EPS9500 ? 96 : 192;
 		}
 		int GetFrameHeight() const override {
-			if constexpr (hardware_id == HW_EPS6009)
-				return std::max(1, emulator.ModelDefinition.screen_height);
-			if constexpr (hardware_id == HW_EPS9500)
-				return 33; // one status row plus 32 dot-matrix rows
+			if constexpr (IsEpsFamily(hardware_id)) {
+				return GetEpsScreenSpec(
+					hardware_id,
+					emulator.ModelDefinition.screen_width,
+					emulator.ModelDefinition.screen_height).export_height;
+			}
 			return hardware_id == HW_FX_5800P || hardware_id == HW_ES_PLUS ||
 				hardware_id == HW_EPS6800 ? 32 : 64;
 		}
@@ -509,161 +532,33 @@ namespace casioemu {
 
 				return;
 			}
-			else if (hardware_id == HW_EPS6800) {
-				#ifndef __EMSCRIPTEN__
-				// Match the deterministic ES Plus low-performance cadence: one
-				// update every 10 ms, retaining 80% of the preceding LCD state.
+			else if constexpr (IsEpsFamily(hardware_id)) {
+			#ifndef __EMSCRIPTEN__
 				ratio = 0.80f;
-				#endif
-				std::array<uint8_t, EPS6800_LCD_RAW_SIZE> lcd{};
-				Eps6800LcdControl control{};
-				if (!emulator.chipset.epscpu ||
-					emulator.chipset.epscpu->CopyLcd(lcd.data(), lcd.size(), &control) != lcd.size())
-					return;
-				float ink_alpha_on = Eps6800ActiveAlpha(control.contrast);
-				float ink_alpha_off = Eps6800InactiveAlpha(control.contrast);
-				ink_alpha_off = screen_residual_enabled ? ink_alpha_off * screen_residual_alpha_scale : 0.0f;
-				if (!control.visible()) {
-					ink_alpha_on = 0.0f;
-					ink_alpha_off = 0.0f;
-				}
-				const float transition_ratio = screen_residual_enabled ? ratio : 0.0f;
-				std::lock_guard<std::mutex> lock(eps_screen_alpha_mutex);
-
-				// EPS stores four 8-pixel pages bottom-to-top. The physical top
-				// row is a 96-bit segmented annunciator bus; it must not be drawn
-				// as dot-matrix pixels. The remaining 31 rows form the 96x31 LCD.
-				const auto decoded = DecodeEps6800Display(lcd.data(), lcd.size());
-				for (int y = 0; y < static_cast<int>(EPS6800_LCD_PIXEL_HEIGHT); ++y) {
-					for (int x = 0; x < static_cast<int>(EPS6800_LCD_WIDTH); ++x) {
-						const bool on = decoded.pixels[y * EPS6800_LCD_WIDTH + x] != 0;
-						auto& alpha = eps_screen_ink_alpha[(y + 1) * 192 + x];
-						alpha = alpha * transition_ratio +
-							(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
-					}
-				}
-
-				const auto& status_indicators = emulator.ModelDefinition.status_indicators;
-				for (size_t ix = 0; ix < status_indicators.size(); ++ix) {
-					const auto& indicator = status_indicators[ix];
-					const bool on = indicator.byte_offset < decoded.status.size() &&
-						(decoded.status[indicator.byte_offset] & (1u << indicator.bit)) != 0;
-					auto& alpha = eps_screen_ink_alpha[ix];
-					alpha = alpha * transition_ratio +
-						(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
-				}
-				return;
-			}
-			else if (hardware_id == HW_EPS6800_W192) {
-				#ifndef __EMSCRIPTEN__
-				ratio = 0.80f;
-				#endif
-				std::array<uint8_t, EPS6800_W192_LCD_RAW_SIZE> lcd{};
-				Eps6800LcdControl control{};
-				if (!emulator.chipset.epscpu ||
-					emulator.chipset.epscpu->CopyLcd(lcd.data(), lcd.size(), &control) != lcd.size())
-					return;
-				float ink_alpha_on = Eps6800W192ActiveAlpha(control.contrast);
-				float ink_alpha_off = Eps6800W192InactiveAlpha(control.contrast);
-				ink_alpha_off = screen_residual_enabled ? ink_alpha_off * screen_residual_alpha_scale : 0.0f;
-				if (!control.visible()) {
-					ink_alpha_on = 0.0f;
-					ink_alpha_off = 0.0f;
-				}
-				const float transition_ratio = screen_residual_enabled ? ratio : 0.0f;
-				std::lock_guard<std::mutex> lock(eps_screen_alpha_mutex);
-				const auto decoded = DecodeEps6800W192Display(lcd.data(), lcd.size());
-				for (size_t y = 0; y < EPS6800_W192_LCD_HEIGHT; ++y) {
-					for (size_t x = 0; x < EPS6800_W192_LCD_WIDTH; ++x) {
-						const bool on = decoded.pixels[y * EPS6800_W192_LCD_WIDTH + x] != 0;
-						auto& alpha = eps_screen_ink_alpha[(y + 1) * 192 + x];
-						alpha = alpha * transition_ratio +
-							(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
-					}
-				}
-				const auto& status_indicators = emulator.ModelDefinition.status_indicators;
-				for (size_t ix = 0; ix < status_indicators.size(); ++ix) {
-					const auto& indicator = status_indicators[ix];
-					const bool on = indicator.byte_offset < decoded.status.size() &&
-						(decoded.status[indicator.byte_offset] & (1u << indicator.bit)) != 0;
-					auto& alpha = eps_screen_ink_alpha[ix];
-					alpha = alpha * transition_ratio +
-						(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
-				}
-				return;
-			}
-			else if (hardware_id == HW_EPS9500) {
-				#ifndef __EMSCRIPTEN__
-				ratio = 0.80f;
-				#endif
-				std::array<uint8_t, EPS9500_LCD_RAW_SIZE> lcd{};
-				Eps6800LcdControl control{};
-				if (!emulator.chipset.epscpu ||
-					emulator.chipset.epscpu->CopyLcd(lcd.data(), lcd.size(), &control) != lcd.size())
-					return;
-				float ink_alpha_on = Eps6800ActiveAlpha(control.contrast);
-				float ink_alpha_off = Eps6800InactiveAlpha(control.contrast);
-				ink_alpha_off = screen_residual_enabled ? ink_alpha_off * screen_residual_alpha_scale : 0.0f;
-				if (!control.visible()) {
-					ink_alpha_on = 0.0f;
-					ink_alpha_off = 0.0f;
-				}
-				const float transition_ratio = screen_residual_enabled ? ratio : 0.0f;
-				std::lock_guard<std::mutex> lock(eps_screen_alpha_mutex);
-				const auto decoded = DecodeEps9500Display(lcd.data(), lcd.size());
-				for (int y = 0; y < static_cast<int>(EPS9500_LCD_HEIGHT); ++y) {
-					for (int x = 0; x < static_cast<int>(EPS9500_LCD_WIDTH); ++x) {
-						const bool on = decoded.pixels[y * EPS9500_LCD_WIDTH + x] != 0;
-						auto& alpha = eps_screen_ink_alpha[(y + 1) * 192 + x];
-						alpha = alpha * transition_ratio +
-							(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
-					}
-				}
-				const auto& status_indicators = emulator.ModelDefinition.status_indicators;
-				for (size_t ix = 0; ix < status_indicators.size(); ++ix) {
-					const auto& indicator = status_indicators[ix];
-					const bool on = indicator.byte_offset < decoded.status.size() &&
-						(decoded.status[indicator.byte_offset] & (1u << indicator.bit)) != 0;
-					auto& alpha = eps_screen_ink_alpha[ix];
-					alpha = alpha * transition_ratio +
-						(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
-				}
-				return;
-			}
-			else if (hardware_id == HW_EPS6009) {
-				#ifndef __EMSCRIPTEN__
-				ratio = 0.80f;
-				#endif
-				std::array<uint8_t, 0x88> lcd{};
-				Eps6800LcdControl control{};
-				if (!emulator.chipset.epscpu ||
-					emulator.chipset.epscpu->CopyLcd(lcd.data(), lcd.size(), &control) != lcd.size())
-					return;
-				float ink_alpha_on = 230.0f;
-				float ink_alpha_off = 8.0f;
-				ink_alpha_off = screen_residual_enabled ? ink_alpha_off * screen_residual_alpha_scale : 0.0f;
-				if (!control.visible()) {
-					ink_alpha_on = 0.0f;
-					ink_alpha_off = 0.0f;
-				}
-				const float transition_ratio = screen_residual_enabled ? ratio : 0.0f;
-				std::lock_guard<std::mutex> lock(eps_screen_alpha_mutex);
-				const auto& status_indicators = emulator.ModelDefinition.status_indicators;
-				for (size_t ix = 0; ix < status_indicators.size(); ++ix) {
-					const auto& indicator = status_indicators[ix];
-					const bool on = indicator.byte_offset < lcd.size() &&
-						(lcd[indicator.byte_offset] & (1u << indicator.bit)) != 0;
-					auto& alpha = eps_screen_ink_alpha[ix];
-					alpha = alpha * transition_ratio +
-						(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
-				}
+			#endif
+				EpsScreenContext eps_context{
+					hardware_id,
+					emulator.chipset.epscpu,
+					emulator.ModelDefinition.status_indicators,
+					eps_screen_ink_alpha,
+					eps_screen_alpha_mutex,
+					screen_residual_enabled,
+					screen_residual_alpha_scale,
+					ratio};
+				UpdateEpsScreen(eps_context);
 				return;
 			}
 
 			if (screen_refresh_rate < screen_flashing_threshold && !enable_screen_fading)
 				;
 			else {
-				int n = update_screen_scan_alpha(screen_scan_alpha, SDL_GetTicks64(), screen_refresh_rate);
+				int n = update_screen_scan_alpha(
+					screen_scan_alpha,
+					screen_scan_curve,
+					screen_scan_curve_coeff,
+					screen_scan_curve_valid,
+					SDL_GetTicks64(),
+					screen_refresh_rate);
 				screen_scan_report = ((n / (screen_scan_report_en ? screen_scan_report_op1 : 64)) % 2 ? 3 : 0) ^ (n % 64 == 0 ? 1 : (n % 64 == 32 ? 2 : 0));
 			}
 			if (screen_refresh_rate < 6) {
@@ -1667,8 +1562,24 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		SDL_Rect dest = Screen<hardware_id>::sprite_info[SPR_PIXEL].dest;
 		const bool board_screen_slot = !emulator.ModelDefinition.board_path.empty();
 		const bool segment_lcd = IsEpsSegmentLcd(hardware_id);
-		const int logical_width = segment_lcd ? std::max(1, emulator.ModelDefinition.screen_width) : ROW_SIZE_DISP * 8;
-		const int logical_height = segment_lcd ? std::max(1, emulator.ModelDefinition.screen_height) : N_ROW;
+		int logical_width = 0;
+		int logical_height = 0;
+		if constexpr (IsEpsFamily(hardware_id)) {
+			const auto eps_spec = GetEpsScreenSpec(
+				hardware_id,
+				emulator.ModelDefinition.screen_width,
+				emulator.ModelDefinition.screen_height);
+			logical_width = eps_spec.logical_width;
+			logical_height = eps_spec.logical_height;
+		}
+		else if (segment_lcd) {
+			logical_width = std::max(1, emulator.ModelDefinition.screen_width);
+			logical_height = std::max(1, emulator.ModelDefinition.screen_height);
+		}
+		else {
+			logical_width = ROW_SIZE_DISP * 8;
+			logical_height = N_ROW;
+		}
 		SDL_Rect lcd_dest = dest;
 		if (!board_screen_slot) {
 			lcd_dest.w = std::max(1, (logical_width - 1) * sprite_info[SPR_PIXEL].src.w + sprite_info[SPR_PIXEL].dest.w);
