@@ -75,28 +75,30 @@ namespace casioemu {
 					return (segment_index == 0 && segment_offset >= 0xFE00) ? 0xFFFF : le_read(rom[offset]);
 			}
 			return 0;
-		case HW_CLASSWIZ_II:
-			if (segment_index == 8)
-				return le_read(rom[offset & 0x7ffff]);
+		case HW_CLASSWIZ_II: {
+			// Segment 8 exposes raw segment 0, without its boot-ROM remapping.
+			const bool raw_segment_zero = segment_index == 8;
+			// Fold the ROM byte address as well as the segment used for decoding.
+			offset &= 0x7FFFE;
 			segment_index &= 7;
 			if (segment_index == 7) {
-				if (segment_offset >= 0x2000) {
-					return 0xffff;
-				}
-				else {
-					return le_read(rom[0x5E000 + segment_offset]);
-				}
+				if (segment_offset >= 0x2000)
+					return 0xFFFF;
+				offset = 0x5E000 + segment_offset;
 			}
-			if (segment_index > 6)
+			else if (segment_index == 5 && segment_offset >= 0xE000)
 				return 0xFFFF;
-			if (segment_index == 5) {
-				if (segment_offset >= 0xe000)
+			else if (segment_index == 0 && !raw_segment_zero) {
+				if (emulator.chipset.remap && segment_offset < 0x200)
+					offset += 0xFE00;
+				else if (!emulator.chipset.remap && segment_offset >= 0xFE00)
 					return 0xFFFF;
 			}
-			if (emulator.chipset.remap)
-				return le_read(rom[offset + ((segment_index == 0 && segment_offset < 0x200) ? 0xFE00 : 0)]);
-			else
-				return (segment_index == 0 && segment_offset >= 0xFE00) ? 0xFFFF : le_read(rom[offset]);
+			// In particular, segments 6/E have no backing in a 0x60000-byte ROM.
+			if (offset >= rom_size || rom_size - offset < sizeof(uint16_t))
+				return 0xFFFF;
+			return le_read(rom[offset]);
+		}
 		case HW_FX_5800P:
 			if (segment_index < 2)
 				return le_read(rom[offset]);
