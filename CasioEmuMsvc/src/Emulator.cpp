@@ -519,6 +519,9 @@ namespace casioemu {
 			delete tick_thread;
 
 			// std::lock_guard<decltype(access_mx)> access_lock(access_mx);
+			// Peripherals own SDL resources (including screen capture and mirror
+			// resources), so destroy them before the renderer they use.
+			delete& chipset;
 
 			if (scaled_interface_texture)
 				SDL_DestroyTexture(scaled_interface_texture);
@@ -529,7 +532,9 @@ namespace casioemu {
 			SDL_DestroyWindow(window);
 		}
 
-		delete& chipset;
+		else {
+			delete& chipset;
+		}
 	}
 
 	void Emulator::HandleMemoryError() {

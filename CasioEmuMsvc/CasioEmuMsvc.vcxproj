@@ -509,6 +509,9 @@
     <ClCompile Include="src\Peripheral\PowerSupply.cpp" />
     <ClCompile Include="src\Peripheral\RealTimeClock.cpp" />
     <ClCompile Include="src\Peripheral\Screen.cpp" />
+    <ClCompile Include="src\Peripheral\ScreenOutput.cpp" />
+    <ClCompile Include="src\Peripheral\ScreenRenderSupport.cpp" />
+    <ClCompile Include="src\Peripheral\SolarIIScreen.cpp" />
     <ClCompile Include="src\Peripheral\StandbyControl.cpp" />
     <ClCompile Include="src\Peripheral\Timer.cpp" />
     <ClCompile Include="src\Peripheral\TimerBaseCounter.cpp" />
@@ -632,6 +635,9 @@
     <ClInclude Include="src\Peripheral\RealTimeClock.hpp" />
     <ClInclude Include="src\Peripheral\ROMWindow.hpp" />
     <ClInclude Include="src\Peripheral\Screen.hpp" />
+    <ClInclude Include="src\Peripheral\ScreenOutput.hpp" />
+    <ClInclude Include="src\Peripheral\ScreenRenderSupport.hpp" />
+    <ClInclude Include="src\Peripheral\SolarIIScreen.hpp" />
     <ClInclude Include="src\Peripheral\StandbyControl.hpp" />
     <ClInclude Include="src\Peripheral\Timer.hpp" />
     <ClInclude Include="src\Peripheral\TimerBaseCounter.hpp" />
