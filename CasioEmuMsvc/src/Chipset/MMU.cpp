@@ -76,9 +76,7 @@ namespace casioemu {
 			}
 			return 0;
 		case HW_CLASSWIZ_II: {
-			// Segment 8 exposes raw segment 0, without its boot-ROM remapping.
-			const bool raw_segment_zero = segment_index == 8;
-			// Fold the ROM byte address as well as the segment used for decoding.
+			// The highest code-address bit is ignored; align the instruction word.
 			offset &= 0x7FFFE;
 			segment_index &= 7;
 			if (segment_index == 7) {
@@ -88,12 +86,6 @@ namespace casioemu {
 			}
 			else if (segment_index == 5 && segment_offset >= 0xE000)
 				return 0xFFFF;
-			else if (segment_index == 0 && !raw_segment_zero) {
-				if (emulator.chipset.remap && segment_offset < 0x200)
-					offset += 0xFE00;
-				else if (!emulator.chipset.remap && segment_offset >= 0xFE00)
-					return 0xFFFF;
-			}
 			// In particular, segments 6/E have no backing in a 0x60000-byte ROM.
 			if (offset >= rom_size || rom_size - offset < sizeof(uint16_t))
 				return 0xFFFF;
