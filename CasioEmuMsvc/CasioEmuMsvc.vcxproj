@@ -510,6 +510,8 @@
     <ClCompile Include="src\Peripheral\RealTimeClock.cpp" />
     <ClCompile Include="src\Peripheral\Screen.cpp" />
     <ClCompile Include="src\Peripheral\EpsScreen.cpp" />
+    <ClCompile Include="src\Peripheral\ScreenGate.cpp" />
+    <ClCompile Include="src\Peripheral\ScreenScan.cpp" />
     <ClCompile Include="src\Peripheral\ScreenOutput.cpp" />
     <ClCompile Include="src\Peripheral\ScreenRenderSupport.cpp" />
     <ClCompile Include="src\Peripheral\SolarIIScreen.cpp" />
@@ -637,6 +639,10 @@
     <ClInclude Include="src\Peripheral\ROMWindow.hpp" />
     <ClInclude Include="src\Peripheral\Screen.hpp" />
     <ClInclude Include="src\Peripheral\EpsScreen.hpp" />
+    <ClInclude Include="src\Peripheral\LcdResponse.hpp" />
+    <ClInclude Include="src\Peripheral\OrdinaryLcdTarget.hpp" />
+    <ClInclude Include="src\Peripheral\ScreenGate.hpp" />
+    <ClInclude Include="src\Peripheral\ScreenScan.hpp" />
     <ClInclude Include="src\Peripheral\ScreenOutput.hpp" />
     <ClInclude Include="src\Peripheral\ScreenRenderSupport.hpp" />
     <ClInclude Include="src\Peripheral\SolarIIScreen.hpp" />

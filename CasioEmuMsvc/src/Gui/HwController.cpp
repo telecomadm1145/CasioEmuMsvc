@@ -9,9 +9,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cmath>
-int screen_flashing_threshold = 20;
 float screen_fading_blending_coefficient = 0;
-bool enable_screen_fading = false;
 float screen_flashing_brightness_coeff = 1.5f;
 bool screen_residual_enabled = true;
 float screen_residual_alpha_scale = 1.0f;
@@ -85,7 +83,10 @@ void HwController::RenderCore() {
 #endif
 
 	if (!casioemu::IsEpsFamily(m_emu->hardware_id)) {
-		ImGui::SliderInt("HwController.Value1"_lc, &screen_flashing_threshold, 0, 0x3F);
+		auto gate = casioemu::screen_gate::Get();
+		int flashing_threshold = gate.flashing_threshold;
+		if (ImGui::SliderInt("HwController.Value1"_lc, &flashing_threshold, 0, 0x3F))
+			casioemu::screen_gate::SetFlashingThreshold(flashing_threshold);
 		ImGui::SliderFloat("HwController.Value2"_lc, &screen_flashing_brightness_coeff, 1.0f, 8.0f);
 		ImGui::SliderInt("HwController.ScreenBufferSelect"_lc, &screen_buffer_select, 0, 2);
 	}

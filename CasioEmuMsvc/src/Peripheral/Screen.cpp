@@ -22,6 +22,9 @@
 #include "ScreenRenderSupport.hpp"
 #include "SolarIIScreen.hpp"
 #include "EpsScreen.hpp"
+#include "LcdResponse.hpp"
+#include "OrdinaryLcdTarget.hpp"
+#include "ScreenScan.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Chipset/MMU.hpp"
 #include "Chipset/MMURegion.hpp"
@@ -92,10 +95,11 @@ namespace casioemu {
 		float& screen_scan_curve_coeff,
 		bool& screen_scan_curve_valid,
 		Uint64 t,
-		int screen_refresh_rate) {
+		int screen_refresh_rate,
+		int flashing_threshold) {
 		int n = (static_cast<Uint64>((t * screen_refresh_rate) / 250)) % 64;
 
-		if (screen_refresh_rate < screen_flashing_threshold) {
+		if (screen_refresh_rate < flashing_threshold) {
 			for (size_t i = 0; i < 64; i++) {
 				screen_scan_alpha[i] = 1.0f;
 			}
@@ -127,6 +131,7 @@ namespace casioemu {
 
 		return n;
 	}
+
 	template <HardwareId hardware_id>
 	class Screen : public Peripheral, public IScreenFrameProvider {
 		static int const N_ROW,
@@ -162,6 +167,11 @@ namespace casioemu {
 		std::array<float, 64> screen_scan_curve{};
 		float screen_scan_curve_coeff = 0.0f;
 		bool screen_scan_curve_valid = false;
+		std::array<double, 66 * 192> lcd_response_alpha{};
+		bool lcd_response_active = false;
+		std::chrono::steady_clock::time_point lcd_response_last_tick{};
+		std::atomic_bool lcd_response_reset_requested{false};
+		screen_scan::State scan_report_state;
 		float position = 0;
 		SDL_Renderer* renderer{};
 		SDL_Texture* interface_texture{};
@@ -212,6 +222,110 @@ namespace casioemu {
 			return lock;
 		}
 
+		struct LcdResponseTick {
+			bool enabled = false;
+			double rise_gain = 0.0;
+			double fall_gain = 0.0;
+		};
+
+		bool LcdResponseEligible() const {
+			if constexpr (!(hardware_id == HW_FX_5800P || hardware_id == HW_ES_PLUS ||
+				hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II)) {
+				return false;
+			}
+#if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
+			return false;
+#else
+			if constexpr (!lcd_response::kEnableTimeResponse)
+				return false;
+			return !ThemeManager::Instance().Settings().lowPerformanceMode && !low_perf_ext;
+#endif
+		}
+
+		LcdResponseTick BeginLcdResponseTick() {
+			if (!LcdResponseEligible()) {
+				lcd_response_active = false;
+				return {};
+			}
+
+			const auto now = std::chrono::steady_clock::now();
+			double elapsed_ms = 0.0;
+			if (lcd_response_reset_requested.exchange(false, std::memory_order_acq_rel) ||
+				!lcd_response_active) {
+				for (size_t i = 0; i < lcd_response_alpha.size(); ++i)
+					lcd_response_alpha[i] = static_cast<double>(screen_ink_alpha[i]);
+				lcd_response_active = true;
+				lcd_response_last_tick = now;
+			}
+			else {
+				elapsed_ms = std::chrono::duration<double, std::milli>(now - lcd_response_last_tick).count();
+				lcd_response_last_tick = now;
+				if (!(elapsed_ms > 0.0))
+					elapsed_ms = 0.0;
+			}
+
+			const auto config = lcd_response::ForHardware(hardware_id);
+			const auto gain = [elapsed_ms](double half_life_ms) {
+				if (half_life_ms == 0.0)
+					return 1.0;
+				return -std::expm1(-0.6931471805599453094 * elapsed_ms / half_life_ms);
+			};
+			return {true, gain(config.rise_half_life_ms), gain(config.fall_half_life_ms)};
+		}
+
+		void ApplyLcdAlpha(
+			size_t index,
+			float target,
+			float ratio,
+			const LcdResponseTick& response) {
+			if (!response.enabled) {
+				screen_ink_alpha[index] = screen_ink_alpha[index] * ratio + target * (1 - ratio);
+				return;
+			}
+
+			double& alpha = lcd_response_alpha[index];
+			const double target_value = static_cast<double>(target);
+			const double gain = target_value >= alpha ? response.rise_gain : response.fall_gain;
+			alpha += (target_value - alpha) * gain;
+			screen_ink_alpha[index] = static_cast<float>(alpha);
+		}
+
+		void ApplyLcdAlphaDecay(
+			size_t first,
+			size_t last,
+			float ratio,
+			const LcdResponseTick& response) {
+			if (!response.enabled) {
+				for (size_t i = first; i < last; ++i)
+					screen_ink_alpha[i] *= ratio;
+				return;
+			}
+			for (size_t i = first; i < last; ++i)
+				ApplyLcdAlpha(i, 0.0f, ratio, response);
+		}
+
+		void SetupIndependentScanRegions() {
+			if constexpr (screen_scan::kEnableIndependentScanReport &&
+				(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II)) {
+				if (!region_scan_report_op1.setup_done)
+					region_scan_report_op1.Setup(
+						0xF035, 1, "Screen/ScanReportOption1", &scan_report_state,
+						screen_scan::ReadOption1, screen_scan::WriteOption1, emulator);
+				if (!region_scan_report_en.setup_done)
+					region_scan_report_en.Setup(
+						0xF036, 1, "Screen/ScanReportOptionEnable", &scan_report_state,
+						screen_scan::ReadOptionEnable, screen_scan::WriteOptionEnable, emulator);
+				if (!region_scan_report.setup_done)
+					region_scan_report.Setup(
+						0xF03B, 1, "Screen/ScanReport", &scan_report_state,
+						screen_scan::ReadReport, MMURegion::IgnoreWrite, emulator);
+				if (!region_refresh_rate.setup_done)
+					region_refresh_rate.Setup(
+						0xF034, 1, "Screen/RefreshRate", &scan_report_state,
+						screen_scan::ReadRefreshRate, screen_scan::WriteRefreshRate, emulator);
+			}
+		}
+
 		void StartUpdateThread();
 		void StopUpdateThread();
 
@@ -241,6 +355,7 @@ namespace casioemu {
 
 		uint8_t ClassWizIIStatusAlpha(uint8_t offset, uint8_t mask) const {
 			if (!StatusEnabled() || !screen_buffer || !screen_buffer1) return 0;
+			const auto gate = screen_gate::Get();
 			const auto status_offset = (offset + screen_offset * ROW_SIZE) % ((N_ROW + 1) * ROW_SIZE);
 			const bool lower = (screen_buffer[status_offset] & mask) != 0;
 			const bool upper = (screen_buffer1[status_offset] & mask) != 0;
@@ -250,7 +365,7 @@ namespace casioemu {
 			float alpha = static_cast<float>(status_ink_alpha_off);
 			alpha += (static_cast<float>(status_ink_alpha_on - status_ink_alpha_off)) * (lower ? kClassWizIILowerPlaneWeight : 0.0f);
 			alpha += (static_cast<float>(status_ink_alpha_on - status_ink_alpha_off)) * (upper ? kClassWizIIUpperPlaneWeight : 0.0f);
-			if (screen_refresh_rate >= screen_flashing_threshold) {
+			if (screen_refresh_rate >= gate.flashing_threshold) {
 				alpha *= screen_scan_alpha[0];
 			}
 			return static_cast<uint8_t>(std::clamp(static_cast<int>(alpha), 0, 255));
@@ -443,7 +558,14 @@ namespace casioemu {
 			os.write(reinterpret_cast<const char*>(&screen_mode), 1);
 			os.write(reinterpret_cast<const char*>(&screen_range), 1);
 			os.write(reinterpret_cast<const char*>(&screen_offset), 1);
-			os.write(reinterpret_cast<const char*>(&screen_refresh_rate), 1);
+			if constexpr (screen_scan::kEnableIndependentScanReport &&
+				(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II)) {
+				const uint8_t refresh_rate = scan_report_state.GetRateForState();
+				os.write(reinterpret_cast<const char*>(&refresh_rate), 1);
+			}
+			else {
+				os.write(reinterpret_cast<const char*>(&screen_refresh_rate), 1);
+			}
 			os.write(reinterpret_cast<const char*>(&screen_power), 1);
 		}
 		void LoadState(std::istream& is) override {
@@ -459,8 +581,17 @@ namespace casioemu {
 			is.read(reinterpret_cast<char*>(&screen_mode), 1);
 			is.read(reinterpret_cast<char*>(&screen_range), 1);
 			is.read(reinterpret_cast<char*>(&screen_offset), 1);
-			is.read(reinterpret_cast<char*>(&screen_refresh_rate), 1);
+			if constexpr (screen_scan::kEnableIndependentScanReport &&
+				(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II)) {
+				uint8_t refresh_rate = scan_report_state.GetRateForState();
+				if (is.read(reinterpret_cast<char*>(&refresh_rate), 1))
+					scan_report_state.LoadRate(refresh_rate);
+			}
+			else {
+				is.read(reinterpret_cast<char*>(&screen_refresh_rate), 1);
+			}
 			is.read(reinterpret_cast<char*>(&screen_power), 1);
+			lcd_response_reset_requested.store(true, std::memory_order_release);
 		}
 		void tick() {
 			float ratio = 0;
@@ -477,6 +608,7 @@ namespace casioemu {
 				ratio = 0.80f;
 			}
 #endif
+			const auto lcd_response = BeginLcdResponseTick();
 			if constexpr (hardware_id == HW_TI) {
 				ratio = 1 - 1e-4;
 #ifdef __EMSCRIPTEN__
@@ -549,49 +681,71 @@ namespace casioemu {
 				return;
 			}
 
-			if (screen_refresh_rate < screen_flashing_threshold && !enable_screen_fading)
-				;
+			int report_refresh_rate = 0;
+			int visual_refresh_rate = 0;
+			Uint64 scan_now = 0;
+			const auto gate = screen_gate::Get();
+			screen_scan::Gate visual_gate = gate;
+			if constexpr (screen_scan::kEnableIndependentScanReport &&
+				(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II)) {
+				scan_now = SDL_GetTicks64();
+				const auto scan_result = scan_report_state.Advance(scan_now, gate);
+				// Advance returns the gate it actually accepted. This may be newer
+				// than the snapshot captured before waiting for scan state, so all
+				// ON-path visual decisions must use this returned snapshot.
+				visual_gate = scan_result.gate;
+				scan_now = scan_result.effective_now_ms;
+				report_refresh_rate = scan_result.phase_rate;
+				visual_refresh_rate = scan_result.effective_rate;
+			}
 			else {
-				int n = update_screen_scan_alpha(
-					screen_scan_alpha,
-					screen_scan_curve,
-					screen_scan_curve_coeff,
-					screen_scan_curve_valid,
-					SDL_GetTicks64(),
-					screen_refresh_rate);
-				screen_scan_report = ((n / (screen_scan_report_en ? screen_scan_report_op1 : 64)) % 2 ? 3 : 0) ^ (n % 64 == 0 ? 1 : (n % 64 == 32 ? 2 : 0));
+				report_refresh_rate = screen_refresh_rate;
 			}
-			if (screen_refresh_rate < 6) {
-				screen_refresh_rate = 6;
+			const int visual_flashing_threshold = visual_gate.flashing_threshold;
+			const bool scan_frozen = [&]() {
+				return report_refresh_rate < visual_gate.flashing_threshold && !visual_gate.fading_enabled;
+			}();
+			if (!scan_frozen) {
+				int n = 0;
+				if constexpr (screen_scan::kEnableIndependentScanReport &&
+					(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II)) {
+					n = update_screen_scan_alpha(
+						screen_scan_alpha,
+						screen_scan_curve,
+						screen_scan_curve_coeff,
+						screen_scan_curve_valid,
+						scan_now,
+						report_refresh_rate,
+						visual_gate.flashing_threshold);
+				}
+				else {
+					n = update_screen_scan_alpha(
+						screen_scan_alpha,
+						screen_scan_curve,
+						screen_scan_curve_coeff,
+						screen_scan_curve_valid,
+						SDL_GetTicks64(),
+						screen_refresh_rate,
+						visual_gate.flashing_threshold);
+				}
+				if constexpr (!(screen_scan::kEnableIndependentScanReport &&
+					(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II))) {
+					screen_scan_report = screen_scan::CalculateScanReportFromPhase(n, screen_scan_report_op1, screen_scan_report_en);
+				}
 			}
-			auto sb = screen_brightness;
-			if (sb < 3) {
-				sb = 3;
+			if constexpr (!(screen_scan::kEnableIndependentScanReport &&
+				(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II))) {
+				if (screen_refresh_rate < 6)
+					screen_refresh_rate = 6;
+				visual_refresh_rate = screen_refresh_rate;
 			}
-			auto contrast = (int)screen_contrast;
-			// if (screen_contrast2_en) {
-			//        contrast += screen_contrast2 * 0.5;
-			// }
-			if (contrast < 0) {
-				contrast = 0;
-			}
-			auto coeff = 16;
-			auto off = 0;
-			if constexpr (hardware_id != HW_CLASSWIZ_II) {
-				coeff = 28;
-				off = -240;
-			}
-			int ink_alpha_on = off + contrast * coeff - sb * 8;
-			int ink_alpha_off = off + 20 + (contrast) * (coeff - 11) - sb * 13;
-			ink_alpha_off = screen_residual_enabled ? static_cast<int>(ink_alpha_off * screen_residual_alpha_scale) : 0;
-			if (ink_alpha_on < 0)
-				ink_alpha_on = 0;
-			if (ink_alpha_off < 0)
-				ink_alpha_off = 0;
-			if (!screen_residual_enabled) {
-				ink_alpha_on = 255;
-				ink_alpha_off = 0;
-			}
+			const auto target_levels = ordinary_lcd::CalculateTargetLevels<hardware_id == HW_CLASSWIZ_II>(
+				screen_brightness,
+				static_cast<int>(screen_contrast),
+				screen_residual_enabled,
+				screen_residual_alpha_scale);
+			int ink_alpha_on = target_levels.ink_alpha_on;
+			int ink_alpha_off = target_levels.ink_alpha_off;
 			bool enable_status, enable_dotmatrix, clear_dots;
 
 			bool mode_6 = false;
@@ -663,9 +817,9 @@ namespace casioemu {
 								ink_alpha += (ink_alpha_on - ink_alpha_off) * kClassWizIILowerPlaneWeight;
 							if (screen_buffer1[off] & sprite_bitmap[ix].mask)
 								ink_alpha += (ink_alpha_on - ink_alpha_off) * kClassWizIIUpperPlaneWeight;
-							if (screen_refresh_rate >= screen_flashing_threshold)
+							if (visual_refresh_rate >= visual_flashing_threshold)
 								ink_alpha *= screen_scan_alpha[0];
-							screen_ink_alpha[ix - 1] = screen_ink_alpha[ix - 1] * ratio + ink_alpha * (1 - ratio);
+							ApplyLcdAlpha(ix - 1, static_cast<float>(ink_alpha), ratio, lcd_response);
 						}
 					}
 					else {
@@ -676,24 +830,15 @@ namespace casioemu {
 								ink_alpha = ink_alpha_on;
 							else
 								ink_alpha = ink_alpha_off;
-							if (screen_refresh_rate >= screen_flashing_threshold)
+							if (visual_refresh_rate >= visual_flashing_threshold)
 								ink_alpha *= screen_scan_alpha[0];
-							screen_ink_alpha[x] = screen_ink_alpha[x] * ratio + ink_alpha * (1 - ratio);
+							ApplyLcdAlpha(x, static_cast<float>(ink_alpha), ratio, lcd_response);
 							x++;
 						}
 					}
 				}
 				else {
-					if constexpr (hardware_id == HW_CLASSWIZ_II) {
-						for (size_t i = 0; i < 192; i++) {
-							screen_ink_alpha[i] *= ratio;
-						}
-					}
-					else {
-						for (size_t i = 0; i < 192; i++) {
-							screen_ink_alpha[i] *= ratio;
-						}
-					}
+					ApplyLcdAlphaDecay(0, 192, ratio, lcd_response);
 				}
 
 				if (enable_dotmatrix) {
@@ -728,12 +873,12 @@ namespace casioemu {
 										ink_alpha += (ink_alpha_on - ink_alpha_off) * kClassWizIILowerPlaneWeight;
 									if (!clear_dots && screen_buffer1[index] & mask)
 										ink_alpha += (ink_alpha_on - ink_alpha_off) * kClassWizIIUpperPlaneWeight;
-									if (screen_refresh_rate >= screen_flashing_threshold)
+									if (visual_refresh_rate >= visual_flashing_threshold)
 										ink_alpha *= screen_scan_alpha[iy];
 									if (clear)
 										ink_alpha = 0;
-									float& dat = screen_ink_alpha[(flip_screen_h ? (191 - x) : x) + iy2 * 192];
-									dat = dat * ratio + ink_alpha * (1 - ratio);
+									const size_t alpha_index = (flip_screen_h ? (191 - x) : x) + iy2 * 192;
+									ApplyLcdAlpha(alpha_index, static_cast<float>(ink_alpha), ratio, lcd_response);
 									x++;
 								}
 							}
@@ -763,12 +908,12 @@ namespace casioemu {
 										ink_alpha = ink_alpha_on;
 									else
 										ink_alpha = ink_alpha_off;
-									if (screen_refresh_rate >= screen_flashing_threshold)
+									if (visual_refresh_rate >= visual_flashing_threshold)
 										ink_alpha *= screen_scan_alpha[iy];
 									if (clear)
 										ink_alpha = 0;
-									float& dat = screen_ink_alpha[(flip_screen_h ? (191 - x) : x) + iy2 * 192];
-									dat = dat * ratio + ink_alpha * (1 - ratio);
+									const size_t alpha_index = (flip_screen_h ? (191 - x) : x) + iy2 * 192;
+									ApplyLcdAlpha(alpha_index, static_cast<float>(ink_alpha), ratio, lcd_response);
 									x++;
 								}
 							}
@@ -776,30 +921,12 @@ namespace casioemu {
 					}
 				}
 				else {
-					if constexpr (hardware_id == HW_CLASSWIZ_II) {
-						for (size_t i = 192; i < 64 * 192; i++) {
-							screen_ink_alpha[i] *= ratio;
-						}
-					}
-					else {
-						for (size_t i = 192; i < 64 * 192; i++) {
-							screen_ink_alpha[i] *= ratio;
-						}
-					}
+					ApplyLcdAlphaDecay(192, 64 * 192, ratio, lcd_response);
 				}
 			}
 			return;
 		clean_scr:
-			if constexpr (hardware_id == HW_CLASSWIZ_II) {
-				for (size_t i = 0; i < 64 * 192; i++) {
-					screen_ink_alpha[i] *= ratio;
-				}
-			}
-			else {
-				for (size_t i = 0; i < 64 * 192; i++) {
-					screen_ink_alpha[i] *= ratio;
-				}
-			}
+			ApplyLcdAlphaDecay(0, 64 * 192, ratio, lcd_response);
 			return;
 		}
 	};
@@ -1438,21 +1565,32 @@ cwx中F03B的值应该是由屏幕扫描和F035/F036决定的
 n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2 ? 3 : 0 ) ^ ( n % 64 == 0 ? 1 : ( n % 64 == 32 ? 2 : 0)  )
 				*/
 
-				region_scan_report_op1.Setup(0xF035, 1, "Screen/ScanReportOption1", &screen_scan_report_op1, MMURegion::DefaultRead<uint8_t, 0x1E>,
-					MMURegion::DefaultWrite<uint8_t, 0x1E>, emulator);
+				if constexpr (screen_scan::kEnableIndependentScanReport) {
+					SetupIndependentScanRegions();
+				}
+				else {
+					region_scan_report_op1.Setup(0xF035, 1, "Screen/ScanReportOption1", &screen_scan_report_op1, MMURegion::DefaultRead<uint8_t, 0x1E>,
+						MMURegion::DefaultWrite<uint8_t, 0x1E>, emulator);
 
-				region_scan_report_en.Setup(0xF036, 1, "Screen/ScanReportOptionEnable", &screen_scan_report_en, MMURegion::DefaultRead<uint8_t, 0b1001>,
-					MMURegion::DefaultWrite<uint8_t, 0b1001>, emulator);
+					region_scan_report_en.Setup(0xF036, 1, "Screen/ScanReportOptionEnable", &screen_scan_report_en, MMURegion::DefaultRead<uint8_t, 0b1001>,
+						MMURegion::DefaultWrite<uint8_t, 0b1001>, emulator);
 
-				region_scan_report.Setup(0xF03B, 1, "Screen/ScanReport", &screen_scan_report, MMURegion::DefaultRead<uint8_t, 0x3>,
-					MMURegion::IgnoreWrite, emulator);
+					region_scan_report.Setup(0xF03B, 1, "Screen/ScanReport", &screen_scan_report, MMURegion::DefaultRead<uint8_t, 0x3>,
+						MMURegion::IgnoreWrite, emulator);
+				}
 			}
 			else {
 				screen_scan_report_op1 = 0x17;
 				screen_scan_report_en = 1;
 			}
 
-			if constexpr (hardware_id == HardwareId::HW_FX_5800P || hardware_id == HardwareId::HW_ES_PLUS) {
+			if constexpr (screen_scan::kEnableIndependentScanReport &&
+				(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II)) {
+				region_offset.Setup(0xF039, 1, "Screen/DSPOFST", &screen_offset, MMURegion::DefaultRead<uint8_t, 0x3F>,
+					MMURegion::DefaultWrite<uint8_t, 0x3F>, emulator);
+				SetupIndependentScanRegions();
+			}
+			else if constexpr (hardware_id == HardwareId::HW_FX_5800P || hardware_id == HardwareId::HW_ES_PLUS) {
 				region_refresh_rate.Setup(0xF034, 1, "Screen/Unknown_F034", &unk_f034, MMURegion::DefaultRead<uint8_t, 0b11>,
 					MMURegion::DefaultWrite<uint8_t, 0b11>, emulator);
 			}
@@ -1465,6 +1603,9 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 					MMURegion::DefaultWrite<uint8_t, 0x7F>, emulator);
 			}
 			enabled_2 = true;
+			if constexpr (screen_scan::kEnableIndependentScanReport &&
+				(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II))
+				scan_report_state.Activate();
 		}
 		StartUpdateThread();
 	}
@@ -1499,18 +1640,28 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		if constexpr (hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) {
 			screen_select = 0;
 			region_select.Kill();
-			screen_scan_report_op1 = 0;
-			region_scan_report_op1.Kill();
-			screen_scan_report_en = 0;
-			region_scan_report_en.Kill();
-			screen_scan_report = 0;
-			region_scan_report.Kill();
+			if constexpr (screen_scan::kEnableIndependentScanReport) {
+				scan_report_state.Deactivate();
+				region_scan_report_op1.Kill();
+				region_scan_report_en.Kill();
+				region_scan_report.Kill();
+			}
+			else {
+				screen_scan_report_op1 = 0;
+				region_scan_report_op1.Kill();
+				screen_scan_report_en = 0;
+				region_scan_report_en.Kill();
+				screen_scan_report = 0;
+				region_scan_report.Kill();
+			}
 			region_unk1.Kill();
 			region_unk2.Kill();
 			screen_brightness = 0;
 			region_brightness.Kill();
 		}
-		screen_refresh_rate = 0;
+		if constexpr (!screen_scan::kEnableIndependentScanReport ||
+			!(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II))
+			screen_refresh_rate = 0;
 		region_refresh_rate.Kill();
 		if constexpr (hardware_id != HardwareId::HW_FX_5800P && hardware_id != HardwareId::HW_ES_PLUS) {
 			screen_offset = 0;
