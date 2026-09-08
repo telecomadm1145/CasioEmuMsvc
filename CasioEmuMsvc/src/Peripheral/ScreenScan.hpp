@@ -2,9 +2,11 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <atomic>
 #include <mutex>
 
 #include "ScreenGate.hpp"
+#include "OrdinaryLcdHistory.hpp"
 
 namespace casioemu {
 struct MMURegion;
@@ -50,8 +52,35 @@ public:
 	uint8_t ReadOptionEnable() const;
 	uint8_t GetRateForState() const;
 	void LoadRate(uint8_t value);
+	void SetHistory(ordinary_lcd_history::History* history);
 
 private:
+	struct Snapshot {
+		uint8_t raw_rate = 0;
+		uint8_t effective_rate = 0;
+		uint8_t option1 = 0;
+		uint8_t option_enable = 0;
+		Gate gate{};
+		bool active = false;
+		bool gate_initialized = false;
+	};
+
+	struct OperationContext {
+		State* state = nullptr;
+		ordinary_lcd_history::ScanOperation operation = ordinary_lcd_history::ScanOperation::Advance;
+		uint64_t now_ms = 0;
+		Gate gate{};
+		uint8_t value = 0;
+		AdvanceResult result{};
+		Snapshot before{};
+		Snapshot after_advance{};
+		Snapshot after{};
+	};
+
+	static ordinary_lcd_history::PrepareResult PrepareOperation(void*, ordinary_lcd_history::Event&) noexcept;
+	static void NoopWrite(void*) noexcept;
+	Snapshot SnapshotLocked() const;
+	void ApplyOperationLocked(OperationContext&);
 	AdvanceResult AdvanceLocked(uint64_t now_ms, Gate gate);
 
 	mutable std::mutex mutex;
@@ -64,6 +93,8 @@ private:
 	bool time_initialized = false;
 	uint64_t last_time_ms = 0;
 	Gate observed_gate{};
+	std::atomic<ordinary_lcd_history::History*> history{nullptr};
+	std::atomic_bool history_started{false};
 };
 
 Gate CurrentGate();

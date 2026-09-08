@@ -34,6 +34,34 @@ enum class Kind : uint8_t {
 	Byte,
 	Select,
 	Mode,
+	Scan,
+};
+
+enum class ScanOperation : uint8_t {
+	Advance,
+	WriteRate,
+	WriteOption1,
+	WriteOptionEnable,
+};
+
+struct ScanSnapshot {
+	uint8_t raw_rate = 0;
+	uint8_t effective_rate = 0;
+	uint8_t option1 = 0;
+	uint8_t option_enable = 0;
+	int flashing_threshold = 0;
+	bool fading_enabled = false;
+	uint64_t gate_version = 0;
+	bool active = false;
+	bool gate_initialized = false;
+
+	bool operator==(const ScanSnapshot& other) const {
+		return raw_rate == other.raw_rate && effective_rate == other.effective_rate &&
+			option1 == other.option1 && option_enable == other.option_enable &&
+			flashing_threshold == other.flashing_threshold &&
+			fading_enabled == other.fading_enabled && gate_version == other.gate_version &&
+			active == other.active && gate_initialized == other.gate_initialized;
+	}
 };
 
 enum class PrepareResult : uint8_t {
@@ -63,8 +91,16 @@ struct Event {
 	uint8_t write_plane_mask = 0;
 	uint8_t old_value = 0;
 	uint8_t new_value = 0;
+	uint64_t state_sdl_ms = 0;
+	ScanOperation scan_operation = ScanOperation::Advance;
+	ScanSnapshot scan_before{};
+	ScanSnapshot scan_after_advance{};
+	ScanSnapshot scan_after_write{};
 
 	bool Changes() const {
+		if (kind == Kind::Scan) {
+			return !(scan_before == scan_after_advance) || !(scan_after_advance == scan_after_write);
+		}
 		if (kind != Kind::Byte)
 			return old_value != new_value;
 		return ((write_plane_mask & kPrimaryPlane) && old_primary != new_primary) ||
@@ -77,15 +113,27 @@ struct Batch {
 	size_t size = 0;
 };
 
+struct Cutoff {
+	uint64_t epoch = 0;
+	uint64_t end_seq = 0;
+	uint64_t steady_ns = 0;
+	uint64_t sdl_ms = 0;
+};
+
 struct ConsumeResult {
 	size_t count = 0;
 	uint64_t last_seq = 0;
 	uint64_t epoch = 0;
+	bool epoch_matches = false;
+	bool queue_epoch_matches = false;
+	bool cutoff_complete = false;
 	bool incomplete = false;
 };
 
 struct WorkerState {
 	Batch batch;
+	Cutoff cutoff{};
+	bool cutoff_pending = false;
 	uint64_t consumed_seq = 0;
 	uint64_t consumed_count = 0;
 	bool incomplete = false;
@@ -95,6 +143,8 @@ struct DisabledBatch {};
 
 struct DisabledWorkerState {
 	DisabledBatch batch;
+	Cutoff cutoff{};
+	bool cutoff_pending = false;
 	uint64_t consumed_seq = 0;
 	uint64_t consumed_count = 0;
 	bool incomplete = false;
@@ -109,7 +159,8 @@ public:
 	// prepare callback reads old bytes and fills Event under that same lock;
 	// Failed/Rejected means the caller must perform the original write itself.
 	TransactionResult TryRecord(PrepareFn prepare, WriteFn write, void* context);
-	ConsumeResult Consume(Batch& batch);
+	Cutoff CaptureCutoff() const;
+	ConsumeResult ConsumeUntil(const Cutoff& cutoff, Batch& batch);
 	bool Incomplete() const;
 	uint64_t Dropped() const;
 
@@ -133,7 +184,8 @@ private:
 // Screen instance. Calls are normally removed by if constexpr at the caller.
 struct DisabledHistory {
 	TransactionResult TryRecord(PrepareFn, WriteFn, void*) { return TransactionResult::Failed; }
-	ConsumeResult Consume(DisabledBatch&) { return {}; }
+	Cutoff CaptureCutoff() const { return {}; }
+	ConsumeResult ConsumeUntil(const Cutoff&, DisabledBatch&) { return {}; }
 	bool Incomplete() const { return false; }
 	uint64_t Dropped() const { return 0; }
 	void InvalidateEpoch() {}

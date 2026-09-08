@@ -184,6 +184,7 @@ namespace casioemu {
 		screen_scan::State scan_report_state;
 		LcdHistory lcd_history;
 		LcdHistoryWorker lcd_history_worker;
+		bool scan_history_bound = false;
 		float position = 0;
 		SDL_Renderer* renderer{};
 		SDL_Texture* interface_texture{};
@@ -277,12 +278,9 @@ namespace casioemu {
 			}
 
 			const auto config = lcd_response::ForHardware(hardware_id);
-			const auto gain = [elapsed_ms](double half_life_ms) {
-				if (half_life_ms == 0.0)
-					return 1.0;
-				return -std::expm1(-0.6931471805599453094 * elapsed_ms / half_life_ms);
-			};
-			return {true, gain(config.rise_half_life_ms), gain(config.fall_half_life_ms)};
+			return {true,
+				lcd_response::GainForElapsed(elapsed_ms, config.rise_half_life_ms),
+				lcd_response::GainForElapsed(elapsed_ms, config.fall_half_life_ms)};
 		}
 
 		void ApplyLcdAlpha(
@@ -296,9 +294,8 @@ namespace casioemu {
 			}
 
 			double& alpha = lcd_response_alpha[index];
-			const double target_value = static_cast<double>(target);
-			const double gain = target_value >= alpha ? response.rise_gain : response.fall_gain;
-			alpha += (target_value - alpha) * gain;
+			alpha = lcd_response::BlendWithGains(
+				alpha, static_cast<double>(target), response.rise_gain, response.fall_gain);
 			screen_ink_alpha[index] = static_cast<float>(alpha);
 		}
 
@@ -623,14 +620,22 @@ namespace casioemu {
 			}
 #endif
 			if constexpr (kCaptureLcdHistory) {
-				const auto consumed = lcd_history.Consume(lcd_history_worker.batch);
+				if (!lcd_history_worker.cutoff_pending) {
+					lcd_history_worker.cutoff = lcd_history.CaptureCutoff();
+					lcd_history_worker.cutoff_pending = true;
+				}
+				const auto consumed = lcd_history.ConsumeUntil(
+					lcd_history_worker.cutoff, lcd_history_worker.batch);
 				lcd_history_worker.consumed_count += consumed.count;
 				if (consumed.count != 0)
 					lcd_history_worker.consumed_seq = consumed.last_seq;
 				// A producer may set Incomplete after Consume releases history's
 				// mutex; retain the sticky state and re-read the atomic diagnostic.
 				lcd_history_worker.incomplete = lcd_history_worker.incomplete ||
-					consumed.incomplete || lcd_history.Incomplete();
+					consumed.incomplete || !consumed.epoch_matches ||
+					!consumed.queue_epoch_matches || lcd_history.Incomplete();
+				if (!consumed.epoch_matches || !consumed.queue_epoch_matches || consumed.cutoff_complete)
+					lcd_history_worker.cutoff_pending = false;
 			}
 			const auto lcd_response = BeginLcdResponseTick();
 			if constexpr (hardware_id == HW_TI) {
@@ -1203,8 +1208,8 @@ namespace casioemu {
 						break;
 					tick();
 				}
-				if constexpr (IsEpsFamily(hardware_id)) {
-					SDL_Delay(10);
+			if constexpr (IsEpsFamily(hardware_id)) {
+				SDL_Delay(10);
 				}
 #ifdef __ANDROID__
 				else {
@@ -1403,6 +1408,12 @@ namespace casioemu {
 			return;
 		}
 		if (!(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) || (!enabled_2 && (screen_power & 1))) {
+			if constexpr (kCaptureLcdHistory) {
+				if (!scan_history_bound) {
+					scan_report_state.SetHistory(&lcd_history);
+					scan_history_bound = true;
+				}
+			}
 			if constexpr (hardware_id != HW_CLASSWIZ_II) {
 				region_buffer.Setup(
 					0xF800, (N_ROW + 1) * ROW_SIZE, "Screen/Buffer", this, [](MMURegion* region, size_t offset) {

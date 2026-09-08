@@ -53,18 +53,35 @@ TransactionResult History::TryRecord(PrepareFn prepare, WriteFn write, void* con
 	return TransactionResult::Committed;
 }
 
-ConsumeResult History::Consume(Batch& batch) {
+Cutoff History::CaptureCutoff() const {
+	std::lock_guard<std::mutex> lock(mutex);
+	const auto steady_ns = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+		std::chrono::steady_clock::now().time_since_epoch()).count());
+	return {epoch, next_seq, steady_ns, SDL_GetTicks64()};
+}
+
+ConsumeResult History::ConsumeUntil(const Cutoff& cutoff, Batch& batch) {
 	std::lock_guard<std::mutex> lock(mutex);
 	batch.size = 0;
-	while (batch.size < batch.events.size() && count != 0) {
+	const bool epoch_matches = cutoff.epoch == epoch;
+	if (!epoch_matches)
+		return {0, 0, epoch, false, false, false, incomplete.load(std::memory_order_acquire)};
+	while (batch.size < batch.events.size() && count != 0 &&
+		ring[head].epoch == cutoff.epoch && ring[head].seq <= cutoff.end_seq) {
 		batch.events[batch.size++] = ring[head];
 		head = (head + 1) % ring.size();
 		--count;
 	}
+	const bool queue_epoch_matches = count == 0 || ring[head].epoch == cutoff.epoch;
+	const bool cutoff_complete = queue_epoch_matches &&
+		(count == 0 || ring[head].seq > cutoff.end_seq);
 	return {
 		batch.size,
 		batch.size == 0 ? 0 : batch.events[batch.size - 1].seq,
 		epoch,
+		true,
+		queue_epoch_matches,
+		cutoff_complete,
 		incomplete.load(std::memory_order_acquire)};
 }
 

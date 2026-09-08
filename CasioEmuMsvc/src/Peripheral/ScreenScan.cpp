@@ -28,6 +28,11 @@ uint8_t CalculateScanReportFromPhase(int n, uint8_t option1, uint8_t option_enab
 }
 
 void State::Activate() {
+	if constexpr (ordinary_lcd_history::kEnabled && kEnableIndependentScanReport) {
+		if (history_started.exchange(true, std::memory_order_acq_rel))
+			if (auto* history = this->history.load(std::memory_order_acquire))
+				history->InvalidateEpoch();
+	}
 	std::lock_guard<std::mutex> lock(mutex);
 	if (active)
 		return;
@@ -37,6 +42,10 @@ void State::Activate() {
 }
 
 void State::Deactivate() {
+	if constexpr (ordinary_lcd_history::kEnabled && kEnableIndependentScanReport) {
+	if (auto* history = this->history.load(std::memory_order_acquire))
+		history->InvalidateEpoch();
+	}
 	std::lock_guard<std::mutex> lock(mutex);
 	active = false;
 	gate_initialized = false;
@@ -48,7 +57,80 @@ void State::Deactivate() {
 	last_report = 0;
 }
 
+void State::SetHistory(ordinary_lcd_history::History* value) {
+	history.store(value, std::memory_order_release);
+}
+
+State::Snapshot State::SnapshotLocked() const {
+	Snapshot snapshot{};
+	snapshot.raw_rate = refresh_rate;
+	snapshot.effective_rate = static_cast<uint8_t>(EffectiveRate(refresh_rate));
+	snapshot.option1 = option1;
+	snapshot.option_enable = option_enable;
+	snapshot.gate = gate_initialized ? observed_gate : Gate{};
+	snapshot.active = active;
+	snapshot.gate_initialized = gate_initialized;
+	return snapshot;
+}
+
+void State::ApplyOperationLocked(OperationContext& context) {
+	context.before = SnapshotLocked();
+	context.result = AdvanceLocked(context.now_ms, context.gate);
+	context.after_advance = SnapshotLocked();
+	switch (context.operation) {
+	case ordinary_lcd_history::ScanOperation::WriteRate:
+		refresh_rate = context.value & 0x7f;
+		break;
+	case ordinary_lcd_history::ScanOperation::WriteOption1:
+		option1 = context.value & 0x1e;
+		break;
+	case ordinary_lcd_history::ScanOperation::WriteOptionEnable:
+		option_enable = context.value & 0b1001;
+		break;
+	case ordinary_lcd_history::ScanOperation::Advance:
+		break;
+	}
+	context.after = SnapshotLocked();
+	if (context.result.active)
+		context.after_advance.gate = context.after.gate = context.result.gate;
+}
+
+ordinary_lcd_history::PrepareResult State::PrepareOperation(
+	void* raw, ordinary_lcd_history::Event& event) noexcept {
+	auto* context = static_cast<OperationContext*>(raw);
+	std::lock_guard<std::mutex> lock(context->state->mutex);
+	context->state->ApplyOperationLocked(*context);
+	event.kind = ordinary_lcd_history::Kind::Scan;
+	event.scan_operation = context->operation;
+	event.scan_before = {context->before.raw_rate, context->before.effective_rate,
+		context->before.option1, context->before.option_enable,
+		context->before.gate.flashing_threshold, context->before.gate.fading_enabled,
+		context->before.gate.version, context->before.active, context->before.gate_initialized};
+	event.scan_after_advance = {context->after_advance.raw_rate, context->after_advance.effective_rate,
+		context->after_advance.option1, context->after_advance.option_enable,
+		context->after_advance.gate.flashing_threshold, context->after_advance.gate.fading_enabled,
+		context->after_advance.gate.version, context->after_advance.active, context->after_advance.gate_initialized};
+	event.scan_after_write = {context->after.raw_rate, context->after.effective_rate,
+		context->after.option1, context->after.option_enable,
+		context->after.gate.flashing_threshold, context->after.gate.fading_enabled,
+		context->after.gate.version, context->after.active, context->after.gate_initialized};
+	event.state_sdl_ms = context->result.effective_now_ms;
+	return event.Changes()
+		? ordinary_lcd_history::PrepareResult::Commit
+		: ordinary_lcd_history::PrepareResult::NoChange;
+}
+
+void State::NoopWrite(void*) noexcept {}
+
 AdvanceResult State::Advance(uint64_t now_ms, Gate gate) {
+	if constexpr (ordinary_lcd_history::kEnabled && kEnableIndependentScanReport) {
+	if (auto* history = this->history.load(std::memory_order_acquire)) {
+		OperationContext context{this, ordinary_lcd_history::ScanOperation::Advance, now_ms, gate};
+		if (history->TryRecord(&State::PrepareOperation, &State::NoopWrite, &context) ==
+			ordinary_lcd_history::TransactionResult::Committed)
+			return context.result;
+	}
+	}
 	std::lock_guard<std::mutex> lock(mutex);
 	return AdvanceLocked(now_ms, gate);
 }
@@ -90,26 +172,49 @@ AdvanceResult State::AdvanceLocked(uint64_t now_ms, Gate gate) {
 }
 
 void State::WriteRate(uint64_t now_ms, Gate gate, uint8_t value) {
+	if constexpr (ordinary_lcd_history::kEnabled && kEnableIndependentScanReport) {
+	if (auto* history = this->history.load(std::memory_order_acquire)) {
+		OperationContext context{this, ordinary_lcd_history::ScanOperation::WriteRate, now_ms, gate, value};
+		if (history->TryRecord(&State::PrepareOperation, &State::NoopWrite, &context) ==
+			ordinary_lcd_history::TransactionResult::Committed)
+			return;
+	}
+	}
 	std::lock_guard<std::mutex> lock(mutex);
 	AdvanceLocked(now_ms, gate);
 	refresh_rate = value & 0x7f;
 }
 
 void State::WriteOption1(uint64_t now_ms, Gate gate, uint8_t value) {
+	if constexpr (ordinary_lcd_history::kEnabled && kEnableIndependentScanReport) {
+	if (auto* history = this->history.load(std::memory_order_acquire)) {
+		OperationContext context{this, ordinary_lcd_history::ScanOperation::WriteOption1, now_ms, gate, value};
+		if (history->TryRecord(&State::PrepareOperation, &State::NoopWrite, &context) ==
+			ordinary_lcd_history::TransactionResult::Committed)
+			return;
+	}
+	}
 	std::lock_guard<std::mutex> lock(mutex);
 	AdvanceLocked(now_ms, gate);
 	option1 = value & 0x1e;
 }
 
 void State::WriteOptionEnable(uint64_t now_ms, Gate gate, uint8_t value) {
+	if constexpr (ordinary_lcd_history::kEnabled && kEnableIndependentScanReport) {
+	if (auto* history = this->history.load(std::memory_order_acquire)) {
+		OperationContext context{this, ordinary_lcd_history::ScanOperation::WriteOptionEnable, now_ms, gate, value};
+		if (history->TryRecord(&State::PrepareOperation, &State::NoopWrite, &context) ==
+			ordinary_lcd_history::TransactionResult::Committed)
+			return;
+	}
+	}
 	std::lock_guard<std::mutex> lock(mutex);
 	AdvanceLocked(now_ms, gate);
 	option_enable = value & 0b1001;
 }
 
 uint8_t State::ReadRate(Gate gate, uint64_t now_ms) {
-	std::lock_guard<std::mutex> lock(mutex);
-	const auto result = AdvanceLocked(now_ms, gate);
+	const auto result = Advance(now_ms, gate);
 	return static_cast<uint8_t>(result.effective_rate) & 0x7f;
 }
 
@@ -129,6 +234,10 @@ uint8_t State::GetRateForState() const {
 }
 
 void State::LoadRate(uint8_t value) {
+	if constexpr (ordinary_lcd_history::kEnabled && kEnableIndependentScanReport) {
+	if (auto* history = this->history.load(std::memory_order_acquire))
+		history->InvalidateEpoch();
+	}
 	std::lock_guard<std::mutex> lock(mutex);
 	refresh_rate = value;
 }

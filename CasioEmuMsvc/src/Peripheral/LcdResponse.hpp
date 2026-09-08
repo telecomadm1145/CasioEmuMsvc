@@ -2,6 +2,7 @@
 
 #include "ModelInfo.h"
 
+#include <cmath>
 #include <limits>
 
 namespace casioemu::lcd_response {
@@ -23,6 +24,17 @@ inline constexpr Config kClassWizII{50.0, 50.0};
 // Set this to false to restore the float-recursion path that preceded this
 // option. The fallback does not claim to recreate any older implementation.
 inline constexpr bool kEnableTimeResponse = true;
+
+inline double GainForElapsed(double elapsed_ms, double half_life_ms) {
+	if (half_life_ms == 0.0)
+		return 1.0;
+	return -std::expm1(-0.6931471805599453094 * elapsed_ms / half_life_ms);
+}
+
+inline double BlendWithGains(double alpha, double target, double rise_gain, double fall_gain) {
+	const double gain = target >= alpha ? rise_gain : fall_gain;
+	return alpha + (target - alpha) * gain;
+}
 
 constexpr bool IsValidHalfLife(double value) {
 	return value >= 0.0 && value == value &&
