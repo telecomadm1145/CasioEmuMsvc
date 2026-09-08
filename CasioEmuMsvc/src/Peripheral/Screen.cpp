@@ -23,6 +23,7 @@
 #include "SolarIIScreen.hpp"
 #include "EpsScreen.hpp"
 #include "LcdResponse.hpp"
+#include "OrdinaryLcdHistory.hpp"
 #include "OrdinaryLcdTarget.hpp"
 #include "ScreenScan.hpp"
 #include "Chipset/Chipset.hpp"
@@ -48,6 +49,7 @@
 #include <functional>
 #include <mutex>
 #include <thread>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -134,6 +136,14 @@ namespace casioemu {
 
 	template <HardwareId hardware_id>
 	class Screen : public Peripheral, public IScreenFrameProvider {
+		static constexpr bool kCaptureLcdHistory = ordinary_lcd_history::kEnabled &&
+			screen_scan::kEnableIndependentScanReport &&
+			(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II);
+		using LcdHistory = std::conditional_t<kCaptureLcdHistory,
+			ordinary_lcd_history::History, ordinary_lcd_history::DisabledHistory>;
+		using LcdHistoryWorker = std::conditional_t<kCaptureLcdHistory,
+			ordinary_lcd_history::WorkerState, ordinary_lcd_history::DisabledWorkerState>;
+
 		static int const N_ROW,
 			ROW_SIZE,
 			OFFSET,
@@ -172,6 +182,8 @@ namespace casioemu {
 		std::chrono::steady_clock::time_point lcd_response_last_tick{};
 		std::atomic_bool lcd_response_reset_requested{false};
 		screen_scan::State scan_report_state;
+		LcdHistory lcd_history;
+		LcdHistoryWorker lcd_history_worker;
 		float position = 0;
 		SDL_Renderer* renderer{};
 		SDL_Texture* interface_texture{};
@@ -569,6 +581,8 @@ namespace casioemu {
 			os.write(reinterpret_cast<const char*>(&screen_power), 1);
 		}
 		void LoadState(std::istream& is) override {
+			if constexpr (kCaptureLcdHistory)
+				lcd_history.InvalidateEpoch();
 			size_t bufSize = (hardware_id == HW_TI) ? (192 * 9) : (N_ROW + 1) * ROW_SIZE;
 			if (screen_buffer)
 				is.read(reinterpret_cast<char*>(screen_buffer), bufSize);
@@ -608,6 +622,16 @@ namespace casioemu {
 				ratio = 0.80f;
 			}
 #endif
+			if constexpr (kCaptureLcdHistory) {
+				const auto consumed = lcd_history.Consume(lcd_history_worker.batch);
+				lcd_history_worker.consumed_count += consumed.count;
+				if (consumed.count != 0)
+					lcd_history_worker.consumed_seq = consumed.last_seq;
+				// A producer may set Incomplete after Consume releases history's
+				// mutex; retain the sticky state and re-read the atomic diagnostic.
+				lcd_history_worker.incomplete = lcd_history_worker.incomplete ||
+					consumed.incomplete || lcd_history.Incomplete();
+			}
 			const auto lcd_response = BeginLcdResponseTick();
 			if constexpr (hardware_id == HW_TI) {
 				ratio = 1 - 1e-4;
@@ -1392,6 +1416,32 @@ namespace casioemu {
 							return;
 
 						auto this_obj = (Screen*)region->userdata;
+						if constexpr (kCaptureLcdHistory) {
+							struct WriteContext {
+								Screen* screen;
+								size_t offset;
+								uint8_t data;
+							};
+							const auto write = [](void* raw) noexcept {
+								auto* context = static_cast<WriteContext*>(raw);
+								context->screen->screen_buffer[context->offset] = context->data;
+							};
+							const auto prepare = [](void* raw, ordinary_lcd_history::Event& event) noexcept {
+								auto* context = static_cast<WriteContext*>(raw);
+								event.buffer = ordinary_lcd_history::BufferId::F800;
+								event.offset = static_cast<uint32_t>(context->offset);
+								event.old_primary = context->screen->screen_buffer[context->offset];
+								event.new_primary = context->data;
+								event.write_plane_mask = ordinary_lcd_history::kPrimaryPlane;
+								return event.Changes()
+									? ordinary_lcd_history::PrepareResult::Commit
+									: ordinary_lcd_history::PrepareResult::NoChange;
+							};
+							WriteContext context{this_obj, offset, data};
+							if (this_obj->lcd_history.TryRecord(prepare, write, &context) ==
+								ordinary_lcd_history::TransactionResult::Committed)
+								return;
+						}
 						this_obj->screen_buffer[offset] = data; },
 					emulator);
 			}
@@ -1415,16 +1465,58 @@ namespace casioemu {
 							return;
 
 						auto this_obj = (Screen*)region->userdata;
+						if constexpr (kCaptureLcdHistory) {
+							struct WriteContext {
+								Screen* screen;
+								size_t offset;
+								uint8_t data;
+								uint8_t plane_mask;
+							};
+							const auto write = [](void* raw) noexcept {
+								auto* context = static_cast<WriteContext*>(raw);
+								if (context->plane_mask == (ordinary_lcd_history::kPrimaryPlane | ordinary_lcd_history::kSecondaryPlane)) {
+									context->screen->screen_buffer1[context->offset] = context->screen->screen_buffer[context->offset] = context->data;
+								}
+								else if (context->plane_mask & ordinary_lcd_history::kSecondaryPlane) {
+									context->screen->screen_buffer1[context->offset] = context->data;
+								}
+								else {
+									context->screen->screen_buffer[context->offset] = context->data;
+								}
+							};
+							const auto prepare = [](void* raw, ordinary_lcd_history::Event& event) noexcept {
+								auto* context = static_cast<WriteContext*>(raw);
+								context->plane_mask = !(context->screen->screen_mode & 0x40)
+									? (ordinary_lcd_history::kPrimaryPlane | ordinary_lcd_history::kSecondaryPlane)
+									: ((context->screen->screen_select & 0x04)
+										? ordinary_lcd_history::kSecondaryPlane
+										: ordinary_lcd_history::kPrimaryPlane);
+								event.buffer = ordinary_lcd_history::BufferId::F800;
+								event.offset = static_cast<uint32_t>(context->offset);
+								event.write_plane_mask = context->plane_mask;
+								if (context->plane_mask & ordinary_lcd_history::kPrimaryPlane)
+									event.old_primary = context->screen->screen_buffer[context->offset];
+								if (context->plane_mask & ordinary_lcd_history::kSecondaryPlane)
+									event.old_secondary = context->screen->screen_buffer1[context->offset];
+								event.new_primary = context->data;
+								event.new_secondary = context->data;
+								return event.Changes()
+									? ordinary_lcd_history::PrepareResult::Commit
+									: ordinary_lcd_history::PrepareResult::NoChange;
+							};
+							WriteContext context{this_obj, offset, data, 0};
+							if (this_obj->lcd_history.TryRecord(prepare, write, &context) ==
+								ordinary_lcd_history::TransactionResult::Committed)
+								return;
+						}
 						if (!(this_obj->screen_mode & 0x40)) {
 							this_obj->screen_buffer1[offset] = this_obj->screen_buffer[offset] = data;
 							return;
 						}
-						if (this_obj->screen_select & 0x04) {
+						if (this_obj->screen_select & 0x04)
 							this_obj->screen_buffer1[offset] = data;
-						}
-						else {
+						else
 							this_obj->screen_buffer[offset] = data;
-						}
 					},
 					emulator);
 				if (!emulator.ModelDefinition.real_hardware) {
@@ -1459,6 +1551,32 @@ namespace casioemu {
 								return;
 
 							auto this_obj = (Screen*)region->userdata;
+							if constexpr (kCaptureLcdHistory) {
+								struct WriteContext {
+									Screen* screen;
+									size_t offset;
+									uint8_t data;
+								};
+								const auto write = [](void* raw) noexcept {
+									auto* context = static_cast<WriteContext*>(raw);
+									context->screen->screen_buffer1[context->offset] = context->data;
+								};
+								const auto prepare = [](void* raw, ordinary_lcd_history::Event& event) noexcept {
+									auto* context = static_cast<WriteContext*>(raw);
+									event.buffer = ordinary_lcd_history::BufferId::F800Secondary;
+									event.offset = static_cast<uint32_t>(context->offset);
+									event.old_secondary = context->screen->screen_buffer1[context->offset];
+									event.new_secondary = context->data;
+									event.write_plane_mask = ordinary_lcd_history::kSecondaryPlane;
+									return event.Changes()
+										? ordinary_lcd_history::PrepareResult::Commit
+										: ordinary_lcd_history::PrepareResult::NoChange;
+								};
+								WriteContext context{this_obj, offset, data};
+								if (this_obj->lcd_history.TryRecord(prepare, write, &context) ==
+									ordinary_lcd_history::TransactionResult::Committed)
+									return;
+							}
 							this_obj->screen_buffer1[offset] = data;
 						},
 						emulator);
@@ -1480,11 +1598,40 @@ namespace casioemu {
 						auto screen = ((Screen*)region->userdata);
 						return screen->screen_mode;
 					},
-					[](MMURegion* region, size_t offset, uint8_t data) {
-						auto screen = ((Screen*)region->userdata);
-						auto old = screen->screen_mode & 0b1000;
+						[](MMURegion* region, size_t offset, uint8_t data) {
+							auto screen = ((Screen*)region->userdata);
+							if constexpr (kCaptureLcdHistory) {
+								struct WriteContext {
+									Screen* screen;
+									uint8_t data;
+								};
+								const auto write = [](void* raw) noexcept {
+									auto* context = static_cast<WriteContext*>(raw);
+									context->screen->screen_mode = context->data & 127;
+								};
+								const auto prepare = [](void* raw, ordinary_lcd_history::Event& event) noexcept {
+									auto* context = static_cast<WriteContext*>(raw);
+									const uint8_t old_value = context->screen->screen_mode & 127;
+									const uint8_t new_value = context->data & 127;
+									if ((old_value ^ new_value) & 0b1000)
+										return ordinary_lcd_history::PrepareResult::Reject;
+									event.kind = ordinary_lcd_history::Kind::Mode;
+									event.old_value = old_value;
+									event.new_value = new_value;
+									return old_value == new_value
+										? ordinary_lcd_history::PrepareResult::NoChange
+										: ordinary_lcd_history::PrepareResult::Commit;
+								};
+								WriteContext context{screen, data};
+								const auto result = screen->lcd_history.TryRecord(prepare, write, &context);
+								if (result == ordinary_lcd_history::TransactionResult::Committed)
+									return;
+							}
+							auto old = screen->screen_mode & 0b1000;
 						auto new_ = data & 0b1000;
 						if (old ^ new_) {
+							if constexpr (kCaptureLcdHistory)
+								screen->lcd_history.InvalidateEpoch();
 							auto sb = screen->screen_buffer;
 							for (int iy = 0; iy != (N_ROW + 1); ++iy) {
 								for (int ix = 0; ix != ROW_SIZE_DISP; ++ix) {
@@ -1515,8 +1662,45 @@ namespace casioemu {
 					emulator);
 			}
 			else if constexpr (hardware_id == HW_CLASSWIZ) {
-				region_mode.Setup(0xF031, 1, "Screen/Mode", &screen_mode, MMURegion::DefaultRead<uint8_t, 63>,
-					MMURegion::DefaultWrite<uint8_t, 63>, emulator);
+				if constexpr (kCaptureLcdHistory) {
+					region_mode.Setup(
+						0xF031, 1, "Screen/Mode", this,
+						[](MMURegion* region, size_t) {
+							return static_cast<uint8_t>(static_cast<Screen*>(region->userdata)->screen_mode & 63);
+						},
+						[](MMURegion* region, size_t, uint8_t data) {
+							auto screen = static_cast<Screen*>(region->userdata);
+							struct WriteContext {
+								Screen* screen;
+								uint8_t data;
+							};
+							const auto write = [](void* raw) noexcept {
+								auto* context = static_cast<WriteContext*>(raw);
+								context->screen->screen_mode = context->data;
+							};
+							const auto prepare = [](void* raw, ordinary_lcd_history::Event& event) noexcept {
+								auto* context = static_cast<WriteContext*>(raw);
+								const uint8_t old_value = context->screen->screen_mode & 63;
+								const uint8_t new_value = context->data & 63;
+								event.kind = ordinary_lcd_history::Kind::Mode;
+								event.old_value = old_value;
+								event.new_value = new_value;
+								return old_value == new_value
+									? ordinary_lcd_history::PrepareResult::NoChange
+									: ordinary_lcd_history::PrepareResult::Commit;
+							};
+							WriteContext context{screen, static_cast<uint8_t>(data & 63)};
+							if (screen->lcd_history.TryRecord(prepare, write, &context) ==
+								ordinary_lcd_history::TransactionResult::Committed)
+								return;
+							screen->screen_mode = data & 63;
+						},
+						emulator);
+				}
+				else {
+					region_mode.Setup(0xF031, 1, "Screen/Mode", &screen_mode, MMURegion::DefaultRead<uint8_t, 63>,
+						MMURegion::DefaultWrite<uint8_t, 63>, emulator);
+				}
 			}
 			else {
 				region_mode.Setup(0xF031, 1, "Screen/Mode", &screen_mode, MMURegion::DefaultRead<uint8_t, 0x07>,
@@ -1550,8 +1734,45 @@ namespace casioemu {
 			}
 
 			if constexpr (hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) {
-				region_select.Setup(0xF037, 1, "Screen/Select", &screen_select, MMURegion::DefaultRead < uint8_t, 0x04 | 1 >,
-					MMURegion::DefaultWrite < uint8_t, 0x04 | 1 >, emulator);
+				if constexpr (kCaptureLcdHistory) {
+					region_select.Setup(
+						0xF037, 1, "Screen/Select", this,
+						[](MMURegion* region, size_t) {
+							return static_cast<uint8_t>(static_cast<Screen*>(region->userdata)->screen_select & (0x04 | 1));
+						},
+						[](MMURegion* region, size_t, uint8_t data) {
+							auto screen = static_cast<Screen*>(region->userdata);
+							struct WriteContext {
+								Screen* screen;
+								uint8_t data;
+							};
+							const auto write = [](void* raw) noexcept {
+								auto* context = static_cast<WriteContext*>(raw);
+								context->screen->screen_select = context->data & (0x04 | 1);
+							};
+							const auto prepare = [](void* raw, ordinary_lcd_history::Event& event) noexcept {
+								auto* context = static_cast<WriteContext*>(raw);
+								const uint8_t old_value = context->screen->screen_select & (0x04 | 1);
+								const uint8_t new_value = context->data & (0x04 | 1);
+								event.kind = ordinary_lcd_history::Kind::Select;
+								event.old_value = old_value;
+								event.new_value = new_value;
+								return old_value == new_value
+									? ordinary_lcd_history::PrepareResult::NoChange
+									: ordinary_lcd_history::PrepareResult::Commit;
+							};
+							WriteContext context{screen, data};
+							if (screen->lcd_history.TryRecord(prepare, write, &context) ==
+								ordinary_lcd_history::TransactionResult::Committed)
+								return;
+							screen->screen_select = data & (0x04 | 1);
+						},
+						emulator);
+				}
+				else {
+					region_select.Setup(0xF037, 1, "Screen/Select", &screen_select, MMURegion::DefaultRead < uint8_t, 0x04 | 1 >,
+						MMURegion::DefaultWrite < uint8_t, 0x04 | 1 >, emulator);
+				}
 
 				region_brightness.Setup(0xF033, 1, "Screen/Brightness", &screen_brightness, MMURegion::DefaultRead<uint8_t, 0x07>,
 					MMURegion::DefaultWrite<uint8_t, 0x07>, emulator);
@@ -1615,6 +1836,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		auto state_lock = LockScreenState();
 		if (!enabled_2)
 			return;
+		if constexpr (kCaptureLcdHistory)
+			lcd_history.InvalidateEpoch();
 		fillRandomData(screen_buffer, (N_ROW + 1) * ROW_SIZE);
 		if constexpr (hardware_id == HW_CLASSWIZ_II) {
 			fillRandomData(screen_buffer1, (N_ROW + 1) * ROW_SIZE);
