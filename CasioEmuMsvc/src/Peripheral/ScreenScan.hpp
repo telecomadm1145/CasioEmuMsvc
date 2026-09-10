@@ -53,8 +53,10 @@ public:
 	uint8_t GetRateForState() const;
 	void LoadRate(uint8_t value);
 	void SetHistory(ordinary_lcd_history::History* history);
+	ordinary_lcd_history::ScanSnapshot CaptureSnapshot() const;
 
 private:
+	std::unique_lock<std::recursive_mutex> LockHistory() const;
 	struct Snapshot {
 		uint8_t raw_rate = 0;
 		uint8_t effective_rate = 0;

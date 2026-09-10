@@ -1,4 +1,5 @@
 #include "HwController.h"
+#include "Peripheral/OrdinaryLcdHistory.hpp"
 #include "../Config.hpp"
 #include "Ui.hpp"
 #include "imgui/imgui.h"
@@ -87,8 +88,16 @@ void HwController::RenderCore() {
 		int flashing_threshold = gate.flashing_threshold;
 		if (ImGui::SliderInt("HwController.Value1"_lc, &flashing_threshold, 0, 0x3F))
 			casioemu::screen_gate::SetFlashingThreshold(flashing_threshold);
-		ImGui::SliderFloat("HwController.Value2"_lc, &screen_flashing_brightness_coeff, 1.0f, 8.0f);
-		ImGui::SliderInt("HwController.ScreenBufferSelect"_lc, &screen_buffer_select, 0, 2);
+		float flashing_brightness = screen_flashing_brightness_coeff;
+		if (ImGui::SliderFloat("HwController.Value2"_lc, &flashing_brightness, 1.0f, 8.0f)) {
+			casioemu::ordinary_lcd_history::UntrackedChange change;
+			screen_flashing_brightness_coeff = flashing_brightness;
+		}
+		int buffer_select = screen_buffer_select;
+		if (ImGui::SliderInt("HwController.ScreenBufferSelect"_lc, &buffer_select, 0, 2)) {
+			casioemu::ordinary_lcd_history::UntrackedChange change;
+			screen_buffer_select = buffer_select;
+		}
 	}
 
 	UIHelpers::SectionHeader("CPU & Performance");

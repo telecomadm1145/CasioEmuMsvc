@@ -1,4 +1,5 @@
 #include "ScreenGate.hpp"
+#include "OrdinaryLcdHistory.hpp"
 
 #include <mutex>
 
@@ -16,6 +17,7 @@ Gate Get() {
 }
 
 void Set(Gate value) {
+	ordinary_lcd_history::UntrackedChange change;
 	std::lock_guard<std::mutex> lock(gate_mutex);
 	gate.flashing_threshold = value.flashing_threshold;
 	gate.fading_enabled = value.fading_enabled;
@@ -23,12 +25,14 @@ void Set(Gate value) {
 }
 
 void SetFlashingThreshold(int value) {
+	ordinary_lcd_history::UntrackedChange change;
 	std::lock_guard<std::mutex> lock(gate_mutex);
 	gate.flashing_threshold = value;
 	gate.version = ++next_version;
 }
 
 void SetFadingEnabled(bool value) {
+	ordinary_lcd_history::UntrackedChange change;
 	std::lock_guard<std::mutex> lock(gate_mutex);
 	gate.fading_enabled = value;
 	gate.version = ++next_version;

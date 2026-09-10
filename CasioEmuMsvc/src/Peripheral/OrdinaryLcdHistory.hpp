@@ -5,16 +5,25 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <condition_variable>
+#include <chrono>
 
 namespace casioemu::ordinary_lcd_history {
 
-// C2a is an opt-in collector. It is deliberately independent from the
-// display path and is hard-disabled for Web/Emscripten and Android.
+#if !defined(CASIOEMU_CORE_WEB) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__) && \
+ !defined(CASIOEMU_DISABLE_INDEPENDENT_SCAN_REPORT) && !defined(CASIOEMU_DISABLE_LCD_TEMPORAL_WORKER)
+inline constexpr bool kNativeTemporalWorker = true;
+#else
+inline constexpr bool kNativeTemporalWorker = false;
+#endif
+
+// Native temporal replay enables recording by default. The explicit collector
+// override remains available independently; mobile/Web always use the old path.
 #if defined(CASIOEMU_ENABLE_ORDINARY_LCD_HISTORY) && \
 	!defined(CASIOEMU_CORE_WEB) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
 inline constexpr bool kEnabled = true;
 #else
-inline constexpr bool kEnabled = false;
+inline constexpr bool kEnabled = kNativeTemporalWorker;
 #endif
 
 inline constexpr size_t kCapacity = 4096;
@@ -35,6 +44,10 @@ enum class Kind : uint8_t {
 	Select,
 	Mode,
 	Scan,
+	Range,
+	Contrast,
+	Brightness,
+	Offset,
 };
 
 enum class ScanOperation : uint8_t {
@@ -153,13 +166,39 @@ struct DisabledWorkerState {
 using PrepareFn = PrepareResult (*)(void*, Event&) noexcept;
 using WriteFn = void (*)(void*) noexcept;
 
+// Marks settings changes which cannot yet be replayed. Both entry and exit
+// advance a process-wide revision; concurrent/nested writers are counted.
+// The settings lease also serializes a baseline capture against A -> B -> A.
+// Buffer/control producers separately hold History::Lock, including fallbacks.
+class UntrackedChange {
+public:
+	UntrackedChange() { if constexpr (kEnabled) { lock_ = LockSettings(); BeginChange(); } }
+	~UntrackedChange() { if constexpr (kEnabled) EndChange(); }
+	UntrackedChange(const UntrackedChange&) = delete;
+	UntrackedChange& operator=(const UntrackedChange&) = delete;
+	static std::unique_lock<std::recursive_mutex> LockSettings();
+private:
+	std::unique_lock<std::recursive_mutex> lock_;
+	static void BeginChange() noexcept;
+	static void EndChange() noexcept;
+};
+
+uint64_t UntrackedRevision() noexcept;
+bool UntrackedStableAt(uint64_t revision) noexcept;
+
 class History {
 public:
+	std::unique_lock<std::recursive_mutex> Lock() const { return std::unique_lock(mutex); }
+	void WaitForWork(std::chrono::milliseconds interval, const std::atomic_bool& running);
+	void Wake() { ready.notify_all(); }
+	// Caller owns Lock(), excluding all producers including fallback writes.
+	// Capturing data, Reset and CaptureCutoff must all stay in that same scope.
 	// Returns the transaction outcome after the original write ran while holding history mutex. The
 	// prepare callback reads old bytes and fills Event under that same lock;
 	// Failed/Rejected means the caller must perform the original write itself.
 	TransactionResult TryRecord(PrepareFn prepare, WriteFn write, void* context);
 	Cutoff CaptureCutoff() const;
+	bool Covers(const Cutoff& cutoff) const;
 	ConsumeResult ConsumeUntil(const Cutoff& cutoff, Batch& batch);
 	bool Incomplete() const;
 	uint64_t Dropped() const;
@@ -170,7 +209,8 @@ public:
 	void Reset();
 
 private:
-	mutable std::mutex mutex;
+	mutable std::recursive_mutex mutex;
+	std::condition_variable_any ready;
 	std::array<Event, kCapacity> ring{};
 	size_t head = 0;
 	size_t count = 0;
@@ -178,6 +218,7 @@ private:
 	uint64_t next_seq = 0;
 	std::atomic_bool incomplete{false};
 	std::atomic_uint64_t dropped{0};
+	std::atomic_uint64_t coverage_revision{UntrackedRevision()};
 };
 
 // Keeps disabled builds free of the ring, mutex, and batch storage in each

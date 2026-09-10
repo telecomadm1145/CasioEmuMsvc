@@ -1,4 +1,5 @@
 #define _NO_FUND_API
+#include "Peripheral/OrdinaryLcdHistory.hpp"
 #include "FileDialog.hpp"
 #include "PluginApi.h"
 #include "PluginMan.h"
@@ -798,6 +799,7 @@ class PluginApi_Impl : public PluginApi {
 			};
 		}
 		void SetDisplaySettings(const DebugDisplaySettings& settings) override {
+			casioemu::ordinary_lcd_history::UntrackedChange change;
 			casioemu::screen_gate::Set({std::clamp(settings.FlashingThreshold, 0, 0x3f), settings.FadingEnabled});
 			screen_flashing_brightness_coeff = std::clamp(settings.FlashingBrightness, 1.0f, 8.0f);
 			screen_buffer_select = std::clamp(settings.BufferSelect, 0, 2);

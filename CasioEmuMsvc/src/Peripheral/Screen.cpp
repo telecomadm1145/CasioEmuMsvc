@@ -25,7 +25,10 @@
 #include "LcdResponse.hpp"
 #include "OrdinaryLcdHistory.hpp"
 #include "OrdinaryLcdTarget.hpp"
+#include "OrdinaryLcdFrame.hpp"
 #include "ScreenScan.hpp"
+#include "ScreenScanVisual.hpp"
+#include "LcdTemporalCandidate.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Chipset/MMU.hpp"
 #include "Chipset/MMURegion.hpp"
@@ -87,58 +90,18 @@ inline void fillRandomData(unsigned char* buf, size_t size) {
 
 namespace casioemu {
 
-	struct SpriteBitmap {
-		const char* name;
-		uint8_t mask, offset;
-	};
-	inline int update_screen_scan_alpha(
-		float* screen_scan_alpha,
-		std::array<float, 64>& screen_scan_curve,
-		float& screen_scan_curve_coeff,
-		bool& screen_scan_curve_valid,
-		Uint64 t,
-		int screen_refresh_rate,
-		int flashing_threshold) {
-		int n = (static_cast<Uint64>((t * screen_refresh_rate) / 250)) % 64;
-
-		if (screen_refresh_rate < flashing_threshold) {
-			for (size_t i = 0; i < 64; i++) {
-				screen_scan_alpha[i] = 1.0f;
-			}
-			return n;
-		}
-
-		const float brightness_coeff = screen_flashing_brightness_coeff;
-		if (!screen_scan_curve_valid || screen_scan_curve_coeff != brightness_coeff) {
-			// 计算归一化所需的归一化因子
-			float normalization_factor = 0.0f;
-			std::array<float, 64> exp_values{};
-
-			for (size_t i = 0; i < 64; i++) {
-				exp_values[i] = std::exp(-brightness_coeff * i / 64.0f);
-				normalization_factor += exp_values[i];
-			}
-
-			// 归一化
-			for (size_t i = 0; i < 64; i++) {
-				screen_scan_curve[i] = std::pow(exp_values[i] / normalization_factor * 80., 0.2);
-			}
-			screen_scan_curve_coeff = brightness_coeff;
-			screen_scan_curve_valid = true;
-		}
-
-		for (size_t i = 0; i < 64; i++) {
-			screen_scan_alpha[(i + n) % 64] = screen_scan_curve[i];
-		}
-
-		return n;
+	using SpriteBitmap = ordinary_lcd::SpriteSpec;
+	inline int update_screen_scan_alpha(float* alpha, std::array<float, 64>& curve,
+		float& coefficient, bool& valid, Uint64 time, int rate, int threshold) {
+		return screen_scan::UpdateScanAlpha(alpha, curve, coefficient, valid,
+			time, rate, threshold, screen_flashing_brightness_coeff);
 	}
-
 	template <HardwareId hardware_id>
 	class Screen : public Peripheral, public IScreenFrameProvider {
 		static constexpr bool kCaptureLcdHistory = ordinary_lcd_history::kEnabled &&
 			screen_scan::kEnableIndependentScanReport &&
-			(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II);
+			(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II ||
+			 hardware_id == HW_ES_PLUS || hardware_id == HW_FX_5800P);
 		using LcdHistory = std::conditional_t<kCaptureLcdHistory,
 			ordinary_lcd_history::History, ordinary_lcd_history::DisabledHistory>;
 		using LcdHistoryWorker = std::conditional_t<kCaptureLcdHistory,
@@ -185,6 +148,12 @@ namespace casioemu {
 		LcdHistory lcd_history;
 		LcdHistoryWorker lcd_history_worker;
 		bool scan_history_bound = false;
+		std::unique_ptr<lcd_temporal::Baseline> temporal_baseline;
+		std::unique_ptr<lcd_temporal::ReplaySession> temporal_replay;
+		bool temporal_valid = false;
+		std::chrono::steady_clock::time_point temporal_retry_after{};
+		static constexpr std::chrono::milliseconds kTemporalInterval{2};
+		static constexpr std::chrono::milliseconds kTemporalRecoveryInterval{50};
 		float position = 0;
 		SDL_Renderer* renderer{};
 		SDL_Texture* interface_texture{};
@@ -216,6 +185,49 @@ namespace casioemu {
 		bool enabled_2 = 0;
 		int status_ink_alpha_on = 255;
 		int status_ink_alpha_off = 0;
+
+		std::unique_lock<std::recursive_mutex> LockLcdMutation() const {
+			if constexpr (kCaptureLcdHistory)
+				return lcd_history.Lock();
+			return {};
+		}
+
+		template <ordinary_lcd_history::Kind kind, uint8_t mask, uint8_t Screen::*member>
+		void SetupLcdControl(MMURegion& region, size_t address, const char* name) {
+			if constexpr (!kCaptureLcdHistory) {
+				region.Setup(address, 1, name, &(this->*member),
+					MMURegion::DefaultRead<uint8_t, mask>, MMURegion::DefaultWrite<uint8_t, mask>, emulator);
+			}
+			else {
+				region.Setup(address, 1, name, this,
+					[](MMURegion* region, size_t) {
+						return static_cast<uint8_t>((static_cast<Screen*>(region->userdata)->*member) & mask);
+					},
+					[](MMURegion* region, size_t, uint8_t data) {
+						auto* screen = static_cast<Screen*>(region->userdata);
+						auto history_lock = screen->LockLcdMutation();
+						struct WriteContext {
+							Screen* screen;
+							uint8_t data;
+						} context{screen, static_cast<uint8_t>(data & mask)};
+						const auto write = [](void* raw) noexcept {
+							auto* context = static_cast<WriteContext*>(raw);
+							context->screen->*member = context->data;
+						};
+						const auto prepare = [](void* raw, ordinary_lcd_history::Event& event) noexcept {
+							auto* context = static_cast<WriteContext*>(raw);
+							event.kind = kind;
+							event.old_value = context->screen->*member;
+							event.new_value = context->data;
+							return event.Changes() ? ordinary_lcd_history::PrepareResult::Commit
+								: ordinary_lcd_history::PrepareResult::NoChange;
+						};
+						if (screen->lcd_history.TryRecord(prepare, write, &context) !=
+							ordinary_lcd_history::TransactionResult::Committed)
+							write(&context);
+					}, emulator);
+			}
+		}
 
 		// Announce readers/lifecycle operations before waiting for the state lock.
 		// The unthrottled LCD worker must let them through before its next tick.
@@ -335,6 +347,133 @@ namespace casioemu {
 			}
 		}
 
+		// Called with Screen held. CPU producers only take History -> Scan;
+		// neither target evaluation nor replay holds their mutation lock.
+		// -1: legacy fallback, 0: pending cutoff, 1: complete publication.
+		int TemporalTick() {
+			if constexpr (!(kCaptureLcdHistory && ordinary_lcd_history::kNativeTemporalWorker)) {
+				return -1;
+			}
+			else {
+				const auto now = std::chrono::steady_clock::now();
+				{
+					auto settings_lock = ordinary_lcd_history::UntrackedChange::LockSettings();
+					if (!LcdResponseEligible() || screen_buffer_select != 0) {
+						temporal_valid = false;
+						return -1;
+					}
+				}
+				if (now < temporal_retry_after) return -1;
+				const auto fail = [&]() {
+					temporal_valid = false;
+					lcd_history_worker.cutoff_pending = false;
+					temporal_retry_after = std::chrono::steady_clock::now() + kTemporalRecoveryInterval;
+					return -1;
+				};
+				if (lcd_history.Incomplete() || lcd_response_reset_requested.load(std::memory_order_acquire))
+					temporal_valid = false;
+				if (!temporal_replay) temporal_replay = std::make_unique<lcd_temporal::ReplaySession>();
+				if (!temporal_valid) {
+					if (!temporal_baseline) {
+						temporal_baseline = std::make_unique<lcd_temporal::Baseline>();
+						temporal_baseline->primary.resize((N_ROW + 1) * ROW_SIZE);
+						if constexpr (hardware_id == HW_CLASSWIZ_II)
+							temporal_baseline->secondary.resize((N_ROW + 1) * ROW_SIZE);
+						temporal_baseline->sprites.assign(sprite_bitmap + 1, sprite_bitmap + SPR_MAX);
+					}
+					auto& b = *temporal_baseline;
+					bool cold = !lcd_response_active || lcd_response_reset_requested.load(std::memory_order_acquire);
+					for (size_t i = 0; i != b.alpha.size(); ++i)
+						b.alpha[i] = cold ? static_cast<double>(screen_ink_alpha[i]) : lcd_response_alpha[i];
+					b.status_levels = {status_ink_alpha_on, status_ink_alpha_off};
+					std::copy_n(screen_scan_alpha, 64, b.scan_alpha.begin());
+					{
+						auto settings_lock = ordinary_lcd_history::UntrackedChange::LockSettings();
+						auto history_lock = LockLcdMutation();
+						if (!LcdResponseEligible() || screen_buffer_select != 0 || !screen_buffer) return fail();
+						if (lcd_response_reset_requested.load(std::memory_order_acquire)) {
+							cold = true;
+							std::copy_n(screen_ink_alpha, b.alpha.size(), b.alpha.begin());
+						}
+						ordinary_lcd_history::ScanSnapshot scan;
+						if constexpr (hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) {
+							scan_report_state.Advance(SDL_GetTicks64(), screen_scan::CurrentGate());
+							scan = scan_report_state.CaptureSnapshot();
+						}
+						else {
+							const auto gate = screen_scan::CurrentGate();
+							// ES/5800 F034 is unrelated to the visual rate. Only
+							// lifecycle/load can change this legacy visual field.
+							screen_refresh_rate = std::max<uint8_t>(screen_refresh_rate, 6);
+							scan = {screen_refresh_rate, screen_refresh_rate,
+								screen_scan_report_op1, screen_scan_report_en,
+								gate.flashing_threshold, gate.fading_enabled, gate.version, true, true};
+						}
+						b.scan = {scan.raw_rate, scan.effective_rate, scan.option1, scan.option_enable,
+							scan.flashing_threshold, scan.fading_enabled, scan.gate_version,
+							scan.active, scan.gate_initialized, 0};
+						b.controls = {hardware_id, N_ROW, ROW_SIZE, ROW_SIZE_DISP,
+							screen_mode, screen_select, screen_range, screen_offset, screen_brightness,
+							screen_contrast, screen_power, enabled_2, false, screen_residual_enabled,
+							screen_residual_alpha_scale, screen_flashing_brightness_coeff};
+						std::copy_n(screen_buffer, b.primary.size(), b.primary.begin());
+						if constexpr (hardware_id == HW_CLASSWIZ_II)
+							std::copy_n(screen_buffer1, b.secondary.size(), b.secondary.begin());
+						// All producers, including invalidating/fallback writes, are
+						// excluded through the same recursive mutation lock.
+						lcd_history.Reset();
+						lcd_history_worker.cutoff = lcd_history.CaptureCutoff();
+						b.coverage_complete = !lcd_history.Incomplete();
+					}
+					const auto& cutoff = lcd_history_worker.cutoff;
+					b.epoch = cutoff.epoch; b.seq = cutoff.end_seq;
+					b.steady_ns = cutoff.steady_ns; b.sdl_ms = cutoff.sdl_ms;
+					b.scan.sdl_ms = b.sdl_ms;
+					b.alpha_steady_ns.fill(b.steady_ns);
+					const uint64_t previous_ns = cold ? b.steady_ns : static_cast<uint64_t>(
+						std::chrono::duration_cast<std::chrono::nanoseconds>(lcd_response_last_tick.time_since_epoch()).count());
+					if (!temporal_replay->BeginFromLive(b, cutoff, previous_ns) || !temporal_replay->Finish()) return fail();
+					temporal_valid = true;
+					lcd_history_worker.cutoff_pending = false;
+				}
+				else {
+					if (!lcd_history_worker.cutoff_pending) {
+						if constexpr (hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II)
+							scan_report_state.Advance(SDL_GetTicks64(), screen_scan::CurrentGate());
+						lcd_history_worker.cutoff = lcd_history.CaptureCutoff();
+						if (!temporal_replay->Continue(lcd_history_worker.cutoff)) return fail();
+						lcd_history_worker.cutoff_pending = true;
+					}
+					const auto consumed = lcd_history.ConsumeUntil(lcd_history_worker.cutoff, lcd_history_worker.batch);
+					if (!temporal_replay->AppendBatch(lcd_history_worker.batch, consumed)) return fail();
+					if (!consumed.cutoff_complete) return 0;
+					lcd_history_worker.cutoff_pending = false;
+				}
+				const auto* result = temporal_replay->Result();
+				if (!result) return fail();
+				{
+					auto settings_lock = ordinary_lcd_history::UntrackedChange::LockSettings();
+					auto history_lock = LockLcdMutation();
+					if (!lcd_history.Covers(lcd_history_worker.cutoff) ||
+						!LcdResponseEligible() || screen_buffer_select != 0) return fail();
+					lcd_response_reset_requested.store(false, std::memory_order_release);
+				} // Publication commits here; subsequent mutations belong to the next observation.
+				{
+					// Publish only the complete private frame. Newer queued writes
+					// belong to the next cutoff, not this observation time.
+					lcd_response_alpha = result->alpha;
+					for (size_t i = 0; i != result->alpha.size(); ++i)
+						screen_ink_alpha[i] = static_cast<float>(result->alpha[i]);
+					std::copy(result->scan_alpha.begin(), result->scan_alpha.end(), screen_scan_alpha);
+					status_ink_alpha_on = result->status_levels.ink_alpha_on;
+					status_ink_alpha_off = result->status_levels.ink_alpha_off;
+					lcd_response_last_tick = std::chrono::steady_clock::time_point(
+						std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::nanoseconds(result->steady_ns)));
+					lcd_response_active = true;
+				}
+				return 1;
+			}
+		}
 		void StartUpdateThread();
 		void StopUpdateThread();
 
@@ -578,6 +717,7 @@ namespace casioemu {
 			os.write(reinterpret_cast<const char*>(&screen_power), 1);
 		}
 		void LoadState(std::istream& is) override {
+			auto history_lock = LockLcdMutation();
 			if constexpr (kCaptureLcdHistory)
 				lcd_history.InvalidateEpoch();
 			size_t bufSize = (hardware_id == HW_TI) ? (192 * 9) : (N_ROW + 1) * ROW_SIZE;
@@ -773,14 +913,9 @@ namespace casioemu {
 				static_cast<int>(screen_contrast),
 				screen_residual_enabled,
 				screen_residual_alpha_scale);
-			int ink_alpha_on = target_levels.ink_alpha_on;
-			int ink_alpha_off = target_levels.ink_alpha_off;
-			bool enable_status, enable_dotmatrix, clear_dots;
-
-			bool mode_6 = false;
 
 			auto screen_buffer = this->screen_buffer;
-			uint8_t* screen_buffer1;
+			uint8_t* screen_buffer1 = nullptr;
 			size_t row_size = ROW_SIZE;
 			if constexpr (hardware_id == HW_CLASSWIZ_II) {
 				screen_buffer1 = this->screen_buffer1;
@@ -793,170 +928,26 @@ namespace casioemu {
 				row_size = ROW_SIZE_DISP;
 			}
 
-			if (!enabled_2)
-				goto clean_scr;
-
-			switch (screen_mode & 7) {
-			case 4: // 100
-				enable_dotmatrix = true;
-				clear_dots = true;
-				enable_status = false;
-				break;
-
-			case 5: // 101
-				enable_dotmatrix = true;
-				clear_dots = false;
-				enable_status = true;
-				break;
-
-			case 6: // 110
-				enable_dotmatrix = true;
-				clear_dots = true;
-				enable_status = true;
-				mode_6 = true;
-				break;
-
-			default:
-				goto clean_scr;
-			}
-			if (screen_range & 0b100000)
-				goto clean_scr;
-			{
-				bool flip_screen_h = screen_mode & 0b1000;
-				bool flip_screen_v = !(screen_mode & 0b10000);
-				if constexpr (hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) {
-				}
-				else {
-					flip_screen_v = flip_screen_v = 0;
-				}
-				int rng1 = (4 - (screen_range & 0x3));
-				ink_alpha_off *= (4 / rng1);
-				ink_alpha_on *= (4 / rng1);
-				int rng = rng1 * 8;
-
-				if (enable_status) {
-					int ink_alpha = ink_alpha_off;
-					status_ink_alpha_on = ink_alpha_on;
-					status_ink_alpha_off = ink_alpha_off;
-					if constexpr (hardware_id == HW_CLASSWIZ_II) {
-						for (int ix = 1; ix != SPR_MAX; ++ix) {
-							ink_alpha = ink_alpha_off;
-							auto off = (sprite_bitmap[ix].offset + screen_offset * row_size) % ((N_ROW + 1) * row_size);
-							if (screen_buffer[off] & sprite_bitmap[ix].mask)
-								ink_alpha += (ink_alpha_on - ink_alpha_off) * kClassWizIILowerPlaneWeight;
-							if (screen_buffer1[off] & sprite_bitmap[ix].mask)
-								ink_alpha += (ink_alpha_on - ink_alpha_off) * kClassWizIIUpperPlaneWeight;
-							if (visual_refresh_rate >= visual_flashing_threshold)
-								ink_alpha *= screen_scan_alpha[0];
-							ApplyLcdAlpha(ix - 1, static_cast<float>(ink_alpha), ratio, lcd_response);
-						}
-					}
-					else {
-						int x = 0;
-						for (int ix = 1; ix != SPR_MAX; ++ix) {
-							auto off = (sprite_bitmap[ix].offset + screen_offset * row_size) % ((N_ROW + 1) * row_size);
-							if (screen_buffer[off] & sprite_bitmap[ix].mask)
-								ink_alpha = ink_alpha_on;
-							else
-								ink_alpha = ink_alpha_off;
-							if (visual_refresh_rate >= visual_flashing_threshold)
-								ink_alpha *= screen_scan_alpha[0];
-							ApplyLcdAlpha(x, static_cast<float>(ink_alpha), ratio, lcd_response);
-							x++;
-						}
-					}
-				}
-				else {
-					ApplyLcdAlphaDecay(0, 192, ratio, lcd_response);
-				}
-
-				if (enable_dotmatrix) {
-					static constexpr auto SPR_PIXEL = 0;
-					SDL_Rect dest = Screen<hardware_id>::sprite_info[SPR_PIXEL].dest;
-					int ink_alpha = ink_alpha_off;
-					if (mode_6) {
-						ink_alpha_on = ink_alpha_off /= 2.55;
-					}
-					if constexpr (hardware_id == HW_CLASSWIZ_II) {
-						for (int iy2 = 1; iy2 != (N_ROW + 1); ++iy2) {
-							int iy = (iy2 + screen_offset) % (N_ROW + 1);
-							bool clear = 0;
-							if (iy2 >= rng && iy2 < 32)
-								clear = 1;
-							if (iy2 >= 32) {
-								if (iy2 <= 32 + rng) {
-									iy = (iy2 - 32 + rng + screen_offset) % (N_ROW + 1);
-								}
-								else {
-									clear = 1;
-								}
-							}
-							dest.x = sprite_info[SPR_PIXEL].dest.x;
-							dest.y = sprite_info[SPR_PIXEL].dest.y + (iy2 - 1) * sprite_info[SPR_PIXEL].src.h;
-							int x = 0;
-							for (int ix = 0; ix != ROW_SIZE_DISP; ++ix) {
-								auto index = (flip_screen_v ? N_ROW - iy : iy) * row_size + ix;
-								for (uint8_t mask = 0x80; mask; mask >>= 1, dest.x += sprite_info[SPR_PIXEL].src.w) {
-									ink_alpha = ink_alpha_off;
-									if (!clear_dots && screen_buffer[index] & mask)
-										ink_alpha += (ink_alpha_on - ink_alpha_off) * kClassWizIILowerPlaneWeight;
-									if (!clear_dots && screen_buffer1[index] & mask)
-										ink_alpha += (ink_alpha_on - ink_alpha_off) * kClassWizIIUpperPlaneWeight;
-									if (visual_refresh_rate >= visual_flashing_threshold)
-										ink_alpha *= screen_scan_alpha[iy];
-									if (clear)
-										ink_alpha = 0;
-									const size_t alpha_index = (flip_screen_h ? (191 - x) : x) + iy2 * 192;
-									ApplyLcdAlpha(alpha_index, static_cast<float>(ink_alpha), ratio, lcd_response);
-									x++;
-								}
-							}
-						}
-					}
-					else {
-						for (int iy2 = 1; iy2 != (N_ROW + 1); ++iy2) {
-							int iy = (iy2 + screen_offset) % (N_ROW + 1);
-							bool clear = 0;
-							if (iy2 >= rng && iy2 < 32)
-								clear = 1;
-							if (iy2 >= 32) {
-								if (iy2 <= 32 + rng) {
-									iy = (iy2 - 32 + rng + screen_offset) % (N_ROW + 1);
-								}
-								else {
-									clear = 1;
-								}
-							}
-							dest.x = sprite_info[SPR_PIXEL].dest.x;
-							dest.y = sprite_info[SPR_PIXEL].dest.y + (iy2 - 1) * sprite_info[SPR_PIXEL].src.h;
-							int x = 0;
-							for (int ix = 0; ix != ROW_SIZE_DISP; ++ix) {
-								auto index = (flip_screen_v ? N_ROW + 1 - iy : iy) * row_size + ix;
-								for (uint8_t mask = 0x80; mask; mask >>= 1, dest.x += sprite_info[SPR_PIXEL].src.w) {
-									if (screen_buffer[index] & mask)
-										ink_alpha = ink_alpha_on;
-									else
-										ink_alpha = ink_alpha_off;
-									if (visual_refresh_rate >= visual_flashing_threshold)
-										ink_alpha *= screen_scan_alpha[iy];
-									if (clear)
-										ink_alpha = 0;
-									const size_t alpha_index = (flip_screen_h ? (191 - x) : x) + iy2 * 192;
-									ApplyLcdAlpha(alpha_index, static_cast<float>(ink_alpha), ratio, lcd_response);
-									x++;
-								}
-							}
-						}
-					}
-				}
-				else {
-					ApplyLcdAlphaDecay(192, 64 * 192, ratio, lcd_response);
-				}
-			}
-			return;
-		clean_scr:
-			ApplyLcdAlphaDecay(0, 64 * 192, ratio, lcd_response);
-			return;
+			const ordinary_lcd::FrameControls frame_controls{
+				N_ROW, static_cast<int>(row_size), ROW_SIZE_DISP,
+				screen_mode, screen_range, screen_offset, enabled_2,
+				hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II,
+				target_levels};
+			ordinary_lcd::VisitFrame<hardware_id == HW_CLASSWIZ_II>(frame_controls,
+				std::span<const ordinary_lcd::SpriteSpec>(sprite_bitmap + 1, SPR_MAX - 1),
+				[&](size_t index, const ordinary_lcd::PixelSource& source) {
+					const float target = ordinary_lcd::EvaluatePixel<hardware_id == HW_CLASSWIZ_II>(
+						source, screen_buffer, screen_buffer1, screen_scan_alpha,
+						visual_refresh_rate >= visual_flashing_threshold);
+					ApplyLcdAlpha(index, target, ratio, lcd_response);
+				},
+				[&](size_t begin, size_t end) {
+					ApplyLcdAlphaDecay(begin, end, ratio, lcd_response);
+				},
+				[&](ordinary_lcd::TargetLevels levels) {
+					status_ink_alpha_on = levels.ink_alpha_on;
+					status_ink_alpha_off = levels.ink_alpha_off;
+				});
 		}
 	};
 
@@ -1199,6 +1190,7 @@ namespace casioemu {
 		screen_thread_running.store(true, std::memory_order_release);
 		screen_thread = std::thread([this]() {
 			while (screen_thread_running.load(std::memory_order_acquire)) {
+				int temporal_status = -1;
 				{
 					std::unique_lock<std::mutex> state_lock(screen_state_mutex);
 					screen_state_ready.wait(state_lock, [this]() {
@@ -1206,7 +1198,14 @@ namespace casioemu {
 					});
 					if (!screen_thread_running.load())
 						break;
-					tick();
+					temporal_status = TemporalTick();
+					if (temporal_status < 0) tick();
+				}
+				if constexpr (kCaptureLcdHistory && ordinary_lcd_history::kNativeTemporalWorker) {
+					if (temporal_status >= 0) {
+						if (temporal_status == 1) lcd_history.WaitForWork(kTemporalInterval, screen_thread_running);
+						continue;
+					}
 				}
 			if constexpr (IsEpsFamily(hardware_id)) {
 				SDL_Delay(10);
@@ -1233,6 +1232,7 @@ namespace casioemu {
 			screen_thread_running.store(false, std::memory_order_release);
 		}
 		screen_state_ready.notify_one();
+		if constexpr (kCaptureLcdHistory) lcd_history.Wake();
 		if (screen_thread.joinable()) {
 			// Screen destruction is owned by the Emulator/Chipset thread. The
 			// update worker never destroys its owning Screen instance.
@@ -1246,6 +1246,8 @@ namespace casioemu {
 	template <HardwareId hardware_id>
 	void Screen<hardware_id>::Initialise() {
 		auto state_lock = LockScreenState();
+		auto history_lock = LockLcdMutation();
+		if constexpr (kCaptureLcdHistory) lcd_history.InvalidateEpoch();
 		if (!inited) {
 			renderer = emulator.GetRenderer();
 			interface_texture = emulator.GetInterfaceTexture();
@@ -1290,8 +1292,17 @@ namespace casioemu {
 						return ((Screen*)region->userdata)->screen_power;
 					},
 					[](MMURegion* region, size_t offset, uint8_t data) {
-						bool a = (((Screen*)region->userdata)->screen_power & 1) ^ (data & 1);
-						((Screen*)region->userdata)->screen_power = data & 0xf;
+						auto* screen = static_cast<Screen*>(region->userdata);
+						bool a;
+						{
+							auto history_lock = screen->LockLcdMutation();
+							a = (screen->screen_power & 1) ^ (data & 1);
+							if constexpr (kCaptureLcdHistory) {
+								if (screen->screen_power != (data & 0xf))
+									screen->lcd_history.InvalidateEpoch();
+							}
+							screen->screen_power = data & 0xf;
+						} // Release History before Initialise/Uninitialise takes Screen.
 						if (a && ((data & 1) == 0)) { // 关闭屏幕
 							((Screen*)region->userdata)->Uninitialise();
 						}
@@ -1427,6 +1438,7 @@ namespace casioemu {
 							return;
 
 						auto this_obj = (Screen*)region->userdata;
+						auto history_lock = this_obj->LockLcdMutation();
 						if constexpr (kCaptureLcdHistory) {
 							struct WriteContext {
 								Screen* screen;
@@ -1476,6 +1488,7 @@ namespace casioemu {
 							return;
 
 						auto this_obj = (Screen*)region->userdata;
+						auto history_lock = this_obj->LockLcdMutation();
 						if constexpr (kCaptureLcdHistory) {
 							struct WriteContext {
 								Screen* screen;
@@ -1562,6 +1575,7 @@ namespace casioemu {
 								return;
 
 							auto this_obj = (Screen*)region->userdata;
+						auto history_lock = this_obj->LockLcdMutation();
 							if constexpr (kCaptureLcdHistory) {
 								struct WriteContext {
 									Screen* screen;
@@ -1594,12 +1608,12 @@ namespace casioemu {
 				}
 			}
 			if constexpr (hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) {
-				region_range.Setup(0xF030, 1, "Screen/Range", &screen_range, MMURegion::DefaultRead<uint8_t, 0x2F>,
-					MMURegion::DefaultWrite<uint8_t, 0x2F>, emulator);
+				SetupLcdControl<ordinary_lcd_history::Kind::Range, 0x2F, &Screen::screen_range>(
+					region_range, 0xF030, "Screen/Range");
 			}
 			else {
-				region_range.Setup(0xF030, 1, "Screen/Range", &screen_range, MMURegion::DefaultRead<uint8_t, 0x07>,
-					MMURegion::DefaultWrite<uint8_t, 0x07>, emulator);
+				SetupLcdControl<ordinary_lcd_history::Kind::Range, 0x07, &Screen::screen_range>(
+					region_range, 0xF030, "Screen/Range");
 			}
 
 			if constexpr (hardware_id == HW_CLASSWIZ_II) {
@@ -1607,10 +1621,12 @@ namespace casioemu {
 					0xF031, 1, "Screen/Mode", this,
 					[](MMURegion* region, size_t offset) {
 						auto screen = ((Screen*)region->userdata);
+						auto history_lock = screen->LockLcdMutation();
 						return screen->screen_mode;
 					},
 						[](MMURegion* region, size_t offset, uint8_t data) {
 							auto screen = ((Screen*)region->userdata);
+						auto history_lock = screen->LockLcdMutation();
 							if constexpr (kCaptureLcdHistory) {
 								struct WriteContext {
 									Screen* screen;
@@ -1681,6 +1697,7 @@ namespace casioemu {
 						},
 						[](MMURegion* region, size_t, uint8_t data) {
 							auto screen = static_cast<Screen*>(region->userdata);
+							auto history_lock = screen->LockLcdMutation();
 							struct WriteContext {
 								Screen* screen;
 								uint8_t data;
@@ -1714,12 +1731,12 @@ namespace casioemu {
 				}
 			}
 			else {
-				region_mode.Setup(0xF031, 1, "Screen/Mode", &screen_mode, MMURegion::DefaultRead<uint8_t, 0x07>,
-					MMURegion::DefaultWrite<uint8_t, 0x07>, emulator);
+				SetupLcdControl<ordinary_lcd_history::Kind::Mode, 0x07, &Screen::screen_mode>(
+					region_mode, 0xF031, "Screen/Mode");
 			}
 			if constexpr (hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) {
-				region_contrast.Setup(0xF032, 1, "Screen/Contrast", &screen_contrast, MMURegion::DefaultRead<uint8_t, 0x3F>,
-					MMURegion::DefaultWrite<uint8_t, 0x3F>, emulator);
+				SetupLcdControl<ordinary_lcd_history::Kind::Contrast, 0x3F, &Screen::screen_contrast>(
+					region_contrast, 0xF032, "Screen/Contrast");
 				region_unk1.Setup(
 					0xF03E, 1, "Screen/Unk1", this,
 					[](MMURegion* region, size_t offset) {
@@ -1740,8 +1757,8 @@ namespace casioemu {
 					emulator);
 			}
 			else {
-				region_contrast.Setup(0xF032, 1, "Screen/Contrast", &screen_contrast, MMURegion::DefaultRead<uint8_t, 0x1f>,
-					MMURegion::DefaultWrite<uint8_t, 0x1f>, emulator);
+				SetupLcdControl<ordinary_lcd_history::Kind::Contrast, 0x1f, &Screen::screen_contrast>(
+					region_contrast, 0xF032, "Screen/Contrast");
 			}
 
 			if constexpr (hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) {
@@ -1753,6 +1770,7 @@ namespace casioemu {
 						},
 						[](MMURegion* region, size_t, uint8_t data) {
 							auto screen = static_cast<Screen*>(region->userdata);
+							auto history_lock = screen->LockLcdMutation();
 							struct WriteContext {
 								Screen* screen;
 								uint8_t data;
@@ -1785,8 +1803,8 @@ namespace casioemu {
 						MMURegion::DefaultWrite < uint8_t, 0x04 | 1 >, emulator);
 				}
 
-				region_brightness.Setup(0xF033, 1, "Screen/Brightness", &screen_brightness, MMURegion::DefaultRead<uint8_t, 0x07>,
-					MMURegion::DefaultWrite<uint8_t, 0x07>, emulator);
+				SetupLcdControl<ordinary_lcd_history::Kind::Brightness, 0x07, &Screen::screen_brightness>(
+					region_brightness, 0xF033, "Screen/Brightness");
 
 				/*
 cwx中F03B的值应该是由屏幕扫描和F035/F036决定的
@@ -1818,8 +1836,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 
 			if constexpr (screen_scan::kEnableIndependentScanReport &&
 				(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II)) {
-				region_offset.Setup(0xF039, 1, "Screen/DSPOFST", &screen_offset, MMURegion::DefaultRead<uint8_t, 0x3F>,
-					MMURegion::DefaultWrite<uint8_t, 0x3F>, emulator);
+				SetupLcdControl<ordinary_lcd_history::Kind::Offset, 0x3F, &Screen::screen_offset>(
+					region_offset, 0xF039, "Screen/DSPOFST");
 				SetupIndependentScanRegions();
 			}
 			else if constexpr (hardware_id == HardwareId::HW_FX_5800P || hardware_id == HardwareId::HW_ES_PLUS) {
@@ -1845,6 +1863,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 	template <HardwareId hardware_id>
 	void Screen<hardware_id>::Uninitialise() {
 		auto state_lock = LockScreenState();
+		auto history_lock = LockLcdMutation();
 		if (!enabled_2)
 			return;
 		if constexpr (kCaptureLcdHistory)

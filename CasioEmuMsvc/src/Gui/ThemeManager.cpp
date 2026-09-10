@@ -1,3 +1,4 @@
+#include "Peripheral/OrdinaryLcdHistory.hpp"
 #include "ThemeManager.h"
 #ifndef TEST_BUILD
 
@@ -128,6 +129,7 @@ void ThemeManager::SaveSettings() {
 }
 
 void ThemeManager::LoadSettings() {
+	casioemu::ordinary_lcd_history::UntrackedChange lcd_change;
 	std::ifstream file(kThemeSettingsPath, std::ios::binary);
 	if (file.is_open()) {
 		m_settings.Read(file);
