@@ -512,6 +512,7 @@
     <ClCompile Include="src\Peripheral\EpsScreen.cpp" />
     <ClCompile Include="src\Peripheral\ScreenGate.cpp" />
     <ClCompile Include="src\Peripheral\OrdinaryLcdHistory.cpp" />
+    <ClCompile Include="src\Peripheral\LcdTemporalCandidate.cpp" />
     <ClCompile Include="src\Peripheral\ScreenScan.cpp" />
     <ClCompile Include="src\Peripheral\ScreenOutput.cpp" />
     <ClCompile Include="src\Peripheral\ScreenRenderSupport.cpp" />
@@ -641,10 +642,13 @@
     <ClInclude Include="src\Peripheral\Screen.hpp" />
     <ClInclude Include="src\Peripheral\EpsScreen.hpp" />
     <ClInclude Include="src\Peripheral\LcdResponse.hpp" />
+    <ClInclude Include="src\Peripheral\LcdTemporalCandidate.hpp" />
+    <ClInclude Include="src\Peripheral\OrdinaryLcdFrame.hpp" />
     <ClInclude Include="src\Peripheral\OrdinaryLcdTarget.hpp" />
     <ClInclude Include="src\Peripheral\ScreenGate.hpp" />
     <ClInclude Include="src\Peripheral\OrdinaryLcdHistory.hpp" />
     <ClInclude Include="src\Peripheral\ScreenScan.hpp" />
+    <ClInclude Include="src\Peripheral\ScreenScanVisual.hpp" />
     <ClInclude Include="src\Peripheral\ScreenOutput.hpp" />
     <ClInclude Include="src\Peripheral\ScreenRenderSupport.hpp" />
     <ClInclude Include="src\Peripheral\SolarIIScreen.hpp" />

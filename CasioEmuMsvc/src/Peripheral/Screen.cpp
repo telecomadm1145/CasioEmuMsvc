@@ -1403,6 +1403,7 @@ namespace casioemu {
 				}
 				ti_a0 = (data & 0x40);
 				});
+			StartUpdateThread();
 			return;
 		}
 		if (!(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) || (!enabled_2 && (screen_power & 1))) {
