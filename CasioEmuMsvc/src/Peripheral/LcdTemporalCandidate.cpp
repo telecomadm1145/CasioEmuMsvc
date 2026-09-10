@@ -7,7 +7,6 @@
 #include <limits>
 #include <memory>
 #include <span>
-#include <utility>
 
 namespace casioemu::lcd_temporal {
 
@@ -195,20 +194,16 @@ bool AdvanceTimeline(Candidate& c, uint64_t end_ns) {
 	c.timeline_ns = end_ns;
 	return true;
 }
-} // namespace
 
-bool BuildTargetsImpl(const Controls& controls, const ScanState& scan, uint64_t sdl_ms,
+bool BuildTargetsImpl(const Controls& controls, const ScanState& scan,
 	std::span<const uint8_t> primary, std::span<const uint8_t> secondary,
 	std::span<const SpriteSpec> sprites, std::array<float, kPixelCount>& targets,
 	std::array<uint8_t, kPixelCount>& active,
 	std::array<uint16_t, kSourceBitCount * 2>* primary_map,
 	std::array<uint16_t, kSourceBitCount * 2>* secondary_map,
 	std::array<ordinary_lcd::PixelSource, kPixelCount>* pixel_sources,
-	ordinary_lcd::TargetLevels* status_levels, const float* scan_alpha, RejectReason& reason) {
-	(void)sdl_ms;
-	reason = RejectReason::None;
+	ordinary_lcd::TargetLevels* status_levels, const float* scan_alpha) {
 	if (!IsSupported(controls.hardware_id)) {
-		reason = RejectReason::UnsupportedHardware;
 		return false;
 	}
 	const bool classwiz_ii = controls.hardware_id == HW_CLASSWIZ_II;
@@ -216,7 +211,6 @@ bool BuildTargetsImpl(const Controls& controls, const ScanState& scan, uint64_t 
 	const size_t sprite_count = classwiz ? 20 : (controls.hardware_id == HW_ES_PLUS ? 18 : 19);
 	if (controls.n_row != (classwiz ? 63 : 31) || controls.row_size != (classwiz ? 32 : 16) ||
 		controls.row_size_display != (classwiz ? 24 : 12) || sprites.size() != sprite_count) {
-		reason = RejectReason::InvalidBuffer;
 		return false;
 	}
 	const int expected_rows = controls.n_row + 1;
@@ -224,21 +218,17 @@ bool BuildTargetsImpl(const Controls& controls, const ScanState& scan, uint64_t 
 	if (primary.size() != expected_size ||
 		(classwiz_ii && secondary.size() != expected_size) ||
 		(!classwiz_ii && !secondary.empty())) {
-		reason = RejectReason::InvalidBuffer;
 		return false;
 	}
 	for (const auto sprite : sprites) {
 		if (sprite.mask == 0) {
-			reason = RejectReason::InvalidBuffer;
 			return false;
 		}
 	}
 	if (controls.buffer_select) {
-		reason = RejectReason::UnsupportedControl;
 		return false;
 	}
 	if (controls.enabled && scan.effective_rate >= scan.flashing_threshold && !scan_alpha) {
-		reason = RejectReason::UnsupportedScan;
 		return false;
 	}
 	std::fill(targets.begin(), targets.end(), 0.0f);
@@ -277,7 +267,6 @@ bool BuildTargetsImpl(const Controls& controls, const ScanState& scan, uint64_t 
 			return;
 		if (index >= kPixelCount || source.source_offset >= primary.size() ||
 			(classwiz_ii && source.source_offset >= secondary.size())) {
-			reason = RejectReason::InvalidBuffer;
 			failed = true;
 			return;
 		}
@@ -289,12 +278,9 @@ bool BuildTargetsImpl(const Controls& controls, const ScanState& scan, uint64_t 
 			(*pixel_sources)[index] = source;
 		active[index] = 1;
 		add_mappings(source, index);
-		if (failed && reason == RejectReason::None)
-			reason = RejectReason::MappingOverflow;
 	};
 	const auto decay = [&](size_t begin, size_t end) {
 		if (begin > end || end > kPixelCount) {
-			reason = RejectReason::InvalidBuffer;
 			failed = true;
 			return;
 		}
@@ -311,28 +297,10 @@ bool BuildTargetsImpl(const Controls& controls, const ScanState& scan, uint64_t 
 	return !failed;
 }
 
-bool BuildTargets(const Controls& controls, const ScanState& scan, uint64_t sdl_ms,
-	std::span<const uint8_t> primary, std::span<const uint8_t> secondary,
-	std::span<const SpriteSpec> sprites, std::array<float, kPixelCount>& targets,
-	std::array<uint8_t, kPixelCount>& active,
-	std::array<uint16_t, kSourceBitCount * 2>& primary_map,
-	std::array<uint16_t, kSourceBitCount * 2>& secondary_map,
-	RejectReason& reason) {
-	return BuildTargetsImpl(controls, scan, sdl_ms, primary, secondary, sprites,
-		targets, active, &primary_map, &secondary_map, nullptr, nullptr, nullptr, reason);
-}
+} // namespace
 
-bool BuildTargets(const Controls& controls, const ScanState& scan, uint64_t sdl_ms,
-	std::span<const uint8_t> primary, std::span<const uint8_t> secondary,
-	std::span<const SpriteSpec> sprites, std::array<float, kPixelCount>& targets,
-	std::array<uint8_t, kPixelCount>& active, RejectReason& reason) {
-	return BuildTargetsImpl(controls, scan, sdl_ms, primary, secondary, sprites,
-		targets, active, nullptr, nullptr, nullptr, nullptr, nullptr, reason);
-}
-
-bool ReplaySession::Reject(RejectReason reason) {
+bool ReplaySession::Reject() {
 	status_ = ReplayStatus::Rejected;
-	reason_ = reason;
 	return false;
 }
 
@@ -340,24 +308,20 @@ bool ReplaySession::Begin(const Baseline& baseline,
 	const ordinary_lcd_history::Cutoff& cutoff) {
 	// Allocation/copy exceptions must not leave a usable pending session.
 	status_ = ReplayStatus::Rejected;
-	reason_ = RejectReason::BaselineIncomplete;
 	cutoff_ = cutoff;
 	if (!baseline.coverage_complete) {
-		reason_ = RejectReason::BaselineIncomplete;
-		return Reject(reason_);
+		return Reject();
 	}
 	if (!IsSupported(baseline.controls.hardware_id)) {
-		reason_ = RejectReason::UnsupportedHardware;
-		return Reject(reason_);
+		return Reject();
 	}
 	if (cutoff.epoch != baseline.epoch || cutoff.end_seq < baseline.seq)
-		return Reject(RejectReason::EpochMismatch);
+		return Reject();
 	if (cutoff.steady_ns < baseline.steady_ns)
-		return Reject(RejectReason::TimeOutOfOrder);
+		return Reject();
 	for (const uint64_t timestamp : baseline.alpha_steady_ns) {
 		if (timestamp != baseline.steady_ns) {
-			reason_ = RejectReason::BaselineIncomplete;
-			return Reject(reason_);
+			return Reject();
 		}
 	}
 	if (!candidate_)
@@ -381,34 +345,33 @@ bool ReplaySession::Begin(const Baseline& baseline,
 	candidate.steady_ns = baseline.steady_ns;
 	candidate.last_event_ns = baseline.steady_ns;
 	candidate.sdl_ms = baseline.sdl_ms;
-	if (!BuildTargetsImpl(candidate.controls, candidate.scan, candidate.sdl_ms,
+	if (!BuildTargetsImpl(candidate.controls, candidate.scan,
 		candidate.primary, candidate.secondary, candidate.sprites,
 		candidate.targets, candidate.active, &candidate.primary_map,
-		&candidate.secondary_map, &candidate.pixel_sources, &candidate.status_levels, candidate.scan_alpha.data(), reason_))
-		return Reject(reason_);
+		&candidate.secondary_map, &candidate.pixel_sources, &candidate.status_levels, candidate.scan_alpha.data()))
+		return Reject();
 	status_ = ReplayStatus::Pending;
-	reason_ = RejectReason::None;
 	return true;
 }
 
 bool ReplaySession::BeginFromLive(const Baseline& baseline,
 	const ordinary_lcd_history::Cutoff& cutoff, uint64_t previous_ns) {
 	if (!Begin(baseline, cutoff)) return false;
-	if (previous_ns > baseline.steady_ns) return Reject(RejectReason::TimeOutOfOrder);
+	if (previous_ns > baseline.steady_ns) return Reject();
 	candidate_->alpha_steady_ns.fill(previous_ns);
 	if (!AdvanceAllPixels(*candidate_, baseline.steady_ns))
-		return Reject(RejectReason::TimeOutOfOrder);
+		return Reject();
 	candidate_->alpha_steady_ns.fill(baseline.steady_ns);
 	return true;
 }
 
 bool ReplaySession::Continue(const ordinary_lcd_history::Cutoff& cutoff) {
 	if (status_ != ReplayStatus::Ready)
-		return Reject(RejectReason::InvalidReplayState);
+		return Reject();
 	if (cutoff.epoch != candidate_->epoch || cutoff.end_seq < candidate_->seq)
-		return Reject(RejectReason::EpochMismatch);
+		return Reject();
 	if (cutoff.steady_ns < candidate_->steady_ns)
-		return Reject(RejectReason::TimeOutOfOrder);
+		return Reject();
 	cutoff_ = cutoff;
 	candidate_->scan_segments = 0;
 	// A new event must follow the completed interval, even when the preceding
@@ -421,16 +384,16 @@ bool ReplaySession::Continue(const ordinary_lcd_history::Cutoff& cutoff) {
 bool ReplaySession::AppendBatch(const ordinary_lcd_history::Batch& batch,
 	const ordinary_lcd_history::ConsumeResult& consumed) {
 	if (status_ != ReplayStatus::Pending)
-		return Reject(RejectReason::InvalidReplayState);
+		return Reject();
 	if (consumed.incomplete)
-		return Reject(RejectReason::HistoryIncomplete);
+		return Reject();
 	if (!consumed.epoch_matches || !consumed.queue_epoch_matches || consumed.epoch != cutoff_.epoch)
-		return Reject(RejectReason::EpochMismatch);
+		return Reject();
 	if (batch.size > batch.events.size() || consumed.count != batch.size)
-		return Reject(RejectReason::InvalidBuffer);
+		return Reject();
 	const uint64_t last_seq = batch.size ? batch.events[batch.size - 1].seq : 0;
 	if (consumed.last_seq != last_seq)
-		return Reject(RejectReason::SequenceGap);
+		return Reject();
 	if (!Append(std::span<const ordinary_lcd_history::Event>(batch.events.data(), batch.size)))
 		return false;
 	return !consumed.cutoff_complete || Finish();
@@ -438,35 +401,30 @@ bool ReplaySession::AppendBatch(const ordinary_lcd_history::Batch& batch,
 
 bool ReplaySession::Append(std::span<const ordinary_lcd_history::Event> events) {
 	if (status_ != ReplayStatus::Pending)
-		return Reject(RejectReason::InvalidReplayState);
+		return Reject();
 	Candidate& candidate = *candidate_;
 	const auto& cutoff = cutoff_;
 	for (const auto& event : events) {
 		if (event.epoch != candidate.epoch) {
-			reason_ = RejectReason::EpochMismatch;
-			return Reject(reason_);
+			return Reject();
 		}
 		if (event.seq != candidate.seq + 1) {
-			reason_ = RejectReason::SequenceGap;
-			return Reject(reason_);
+			return Reject();
 		}
 		if (event.seq > cutoff.end_seq || event.steady_ns < candidate.last_event_ns ||
 			event.steady_ns > cutoff.steady_ns) {
-			reason_ = RejectReason::TimeOutOfOrder;
-			return Reject(reason_);
+			return Reject();
 		}
 		if (!AdvanceTimeline(candidate, event.steady_ns))
-			return Reject(RejectReason::WorkLimit);
+			return Reject();
 		switch (event.kind) {
 		case ordinary_lcd_history::Kind::Byte: {
 			if ((event.write_plane_mask & ~(ordinary_lcd_history::kPrimaryPlane |
 				ordinary_lcd_history::kSecondaryPlane)) != 0 || event.write_plane_mask == 0) {
-				reason_ = RejectReason::InvalidBuffer;
-				return Reject(reason_);
+				return Reject();
 			}
 			if (event.offset >= candidate.primary.size()) {
-				reason_ = RejectReason::InvalidBuffer;
-				return Reject(reason_);
+				return Reject();
 			}
 			const uint8_t primary_changed = event.old_primary ^ event.new_primary;
 			const uint8_t secondary_changed = event.old_secondary ^ event.new_secondary;
@@ -488,19 +446,16 @@ bool ReplaySession::Append(std::span<const ordinary_lcd_history::Event> events) 
 				if (event.write_plane_mask != ordinary_lcd_history::kSecondaryPlane ||
 					candidate.secondary.empty() || event.offset >= candidate.secondary.size() ||
 					event.old_secondary != candidate.secondary[event.offset]) {
-					reason_ = RejectReason::SequenceGap;
-					return Reject(reason_);
+					return Reject();
 				}
 				if (event.write_plane_mask & ordinary_lcd_history::kSecondaryPlane)
 					collect(candidate.secondary_map, secondary_changed);
 				if (affected_overflow) {
-					reason_ = RejectReason::AffectedOverflow;
-					return Reject(reason_);
+					return Reject();
 				}
 				if (!AdvancePixels(candidate,
 					std::span<const size_t>(affected.data(), affected_count), event.steady_ns)) {
-					reason_ = RejectReason::TimeOutOfOrder;
-					return Reject(reason_);
+					return Reject();
 				}
 				if (event.write_plane_mask & ordinary_lcd_history::kSecondaryPlane)
 					candidate.secondary[event.offset] = event.new_secondary;
@@ -508,32 +463,27 @@ bool ReplaySession::Append(std::span<const ordinary_lcd_history::Event> events) 
 			else if (event.buffer == ordinary_lcd_history::BufferId::F800) {
 				if ((event.write_plane_mask & ordinary_lcd_history::kSecondaryPlane) &&
 					(candidate.secondary.empty() || event.offset >= candidate.secondary.size())) {
-					reason_ = RejectReason::InvalidBuffer;
-					return Reject(reason_);
+					return Reject();
 				}
 				if (event.offset >= candidate.primary.size() ||
 					((event.write_plane_mask & ordinary_lcd_history::kPrimaryPlane) &&
 					event.old_primary != candidate.primary[event.offset])) {
-					reason_ = RejectReason::SequenceGap;
-					return Reject(reason_);
+					return Reject();
 				}
 				if (event.write_plane_mask & ordinary_lcd_history::kPrimaryPlane)
 					collect(candidate.primary_map, primary_changed);
 				if ((event.write_plane_mask & ordinary_lcd_history::kSecondaryPlane) &&
 					event.old_secondary != candidate.secondary[event.offset]) {
-					reason_ = RejectReason::SequenceGap;
-					return Reject(reason_);
+					return Reject();
 				}
 				if (event.write_plane_mask & ordinary_lcd_history::kSecondaryPlane)
 					collect(candidate.secondary_map, secondary_changed);
 				if (affected_overflow) {
-					reason_ = RejectReason::AffectedOverflow;
-					return Reject(reason_);
+					return Reject();
 				}
 				if (!AdvancePixels(candidate,
 					std::span<const size_t>(affected.data(), affected_count), event.steady_ns)) {
-					reason_ = RejectReason::TimeOutOfOrder;
-					return Reject(reason_);
+					return Reject();
 				}
 				if (event.write_plane_mask & ordinary_lcd_history::kPrimaryPlane)
 					candidate.primary[event.offset] = event.new_primary;
@@ -542,8 +492,7 @@ bool ReplaySession::Append(std::span<const ordinary_lcd_history::Event> events) 
 				}
 			}
 			else {
-				reason_ = RejectReason::UnknownEvent;
-				return Reject(reason_);
+				return Reject();
 			}
 			for (size_t i = 0; i != affected_count; ++i) {
 				const size_t pixel = affected[i];
@@ -559,21 +508,17 @@ bool ReplaySession::Append(std::span<const ordinary_lcd_history::Event> events) 
 		}
 		case ordinary_lcd_history::Kind::Mode: {
 			if (!AdvanceAllPixels(candidate, event.steady_ns)) {
-				reason_ = RejectReason::TimeOutOfOrder;
-				return Reject(reason_);
+				return Reject();
 			}
 			const uint8_t mode_mask = candidate.controls.hardware_id == HW_CLASSWIZ_II ? 0x7f :
 				(candidate.controls.hardware_id == HW_CLASSWIZ ? 0x3f : 0x07);
 			if (event.old_value != candidate.controls.mode ||
 				((event.old_value | event.new_value) & ~mode_mask) != 0) {
-				reason_ = event.old_value != candidate.controls.mode
-					? RejectReason::SequenceGap : RejectReason::InvalidBuffer;
-				return Reject(reason_);
+				return Reject();
 			}
 			if (candidate.controls.hardware_id == HW_CLASSWIZ_II &&
 				((event.old_value ^ event.new_value) & 0x08) != 0) {
-				reason_ = RejectReason::UnsupportedControl;
-				return Reject(reason_);
+				return Reject();
 			}
 			candidate.controls.mode = event.new_value;
 			break;
@@ -583,9 +528,7 @@ bool ReplaySession::Append(std::span<const ordinary_lcd_history::Event> events) 
 			// ordinary LCD target mapping or pixel values.
 			if (event.old_value != candidate.controls.select ||
 				((event.old_value | event.new_value) & ~uint8_t(0x05)) != 0) {
-				reason_ = event.old_value != candidate.controls.select
-					? RejectReason::SequenceGap : RejectReason::InvalidBuffer;
-				return Reject(reason_);
+				return Reject();
 			}
 			candidate.controls.select = event.new_value;
 			break;
@@ -593,9 +536,7 @@ bool ReplaySession::Append(std::span<const ordinary_lcd_history::Event> events) 
 			if (!AdvanceAllPixels(candidate, event.steady_ns) ||
 				event.old_value != candidate.controls.range ||
 				((event.old_value | event.new_value) & ~uint8_t(0x2f)) != 0) {
-				reason_ = event.old_value != candidate.controls.range
-					? RejectReason::SequenceGap : RejectReason::InvalidBuffer;
-				return Reject(reason_);
+				return Reject();
 			}
 			candidate.controls.range = event.new_value;
 			break;
@@ -603,9 +544,7 @@ bool ReplaySession::Append(std::span<const ordinary_lcd_history::Event> events) 
 			if (!AdvanceAllPixels(candidate, event.steady_ns) ||
 				event.old_value != candidate.controls.contrast ||
 				((event.old_value | event.new_value) & ~uint8_t(0x3f)) != 0) {
-				reason_ = event.old_value != candidate.controls.contrast
-					? RejectReason::SequenceGap : RejectReason::InvalidBuffer;
-				return Reject(reason_);
+				return Reject();
 			}
 			candidate.controls.contrast = event.new_value;
 			break;
@@ -613,9 +552,7 @@ bool ReplaySession::Append(std::span<const ordinary_lcd_history::Event> events) 
 			if (!AdvanceAllPixels(candidate, event.steady_ns) ||
 				event.old_value != candidate.controls.brightness ||
 				((event.old_value | event.new_value) & ~uint8_t(0x07)) != 0) {
-				reason_ = event.old_value != candidate.controls.brightness
-					? RejectReason::SequenceGap : RejectReason::InvalidBuffer;
-				return Reject(reason_);
+				return Reject();
 			}
 			candidate.controls.brightness = event.new_value;
 			break;
@@ -623,20 +560,16 @@ bool ReplaySession::Append(std::span<const ordinary_lcd_history::Event> events) 
 			if (!AdvanceAllPixels(candidate, event.steady_ns) ||
 				event.old_value != candidate.controls.offset ||
 				((event.old_value | event.new_value) & ~uint8_t(0x3f)) != 0) {
-				reason_ = event.old_value != candidate.controls.offset
-					? RejectReason::SequenceGap : RejectReason::InvalidBuffer;
-				return Reject(reason_);
+				return Reject();
 			}
 			candidate.controls.offset = event.new_value;
 			break;
 		case ordinary_lcd_history::Kind::Scan:
 			if (!AdvanceAllPixels(candidate, event.steady_ns)) {
-				reason_ = RejectReason::TimeOutOfOrder;
-				return Reject(reason_);
+				return Reject();
 			}
 			if (!SameScan(candidate.scan, event.scan_before)) {
-				reason_ = RejectReason::SequenceGap;
-				return Reject(reason_);
+				return Reject();
 			}
 			candidate.scan = ToScanState(event.scan_after_advance, event.state_sdl_ms);
 			candidate.scan.raw_rate = event.scan_before.raw_rate;
@@ -647,8 +580,7 @@ bool ReplaySession::Append(std::span<const ordinary_lcd_history::Event> events) 
 			RefreshScan(candidate, event.state_sdl_ms);
 			break;
 		default:
-			reason_ = RejectReason::UnknownEvent;
-			return Reject(reason_);
+			return Reject();
 		}
 		candidate.seq = event.seq;
 		candidate.last_event_ns = event.steady_ns;
@@ -657,11 +589,11 @@ bool ReplaySession::Append(std::span<const ordinary_lcd_history::Event> events) 
 			? event.state_sdl_ms : event.sdl_ms;
 		if (event.kind != ordinary_lcd_history::Kind::Select &&
 			event.kind != ordinary_lcd_history::Kind::Byte) {
-			if (!BuildTargetsImpl(candidate.controls, candidate.scan, candidate.sdl_ms,
+			if (!BuildTargetsImpl(candidate.controls, candidate.scan,
 				candidate.primary, candidate.secondary, candidate.sprites,
 				candidate.targets, candidate.active, &candidate.primary_map,
-				&candidate.secondary_map, &candidate.pixel_sources, &candidate.status_levels, candidate.scan_alpha.data(), reason_))
-				return Reject(reason_);
+				&candidate.secondary_map, &candidate.pixel_sources, &candidate.status_levels, candidate.scan_alpha.data()))
+				return Reject();
 			for (size_t i = 0; i != kPixelCount; ++i)
 				if (candidate.active[i])
 					candidate.alpha_steady_ns[i] = event.steady_ns;
@@ -672,18 +604,16 @@ bool ReplaySession::Append(std::span<const ordinary_lcd_history::Event> events) 
 
 bool ReplaySession::Finish() {
 	if (status_ != ReplayStatus::Pending)
-		return Reject(RejectReason::InvalidReplayState);
+		return Reject();
 	Candidate& candidate = *candidate_;
 	const auto& cutoff = cutoff_;
 	if (candidate.seq != cutoff.end_seq) {
-		reason_ = RejectReason::SequenceGap;
-		return Reject(reason_);
+		return Reject();
 	}
 	if (!AdvanceTimeline(candidate, cutoff.steady_ns))
-		return Reject(RejectReason::WorkLimit);
+		return Reject();
 	if (!AdvanceAllPixels(candidate, cutoff.steady_ns)) {
-		reason_ = RejectReason::TimeOutOfOrder;
-		return Reject(reason_);
+		return Reject();
 	}
 	candidate.steady_ns = cutoff.steady_ns;
 	candidate.sdl_ms = cutoff.sdl_ms;
@@ -696,22 +626,6 @@ bool ReplaySession::Finish() {
 
 const Candidate* ReplaySession::Result() const {
 	return status_ == ReplayStatus::Ready ? candidate_.get() : nullptr;
-}
-
-std::unique_ptr<Candidate> ReplaySession::TakeResult() {
-	if (status_ != ReplayStatus::Ready)
-		return nullptr;
-	status_ = ReplayStatus::Idle;
-	return std::move(candidate_);
-}
-
-ReplayResult Replay(const Baseline& baseline,
-	std::span<const ordinary_lcd_history::Event> events,
-	const ordinary_lcd_history::Cutoff& cutoff) {
-	ReplaySession session;
-	if (!session.Begin(baseline, cutoff) || !session.Append(events) || !session.Finish())
-		return {false, session.Reason(), nullptr};
-	return {true, RejectReason::None, session.TakeResult()};
 }
 
 } // namespace casioemu::lcd_temporal

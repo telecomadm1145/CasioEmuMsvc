@@ -17,14 +17,8 @@ inline constexpr bool kNativeTemporalWorker = true;
 inline constexpr bool kNativeTemporalWorker = false;
 #endif
 
-// Native temporal replay enables recording by default. The explicit collector
-// override remains available independently; mobile/Web always use the old path.
-#if defined(CASIOEMU_ENABLE_ORDINARY_LCD_HISTORY) && \
-	!defined(CASIOEMU_CORE_WEB) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
-inline constexpr bool kEnabled = true;
-#else
+// Recording is part of temporal replay; disabling the worker disables it too.
 inline constexpr bool kEnabled = kNativeTemporalWorker;
-#endif
 
 inline constexpr size_t kCapacity = 4096;
 inline constexpr size_t kBatchCapacity = 256;
@@ -147,9 +141,6 @@ struct WorkerState {
 	Batch batch;
 	Cutoff cutoff{};
 	bool cutoff_pending = false;
-	uint64_t consumed_seq = 0;
-	uint64_t consumed_count = 0;
-	bool incomplete = false;
 };
 
 struct DisabledBatch {};
@@ -158,9 +149,6 @@ struct DisabledWorkerState {
 	DisabledBatch batch;
 	Cutoff cutoff{};
 	bool cutoff_pending = false;
-	uint64_t consumed_seq = 0;
-	uint64_t consumed_count = 0;
-	bool incomplete = false;
 };
 
 using PrepareFn = PrepareResult (*)(void*, Event&) noexcept;
@@ -201,11 +189,9 @@ public:
 	bool Covers(const Cutoff& cutoff) const;
 	ConsumeResult ConsumeUntil(const Cutoff& cutoff, Batch& batch);
 	bool Incomplete() const;
-	uint64_t Dropped() const;
-
-	// These lifecycle operations are intentionally explicit. Reset requires all
-	// producers to be stopped; no runtime path calls it in C2a.
 	void InvalidateEpoch();
+	// Hold Lock across the baseline copy, Reset and CaptureCutoff. Every
+	// producer, including fallback writes, must use that same mutation lease.
 	void Reset();
 
 private:
@@ -217,7 +203,6 @@ private:
 	uint64_t epoch = 1;
 	uint64_t next_seq = 0;
 	std::atomic_bool incomplete{false};
-	std::atomic_uint64_t dropped{0};
 	std::atomic_uint64_t coverage_revision{UntrackedRevision()};
 };
 
@@ -228,7 +213,6 @@ struct DisabledHistory {
 	Cutoff CaptureCutoff() const { return {}; }
 	ConsumeResult ConsumeUntil(const Cutoff&, DisabledBatch&) { return {}; }
 	bool Incomplete() const { return false; }
-	uint64_t Dropped() const { return 0; }
 	void InvalidateEpoch() {}
 	void Reset() {}
 };

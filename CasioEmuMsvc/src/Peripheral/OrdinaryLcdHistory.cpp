@@ -53,12 +53,10 @@ TransactionResult History::TryRecord(PrepareFn prepare, WriteFn write, void* con
 	std::unique_lock<std::recursive_mutex> lock(mutex, std::try_to_lock);
 	if (!lock.owns_lock()) {
 		incomplete.store(true, std::memory_order_release);
-		dropped.fetch_add(1, std::memory_order_relaxed);
 		return TransactionResult::Failed;
 	}
 	if (Incomplete() || count == ring.size()) {
 		incomplete.store(true, std::memory_order_release);
-		dropped.fetch_add(1, std::memory_order_relaxed);
 		return TransactionResult::Failed;
 	}
 
@@ -135,10 +133,6 @@ bool History::Incomplete() const {
 		!UntrackedStableAt(coverage_revision.load(std::memory_order_acquire));
 }
 
-uint64_t History::Dropped() const {
-	return dropped.load(std::memory_order_relaxed);
-}
-
 void History::InvalidateEpoch() {
 	std::lock_guard<std::recursive_mutex> lock(mutex);
 	incomplete.store(true, std::memory_order_release);
@@ -153,7 +147,6 @@ void History::Reset() {
 	const auto revision = UntrackedRevision();
 	coverage_revision.store(revision, std::memory_order_release);
 	incomplete.store(!UntrackedStableAt(revision), std::memory_order_release);
-	dropped.store(0, std::memory_order_relaxed);
 }
 
 } // namespace casioemu::ordinary_lcd_history

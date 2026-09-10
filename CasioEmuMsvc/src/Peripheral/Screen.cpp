@@ -359,12 +359,17 @@ namespace casioemu {
 				{
 					auto settings_lock = ordinary_lcd_history::UntrackedChange::LockSettings();
 					if (!LcdResponseEligible() || screen_buffer_select != 0) {
+						if (temporal_valid) lcd_history.InvalidateEpoch();
 						temporal_valid = false;
+						lcd_history_worker.cutoff_pending = false;
 						return -1;
 					}
 				}
 				if (now < temporal_retry_after) return -1;
 				const auto fail = [&]() {
+					// Legacy tick does not consume history. Stop recording until
+					// recovery establishes a new baseline and resets the queue.
+					lcd_history.InvalidateEpoch();
 					temporal_valid = false;
 					lcd_history_worker.cutoff_pending = false;
 					temporal_retry_after = std::chrono::steady_clock::now() + kTemporalRecoveryInterval;
@@ -759,24 +764,6 @@ namespace casioemu {
 				ratio = 0.80f;
 			}
 #endif
-			if constexpr (kCaptureLcdHistory) {
-				if (!lcd_history_worker.cutoff_pending) {
-					lcd_history_worker.cutoff = lcd_history.CaptureCutoff();
-					lcd_history_worker.cutoff_pending = true;
-				}
-				const auto consumed = lcd_history.ConsumeUntil(
-					lcd_history_worker.cutoff, lcd_history_worker.batch);
-				lcd_history_worker.consumed_count += consumed.count;
-				if (consumed.count != 0)
-					lcd_history_worker.consumed_seq = consumed.last_seq;
-				// A producer may set Incomplete after Consume releases history's
-				// mutex; retain the sticky state and re-read the atomic diagnostic.
-				lcd_history_worker.incomplete = lcd_history_worker.incomplete ||
-					consumed.incomplete || !consumed.epoch_matches ||
-					!consumed.queue_epoch_matches || lcd_history.Incomplete();
-				if (!consumed.epoch_matches || !consumed.queue_epoch_matches || consumed.cutoff_complete)
-					lcd_history_worker.cutoff_pending = false;
-			}
 			const auto lcd_response = BeginLcdResponseTick();
 			if constexpr (hardware_id == HW_TI) {
 				ratio = 1 - 1e-4;

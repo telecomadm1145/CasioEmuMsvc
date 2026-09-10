@@ -21,24 +21,6 @@ inline constexpr size_t kGainCacheCapacity = 32768;
 static_assert((kGainCacheCapacity & (kGainCacheCapacity - 1)) == 0);
 static_assert(kGainCacheCapacity > kPixelCount);
 
-enum class RejectReason : uint8_t {
-	None,
-	BaselineIncomplete,
-	UnsupportedHardware,
-	InvalidBuffer,
-	EpochMismatch,
-	SequenceGap,
-	TimeOutOfOrder,
-	UnsupportedControl,
-	UnsupportedScan,
-	MappingOverflow,
-	AffectedOverflow,
-	UnknownEvent,
-	InvalidReplayState,
-	HistoryIncomplete,
-	WorkLimit,
-};
-
 struct ScanState {
 	uint8_t raw_rate = 0;
 	uint8_t effective_rate = 0;
@@ -129,17 +111,9 @@ struct Candidate {
 	size_t gain_cache_count = 0;
 };
 
-struct ReplayResult {
-	bool accepted = false;
-	RejectReason reason = RejectReason::None;
-	std::unique_ptr<Candidate> candidate;
-};
-
-enum class ReplayStatus : uint8_t { Idle, Pending, Ready, Rejected };
-
 // Owns reusable heap storage for a single fixed cutoff. Append never exposes a
 // partially replayed frame. Finish requires the entire contiguous sequence;
-// Result/TakeResult stay unavailable after any failure. History completeness
+// Result stays unavailable after any failure. History completeness
 // and live publication/version checks remain the caller's responsibility.
 class ReplaySession {
 public:
@@ -148,56 +122,26 @@ public:
 	ReplaySession& operator=(const ReplaySession&) = delete;
 	ReplaySession(ReplaySession&&) = delete;
 	ReplaySession& operator=(ReplaySession&&) = delete;
-	bool Begin(const Baseline& baseline, const ordinary_lcd_history::Cutoff& cutoff);
 	// Handoff from the legacy endpoint sampler: settle its last interval using
 	// the captured endpoint target, privately, before starting event replay.
 	bool BeginFromLive(const Baseline& baseline, const ordinary_lcd_history::Cutoff& cutoff,
 		uint64_t previous_ns);
 	// Retain a completed private frame and its mapping for the next cutoff.
 	bool Continue(const ordinary_lcd_history::Cutoff& cutoff);
-	bool Append(std::span<const ordinary_lcd_history::Event> events);
 	bool AppendBatch(const ordinary_lcd_history::Batch& batch,
 		const ordinary_lcd_history::ConsumeResult& consumed);
 	bool Finish();
-	ReplayStatus Status() const { return status_; }
-	RejectReason Reason() const { return reason_; }
 	// Borrowed until the next mutating session call; no live arrays are aliased.
 	const Candidate* Result() const;
-	std::unique_ptr<Candidate> TakeResult();
 
 private:
-	bool Reject(RejectReason reason);
+	enum class ReplayStatus : uint8_t { Idle, Pending, Ready, Rejected };
+	bool Begin(const Baseline& baseline, const ordinary_lcd_history::Cutoff& cutoff);
+	bool Append(std::span<const ordinary_lcd_history::Event> events);
+	bool Reject();
 	std::unique_ptr<Candidate> candidate_;
 	ordinary_lcd_history::Cutoff cutoff_{};
 	ReplayStatus status_ = ReplayStatus::Idle;
-	RejectReason reason_ = RejectReason::None;
 };
-
-// Builds the ordinary target frame for a private snapshot. It does not expose
-// decay/status side effects required by the live consumer and is not a live
-// display publication interface.
-bool BuildTargets(const Controls& controls, const ScanState& scan,
-	uint64_t sdl_ms, std::span<const uint8_t> primary,
-	std::span<const uint8_t> secondary, std::span<const SpriteSpec> sprites,
-	std::array<float, kPixelCount>& targets, std::array<uint8_t, kPixelCount>& active,
-	std::array<uint16_t, kSourceBitCount * 2>& primary_map,
-	std::array<uint16_t, kSourceBitCount * 2>& secondary_map,
-	RejectReason& reason);
-
-// Convenience overload for a private snapshot consumer that only needs
-// rendered targets. It is not a complete live-frame consumer interface.
-bool BuildTargets(const Controls& controls, const ScanState& scan,
-	uint64_t sdl_ms, std::span<const uint8_t> primary,
-	std::span<const uint8_t> secondary, std::span<const SpriteSpec> sprites,
-	std::array<float, kPixelCount>& targets,
-	std::array<uint8_t, kPixelCount>& active, RejectReason& reason);
-
-// Replays an ordered history segment into private storage. The live alpha array
-// is never referenced or modified. accepted only reports private replay
-// success; callers must separately prove complete coverage, no History
-// Incomplete state, and matching control versions before any publication.
-ReplayResult Replay(const Baseline& baseline,
-	std::span<const ordinary_lcd_history::Event> events,
-	const ordinary_lcd_history::Cutoff& cutoff);
 
 } // namespace casioemu::lcd_temporal
