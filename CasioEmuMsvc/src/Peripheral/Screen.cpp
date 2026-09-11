@@ -113,6 +113,10 @@ namespace casioemu {
 			ROW_SIZE_DISP,
 			SPR_MAX;
 
+		static size_t RowBufferSize() {
+			return (static_cast<size_t>(N_ROW) + 1) * static_cast<size_t>(ROW_SIZE);
+		}
+
 		MMURegion region_buffer{}, region_buffer1{}, region_contrast{}, region_brightness{}, region_scan_report_op1{}, region_mode{}, region_range{}, region_select{}, region_offset{}, region_refresh_rate{}, region_scan_report{};
 		uint8_t* screen_buffer{}, * screen_buffer1{}, screen_contrast{}, screen_brightness{}, screen_scan_report_op1{}, screen_mode{}, screen_range{}, screen_select{}, screen_offset{}, screen_refresh_rate{}, screen_scan_report{};
 
@@ -381,9 +385,9 @@ namespace casioemu {
 				if (!temporal_valid) {
 					if (!temporal_baseline) {
 						temporal_baseline = std::make_unique<lcd_temporal::Baseline>();
-						temporal_baseline->primary.resize((N_ROW + 1) * ROW_SIZE);
+						temporal_baseline->primary.resize(RowBufferSize());
 						if constexpr (hardware_id == HW_CLASSWIZ_II)
-							temporal_baseline->secondary.resize((N_ROW + 1) * ROW_SIZE);
+							temporal_baseline->secondary.resize(RowBufferSize());
 						temporal_baseline->sprites.assign(sprite_bitmap + 1, sprite_bitmap + SPR_MAX);
 					}
 					auto& b = *temporal_baseline;
@@ -509,7 +513,7 @@ namespace casioemu {
 		uint8_t ClassWizIIStatusAlpha(uint8_t offset, uint8_t mask) const {
 			if (!StatusEnabled() || !screen_buffer || !screen_buffer1) return 0;
 			const auto gate = screen_gate::Get();
-			const auto status_offset = (offset + screen_offset * ROW_SIZE) % ((N_ROW + 1) * ROW_SIZE);
+			const auto status_offset = (offset + screen_offset * ROW_SIZE) % RowBufferSize();
 			const bool lower = (screen_buffer[status_offset] & mask) != 0;
 			const bool upper = (screen_buffer1[status_offset] & mask) != 0;
 			if (!screen_residual_enabled) {
@@ -699,7 +703,7 @@ namespace casioemu {
 			}
 		}
 		void SaveState(std::ostream& os) override {
-			size_t bufSize = (hardware_id == HW_TI) ? (192 * 9) : (N_ROW + 1) * ROW_SIZE;
+			size_t bufSize = (hardware_id == HW_TI) ? (192 * 9) : RowBufferSize();
 			if (screen_buffer)
 				os.write(reinterpret_cast<const char*>(screen_buffer), bufSize);
 			uint8_t hasBuf1 = (screen_buffer1 != nullptr) ? 1 : 0;
@@ -725,7 +729,7 @@ namespace casioemu {
 			auto history_lock = LockLcdMutation();
 			if constexpr (kCaptureLcdHistory)
 				lcd_history.InvalidateEpoch();
-			size_t bufSize = (hardware_id == HW_TI) ? (192 * 9) : (N_ROW + 1) * ROW_SIZE;
+			size_t bufSize = (hardware_id == HW_TI) ? (192 * 9) : RowBufferSize();
 			if (screen_buffer)
 				is.read(reinterpret_cast<char*>(screen_buffer), bufSize);
 			uint8_t hasBuf1 = 0;
@@ -1234,8 +1238,8 @@ namespace casioemu {
 	void Screen<hardware_id>::Initialise() {
 		auto state_lock = LockScreenState();
 		auto history_lock = LockLcdMutation();
-		if constexpr (kCaptureLcdHistory) lcd_history.InvalidateEpoch();
 		if (!inited) {
+			if constexpr (kCaptureLcdHistory) lcd_history.InvalidateEpoch();
 			renderer = emulator.GetRenderer();
 			interface_texture = emulator.GetInterfaceTexture();
 			const int sprite_count = SpriteCount();
@@ -1269,8 +1273,8 @@ namespace casioemu {
 				// fillRandomData(screen_buffer, 192*9);
 			}
 			else {
-				screen_buffer = new uint8_t[(N_ROW + 1) * ROW_SIZE];
-				fillRandomData(screen_buffer, (N_ROW + 1) * ROW_SIZE);
+				screen_buffer = new uint8_t[RowBufferSize()];
+				fillRandomData(screen_buffer, RowBufferSize());
 			}
 			if constexpr (hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) {
 				region_power.Setup(
@@ -1300,8 +1304,8 @@ namespace casioemu {
 					emulator);
 			}
 			if constexpr (hardware_id == HW_CLASSWIZ_II) {
-				screen_buffer1 = new uint8_t[(N_ROW + 1) * ROW_SIZE];
-				fillRandomData(screen_buffer1, (N_ROW + 1) * ROW_SIZE);
+				screen_buffer1 = new uint8_t[RowBufferSize()];
+				fillRandomData(screen_buffer1, RowBufferSize());
 			}
 			inited = true;
 		}
@@ -1408,6 +1412,8 @@ namespace casioemu {
 		}
 		if (!(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II) || (!enabled_2 && (screen_power & 1))) {
 			if constexpr (kCaptureLcdHistory) {
+				// Repeated power writes while already enabled leave history intact.
+				lcd_history.InvalidateEpoch();
 				if (!scan_history_bound) {
 					scan_report_state.SetHistory(&lcd_history);
 					scan_history_bound = true;
@@ -1415,7 +1421,7 @@ namespace casioemu {
 			}
 			if constexpr (hardware_id != HW_CLASSWIZ_II) {
 				region_buffer.Setup(
-					0xF800, (N_ROW + 1) * ROW_SIZE, "Screen/Buffer", this, [](MMURegion* region, size_t offset) {
+					0xF800, RowBufferSize(), "Screen/Buffer", this, [](MMURegion* region, size_t offset) {
 						offset -= region->base;
 						if (offset % ROW_SIZE >= ROW_SIZE_DISP)
 							return (uint8_t)0;
@@ -1458,7 +1464,7 @@ namespace casioemu {
 			}
 			else {
 				region_buffer.Setup(
-					0xF800, (N_ROW + 1) * ROW_SIZE, "Screen/Buffer", this,
+					0xF800, RowBufferSize(), "Screen/Buffer", this,
 					[](MMURegion* region, size_t offset) {
 						offset -= region->base;
 						if (offset % ROW_SIZE >= ROW_SIZE_DISP)
@@ -1550,7 +1556,7 @@ namespace casioemu {
 					//        },
 					//        emulator);
 					region_buffer1.Setup(
-						0x89000, (N_ROW + 1) * ROW_SIZE, "Screen/Buffer1", this,
+						0x89000, RowBufferSize(), "Screen/Buffer1", this,
 						[](MMURegion* region, size_t offset) {
 							offset -= region->base;
 							if (offset % ROW_SIZE >= ROW_SIZE_DISP)
@@ -1856,9 +1862,9 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 			return;
 		if constexpr (kCaptureLcdHistory)
 			lcd_history.InvalidateEpoch();
-		fillRandomData(screen_buffer, (N_ROW + 1) * ROW_SIZE);
+		fillRandomData(screen_buffer, RowBufferSize());
 		if constexpr (hardware_id == HW_CLASSWIZ_II) {
-			fillRandomData(screen_buffer1, (N_ROW + 1) * ROW_SIZE);
+			fillRandomData(screen_buffer1, RowBufferSize());
 		}
 		if constexpr (hardware_id != HW_CLASSWIZ_II) {
 			region_buffer.Kill();

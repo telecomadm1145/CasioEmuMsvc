@@ -43,14 +43,14 @@ ordinary_lcd_history::ScanSnapshot State::CaptureSnapshot() const {
 
 void State::Activate() {
 	auto history_lock = LockHistory();
+	std::lock_guard<std::mutex> lock(mutex);
+	if (active)
+		return;
 	if constexpr (ordinary_lcd_history::kEnabled && kEnableIndependentScanReport) {
 		if (history_started.exchange(true, std::memory_order_acq_rel))
 			if (auto* history = this->history.load(std::memory_order_acquire))
 				history->InvalidateEpoch();
 	}
-	std::lock_guard<std::mutex> lock(mutex);
-	if (active)
-		return;
 	active = true;
 	gate_initialized = false;
 	time_initialized = false;

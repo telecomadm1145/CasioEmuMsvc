@@ -375,8 +375,12 @@ namespace casioemu {
 				ssize_t inputIndex = AMediaCodec_dequeueInputBuffer(codec, 10000);
 				if (inputIndex >= 0) {
 					const int64_t ptsUs = static_cast<int64_t>(frameIndex) * 1000000 / std::max(1, fps);
-					AMediaCodec_queueInputBuffer(codec, inputIndex, 0, 0, ptsUs, AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM);
-					Drain(true);
+					const media_status_t status = AMediaCodec_queueInputBuffer(
+						codec, inputIndex, 0, 0, ptsUs, AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM);
+					if (status == AMEDIA_OK)
+						Drain(true);
+					else
+						SDL_Log("Could not queue Android media encoder EOS: %d", status);
 				}
 				AMediaCodec_stop(codec);
 			}
@@ -446,7 +450,14 @@ namespace casioemu {
 		}
 
 		bool Drain(bool endOfStream) {
+			// A per-dequeue timeout does not bound repeated retries or output
+			// that never carries EOS. Keep shutdown bounded across the whole loop.
+			const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
 			while (true) {
+				if (endOfStream && std::chrono::steady_clock::now() >= deadline) {
+					SDL_Log("Timed out waiting for Android media encoder EOS.");
+					return false;
+				}
 				AMediaCodecBufferInfo info{};
 				ssize_t outputIndex = AMediaCodec_dequeueOutputBuffer(codec, &info, endOfStream ? 10000 : 0);
 				if (outputIndex >= 0) {

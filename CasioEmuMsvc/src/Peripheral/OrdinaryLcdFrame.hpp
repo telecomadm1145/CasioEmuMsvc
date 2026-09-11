@@ -127,11 +127,14 @@ void VisitFrame(const FrameControls& controls, std::span<const SpriteSpec> sprit
 			else
 				clear = true;
 		}
+		// Preserve ClassWiz's row mapping, wrapping row zero within RAM.
+		const int source_row = flip_screen_v
+			? (classwiz_ii ? controls.n_row - iy
+				: (iy == 0 ? 0 : controls.n_row + 1 - iy))
+			: iy;
 		int x = 0;
 		for (int ix = 0; ix != controls.row_size_display; ++ix) {
-			const auto index = (flip_screen_v
-				? (classwiz_ii ? controls.n_row - iy : controls.n_row + 1 - iy)
-				: iy) * controls.row_size + ix;
+			const auto index = source_row * controls.row_size + ix;
 			for (uint8_t mask = 0x80; mask; mask >>= 1) {
 				const size_t alpha_index = (flip_screen_h ? 191 - x : x) + iy2 * 192;
 				pixel(alpha_index, PixelSource{static_cast<size_t>(index), mask,

@@ -27,6 +27,7 @@
 #include <sstream>
 #include <memory>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <typeinfo>
 #include <vector>
@@ -313,8 +314,21 @@ namespace {
 		model.LARGE_model = hardware_id != casioemu::HW_SOLARII && !casioemu::IsEpsFamily(hardware_id);
 		model.ml620_mirroring = hardware_id != casioemu::HW_CLASSWIZ && !casioemu::IsEpsFamily(hardware_id);
 		model.ink_color = {0, 0, 0};
-		if (casioemu::IsEpsFamily(hardware_id))
+		if (casioemu::IsEpsFamily(hardware_id)) {
+			const auto* descriptor = casioemu::FindHardwareDescriptor(hardware_id);
+			// Dot-matrix status alphas share the first 192 entries of the pixel
+			// buffer. Check against the model's status bits once hardware is known;
+			// EPS6009 uses a separate segment layout and may have more indicators.
+			if (descriptor->eps_status_size != 0) {
+				if (g_web_status_indicators.size() > descriptor->eps_status_size * 8)
+					throw std::runtime_error("Too many status indicators for the selected EPS model.");
+				for (const auto& indicator : g_web_status_indicators) {
+					if (indicator.byte_offset >= descriptor->eps_status_size)
+						throw std::runtime_error("Status indicator byte is outside the selected EPS model's LCD status area.");
+				}
+			}
 			model.status_indicators = g_web_status_indicators;
+		}
 		if (casioemu::IsEpsFamily(hardware_id)) {
 			auto hexByte = [](int value) {
 				char buffer[8]{};
@@ -988,6 +1002,7 @@ void WebDebuggerQueueDownload(const char* path, const char* name) {
 extern "C" {
 
 int casioemu_core_set_status_indicators(const uint32_t* packed, int count) {
+	// MakeWebModel validates hardware-specific limits when the core is created.
 	if (count < 0 || count > 4096 || (count > 0 && !packed)) return 1;
 	std::vector<casioemu::StatusIndicatorInfo> indicators;
 	indicators.reserve(static_cast<size_t>(count));
