@@ -32,6 +32,12 @@ namespace {
 	constexpr size_t kUnpackedBytesPerWord = 4;
 	constexpr size_t kMaximumRomWords = 96 * 1024;
 	constexpr size_t kFlashWords = 32 * 1024;
+	constexpr size_t kLcdHistoryCapacity = 16384;
+
+	uint64_t SteadyNowNs() {
+		return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+			std::chrono::steady_clock::now().time_since_epoch()).count());
+	}
 
 	bool ConvertUnpackedNibbles(const std::vector<unsigned char>& source,
 		std::vector<unsigned char>& packed) {
@@ -90,7 +96,7 @@ namespace casioemu {
 	}
 
 	ePSCPU::ePSCPU(EpsVariant variant)
-		: state_(CreateMachineOrThrow(variant)) {
+		: state_(CreateMachineOrThrow(variant)), variant_(variant) {
 		machine_state_debug_set_memory_access_callback(state_, &ePSCPU::MemoryAccessThunk, this);
 	}
 
@@ -194,6 +200,7 @@ namespace casioemu {
 		idle_timer_checkpoint_ = std::chrono::steady_clock::now();
 		trace_buffer_.clear();
 		memory_break_pending_ = false;
+		ResetLcdHistoryLocked();
 	}
 
 	void ePSCPU::ClearRamAndReset() {
@@ -209,6 +216,7 @@ namespace casioemu {
 		idle_timer_checkpoint_ = std::chrono::steady_clock::now();
 		trace_buffer_.clear();
 		memory_break_pending_ = false;
+		ResetLcdHistoryLocked();
 	}
 
 	void ePSCPU::SetTimerCycleDivisor(uint32_t divisor) {
@@ -429,6 +437,8 @@ namespace casioemu {
 	bool ePSCPU::OnMemoryAccessLocked(uint32_t address, uint8_t& value, bool write, bool before) {
 		if (before)
 			return memory_hook_ ? memory_hook_(address, value, write) : false;
+		if (write && LcdAddressMayChangeDisplayLocked(address))
+			CaptureLcdHistoryChangeLocked();
 		for (auto& breakpoint : memory_breakpoints_) {
 			if (!breakpoint.enabled || breakpoint.address != address || breakpoint.write != write)
 				continue;
@@ -511,6 +521,138 @@ namespace casioemu {
 		return machine_state_lcd_raw_size(state_);
 	}
 
+	bool ePSCPU::LcdAddressMayChangeDisplayLocked(uint32_t address) const {
+		if (address >= 0x80)
+			return false;
+		const auto core_variant = ToCoreVariant(variant_);
+		const auto* traits = eps_get_variant_traits(core_variant);
+		if (eps_variant_is_6800_w192(core_variant))
+			return address == REG_PORTD || address == REG_PORTE || address == REG_DCRDE;
+		return address == traits->reg_lcddat || address == traits->reg_lcdcon ||
+			(traits->reg_lcdarh != 0xffu && address == traits->reg_lcdarh);
+	}
+
+	bool ePSCPU::CaptureLcdSnapshotLocked(
+		std::vector<uint8_t>& raw, Eps6800LcdControl& control) const {
+		const size_t size = machine_state_lcd_raw_size(state_);
+		raw.resize(size);
+		machine_lcd_control core_control{};
+		if (machine_state_lcd_copy_display(state_, raw.data(), raw.size(), &core_control) != size)
+			return false;
+		control.lcdarh = core_control.lcdarh;
+		control.lcdcon = core_control.lcdcon;
+		control.contrast = core_control.contrast;
+		control.display_on = (core_control.lcdcon & BIT_LCD_ON) != 0;
+		control.blanked = (core_control.lcdcon & BIT_LCD_BLANK) != 0;
+		return true;
+	}
+
+	void ePSCPU::ResetLcdHistoryLocked() {
+		lcd_history_events_.clear();
+		lcd_history_incomplete_ = false;
+		++lcd_history_epoch_;
+		lcd_history_next_seq_ = 0;
+		lcd_history_baseline_seq_ = 0;
+		lcd_history_baseline_ns_ = SteadyNowNs();
+		if (!lcd_history_enabled_) {
+			lcd_history_live_.clear();
+			lcd_history_baseline_.clear();
+			lcd_history_scratch_.clear();
+			return;
+		}
+		if (!CaptureLcdSnapshotLocked(lcd_history_live_, lcd_history_live_control_)) {
+			lcd_history_incomplete_ = true;
+			return;
+		}
+		lcd_history_baseline_ = lcd_history_live_;
+		lcd_history_baseline_control_ = lcd_history_live_control_;
+		lcd_history_scratch_.resize(lcd_history_live_.size());
+	}
+
+	void ePSCPU::CaptureLcdHistoryChangeLocked() {
+		if (!lcd_history_enabled_)
+			return;
+		Eps6800LcdControl control{};
+		if (!CaptureLcdSnapshotLocked(lcd_history_scratch_, control)) {
+			lcd_history_incomplete_ = true;
+			lcd_history_events_.clear();
+			return;
+		}
+		if (lcd_history_live_.size() != lcd_history_scratch_.size()) {
+			lcd_history_incomplete_ = true;
+			lcd_history_events_.clear();
+			lcd_history_live_ = lcd_history_scratch_;
+			lcd_history_live_control_ = control;
+			return;
+		}
+
+		const uint64_t now_ns = SteadyNowNs();
+		const bool control_changed = !(control == lcd_history_live_control_);
+		size_t changed_bytes = 0;
+		for (size_t i = 0; i < lcd_history_live_.size(); ++i)
+			changed_bytes += lcd_history_live_[i] != lcd_history_scratch_[i] ? 1u : 0u;
+		const size_t event_count = changed_bytes + (control_changed && changed_bytes == 0 ? 1u : 0u);
+		if (event_count != 0 && (lcd_history_incomplete_ ||
+			lcd_history_events_.size() + event_count > kLcdHistoryCapacity)) {
+			lcd_history_incomplete_ = true;
+			lcd_history_events_.clear();
+			lcd_history_next_seq_ += event_count;
+		}
+		else if (event_count != 0) {
+			for (size_t i = 0; i < lcd_history_live_.size(); ++i) {
+				if (lcd_history_live_[i] == lcd_history_scratch_[i])
+					continue;
+				lcd_history_events_.push_back({++lcd_history_next_seq_, now_ns,
+					static_cast<uint32_t>(i), lcd_history_live_[i], lcd_history_scratch_[i], control});
+			}
+			if (control_changed && changed_bytes == 0)
+				lcd_history_events_.push_back({++lcd_history_next_seq_, now_ns,
+					EpsLcdHistoryEvent::kNoByte, 0, 0, control});
+		}
+		lcd_history_live_.swap(lcd_history_scratch_);
+		lcd_history_live_control_ = control;
+	}
+
+	void ePSCPU::SetLcdHistoryEnabled(bool enabled) {
+		const std::lock_guard lock(state_mutex_);
+		if (lcd_history_enabled_ == enabled)
+			return;
+		lcd_history_enabled_ = enabled;
+		ResetLcdHistoryLocked();
+	}
+
+	bool ePSCPU::ConsumeLcdHistory(EpsLcdHistoryBatch& batch) {
+		const std::lock_guard lock(state_mutex_);
+		batch = {};
+		if (!lcd_history_enabled_)
+			return false;
+		Eps6800LcdControl current_control{};
+		if (!CaptureLcdSnapshotLocked(lcd_history_scratch_, current_control))
+			return false;
+		if (lcd_history_scratch_ != lcd_history_live_ || !(current_control == lcd_history_live_control_)) {
+			lcd_history_incomplete_ = true;
+			lcd_history_events_.clear();
+			lcd_history_live_.swap(lcd_history_scratch_);
+			lcd_history_live_control_ = current_control;
+		}
+
+		const uint64_t cutoff_ns = SteadyNowNs();
+		batch.baseline = {lcd_history_baseline_, lcd_history_baseline_control_,
+			lcd_history_epoch_, lcd_history_baseline_seq_, lcd_history_baseline_ns_};
+		batch.events.assign(lcd_history_events_.begin(), lcd_history_events_.end());
+		batch.cutoff = {lcd_history_live_, lcd_history_live_control_,
+			lcd_history_epoch_, lcd_history_next_seq_, cutoff_ns};
+		batch.complete = !lcd_history_incomplete_;
+
+		lcd_history_baseline_ = lcd_history_live_;
+		lcd_history_baseline_control_ = lcd_history_live_control_;
+		lcd_history_baseline_seq_ = lcd_history_next_seq_;
+		lcd_history_baseline_ns_ = cutoff_ns;
+		lcd_history_events_.clear();
+		lcd_history_incomplete_ = false;
+		return true;
+	}
+
 	uint8_t ePSCPU::ReadByte(uint8_t address) {
 		const std::lock_guard lock(state_mutex_);
 		return machine_state_debug_read_byte(state_, address);
@@ -519,6 +661,8 @@ namespace casioemu {
 	void ePSCPU::WriteByte(uint8_t address, uint8_t value) {
 		const std::lock_guard lock(state_mutex_);
 		machine_state_debug_write_byte(state_, address, value);
+		if (LcdAddressMayChangeDisplayLocked(address))
+			CaptureLcdHistoryChangeLocked();
 	}
 
 	uint8_t ePSCPU::ReadDebugMemory(uint32_t linear_address) const {
@@ -528,7 +672,10 @@ namespace casioemu {
 
 	bool ePSCPU::WriteDebugMemory(uint32_t linear_address, uint8_t value) {
 		const std::lock_guard lock(state_mutex_);
-		return machine_state_debug_write_memory(state_, linear_address, value);
+		const bool written = machine_state_debug_write_memory(state_, linear_address, value);
+		if (written && LcdAddressMayChangeDisplayLocked(linear_address))
+			CaptureLcdHistoryChangeLocked();
+		return written;
 	}
 
 	uint32_t ePSCPU::DebugLinearMemorySize() const {
@@ -553,7 +700,10 @@ namespace casioemu {
 
 	bool ePSCPU::WriteLcdMemory(size_t address, uint8_t value) {
 		const std::lock_guard lock(state_mutex_);
-		return machine_state_lcd_write_memory(state_, address, value);
+		const bool written = machine_state_lcd_write_memory(state_, address, value);
+		if (written)
+			CaptureLcdHistoryChangeLocked();
+		return written;
 	}
 
 	Eps6800DebugSnapshot ePSCPU::DebugSnapshot() const {
@@ -596,7 +746,10 @@ namespace casioemu {
 
 	bool ePSCPU::ImportRam(const std::vector<uint8_t>& data) {
 		const std::lock_guard lock(state_mutex_);
-		return machine_state_import_ram(state_, data.data(), data.size());
+		const bool imported = machine_state_import_ram(state_, data.data(), data.size());
+		if (imported)
+			ResetLcdHistoryLocked();
+		return imported;
 	}
 
 	void ePSCPU::RequestContinue(bool honor_breakpoints) {
@@ -865,6 +1018,7 @@ namespace casioemu {
 			timer_cycle_phase_ = 0;
 			idle_timer_checkpoint_ = std::chrono::steady_clock::now();
 			machine_state_debug_set_memory_access_callback(state_, &ePSCPU::MemoryAccessThunk, this);
+			ResetLcdHistoryLocked();
 		}
 		machine_snapshot_free(snapshot);
 	}

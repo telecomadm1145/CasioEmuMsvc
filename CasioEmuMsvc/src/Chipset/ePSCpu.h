@@ -44,6 +44,36 @@ namespace casioemu {
 		bool blanked{};
 
 		bool visible() const { return display_on && !blanked; }
+		bool operator==(const Eps6800LcdControl& other) const {
+			// Address and frame-rate fields do not change the rendered target.
+			return contrast == other.contrast && display_on == other.display_on &&
+				blanked == other.blanked;
+		}
+	};
+
+	struct EpsLcdHistorySnapshot {
+		std::vector<uint8_t> raw;
+		Eps6800LcdControl control{};
+		uint64_t epoch = 0;
+		uint64_t seq = 0;
+		uint64_t steady_ns = 0;
+	};
+
+	struct EpsLcdHistoryEvent {
+		static constexpr uint32_t kNoByte = UINT32_MAX;
+		uint64_t seq = 0;
+		uint64_t steady_ns = 0;
+		uint32_t offset = kNoByte;
+		uint8_t old_value = 0;
+		uint8_t new_value = 0;
+		Eps6800LcdControl control{};
+	};
+
+	struct EpsLcdHistoryBatch {
+		EpsLcdHistorySnapshot baseline;
+		std::vector<EpsLcdHistoryEvent> events;
+		EpsLcdHistorySnapshot cutoff;
+		bool complete = false;
 	};
 
 	enum class Eps6800DebugStopReason : uint8_t {
@@ -200,6 +230,19 @@ namespace casioemu {
 		std::function<void(uint32_t, uint32_t, bool, uint32_t, const std::string&)> function_hook_;
 		std::function<bool(uint32_t, uint8_t&, bool)> memory_hook_;
 		std::function<void(uint8_t)> interrupt_hook_;
+		EpsVariant variant_;
+		bool lcd_history_enabled_{};
+		bool lcd_history_incomplete_{};
+		uint64_t lcd_history_epoch_{1};
+		uint64_t lcd_history_next_seq_{};
+		uint64_t lcd_history_baseline_ns_{};
+		uint64_t lcd_history_baseline_seq_{};
+		std::vector<uint8_t> lcd_history_live_;
+		std::vector<uint8_t> lcd_history_baseline_;
+		std::vector<uint8_t> lcd_history_scratch_;
+		Eps6800LcdControl lcd_history_live_control_{};
+		Eps6800LcdControl lcd_history_baseline_control_{};
+		std::deque<EpsLcdHistoryEvent> lcd_history_events_;
 
 		bool RunInstructionLocked(bool tick_timer);
 		bool ConsumeBreakRequestLocked();
@@ -210,6 +253,10 @@ namespace casioemu {
 		static bool MemoryAccessThunk(void* user, uint32_t address, uint8_t* value, bool write, bool before);
 		bool OnMemoryAccessLocked(uint32_t address, uint8_t& value, bool write, bool before);
 		std::string BacktraceLocked() const;
+		bool LcdAddressMayChangeDisplayLocked(uint32_t address) const;
+		bool CaptureLcdSnapshotLocked(std::vector<uint8_t>& raw, Eps6800LcdControl& control) const;
+		void CaptureLcdHistoryChangeLocked();
+		void ResetLcdHistoryLocked();
 
 	public:
 		explicit ePSCPU(EpsVariant variant = EpsVariant::Eps6800);
@@ -246,6 +293,8 @@ namespace casioemu {
 
 		size_t CopyLcd(uint8_t* output, size_t size, Eps6800LcdControl* control = nullptr) const;
 		size_t LcdRawSize() const;
+		void SetLcdHistoryEnabled(bool enabled);
+		bool ConsumeLcdHistory(EpsLcdHistoryBatch& batch);
 		uint8_t ReadByte(uint8_t address);
 		void WriteByte(uint8_t address, uint8_t value);
 		uint8_t ReadDebugMemory(uint32_t linear_address) const;

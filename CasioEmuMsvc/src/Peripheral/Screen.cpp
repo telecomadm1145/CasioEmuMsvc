@@ -170,6 +170,7 @@ namespace casioemu {
 		float screen_ink_alpha[66 * 192]{};
 		std::array<float, 66 * 192> eps_screen_ink_alpha{};
 		std::mutex eps_screen_alpha_mutex;
+		EpsScreenTemporalState eps_temporal_state;
 		bool eps_lcd_response_active = false;
 		std::chrono::steady_clock::time_point eps_lcd_response_last_tick{};
 		std::atomic_bool screen_thread_running{false};
@@ -874,6 +875,7 @@ namespace casioemu {
 					emulator.ModelDefinition.status_indicators,
 					eps_screen_ink_alpha,
 					eps_screen_alpha_mutex,
+					eps_temporal_state,
 					screen_residual_enabled,
 					screen_residual_alpha_scale,
 					ratio,

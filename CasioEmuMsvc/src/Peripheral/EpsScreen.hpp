@@ -4,12 +4,27 @@
 
 #include <array>
 #include <cstddef>
+#include <memory>
 #include <mutex>
 #include <vector>
 
 namespace casioemu {
 
 class ePSCPU;
+
+class EpsScreenTemporalState {
+public:
+	EpsScreenTemporalState();
+	~EpsScreenTemporalState();
+	EpsScreenTemporalState(const EpsScreenTemporalState&) = delete;
+	EpsScreenTemporalState& operator=(const EpsScreenTemporalState&) = delete;
+	void Reset();
+
+private:
+	struct Impl;
+	std::unique_ptr<Impl> impl_;
+	friend void UpdateEpsScreen(struct EpsScreenContext& context);
+};
 
 struct EpsScreenSpec {
 	int pixel_width = 0;
@@ -40,6 +55,7 @@ struct EpsScreenContext {
 	const std::vector<StatusIndicatorInfo>& status_indicators;
 	std::array<float, 66 * 192>& eps_screen_ink_alpha;
 	std::mutex& eps_screen_alpha_mutex;
+	EpsScreenTemporalState& temporal_state;
 	bool residual_enabled = false;
 	float residual_alpha_scale = 1.0f;
 	float transition_ratio = 0.0f;
