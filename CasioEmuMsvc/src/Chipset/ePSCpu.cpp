@@ -271,9 +271,9 @@ namespace casioemu {
 		if (machine_state_cpu_mode(state_) == MACHINE_CPU_MODE_IDLE) {
 			machine_state_advance_cycles_split(state_, kFrameInstructions, false, false);
 			if (idle_timer_cycles != 0) {
-				// Some EPS6800 models need Timer1 paced from the low-speed
-				// oscillator while the CPU is idle, not from key wakeups.
-				machine_state_tick_idle_timer1(state_, idle_timer_cycles);
+				// A key may have woken the CPU during the batched keyboard tick.
+				// The independent oscillator still owns this frame's time budget.
+				machine_state_tick_timer1(state_, idle_timer_cycles);
 			}
 			else {
 				constexpr auto kIdleTimerPeriod = std::chrono::milliseconds(20);
@@ -297,8 +297,17 @@ namespace casioemu {
 			return false;
 		}
 		idle_timer_checkpoint_ = now;
+		uint64_t timer1_phase = 0;
 		for (uint32_t i = 0; i < kFrameInstructions; ++i) {
-			if (RunInstructionLocked(true)) {
+			std::optional<uint32_t> timer1_cycles;
+			if (idle_timer_cycles != 0) {
+				// Use the same oscillator budget as Idle, distributed over the
+				// frame. Instruction weights must not accelerate Timer1.
+				timer1_phase += idle_timer_cycles;
+				timer1_cycles = static_cast<uint32_t>(timer1_phase / kFrameInstructions);
+				timer1_phase %= kFrameInstructions;
+			}
+			if (RunInstructionLocked(true, timer1_cycles)) {
 				stopped = true;
 				break;
 			}
@@ -306,7 +315,7 @@ namespace casioemu {
 		return stopped;
 	}
 
-	bool ePSCPU::RunInstructionLocked(bool tick_timer) {
+	bool ePSCPU::RunInstructionLocked(bool tick_timer, std::optional<uint32_t> timer1_cycles) {
 		if (ConsumeBreakRequestLocked())
 			return true;
 		memory_break_pending_ = false;
@@ -319,15 +328,16 @@ namespace casioemu {
 		machine_state_debug_decode_instruction(state_, word, &instruction_info);
 		const uint8_t base_cycles = instruction_info.cycles;
 		bool advance_timer = false;
-		if (tick_timer && ++timer_cycle_phase_ >= timer_cycle_divisor_) {
+		if (!timer1_cycles && tick_timer && ++timer_cycle_phase_ >= timer_cycle_divisor_) {
 			timer_cycle_phase_ = 0;
 			advance_timer = true;
 		}
-		/* Run one instruction and pace the timers with this instruction's
-		 * weighted cycle count (1 or 2), so 2-cycle instructions advance the
-		 * timers twice — matching the reference ice.dll model. The keyboard
-		 * debounce counters keep the per-instruction cadence. */
-		machine_state_advance_instruction_cycles(state_, base_cycles, tick_timer, advance_timer);
+		/* Fast timers retain the reference ice.dll instruction weights.
+		 * Timer1 uses the host oscillator budget when supplied, otherwise
+		 * the legacy weighted divider. Keyboard debounce remains paced
+		 * per instruction. */
+		machine_state_advance_instruction_cycles(state_, base_cycles, tick_timer,
+			timer1_cycles.value_or(advance_timer ? base_cycles : 0));
 		++instruction_count_;
 
 		const uint32_t pc_after = machine_state_debug_program_counter(state_);

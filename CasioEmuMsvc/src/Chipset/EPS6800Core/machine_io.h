@@ -64,8 +64,10 @@ void machine_state_advance_instruction_cycles(
 	struct machine_state *state,
 	uint32_t timer_cycles,
 	bool tick_fast_timers,
-	bool tick_timer1
+	uint32_t timer1_cycles
 );
+/* Timer1's independent oscillator runs in both active and Idle modes. */
+void machine_state_tick_timer1(struct machine_state *state, uint32_t cycles);
 void machine_state_tick_idle_timer1(struct machine_state *state, uint32_t cycles);
 void machine_state_run_frame(struct machine_state *state);
 

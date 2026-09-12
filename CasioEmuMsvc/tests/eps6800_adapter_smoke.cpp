@@ -321,6 +321,109 @@ namespace {
 		return (machine.PC() >> 1) != 0;
 	}
 
+	bool MaskedKeyboardInterruptSmoke() {
+		for (const auto variant : {casioemu::EpsVariant::Eps6800,
+			casioemu::EpsVariant::Eps6800W192, casioemu::EpsVariant::Eps9500}) {
+			for (int action = 0; action < 3; ++action) {
+				casioemu::ePSCPU machine(variant);
+				std::vector<uint8_t> rom(0x20000, 0);
+				SetPackedRomWord(rom, 2, 0x2436); // PA ISR: CLR PAINTSTA
+				SetPackedRomWord(rom, 3, 0x1d60); // INC 60h: count deliveries
+				SetPackedRomWord(rom, 4, 0x2bff); // RETI
+				SetPackedRomWord(rom, 0x100, 0x0002); // SLEP with GLINT masked
+				SetPackedRomWord(rom, 0x101, 0xc101); // SJMP 101h after wake
+				if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+					return false;
+				machine.Reset();
+				machine.WriteByte(0x20, 0x03); // Idle, GLINT=0
+				machine.WriteByte(0x33, 0xff); // Port A inputs
+				machine.WriteByte(0x37, 0x00); // Select matrix rows
+				machine.WriteByte(0x39, 0x00); // Port B outputs
+				machine.WriteByte(0x34, 0x20); // PAWAKE
+				machine.WriteByte(0x35, 0x20); // PAINTEN
+				machine.WriteByte(0x60, 0);
+				machine.SetPC(0x100);
+				machine.Next();
+				machine.KeyDown(5);
+				for (int i = 0; i < 1100; ++i)
+					machine.Next();
+				machine.KeyUp(5);
+				for (int i = 0; i < 1100; ++i)
+					machine.Next();
+				if (!Check(machine.ReadByte(0x31) == 0xff && machine.ReadByte(0x36) == 0x20 &&
+					machine.ReadByte(0x60) == 0, "masked key remains latched after release", __LINE__))
+					return false;
+				if (action == 1)
+					machine.WriteByte(0x36, 0); // Firmware acknowledges before unmasking.
+				if (action == 2)
+					machine.WriteByte(0x35, 0); // Firmware disables the source.
+				machine.WriteByte(0x20, 0x07); // Reenable GLINT without another key edge.
+				for (int i = 0; i < 20; ++i)
+					machine.Next();
+				if (!Check(machine.ReadByte(0x60) == (action == 0 ? 1 : 0),
+					"latched PAINT delivered once, respecting acknowledgement and mask", __LINE__))
+					return false;
+				if (action == 2) {
+					machine.WriteByte(0x35, 0x20);
+					for (int i = 0; i < 20; ++i)
+						machine.Next();
+					if (!Check(machine.ReadByte(0x60) == 1, "PAINTEN reenable delivers retained status", __LINE__))
+						return false;
+				}
+				if (!Check(machine.ReadByte(0x36) == 0, "PA ISR acknowledges status", __LINE__))
+					return false;
+			}
+		}
+		return true;
+	}
+
+	bool Timer1FrameClockSmoke() {
+		machine_timer_snapshot reference{};
+		for (int workload = 0; workload < 4; ++workload) {
+			casioemu::ePSCPU machine(casioemu::EpsVariant::Eps6800W192);
+			std::vector<uint8_t> rom(0x20000, 0);
+			if (workload == 1)
+				SetPackedRomWord(rom, 0x100, 0xc100); // Two-cycle branch loop.
+			if (workload >= 2)
+				SetPackedRomWord(rom, 0x100, 0x0002); // Idle, or Idle -> key wake.
+			if (!machine.LoadRom(rom, casioemu::Eps6800RomFormat::PackedLittleEndian))
+				return false;
+			machine.Reset();
+			machine.SetIceTimerScheduling(true);
+			machine.SetTimerCycleDivisor(31);
+			machine.WriteByte(0x20, 0x03);
+			machine.SetPC(0x100);
+			if (workload >= 2)
+				machine.Next();
+			machine.WriteByte(0x2b, 0xff); // Long period: no overflow/wake in this test.
+			machine.WriteByte(0x2a, 0x0b);
+			if (workload == 3) {
+				machine.WriteByte(0x34, 1);
+				machine.KeyDown(0); // Wake during the batched Idle keyboard tick.
+			}
+			uint32_t remainder = 0;
+			for (int frame = 0; frame < 25; ++frame) {
+				remainder += 4000 * 32768;
+				machine.RunFrame(remainder / 1000000);
+				remainder %= 1000000;
+			}
+			std::ostringstream saved(std::ios::binary);
+			machine.SaveState(saved);
+			const auto blob = saved.str();
+			if (blob.size() != 8u + sizeof(machine_snapshot))
+				return false;
+			machine_snapshot snapshot{};
+			std::memcpy(&snapshot, blob.data() + 8, sizeof(snapshot));
+			if (workload == 0)
+				reference = snapshot.timer;
+			else if (!Check(snapshot.timer.t1psc == reference.t1psc &&
+				snapshot.timer.t1cnt == reference.t1cnt,
+				"Timer1 oscillator independent of instruction weight and Idle/key wake", __LINE__))
+				return false;
+		}
+		return true;
+	}
+
 	bool RepeatInterruptDeferralSmoke() {
 		constexpr uint8_t kCpuControl = 0x20;
 		constexpr uint8_t kTimer1Control = 0x2a;
@@ -1742,6 +1845,8 @@ int main(int argc, char** argv) {
 		std::cerr << "EPS6800 ice idle timer regression\n";
 		return 1;
 	}
+	if (!MaskedKeyboardInterruptSmoke() || !Timer1FrameClockSmoke())
+		return 1;
 	if (!RepeatInterruptDeferralSmoke()) {
 		std::cerr << "EPS6800 repeat/interrupt deferral regression\n";
 		return 1;

@@ -222,6 +222,18 @@ static void kbd_queue_press(struct kbd_state *state, uint8_t mask) {
 	state->pending_press_mask |= mask;
 }
 
+static void kbd_sync_latched_interrupt(struct kbd_state *state) {
+	const enum eps_variant variant = state->mmio->variant;
+	/* A key can wake firmware with GLINT masked. PAINTSTA retains that
+	 * event even after key release; deliver it when firmware unmasks the
+	 * interrupt, unless it has cleared the status or disabled PAINTEN.
+	 * Do not reassert inside the ISR, where GLINT is masked again. */
+	if ((state->reg[eps_reg_paintsta(variant)] & state->reg[eps_reg_painten(variant)]) &&
+		(kbd_bus_read_internal(state, eps_reg_cpucon(variant)) & BIT_GLINT)) {
+		kbd_cpu_interrupt(state, INT_LEVEL1_PAINT);
+	}
+}
+
 static bool kbd_key_valid(uint8_t key) {
 	return key < KBD_KEY_COUNT;
 }
@@ -570,6 +582,7 @@ void kbd_tick_state(struct kbd_state *state, uint32_t cycles) {
 	if (kbd_profile(state->mmio->variant)->refresh_on_contact_level && state->on_pressed)
 		kbd_update_porta(state);
 	kbd_sync_level_sensitive_inputs(state);
+	kbd_sync_latched_interrupt(state);
 }
 
 void kbd_ondown_state(struct kbd_state *state) {

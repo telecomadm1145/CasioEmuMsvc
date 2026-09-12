@@ -19,6 +19,7 @@
 #include <functional>
 #include <iosfwd>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -245,7 +246,7 @@ namespace casioemu {
 		Eps6800LcdControl lcd_history_baseline_control_{};
 		std::deque<EpsLcdHistoryEvent> lcd_history_events_;
 
-		bool RunInstructionLocked(bool tick_timer);
+		bool RunInstructionLocked(bool tick_timer, std::optional<uint32_t> timer1_cycles = std::nullopt);
 		bool ConsumeBreakRequestLocked();
 		bool ShouldStopLocked(uint32_t pc_after, uint8_t stack_pointer_after,
 			Eps6800DebugStopReason& reason);
@@ -287,6 +288,7 @@ namespace casioemu {
 		void SetPortBInput(uint8_t mask, uint8_t value);
 		void SetPortCInput(uint8_t mask, uint8_t value);
 		void Next();
+		// A nonzero oscillator budget paces Timer1 in both active and Idle modes.
 		bool RunFrame(uint32_t idle_timer_cycles = 0);
 
 		void KeyDown(uint8_t matrix_index);
