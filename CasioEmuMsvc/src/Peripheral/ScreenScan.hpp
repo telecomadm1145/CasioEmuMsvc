@@ -13,12 +13,9 @@ struct MMURegion;
 
 namespace screen_scan {
 
-// Native desktop CW/CWII uses the independent scan-report model by default.
-// Define CASIOEMU_DISABLE_INDEPENDENT_SCAN_REPORT to restore the legacy path.
-// Web/Emscripten and Android intentionally remain on the legacy path. The
-// legacy ENABLE macro is not consulted, so platform and DISABLE always win.
-#if !defined(CASIOEMU_CORE_WEB) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__) && \
-	!defined(CASIOEMU_DISABLE_INDEPENDENT_SCAN_REPORT)
+// Native desktop CW/CWII uses the independent scan-report model.
+// Web/Emscripten and Android intentionally remain on the legacy path.
+#if !defined(CASIOEMU_CORE_WEB) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
 inline constexpr bool kEnableIndependentScanReport = true;
 #else
 inline constexpr bool kEnableIndependentScanReport = false;
