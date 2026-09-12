@@ -302,8 +302,7 @@ namespace casioemu {
 		}
 
 		EpsLcdResponseTick BeginEpsLcdResponseTick() {
-			if constexpr (!(hardware_id == HW_EPS6800 || hardware_id == HW_EPS6800_W192 ||
-				hardware_id == HW_EPS9500 || hardware_id == HW_EPS6009)) {
+			if constexpr (!IsEpsFamily(hardware_id)) {
 				return {};
 			}
 #if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
