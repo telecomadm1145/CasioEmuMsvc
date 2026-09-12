@@ -117,8 +117,8 @@ void UpdateEpsScreen(EpsScreenContext& context) {
 			const bool on = indicator.byte_offset < lcd.size() &&
 				(lcd[indicator.byte_offset] & (1u << indicator.bit)) != 0;
 			auto& alpha = context.eps_screen_ink_alpha[ix];
-			alpha = alpha * transition_ratio +
-				(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
+			alpha = BlendAlpha(alpha, on ? ink_alpha_on : ink_alpha_off,
+				transition_ratio, context.response);
 		}
 		return;
 	}
