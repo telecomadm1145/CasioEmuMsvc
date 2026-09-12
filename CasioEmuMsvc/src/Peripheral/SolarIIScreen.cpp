@@ -333,4 +333,3 @@ Peripheral* CreateSolarIIScreen(Emulator& emulator) {
 	return new SolarIIScreen(emulator);
 }
 } // namespace casioemu
-

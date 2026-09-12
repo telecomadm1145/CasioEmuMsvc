@@ -28,7 +28,7 @@ uint8_t CalculateScanReportFromPhase(int n, uint8_t option1, uint8_t option_enab
 }
 
 std::unique_lock<std::recursive_mutex> State::LockHistory() const {
-	if constexpr (ordinary_lcd_history::kEnabled && kEnableIndependentScanReport)
+	if constexpr (kEnableIndependentScanReport)
 		if (auto* owner = history.load(std::memory_order_acquire)) return owner->Lock();
 	return {};
 }
@@ -46,7 +46,7 @@ void State::Activate() {
 	std::lock_guard<std::mutex> lock(mutex);
 	if (active)
 		return;
-	if constexpr (ordinary_lcd_history::kEnabled && kEnableIndependentScanReport) {
+	if constexpr (kEnableIndependentScanReport) {
 		if (history_started.exchange(true, std::memory_order_acq_rel))
 			if (auto* history = this->history.load(std::memory_order_acquire))
 				history->InvalidateEpoch();
@@ -58,7 +58,7 @@ void State::Activate() {
 
 void State::Deactivate() {
 	auto history_lock = LockHistory();
-	if constexpr (ordinary_lcd_history::kEnabled && kEnableIndependentScanReport) {
+	if constexpr (kEnableIndependentScanReport) {
 	if (auto* history = this->history.load(std::memory_order_acquire))
 		history->InvalidateEpoch();
 	}
@@ -140,7 +140,7 @@ void State::NoopWrite(void*) noexcept {}
 
 AdvanceResult State::Advance(uint64_t now_ms, Gate gate) {
 	auto history_lock = LockHistory();
-	if constexpr (ordinary_lcd_history::kEnabled && kEnableIndependentScanReport) {
+	if constexpr (kEnableIndependentScanReport) {
 	if (auto* history = this->history.load(std::memory_order_acquire)) {
 		OperationContext context{this, ordinary_lcd_history::ScanOperation::Advance, now_ms, gate};
 		if (history->TryRecord(&State::PrepareOperation, &State::NoopWrite, &context) ==
@@ -190,7 +190,7 @@ AdvanceResult State::AdvanceLocked(uint64_t now_ms, Gate gate) {
 
 void State::WriteRate(uint64_t now_ms, Gate gate, uint8_t value) {
 	auto history_lock = LockHistory();
-	if constexpr (ordinary_lcd_history::kEnabled && kEnableIndependentScanReport) {
+	if constexpr (kEnableIndependentScanReport) {
 	if (auto* history = this->history.load(std::memory_order_acquire)) {
 		OperationContext context{this, ordinary_lcd_history::ScanOperation::WriteRate, now_ms, gate, value};
 		if (history->TryRecord(&State::PrepareOperation, &State::NoopWrite, &context) ==
@@ -205,7 +205,7 @@ void State::WriteRate(uint64_t now_ms, Gate gate, uint8_t value) {
 
 void State::WriteOption1(uint64_t now_ms, Gate gate, uint8_t value) {
 	auto history_lock = LockHistory();
-	if constexpr (ordinary_lcd_history::kEnabled && kEnableIndependentScanReport) {
+	if constexpr (kEnableIndependentScanReport) {
 	if (auto* history = this->history.load(std::memory_order_acquire)) {
 		OperationContext context{this, ordinary_lcd_history::ScanOperation::WriteOption1, now_ms, gate, value};
 		if (history->TryRecord(&State::PrepareOperation, &State::NoopWrite, &context) ==
@@ -220,7 +220,7 @@ void State::WriteOption1(uint64_t now_ms, Gate gate, uint8_t value) {
 
 void State::WriteOptionEnable(uint64_t now_ms, Gate gate, uint8_t value) {
 	auto history_lock = LockHistory();
-	if constexpr (ordinary_lcd_history::kEnabled && kEnableIndependentScanReport) {
+	if constexpr (kEnableIndependentScanReport) {
 	if (auto* history = this->history.load(std::memory_order_acquire)) {
 		OperationContext context{this, ordinary_lcd_history::ScanOperation::WriteOptionEnable, now_ms, gate, value};
 		if (history->TryRecord(&State::PrepareOperation, &State::NoopWrite, &context) ==
@@ -255,7 +255,7 @@ uint8_t State::GetRateForState() const {
 
 void State::LoadRate(uint8_t value) {
 	auto history_lock = LockHistory();
-	if constexpr (ordinary_lcd_history::kEnabled && kEnableIndependentScanReport) {
+	if constexpr (kEnableIndependentScanReport) {
 	if (auto* history = this->history.load(std::memory_order_acquire))
 		history->InvalidateEpoch();
 	}

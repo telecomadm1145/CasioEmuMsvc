@@ -8,16 +8,12 @@
 #include <condition_variable>
 #include <chrono>
 
+#include "LcdPlatform.hpp"
+
 namespace casioemu::ordinary_lcd_history {
 
-#if !defined(CASIOEMU_CORE_WEB) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
-inline constexpr bool kNativeTemporalWorker = true;
-#else
-inline constexpr bool kNativeTemporalWorker = false;
-#endif
-
-// Recording is part of temporal replay; disabling the worker disables it too.
-inline constexpr bool kEnabled = kNativeTemporalWorker;
+// Recording is only needed on platforms that run temporal replay.
+inline constexpr bool kEnabled = lcd_platform::kNativeTemporalSupport;
 
 inline constexpr size_t kCapacity = 4096;
 inline constexpr size_t kBatchCapacity = 256;

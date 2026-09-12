@@ -28,7 +28,7 @@
 #include "OrdinaryLcdFrame.hpp"
 #include "ScreenScan.hpp"
 #include "ScreenScanVisual.hpp"
-#include "LcdTemporalCandidate.hpp"
+#include "LcdTemporalReplay.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Chipset/ePSCpu.h"
 #include "Chipset/MMU.hpp"
@@ -100,7 +100,6 @@ namespace casioemu {
 	template <HardwareId hardware_id>
 	class Screen : public Peripheral, public IScreenFrameProvider {
 		static constexpr bool kCaptureLcdHistory = ordinary_lcd_history::kEnabled &&
-			screen_scan::kEnableIndependentScanReport &&
 			(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II ||
 			 hardware_id == HW_ES_PLUS || hardware_id == HW_FX_5800P);
 		using LcdHistory = std::conditional_t<kCaptureLcdHistory,
@@ -269,8 +268,6 @@ namespace casioemu {
 #if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
 			return false;
 #else
-			if constexpr (!lcd_response::kEnableTimeResponse)
-				return false;
 			return !ThemeManager::Instance().Settings().lowPerformanceMode && !low_perf_ext;
 #endif
 		}
@@ -311,10 +308,6 @@ namespace casioemu {
 			eps_lcd_response_active = false;
 			return {};
 #else
-			if constexpr (!lcd_response::kEnableTimeResponse) {
-				eps_lcd_response_active = false;
-				return {};
-			}
 			if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext) {
 				eps_lcd_response_active = false;
 				return {};
@@ -397,7 +390,7 @@ namespace casioemu {
 		// neither target evaluation nor replay holds their mutation lock.
 		// -1: legacy fallback, 0: pending cutoff, 1: complete publication.
 		int TemporalTick() {
-			if constexpr (!(kCaptureLcdHistory && ordinary_lcd_history::kNativeTemporalWorker)) {
+			if constexpr (!kCaptureLcdHistory) {
 				return -1;
 			}
 			else {
@@ -1243,9 +1236,14 @@ namespace casioemu {
 					if (!screen_thread_running.load())
 						break;
 					temporal_status = TemporalTick();
-					if (temporal_status < 0) tick();
+					if (temporal_status < 0) {
+						// Settings writers use UntrackedChange. Keep the legacy
+						// renderer on the same synchronization contract.
+						auto settings_lock = ordinary_lcd_history::UntrackedChange::LockSettings();
+						tick();
+					}
 				}
-				if constexpr (kCaptureLcdHistory && ordinary_lcd_history::kNativeTemporalWorker) {
+				if constexpr (kCaptureLcdHistory) {
 					if (temporal_status >= 0) {
 						if (temporal_status == 1) lcd_history.WaitForWork(kTemporalInterval, screen_thread_running);
 						continue;
@@ -1259,8 +1257,14 @@ namespace casioemu {
 					SDL_Delay(10);
 				}
 #elif !defined(__EMSCRIPTEN__)
-				else if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext) {
-					SDL_Delay(10);
+				else {
+					bool low_performance;
+					{
+						auto settings_lock = ordinary_lcd_history::UntrackedChange::LockSettings();
+						low_performance = ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext;
+					}
+					if (low_performance)
+						SDL_Delay(10);
 				}
 #endif
 			}
@@ -1889,7 +1893,6 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 				(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II)) {
 				SetupLcdControl<ordinary_lcd_history::Kind::Offset, 0x3F, &Screen::screen_offset>(
 					region_offset, 0xF039, "Screen/DSPOFST");
-				SetupIndependentScanRegions();
 			}
 			else if constexpr (hardware_id == HardwareId::HW_FX_5800P || hardware_id == HardwareId::HW_ES_PLUS) {
 				region_refresh_rate.Setup(0xF034, 1, "Screen/Unknown_F034", &unk_f034, MMURegion::DefaultRead<uint8_t, 0b11>,

@@ -23,10 +23,6 @@ inline constexpr Config kClassWizII{50.0, 50.0};
 inline constexpr Config kEpsDotMatrix{50.0, 50.0};
 inline constexpr Config kEpsSegment{50.0, 50.0};
 
-// Set this to false to restore the float-recursion path that preceded this
-// option. The fallback does not claim to recreate any older implementation.
-inline constexpr bool kEnableTimeResponse = true;
-
 inline double GainForElapsed(double elapsed_ms, double half_life_ms) {
 	if (half_life_ms == 0.0)
 		return 1.0;

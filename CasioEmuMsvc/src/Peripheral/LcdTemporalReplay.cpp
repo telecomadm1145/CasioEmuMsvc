@@ -1,4 +1,4 @@
-#include "LcdTemporalCandidate.hpp"
+#include "LcdTemporalReplay.hpp"
 
 #include "OrdinaryLcdTarget.hpp"
 #include "ScreenScanVisual.hpp"
@@ -71,7 +71,7 @@ void ForMappedPixels(const std::array<uint16_t, kSourceBitCount * 2>& map,
 	}
 }
 
-void BeginGainCache(Candidate& candidate) {
+void BeginGainCache(ReplayState& candidate) {
 	if (++candidate.gain_cache_current_generation == 0) {
 		candidate.gain_cache_generation.fill(0);
 		candidate.gain_cache_current_generation = 1;
@@ -79,7 +79,7 @@ void BeginGainCache(Candidate& candidate) {
 	candidate.gain_cache_count = 0;
 }
 
-bool LookupGains(Candidate& candidate, lcd_response::Config config,
+bool LookupGains(ReplayState& candidate, lcd_response::Config config,
 	uint64_t start_ns, uint64_t end_ns, double& rise, double& fall) {
 	size_t cache_index = static_cast<size_t>(
 		(start_ns ^ (start_ns >> 33) ^ (start_ns >> 17)) & (kGainCacheCapacity - 1));
@@ -109,7 +109,7 @@ bool LookupGains(Candidate& candidate, lcd_response::Config config,
 	return false;
 }
 
-bool AdvancePixels(Candidate& candidate, std::span<const size_t> pixels, uint64_t end_ns) {
+bool AdvancePixels(ReplayState& candidate, std::span<const size_t> pixels, uint64_t end_ns) {
 	const auto config = lcd_response::ForHardware(candidate.controls.hardware_id);
 	for (const size_t i : pixels) {
 		if (i >= kPixelCount || (candidate.active[i] && end_ns < candidate.alpha_steady_ns[i]))
@@ -129,7 +129,7 @@ bool AdvancePixels(Candidate& candidate, std::span<const size_t> pixels, uint64_
 	return true;
 }
 
-bool AdvanceAllPixels(Candidate& candidate, uint64_t end_ns) {
+bool AdvanceAllPixels(ReplayState& candidate, uint64_t end_ns) {
 	const auto config = lcd_response::ForHardware(candidate.controls.hardware_id);
 	for (size_t i = 0; i != kPixelCount; ++i)
 		if (candidate.active[i] && end_ns < candidate.alpha_steady_ns[i])
@@ -148,7 +148,7 @@ bool AdvanceAllPixels(Candidate& candidate, uint64_t end_ns) {
 	return true;
 }
 
-void RefreshScan(Candidate& candidate, uint64_t sdl_ms) {
+void RefreshScan(ReplayState& candidate, uint64_t sdl_ms) {
 	if (!IsFrozen(candidate.scan))
 		screen_scan::UpdateScanAlpha(candidate.scan_alpha.data(), candidate.scan_curve,
 			candidate.scan_curve_coefficient, candidate.scan_curve_valid, sdl_ms,
@@ -156,7 +156,7 @@ void RefreshScan(Candidate& candidate, uint64_t sdl_ms) {
 			candidate.controls.flashing_brightness_coeff);
 }
 
-void RefreshTargets(Candidate& c) {
+void RefreshTargets(ReplayState& c) {
 	for (size_t i = 0; i != kPixelCount; ++i) {
 		if (c.active[i] != 1) continue; // decay ranges retain zero targets
 		c.targets[i] = c.controls.hardware_id == HW_CLASSWIZ_II
@@ -170,7 +170,7 @@ void RefreshTargets(Candidate& c) {
 // Anchor the integer SDL sample to its paired steady sample. Preemption and
 // clock resolution introduce anchoring error; no sub-millisecond bound is
 // assumed. Scan events re-anchor to State's adopted SDL timestamp.
-bool AdvanceTimeline(Candidate& c, uint64_t end_ns) {
+bool AdvanceTimeline(ReplayState& c, uint64_t end_ns) {
 	if (end_ns < c.timeline_ns || c.timeline_ns < c.anchor_ns) return false;
 	const auto rate = c.scan.raw_rate;
 	if (c.controls.enabled && c.scan.active && rate > 0 &&
@@ -324,9 +324,9 @@ bool ReplaySession::Begin(const Baseline& baseline,
 			return Reject();
 		}
 	}
-	if (!candidate_)
-		candidate_ = std::make_unique<Candidate>();
-	Candidate& candidate = *candidate_;
+	if (!replay_state_)
+		replay_state_ = std::make_unique<ReplayState>();
+	ReplayState& candidate = *replay_state_;
 	candidate.controls = baseline.controls;
 	candidate.scan = baseline.scan;
 	candidate.primary = baseline.primary;
@@ -358,25 +358,25 @@ bool ReplaySession::BeginFromLive(const Baseline& baseline,
 	const ordinary_lcd_history::Cutoff& cutoff, uint64_t previous_ns) {
 	if (!Begin(baseline, cutoff)) return false;
 	if (previous_ns > baseline.steady_ns) return Reject();
-	candidate_->alpha_steady_ns.fill(previous_ns);
-	if (!AdvanceAllPixels(*candidate_, baseline.steady_ns))
+	replay_state_->alpha_steady_ns.fill(previous_ns);
+	if (!AdvanceAllPixels(*replay_state_, baseline.steady_ns))
 		return Reject();
-	candidate_->alpha_steady_ns.fill(baseline.steady_ns);
+	replay_state_->alpha_steady_ns.fill(baseline.steady_ns);
 	return true;
 }
 
 bool ReplaySession::Continue(const ordinary_lcd_history::Cutoff& cutoff) {
 	if (status_ != ReplayStatus::Ready)
 		return Reject();
-	if (cutoff.epoch != candidate_->epoch || cutoff.end_seq < candidate_->seq)
+	if (cutoff.epoch != replay_state_->epoch || cutoff.end_seq < replay_state_->seq)
 		return Reject();
-	if (cutoff.steady_ns < candidate_->steady_ns)
+	if (cutoff.steady_ns < replay_state_->steady_ns)
 		return Reject();
 	cutoff_ = cutoff;
-	candidate_->scan_segments = 0;
+	replay_state_->scan_segments = 0;
 	// A new event must follow the completed interval, even when the preceding
 	// interval contained no events. Per-pixel origins were settled by Finish.
-	candidate_->last_event_ns = candidate_->steady_ns;
+	replay_state_->last_event_ns = replay_state_->steady_ns;
 	status_ = ReplayStatus::Pending;
 	return true;
 }
@@ -402,7 +402,7 @@ bool ReplaySession::AppendBatch(const ordinary_lcd_history::Batch& batch,
 bool ReplaySession::Append(std::span<const ordinary_lcd_history::Event> events) {
 	if (status_ != ReplayStatus::Pending)
 		return Reject();
-	Candidate& candidate = *candidate_;
+	ReplayState& candidate = *replay_state_;
 	const auto& cutoff = cutoff_;
 	for (const auto& event : events) {
 		if (event.epoch != candidate.epoch) {
@@ -605,7 +605,7 @@ bool ReplaySession::Append(std::span<const ordinary_lcd_history::Event> events) 
 bool ReplaySession::Finish() {
 	if (status_ != ReplayStatus::Pending)
 		return Reject();
-	Candidate& candidate = *candidate_;
+	ReplayState& candidate = *replay_state_;
 	const auto& cutoff = cutoff_;
 	if (candidate.seq != cutoff.end_seq) {
 		return Reject();
@@ -624,8 +624,8 @@ bool ReplaySession::Finish() {
 	return true;
 }
 
-const Candidate* ReplaySession::Result() const {
-	return status_ == ReplayStatus::Ready ? candidate_.get() : nullptr;
+const ReplayState* ReplaySession::Result() const {
+	return status_ == ReplayStatus::Ready ? replay_state_.get() : nullptr;
 }
 
 } // namespace casioemu::lcd_temporal

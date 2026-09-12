@@ -7,6 +7,7 @@
 
 #include "ScreenGate.hpp"
 #include "OrdinaryLcdHistory.hpp"
+#include "LcdPlatform.hpp"
 
 namespace casioemu {
 struct MMURegion;
@@ -15,11 +16,7 @@ namespace screen_scan {
 
 // Native desktop CW/CWII uses the independent scan-report model.
 // Web/Emscripten and Android intentionally remain on the legacy path.
-#if !defined(CASIOEMU_CORE_WEB) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
-inline constexpr bool kEnableIndependentScanReport = true;
-#else
-inline constexpr bool kEnableIndependentScanReport = false;
-#endif
+inline constexpr bool kEnableIndependentScanReport = lcd_platform::kNativeTemporalSupport;
 
 using Gate = screen_gate::Gate;
 

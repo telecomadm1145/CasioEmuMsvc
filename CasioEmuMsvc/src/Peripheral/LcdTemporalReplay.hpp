@@ -75,7 +75,7 @@ struct Baseline {
 	bool coverage_complete = false;
 };
 
-struct Candidate {
+struct ReplayState {
 	Controls controls{};
 	ScanState scan{};
 	std::vector<uint8_t> primary;
@@ -132,14 +132,14 @@ public:
 		const ordinary_lcd_history::ConsumeResult& consumed);
 	bool Finish();
 	// Borrowed until the next mutating session call; no live arrays are aliased.
-	const Candidate* Result() const;
+	const ReplayState* Result() const;
 
 private:
 	enum class ReplayStatus : uint8_t { Idle, Pending, Ready, Rejected };
 	bool Begin(const Baseline& baseline, const ordinary_lcd_history::Cutoff& cutoff);
 	bool Append(std::span<const ordinary_lcd_history::Event> events);
 	bool Reject();
-	std::unique_ptr<Candidate> candidate_;
+	std::unique_ptr<ReplayState> replay_state_;
 	ordinary_lcd_history::Cutoff cutoff_{};
 	ReplayStatus status_ = ReplayStatus::Idle;
 };

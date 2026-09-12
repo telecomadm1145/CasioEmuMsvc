@@ -6,4 +6,3 @@ class Peripheral;
 
 Peripheral* CreateSolarIIScreen(Emulator& emulator);
 } // namespace casioemu
-

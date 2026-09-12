@@ -201,4 +201,3 @@ SDL_Color ScreenPixelColour(const ColourInfo& ink_colour, float alpha_value) {
 }
 #endif
 } // namespace casioemu
-
