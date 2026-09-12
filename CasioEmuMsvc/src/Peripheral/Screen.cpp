@@ -170,6 +170,8 @@ namespace casioemu {
 		float screen_ink_alpha[66 * 192]{};
 		std::array<float, 66 * 192> eps_screen_ink_alpha{};
 		std::mutex eps_screen_alpha_mutex;
+		bool eps_lcd_response_active = false;
+		std::chrono::steady_clock::time_point eps_lcd_response_last_tick{};
 		std::atomic_bool screen_thread_running{false};
 		std::thread screen_thread;
 		mutable std::mutex screen_state_mutex;
@@ -297,6 +299,45 @@ namespace casioemu {
 			return {true,
 				lcd_response::GainForElapsed(elapsed_ms, config.rise_half_life_ms),
 				lcd_response::GainForElapsed(elapsed_ms, config.fall_half_life_ms)};
+		}
+
+		EpsLcdResponseTick BeginEpsLcdResponseTick() {
+			if constexpr (!(hardware_id == HW_EPS6800 || hardware_id == HW_EPS6800_W192 ||
+				hardware_id == HW_EPS9500)) {
+				return {};
+			}
+#if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
+			eps_lcd_response_active = false;
+			return {};
+#else
+			if constexpr (!lcd_response::kEnableTimeResponse) {
+				eps_lcd_response_active = false;
+				return {};
+			}
+			if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext) {
+				eps_lcd_response_active = false;
+				return {};
+			}
+
+			const auto now = std::chrono::steady_clock::now();
+			double elapsed_ms = 0.0;
+			if (lcd_response_reset_requested.exchange(false, std::memory_order_acq_rel) ||
+				!eps_lcd_response_active) {
+				eps_lcd_response_active = true;
+			}
+			else {
+				elapsed_ms = std::chrono::duration<double, std::milli>(
+					now - eps_lcd_response_last_tick).count();
+				if (!(elapsed_ms > 0.0))
+					elapsed_ms = 0.0;
+			}
+			eps_lcd_response_last_tick = now;
+
+			const auto config = lcd_response::ForHardware(hardware_id);
+			return {true,
+				lcd_response::GainForElapsed(elapsed_ms, config.rise_half_life_ms),
+				lcd_response::GainForElapsed(elapsed_ms, config.fall_half_life_ms)};
+#endif
 		}
 
 		void ApplyLcdAlpha(
@@ -836,7 +877,8 @@ namespace casioemu {
 					eps_screen_alpha_mutex,
 					screen_residual_enabled,
 					screen_residual_alpha_scale,
-					ratio};
+					ratio,
+					BeginEpsLcdResponseTick()};
 				UpdateEpsScreen(eps_context);
 				return;
 			}

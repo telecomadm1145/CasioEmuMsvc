@@ -2,6 +2,7 @@
 
 #include "Chipset/Eps6800Display.h"
 #include "Chipset/ePSCpu.h"
+#include "LcdResponse.hpp"
 
 #include <algorithm>
 #include <array>
@@ -40,6 +41,18 @@ EpsScreenSpec GetEpsScreenSpec(
 
 namespace {
 
+float BlendAlpha(
+	float alpha,
+	float target,
+	float transition_ratio,
+	const EpsLcdResponseTick& response) {
+	if (!response.enabled)
+		return alpha * transition_ratio + target * (1 - transition_ratio);
+	return static_cast<float>(lcd_response::BlendWithGains(
+		static_cast<double>(alpha), static_cast<double>(target),
+		response.rise_gain, response.fall_gain));
+}
+
 template <typename DecodedFrame>
 void UpdateStatusAlpha(
 	const DecodedFrame& decoded,
@@ -47,14 +60,15 @@ void UpdateStatusAlpha(
 	std::array<float, 66 * 192>& alpha_buffer,
 	float transition_ratio,
 	float ink_alpha_on,
-	float ink_alpha_off) {
+	float ink_alpha_off,
+	const EpsLcdResponseTick& response) {
 	for (size_t ix = 0; ix < status_indicators.size(); ++ix) {
 		const auto& indicator = status_indicators[ix];
 		const bool on = indicator.byte_offset < decoded.status.size() &&
 			(decoded.status[indicator.byte_offset] & (1u << indicator.bit)) != 0;
 		auto& alpha = alpha_buffer[ix];
-		alpha = alpha * transition_ratio +
-			(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
+		alpha = BlendAlpha(alpha, on ? ink_alpha_on : ink_alpha_off,
+			transition_ratio, response);
 	}
 }
 
@@ -65,13 +79,14 @@ void UpdateDotMatrixAlpha(
 	std::array<float, 66 * 192>& alpha_buffer,
 	float transition_ratio,
 	float ink_alpha_on,
-	float ink_alpha_off) {
+	float ink_alpha_off,
+	const EpsLcdResponseTick& response) {
 	for (int y = 0; y < height; ++y) {
 		for (int x = 0; x < width; ++x) {
 			const bool on = pixels[y * width + x] != 0;
 			auto& alpha = alpha_buffer[(y + 1) * 192 + x];
-			alpha = alpha * transition_ratio +
-				(on ? ink_alpha_on : ink_alpha_off) * (1 - transition_ratio);
+			alpha = BlendAlpha(alpha, on ? ink_alpha_on : ink_alpha_off,
+				transition_ratio, response);
 		}
 	}
 }
@@ -130,14 +145,16 @@ void UpdateEpsScreen(EpsScreenContext& context) {
 			context.eps_screen_ink_alpha,
 			transition_ratio,
 			ink_alpha_on,
-			ink_alpha_off);
+			ink_alpha_off,
+			context.response);
 		UpdateStatusAlpha(
 			decoded,
 			context.status_indicators,
 			context.eps_screen_ink_alpha,
 			transition_ratio,
 			ink_alpha_on,
-			ink_alpha_off);
+			ink_alpha_off,
+			context.response);
 		return;
 	}
 
@@ -163,14 +180,16 @@ void UpdateEpsScreen(EpsScreenContext& context) {
 			context.eps_screen_ink_alpha,
 			transition_ratio,
 			ink_alpha_on,
-			ink_alpha_off);
+			ink_alpha_off,
+			context.response);
 		UpdateStatusAlpha(
 			decoded,
 			context.status_indicators,
 			context.eps_screen_ink_alpha,
 			transition_ratio,
 			ink_alpha_on,
-			ink_alpha_off);
+			ink_alpha_off,
+			context.response);
 		return;
 	}
 
@@ -196,14 +215,16 @@ void UpdateEpsScreen(EpsScreenContext& context) {
 			context.eps_screen_ink_alpha,
 			transition_ratio,
 			ink_alpha_on,
-			ink_alpha_off);
+			ink_alpha_off,
+			context.response);
 		UpdateStatusAlpha(
 			decoded,
 			context.status_indicators,
 			context.eps_screen_ink_alpha,
 			transition_ratio,
 			ink_alpha_on,
-			ink_alpha_off);
+			ink_alpha_off,
+			context.response);
 	}
 }
 

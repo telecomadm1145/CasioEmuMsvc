@@ -20,6 +20,8 @@ struct Config {
 inline constexpr Config kEsPlusAnd5800P{50.0, 50.0};
 inline constexpr Config kClassWiz{50.0, 50.0};
 inline constexpr Config kClassWizII{50.0, 50.0};
+// Matches the legacy 0.80 blend ratio at the EPS worker's nominal 10 ms tick.
+inline constexpr Config kEpsDotMatrix{50.0, 50.0};
 
 // Set this to false to restore the float-recursion path that preceded this
 // option. The fallback does not claim to recreate any older implementation.
@@ -48,6 +50,8 @@ static_assert(IsValidHalfLife(kClassWiz.rise_half_life_ms));
 static_assert(IsValidHalfLife(kClassWiz.fall_half_life_ms));
 static_assert(IsValidHalfLife(kClassWizII.rise_half_life_ms));
 static_assert(IsValidHalfLife(kClassWizII.fall_half_life_ms));
+static_assert(IsValidHalfLife(kEpsDotMatrix.rise_half_life_ms));
+static_assert(IsValidHalfLife(kEpsDotMatrix.fall_half_life_ms));
 
 constexpr Config ForHardware(HardwareId hardware_id) {
 	switch (hardware_id) {
@@ -58,6 +62,10 @@ constexpr Config ForHardware(HardwareId hardware_id) {
 		return kClassWiz;
 	case HW_CLASSWIZ_II:
 		return kClassWizII;
+	case HW_EPS6800:
+	case HW_EPS6800_W192:
+	case HW_EPS9500:
+		return kEpsDotMatrix;
 	default:
 		return {0.0, 0.0};
 	}

@@ -28,6 +28,12 @@ EpsScreenSpec GetEpsScreenSpec(
 	int model_screen_width,
 	int model_screen_height);
 
+struct EpsLcdResponseTick {
+	bool enabled = false;
+	double rise_gain = 0.0;
+	double fall_gain = 0.0;
+};
+
 struct EpsScreenContext {
 	HardwareId hardware_id;
 	ePSCPU* eps_cpu = nullptr;
@@ -37,6 +43,7 @@ struct EpsScreenContext {
 	bool residual_enabled = false;
 	float residual_alpha_scale = 1.0f;
 	float transition_ratio = 0.0f;
+	EpsLcdResponseTick response;
 };
 
 void UpdateEpsScreen(EpsScreenContext& context);
