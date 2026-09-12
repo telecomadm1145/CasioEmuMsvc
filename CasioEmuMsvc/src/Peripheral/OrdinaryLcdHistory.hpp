@@ -11,7 +11,7 @@
 namespace casioemu::ordinary_lcd_history {
 
 #if !defined(CASIOEMU_CORE_WEB) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__) && \
- !defined(CASIOEMU_DISABLE_INDEPENDENT_SCAN_REPORT) && !defined(CASIOEMU_DISABLE_LCD_TEMPORAL_WORKER)
+ !defined(CASIOEMU_DISABLE_INDEPENDENT_SCAN_REPORT)
 inline constexpr bool kNativeTemporalWorker = true;
 #else
 inline constexpr bool kNativeTemporalWorker = false;

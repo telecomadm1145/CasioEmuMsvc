@@ -156,7 +156,8 @@ bool VisitRawByteTargets(
 			const size_t device = offset % EPS9500_LCD_DEVICE_COUNT;
 			if (device == 0)
 				VisitStatusSource(page, bit, on, indicators, visitor);
-			else {
+			else if (device >= EPS9500_LCD_VISIBLE_DEVICE_FIRST &&
+				device < EPS9500_LCD_VISIBLE_DEVICE_FIRST + EPS9500_LCD_WIDTH) {
 				const size_t x = device - EPS9500_LCD_VISIBLE_DEVICE_FIRST;
 				const size_t y = EPS9500_LCD_HEIGHT - 1 - (page * 8 + bit);
 				visitor((y + 1) * 192 + x, on);
@@ -178,7 +179,8 @@ void RebuildTargets(
 	const auto levels = TargetLevels(state.hardware_id, state.control,
 		state.residual_enabled, state.residual_alpha_scale);
 	for (size_t offset = 0; offset < state.raw.size(); ++offset) {
-		VisitRawByteTargets(state.hardware_id, offset, state.raw[offset], 0xff, indicators,
+		const uint8_t visible_value = state.control.all_pixels_on ? 0xff : state.raw[offset];
+		VisitRawByteTargets(state.hardware_id, offset, visible_value, 0xff, indicators,
 			[&](size_t index, bool on) {
 				if (index >= state.targets.size())
 					return;
@@ -269,7 +271,8 @@ bool ReplayHistory(
 				return false;
 			}
 			const uint8_t changed = event.old_value ^ event.new_value;
-			if (!VisitRawByteTargets(state.hardware_id, event.offset, event.new_value, changed,
+			if (!state.control.all_pixels_on &&
+				!VisitRawByteTargets(state.hardware_id, event.offset, event.new_value, changed,
 				context.status_indicators, [&](size_t index, bool on) {
 					if (index >= state.targets.size())
 						return;

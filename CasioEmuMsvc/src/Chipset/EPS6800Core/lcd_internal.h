@@ -3,6 +3,7 @@
 #define FX_EMU_CORE_LCD_INTERNAL_H
 
 #include "lcd_geometry.h"
+#include "machine_io.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -43,6 +44,8 @@ struct lcd_state {
 	uint8_t w192_com_reverse;
 	uint8_t w192_contrast;
 	uint8_t w192_contrast_pending;
+	machine_lcd_change_callback change_callback;
+	void *change_callback_user;
 	struct mmio_state *mmio;
 };
 
@@ -59,7 +62,21 @@ size_t lcd_copy_display_state(
 	size_t size,
 	uint8_t *lcdarh,
 	uint8_t *lcdcon,
-	uint8_t *contrast
+	uint8_t *contrast,
+	uint8_t *all_pixels_on
+);
+size_t lcd_copy_raw_memory_state(const struct lcd_state *state, uint8_t *data, size_t size);
+void lcd_get_control_state(
+	const struct lcd_state *state,
+	uint8_t *lcdarh,
+	uint8_t *lcdcon,
+	uint8_t *contrast,
+	uint8_t *all_pixels_on
+);
+void lcd_set_change_callback_state(
+	struct lcd_state *state,
+	machine_lcd_change_callback callback,
+	void *user
 );
 uint8_t lcd_raw_read_byte_state(const struct lcd_state *state, size_t addr);
 bool lcd_raw_write_byte_state(struct lcd_state *state, size_t addr, uint8_t value);

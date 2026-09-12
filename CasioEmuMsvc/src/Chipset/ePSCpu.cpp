@@ -98,6 +98,7 @@ namespace casioemu {
 	ePSCPU::ePSCPU(EpsVariant variant)
 		: state_(CreateMachineOrThrow(variant)), variant_(variant) {
 		machine_state_debug_set_memory_access_callback(state_, &ePSCPU::MemoryAccessThunk, this);
+		machine_state_set_lcd_change_callback(state_, &ePSCPU::LcdChangeThunk, this);
 	}
 
 	ePSCPU::~ePSCPU() {
@@ -437,8 +438,6 @@ namespace casioemu {
 	bool ePSCPU::OnMemoryAccessLocked(uint32_t address, uint8_t& value, bool write, bool before) {
 		if (before)
 			return memory_hook_ ? memory_hook_(address, value, write) : false;
-		if (write && LcdAddressMayChangeDisplayLocked(address))
-			CaptureLcdHistoryChangeLocked();
 		for (auto& breakpoint : memory_breakpoints_) {
 			if (!breakpoint.enabled || breakpoint.address != address || breakpoint.write != write)
 				continue;
@@ -458,6 +457,40 @@ namespace casioemu {
 			}
 		}
 		return false;
+	}
+
+	void ePSCPU::LcdChangeThunk(
+		void* user, int kind, size_t offset, uint8_t old_value, uint8_t new_value) {
+		if (user)
+			static_cast<ePSCPU*>(user)->OnLcdChangeLocked(kind, offset, old_value, new_value);
+	}
+
+	void ePSCPU::OnLcdChangeLocked(
+		int kind, size_t offset, uint8_t old_value, uint8_t new_value) {
+		if (!lcd_history_enabled_)
+			return;
+		Eps6800LcdControl control{};
+		if (!CaptureLcdControlLocked(control)) {
+			lcd_history_incomplete_ = true;
+			lcd_history_events_.clear();
+			return;
+		}
+		if (kind == MACHINE_LCD_CHANGE_BYTE) {
+			if (offset >= lcd_history_live_.size() || lcd_history_live_[offset] != old_value) {
+				lcd_history_incomplete_ = true;
+				lcd_history_events_.clear();
+				if (offset < lcd_history_live_.size())
+					lcd_history_live_[offset] = new_value;
+				lcd_history_live_control_ = control;
+				return;
+			}
+			AppendLcdHistoryEventLocked(static_cast<uint32_t>(offset), old_value, new_value, control);
+			lcd_history_live_[offset] = new_value;
+		}
+		else if (!(control == lcd_history_live_control_)) {
+			AppendLcdHistoryEventLocked(EpsLcdHistoryEvent::kNoByte, 0, 0, control);
+		}
+		lcd_history_live_control_ = control;
 	}
 
 	void ePSCPU::RecordTraceLocked(uint32_t pc_before, uint32_t instruction, uint32_t pc_after) {
@@ -513,6 +546,7 @@ namespace casioemu {
 			control->contrast = raw_control.contrast;
 			control->display_on = (raw_control.lcdcon & BIT_LCD_ON) != 0;
 			control->blanked = (raw_control.lcdcon & BIT_LCD_BLANK) != 0;
+			control->all_pixels_on = raw_control.all_pixels_on != 0;
 		}
 		return copied;
 	}
@@ -521,30 +555,39 @@ namespace casioemu {
 		return machine_state_lcd_raw_size(state_);
 	}
 
-	bool ePSCPU::LcdAddressMayChangeDisplayLocked(uint32_t address) const {
-		if (address >= 0x80)
+	bool ePSCPU::CaptureLcdControlLocked(Eps6800LcdControl& control) const {
+		machine_lcd_control raw_control{};
+		if (!machine_state_lcd_get_control(state_, &raw_control))
 			return false;
-		const auto core_variant = ToCoreVariant(variant_);
-		const auto* traits = eps_get_variant_traits(core_variant);
-		if (eps_variant_is_6800_w192(core_variant))
-			return address == REG_PORTD || address == REG_PORTE || address == REG_DCRDE;
-		return address == traits->reg_lcddat || address == traits->reg_lcdcon ||
-			(traits->reg_lcdarh != 0xffu && address == traits->reg_lcdarh);
+		control.lcdarh = raw_control.lcdarh;
+		control.lcdcon = raw_control.lcdcon;
+		control.contrast = raw_control.contrast;
+		control.display_on = (raw_control.lcdcon & BIT_LCD_ON) != 0;
+		control.blanked = (raw_control.lcdcon & BIT_LCD_BLANK) != 0;
+		control.all_pixels_on = raw_control.all_pixels_on != 0;
+		return true;
 	}
 
 	bool ePSCPU::CaptureLcdSnapshotLocked(
 		std::vector<uint8_t>& raw, Eps6800LcdControl& control) const {
 		const size_t size = machine_state_lcd_raw_size(state_);
 		raw.resize(size);
-		machine_lcd_control core_control{};
-		if (machine_state_lcd_copy_display(state_, raw.data(), raw.size(), &core_control) != size)
+		if (machine_state_lcd_copy_raw_memory(state_, raw.data(), raw.size()) != size ||
+			!CaptureLcdControlLocked(control))
 			return false;
-		control.lcdarh = core_control.lcdarh;
-		control.lcdcon = core_control.lcdcon;
-		control.contrast = core_control.contrast;
-		control.display_on = (core_control.lcdcon & BIT_LCD_ON) != 0;
-		control.blanked = (core_control.lcdcon & BIT_LCD_BLANK) != 0;
 		return true;
+	}
+
+	void ePSCPU::AppendLcdHistoryEventLocked(
+		uint32_t offset, uint8_t old_value, uint8_t new_value,
+		const Eps6800LcdControl& control) {
+		const uint64_t seq = ++lcd_history_next_seq_;
+		if (lcd_history_incomplete_ || lcd_history_events_.size() >= kLcdHistoryCapacity) {
+			lcd_history_incomplete_ = true;
+			lcd_history_events_.clear();
+			return;
+		}
+		lcd_history_events_.push_back({seq, SteadyNowNs(), offset, old_value, new_value, control});
 	}
 
 	void ePSCPU::ResetLcdHistoryLocked() {
@@ -567,50 +610,6 @@ namespace casioemu {
 		lcd_history_baseline_ = lcd_history_live_;
 		lcd_history_baseline_control_ = lcd_history_live_control_;
 		lcd_history_scratch_.resize(lcd_history_live_.size());
-	}
-
-	void ePSCPU::CaptureLcdHistoryChangeLocked() {
-		if (!lcd_history_enabled_)
-			return;
-		Eps6800LcdControl control{};
-		if (!CaptureLcdSnapshotLocked(lcd_history_scratch_, control)) {
-			lcd_history_incomplete_ = true;
-			lcd_history_events_.clear();
-			return;
-		}
-		if (lcd_history_live_.size() != lcd_history_scratch_.size()) {
-			lcd_history_incomplete_ = true;
-			lcd_history_events_.clear();
-			lcd_history_live_ = lcd_history_scratch_;
-			lcd_history_live_control_ = control;
-			return;
-		}
-
-		const uint64_t now_ns = SteadyNowNs();
-		const bool control_changed = !(control == lcd_history_live_control_);
-		size_t changed_bytes = 0;
-		for (size_t i = 0; i < lcd_history_live_.size(); ++i)
-			changed_bytes += lcd_history_live_[i] != lcd_history_scratch_[i] ? 1u : 0u;
-		const size_t event_count = changed_bytes + (control_changed && changed_bytes == 0 ? 1u : 0u);
-		if (event_count != 0 && (lcd_history_incomplete_ ||
-			lcd_history_events_.size() + event_count > kLcdHistoryCapacity)) {
-			lcd_history_incomplete_ = true;
-			lcd_history_events_.clear();
-			lcd_history_next_seq_ += event_count;
-		}
-		else if (event_count != 0) {
-			for (size_t i = 0; i < lcd_history_live_.size(); ++i) {
-				if (lcd_history_live_[i] == lcd_history_scratch_[i])
-					continue;
-				lcd_history_events_.push_back({++lcd_history_next_seq_, now_ns,
-					static_cast<uint32_t>(i), lcd_history_live_[i], lcd_history_scratch_[i], control});
-			}
-			if (control_changed && changed_bytes == 0)
-				lcd_history_events_.push_back({++lcd_history_next_seq_, now_ns,
-					EpsLcdHistoryEvent::kNoByte, 0, 0, control});
-		}
-		lcd_history_live_.swap(lcd_history_scratch_);
-		lcd_history_live_control_ = control;
 	}
 
 	void ePSCPU::SetLcdHistoryEnabled(bool enabled) {
@@ -661,8 +660,6 @@ namespace casioemu {
 	void ePSCPU::WriteByte(uint8_t address, uint8_t value) {
 		const std::lock_guard lock(state_mutex_);
 		machine_state_debug_write_byte(state_, address, value);
-		if (LcdAddressMayChangeDisplayLocked(address))
-			CaptureLcdHistoryChangeLocked();
 	}
 
 	uint8_t ePSCPU::ReadDebugMemory(uint32_t linear_address) const {
@@ -673,8 +670,6 @@ namespace casioemu {
 	bool ePSCPU::WriteDebugMemory(uint32_t linear_address, uint8_t value) {
 		const std::lock_guard lock(state_mutex_);
 		const bool written = machine_state_debug_write_memory(state_, linear_address, value);
-		if (written && LcdAddressMayChangeDisplayLocked(linear_address))
-			CaptureLcdHistoryChangeLocked();
 		return written;
 	}
 
@@ -700,10 +695,7 @@ namespace casioemu {
 
 	bool ePSCPU::WriteLcdMemory(size_t address, uint8_t value) {
 		const std::lock_guard lock(state_mutex_);
-		const bool written = machine_state_lcd_write_memory(state_, address, value);
-		if (written)
-			CaptureLcdHistoryChangeLocked();
-		return written;
+		return machine_state_lcd_write_memory(state_, address, value);
 	}
 
 	Eps6800DebugSnapshot ePSCPU::DebugSnapshot() const {
@@ -1018,6 +1010,7 @@ namespace casioemu {
 			timer_cycle_phase_ = 0;
 			idle_timer_checkpoint_ = std::chrono::steady_clock::now();
 			machine_state_debug_set_memory_access_callback(state_, &ePSCPU::MemoryAccessThunk, this);
+			machine_state_set_lcd_change_callback(state_, &ePSCPU::LcdChangeThunk, this);
 			ResetLcdHistoryLocked();
 		}
 		machine_snapshot_free(snapshot);

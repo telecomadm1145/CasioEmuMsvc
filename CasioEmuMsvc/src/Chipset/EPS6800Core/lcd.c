@@ -27,6 +27,17 @@ enum {
 	LCD_W192_CONTRAST_DEFAULT = 0x26
 };
 
+static void lcd_notify_change(
+	struct lcd_state *state,
+	int kind,
+	size_t offset,
+	uint8_t old_value,
+	uint8_t new_value
+) {
+	if (old_value != new_value && state->change_callback)
+		state->change_callback(state->change_callback_user, kind, offset, old_value, new_value);
+}
+
 static bool lcd_w192_address(const struct lcd_state *state, size_t *address) {
 	if (state->w192_page >= LCD_W192_PAGE_COUNT || state->w192_column >= LCD_W192_WIDTH)
 		return false;
@@ -45,6 +56,9 @@ static void lcd_w192_advance_column(struct lcd_state *state) {
 }
 
 static void lcd_w192_command(struct lcd_state *state, uint8_t byte) {
+	const uint8_t old_contrast = state->w192_contrast;
+	const uint8_t old_display_on = state->w192_display_on;
+	const uint8_t old_all_pixels_on = state->w192_all_pixels_on;
 	/* IQV9 ROM sends the electronic-volume command as 81h followed by a
 	 * six-bit parameter.  Preserve the controller value without folding it
 	 * into the four-bit internal-EPS6800 LCDARH representation. */
@@ -83,6 +97,10 @@ static void lcd_w192_command(struct lcd_state *state, uint8_t byte) {
 		state->w192_column = state->w192_rmw_column;
 		state->w192_rmw_active = 0u;
 		state->w192_read_valid = 0;
+	}
+	if (old_contrast != state->w192_contrast || old_display_on != state->w192_display_on ||
+		old_all_pixels_on != state->w192_all_pixels_on) {
+		lcd_notify_change(state, MACHINE_LCD_CHANGE_CONTROL, SIZE_MAX, 0u, 1u);
 	}
 }
 
@@ -189,8 +207,12 @@ void lcd_gpio_write_byte_state(struct lcd_state *state, uint8_t addr, uint8_t by
 			else if ((byte & (LCD_W192_PORTD_DATA | LCD_W192_PORTD_WRITE |
 				LCD_W192_PORTD_ENABLE)) == (LCD_W192_PORTD_DATA |
 				LCD_W192_PORTD_WRITE | LCD_W192_PORTD_ENABLE)) {
-				if (lcd_w192_address(state, &address))
+				if (lcd_w192_address(state, &address)) {
+					const uint8_t old_value = state->w192_fb[address];
 					state->w192_fb[address] = state->w192_porte;
+					lcd_notify_change(state, MACHINE_LCD_CHANGE_BYTE, address,
+						old_value, state->w192_porte);
+				}
 				lcd_w192_advance_column(state);
 				state->w192_bus_phase = 1;
 			}
@@ -254,6 +276,22 @@ static uint16_t lcd_visible_address(uint16_t addr) {
 	return (uint16_t)((addr / LCD_VISIBLE_WIDTH) * LCD_FB_STRIDE + (addr % LCD_VISIBLE_WIDTH));
 }
 
+static bool lcd_storage_to_raw_offset(const struct lcd_state *state, uint16_t address, size_t *offset) {
+	const enum eps_variant variant = state->mmio->variant;
+	if (lcd_profile(variant)->host_linear) {
+		if (address >= eps_lcd_raw_size(variant))
+			return false;
+		*offset = address;
+		return true;
+	}
+	const size_t page = address / LCD_FB_STRIDE;
+	const size_t column = address % LCD_FB_STRIDE;
+	if (column >= LCD_VISIBLE_WIDTH)
+		return false;
+	*offset = page * LCD_VISIBLE_WIDTH + column;
+	return *offset < eps_lcd_raw_size(variant);
+}
+
 static void lcd_increment_address(struct lcd_state *state) {
 	const enum eps_variant variant = state->mmio->variant;
 	const uint8_t reg_lcdarl = eps_reg_lcdarl(variant);
@@ -310,13 +348,23 @@ void lcd_process_postid_state(struct lcd_state *state) {
 
 void lcd_write_byte_state(struct lcd_state *state, uint8_t addr, uint8_t byte) {
 	if (addr < LCD_REG_COUNT) {
+		const uint8_t old_register = state->reg[addr];
 		state->reg[addr] = byte;
 		/* Keep the debugger's flat SFR view synchronized with the peripheral. */
 		lcd_bus_write_internal(state, addr, byte);
 		if (addr == eps_reg_lcddat(state->mmio->variant)) {
 			const uint16_t data_addr = lcd_data_address(state);
-			if (lcd_data_address_valid(state, data_addr))
+			if (lcd_data_address_valid(state, data_addr)) {
+				const uint8_t old_value = state->fb[data_addr];
 				state->fb[data_addr] = byte;
+				size_t raw_offset;
+				if (lcd_storage_to_raw_offset(state, data_addr, &raw_offset))
+					lcd_notify_change(state, MACHINE_LCD_CHANGE_BYTE, raw_offset, old_value, byte);
+			}
+		}
+		else if (addr == eps_reg_lcdcon(state->mmio->variant) ||
+			addr == eps_reg_lcdarh(state->mmio->variant)) {
+			lcd_notify_change(state, MACHINE_LCD_CHANGE_CONTROL, SIZE_MAX, old_register, byte);
 		}
 	}
 	else {
@@ -337,25 +385,41 @@ size_t lcd_copy_display_state(
 	size_t size,
 	uint8_t *lcdarh,
 	uint8_t *lcdcon,
-	uint8_t *contrast
+	uint8_t *contrast,
+	uint8_t *all_pixels_on
 ) {
+	const enum eps_variant variant = state->mmio->variant;
+	const size_t copy_size = lcd_copy_raw_memory_state(state, data, size);
+	if (eps_variant_is_6800_w192(variant) && state->w192_all_pixels_on)
+		memset(data, 0xff, copy_size);
+	lcd_get_control_state(state, lcdarh, lcdcon, contrast, all_pixels_on);
+	return copy_size;
+}
+
+size_t lcd_copy_raw_memory_state(const struct lcd_state *state, uint8_t *data, size_t size) {
 	size_t i;
 	const enum eps_variant variant = state->mmio->variant;
-	const struct eps_lcd_profile *profile = lcd_profile(variant);
 	const size_t raw_size = eps_lcd_raw_size(variant);
 	const size_t copy_size = size < raw_size ? size : raw_size;
-
 	if (eps_variant_is_6800_w192(variant)) {
-		/* IQ-V9's glass wiring already accounts for the A1/C8 controller
-		 * setup.  The official emulator consumes page RAM as-is; applying
-		 * SEG/COM remapping here rotates the logical display a second time. */
-		for (i = 0; i < copy_size; ++i)
-			data[i] = state->w192_all_pixels_on ? 0xffu : state->w192_fb[i];
+		/* IQ-V9's glass wiring already accounts for the A1/C8 controller setup. */
+		memcpy(data, state->w192_fb, copy_size);
 	}
-	else {
+	else
 		for (i = 0; i < copy_size; ++i)
 			data[i] = lcd_ram_read_byte_state(state, (uint16_t)i);
-	}
+	return copy_size;
+}
+
+void lcd_get_control_state(
+	const struct lcd_state *state,
+	uint8_t *lcdarh,
+	uint8_t *lcdcon,
+	uint8_t *contrast,
+	uint8_t *all_pixels_on
+) {
+	const enum eps_variant variant = state->mmio->variant;
+	const struct eps_lcd_profile *profile = lcd_profile(variant);
 	if (lcdarh)
 		*lcdarh = profile->has_address_high ? state->reg[eps_reg_lcdarh(variant)] : 0;
 	if (lcdcon)
@@ -366,7 +430,17 @@ size_t lcd_copy_display_state(
 			(uint8_t)((state->reg[eps_reg_lcdarh(variant)] & MASK_LCD_CONTRAST) >> SHIFT_LCD_CONTRAST) :
 			profile->fixed_contrast;
 	}
-	return copy_size;
+	if (all_pixels_on)
+		*all_pixels_on = eps_variant_is_6800_w192(variant) ? state->w192_all_pixels_on : 0u;
+}
+
+void lcd_set_change_callback_state(
+	struct lcd_state *state,
+	machine_lcd_change_callback callback,
+	void *user
+) {
+	state->change_callback = callback;
+	state->change_callback_user = user;
 }
 
 uint8_t lcd_raw_read_byte_state(const struct lcd_state *state, size_t addr) {
@@ -378,10 +452,12 @@ uint8_t lcd_raw_read_byte_state(const struct lcd_state *state, size_t addr) {
 bool lcd_raw_write_byte_state(struct lcd_state *state, size_t addr, uint8_t value) {
 	if (!state || addr >= eps_lcd_raw_size(state->mmio->variant))
 		return false;
+	const uint8_t old_value = lcd_raw_read_byte_state(state, addr);
 	if (eps_variant_is_6800_w192(state->mmio->variant))
 		state->w192_fb[addr] = value;
 	else
-		state->fb[addr] = value;
+		state->fb[lcd_profile(state->mmio->variant)->host_linear ? addr : lcd_visible_address((uint16_t)addr)] = value;
+	lcd_notify_change(state, MACHINE_LCD_CHANGE_BYTE, addr, old_value, value);
 	return true;
 }
 

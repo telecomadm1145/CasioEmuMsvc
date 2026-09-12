@@ -42,12 +42,13 @@ namespace casioemu {
 		uint8_t contrast{};
 		bool display_on{};
 		bool blanked{};
+		bool all_pixels_on{};
 
 		bool visible() const { return display_on && !blanked; }
 		bool operator==(const Eps6800LcdControl& other) const {
 			// Address and frame-rate fields do not change the rendered target.
 			return contrast == other.contrast && display_on == other.display_on &&
-				blanked == other.blanked;
+				blanked == other.blanked && all_pixels_on == other.all_pixels_on;
 		}
 	};
 
@@ -252,10 +253,13 @@ namespace casioemu {
 		void RecordTraceLocked(uint32_t pc_before, uint32_t instruction, uint32_t pc_after);
 		static bool MemoryAccessThunk(void* user, uint32_t address, uint8_t* value, bool write, bool before);
 		bool OnMemoryAccessLocked(uint32_t address, uint8_t& value, bool write, bool before);
+		static void LcdChangeThunk(void* user, int kind, size_t offset, uint8_t old_value, uint8_t new_value);
+		void OnLcdChangeLocked(int kind, size_t offset, uint8_t old_value, uint8_t new_value);
 		std::string BacktraceLocked() const;
-		bool LcdAddressMayChangeDisplayLocked(uint32_t address) const;
+		bool CaptureLcdControlLocked(Eps6800LcdControl& control) const;
 		bool CaptureLcdSnapshotLocked(std::vector<uint8_t>& raw, Eps6800LcdControl& control) const;
-		void CaptureLcdHistoryChangeLocked();
+		void AppendLcdHistoryEventLocked(uint32_t offset, uint8_t old_value,
+			uint8_t new_value, const Eps6800LcdControl& control);
 		void ResetLcdHistoryLocked();
 
 	public:

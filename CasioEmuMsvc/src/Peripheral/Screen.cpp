@@ -30,6 +30,7 @@
 #include "ScreenScanVisual.hpp"
 #include "LcdTemporalCandidate.hpp"
 #include "Chipset/Chipset.hpp"
+#include "Chipset/ePSCpu.h"
 #include "Chipset/MMU.hpp"
 #include "Chipset/MMURegion.hpp"
 #include "Emulator.hpp"
@@ -869,6 +870,15 @@ namespace casioemu {
 			#ifndef __EMSCRIPTEN__
 				ratio = 0.80f;
 			#endif
+				bool eps_residual_enabled;
+				float eps_residual_alpha_scale;
+				EpsLcdResponseTick eps_response;
+				{
+					auto settings_lock = ordinary_lcd_history::UntrackedChange::LockSettings();
+					eps_residual_enabled = screen_residual_enabled;
+					eps_residual_alpha_scale = screen_residual_alpha_scale;
+					eps_response = BeginEpsLcdResponseTick();
+				}
 				EpsScreenContext eps_context{
 					hardware_id,
 					emulator.chipset.epscpu,
@@ -876,10 +886,10 @@ namespace casioemu {
 					eps_screen_ink_alpha,
 					eps_screen_alpha_mutex,
 					eps_temporal_state,
-					screen_residual_enabled,
-					screen_residual_alpha_scale,
+					eps_residual_enabled,
+					eps_residual_alpha_scale,
 					ratio,
-					BeginEpsLcdResponseTick()};
+					eps_response};
 				UpdateEpsScreen(eps_context);
 				return;
 			}
@@ -1273,6 +1283,10 @@ namespace casioemu {
 			if (screen_thread.get_id() == std::this_thread::get_id())
 				std::terminate();
 			screen_thread.join();
+		}
+		if constexpr (IsEpsFamily(hardware_id)) {
+			if (emulator.chipset.epscpu)
+				emulator.chipset.epscpu->SetLcdHistoryEnabled(false);
 		}
 #endif
 	}
