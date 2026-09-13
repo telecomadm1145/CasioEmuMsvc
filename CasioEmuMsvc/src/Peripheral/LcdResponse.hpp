@@ -24,9 +24,14 @@ inline constexpr Config kEpsDotMatrix{50.0, 50.0};
 inline constexpr Config kEpsSegment{50.0, 50.0};
 
 inline double GainForElapsed(double elapsed_ms, double half_life_ms) {
+	// A zero half-life means an immediate transition to the target.
 	if (half_life_ms == 0.0)
 		return 1.0;
-	return -std::expm1(-0.6931471805599453094 * elapsed_ms / half_life_ms);
+
+	constexpr double kLn2 = 0.6931471805599453094;
+	// gain = 1 - 2^(-elapsed_ms / half_life_ms): close half the remaining
+	// gap to the target each half-life. expm1 preserves precision for small steps.
+	return -std::expm1(-kLn2 * elapsed_ms / half_life_ms);
 }
 
 inline double BlendWithGains(double alpha, double target, double rise_gain, double fall_gain) {
