@@ -1,4 +1,5 @@
 #define _NO_FUND_API
+#include "Peripheral/OrdinaryLcdHistory.hpp"
 #include "FileDialog.hpp"
 #include "PluginApi.h"
 #include "PluginMan.h"
@@ -785,11 +786,12 @@ class PluginApi_Impl : public PluginApi {
 			m_emu->ModelDefinition.pd_value = value;
 		}
 		DebugDisplaySettings GetDisplaySettings() override {
+			const auto gate = casioemu::screen_gate::Get();
 			return {
-				screen_flashing_threshold,
+				gate.flashing_threshold,
 				screen_flashing_brightness_coeff,
 				screen_buffer_select,
-				enable_screen_fading,
+				gate.fading_enabled,
 				screen_fading_blending_coefficient,
 				screen_residual_enabled,
 				screen_residual_alpha_scale,
@@ -797,10 +799,10 @@ class PluginApi_Impl : public PluginApi {
 			};
 		}
 		void SetDisplaySettings(const DebugDisplaySettings& settings) override {
-			screen_flashing_threshold = std::clamp(settings.FlashingThreshold, 0, 0x3f);
+			casioemu::ordinary_lcd_history::UntrackedChange change;
+			casioemu::screen_gate::Set({std::clamp(settings.FlashingThreshold, 0, 0x3f), settings.FadingEnabled});
 			screen_flashing_brightness_coeff = std::clamp(settings.FlashingBrightness, 1.0f, 8.0f);
 			screen_buffer_select = std::clamp(settings.BufferSelect, 0, 2);
-			enable_screen_fading = settings.FadingEnabled;
 			screen_fading_blending_coefficient = settings.FadingCoefficient;
 			screen_residual_enabled = settings.ResidualEnabled;
 			screen_residual_alpha_scale = settings.ResidualAlphaScale;

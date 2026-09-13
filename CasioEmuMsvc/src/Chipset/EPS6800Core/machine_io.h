@@ -32,7 +32,21 @@ struct machine_lcd_control {
 	uint8_t lcdarh;
 	uint8_t lcdcon;
 	uint8_t contrast;
+	uint8_t all_pixels_on;
 };
+
+enum machine_lcd_change_kind {
+	MACHINE_LCD_CHANGE_BYTE = 0,
+	MACHINE_LCD_CHANGE_CONTROL = 1
+};
+
+typedef void (*machine_lcd_change_callback)(
+	void *user,
+	int kind,
+	size_t offset,
+	uint8_t old_value,
+	uint8_t new_value
+);
 
 /* Host execution boundary.  Callers can schedule the machine without
  * depending on the internal cpu_state/timer_state representation. */
@@ -50,8 +64,10 @@ void machine_state_advance_instruction_cycles(
 	struct machine_state *state,
 	uint32_t timer_cycles,
 	bool tick_fast_timers,
-	bool tick_timer1
+	uint32_t timer1_cycles
 );
+/* Timer1's independent oscillator runs in both active and Idle modes. */
+void machine_state_tick_timer1(struct machine_state *state, uint32_t cycles);
 void machine_state_tick_idle_timer1(struct machine_state *state, uint32_t cycles);
 void machine_state_run_frame(struct machine_state *state);
 
@@ -63,6 +79,14 @@ size_t machine_state_lcd_copy_display(
 	uint8_t *data,
 	size_t size,
 	struct machine_lcd_control *control
+);
+/* Copies physical LCD RAM without applying display-wide controller overrides. */
+size_t machine_state_lcd_copy_raw_memory(const struct machine_state *state, uint8_t *data, size_t size);
+bool machine_state_lcd_get_control(const struct machine_state *state, struct machine_lcd_control *control);
+void machine_state_set_lcd_change_callback(
+	struct machine_state *state,
+	machine_lcd_change_callback callback,
+	void *user
 );
 /* Raw LCD RAM access used by debugger/editor surfaces. */
 uint8_t machine_state_lcd_read_memory(const struct machine_state *state, size_t address);

@@ -884,10 +884,6 @@ namespace casioemu {
 											flash = {std::istreambuf_iterator<char>{ifs3.rdbuf()}, std::istreambuf_iterator<char>{}};
 									}
 								}
-								else if (mi.hardware_id == HW_FX_5800P && rom.size() > 0x20000) {
-									flash.assign(rom.begin() + 0x20000, rom.end());
-									rom.resize(0x20000);
-								}
 								auto ri = rom_info(rom, flash, mi.real_hardware);
 								if (ri.type != 0) {
 									switch (ri.type) {

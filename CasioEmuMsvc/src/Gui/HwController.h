@@ -1,8 +1,7 @@
 ﻿#pragma once
 #include "Ui.hpp"
-extern int screen_flashing_threshold;
+#include "../Peripheral/ScreenGate.hpp"
 extern float screen_fading_blending_coefficient;
-extern bool enable_screen_fading;
 extern float screen_flashing_brightness_coeff;
 extern bool screen_residual_enabled;
 extern float screen_residual_alpha_scale;

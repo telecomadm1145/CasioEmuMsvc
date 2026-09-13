@@ -24,9 +24,7 @@ casioemu::MMU* me_mmu = nullptr;
 casioemu::Emulator* m_emu = nullptr;
 uint32_t pc_cache = 0;
 
-int screen_flashing_threshold = 20;
 float screen_fading_blending_coefficient = 0.0f;
-bool enable_screen_fading = false;
 float screen_flashing_brightness_coeff = 1.5f;
 bool screen_residual_enabled = true;
 float screen_residual_alpha_scale = 1.0f;

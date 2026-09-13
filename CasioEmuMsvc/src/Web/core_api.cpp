@@ -26,6 +26,8 @@
 #include <fstream>
 #include <sstream>
 #include <memory>
+#include <set>
+#include <stdexcept>
 #include <string>
 #include <typeinfo>
 #include <vector>
@@ -43,9 +45,7 @@ extern casioemu::MMU* me_mmu;
 extern casioemu::Emulator* m_emu;
 extern uint32_t pc_cache;
 
-extern int screen_flashing_threshold;
 extern float screen_fading_blending_coefficient;
-extern bool enable_screen_fading;
 extern float screen_flashing_brightness_coeff;
 extern bool screen_residual_enabled;
 extern float screen_residual_alpha_scale;
@@ -67,6 +67,18 @@ namespace {
 	std::vector<uint8_t> g_frame_rgba;
 	std::vector<uint8_t> g_source_frame_rgba;
 	std::vector<uint8_t> g_status_alpha;
+	std::vector<casioemu::StatusIndicatorInfo> g_web_status_indicators;
+	struct WebEpsConfig {
+		int port_b_mask = 0;
+		int port_b_value = 0;
+		int port_c_mask = 0;
+		int port_c_value = 0;
+		int cycles_per_second = 0;
+		int timer1_source_hz = 0;
+		int timer_cycle_divisor = 0;
+		bool ice_timer_scheduling = false;
+	};
+	WebEpsConfig g_web_eps_config;
 	std::vector<uint8_t> g_snapshot_buffer;
 	bool g_qr_active = false;
 	int g_qr_version = 0;
@@ -291,20 +303,56 @@ namespace {
 			model.flash_path = kFlashPath;
 		}
 		model.enable_new_screen = false;
+		if (hardware_id == casioemu::HW_EPS6009) {
+			model.screen_width = 96;
+			model.screen_height = 31;
+			model.screen_scale_y = 1.0f;
+		}
 		model.is_sample_rom = is_sample_rom;
 		model.legacy_ko = legacy_ko;
 		model.u16_mode = hardware_id == casioemu::HW_CLASSWIZ || hardware_id == casioemu::HW_CLASSWIZ_II || hardware_id == casioemu::HW_TI;
-		model.LARGE_model = hardware_id != casioemu::HW_SOLARII;
-		model.ml620_mirroring = hardware_id != casioemu::HW_CLASSWIZ;
+		model.LARGE_model = hardware_id != casioemu::HW_SOLARII && !casioemu::IsEpsFamily(hardware_id);
+		model.ml620_mirroring = hardware_id != casioemu::HW_CLASSWIZ && !casioemu::IsEpsFamily(hardware_id);
 		model.ink_color = {0, 0, 0};
+		if (casioemu::IsEpsFamily(hardware_id)) {
+			const auto* descriptor = casioemu::FindHardwareDescriptor(hardware_id);
+			// Dot-matrix status alphas share the first 192 entries of the pixel
+			// buffer. Check against the model's status bits once hardware is known;
+			// EPS6009 uses a separate segment layout and may have more indicators.
+			if (descriptor->eps_status_size != 0) {
+				if (g_web_status_indicators.size() > descriptor->eps_status_size * 8)
+					throw std::runtime_error("Too many status indicators for the selected EPS model.");
+				for (const auto& indicator : g_web_status_indicators) {
+					if (indicator.byte_offset >= descriptor->eps_status_size)
+						throw std::runtime_error("Status indicator byte is outside the selected EPS model's LCD status area.");
+				}
+			}
+			model.status_indicators = g_web_status_indicators;
+		}
+		if (casioemu::IsEpsFamily(hardware_id)) {
+			auto hexByte = [](int value) {
+				char buffer[8]{};
+				std::snprintf(buffer, sizeof(buffer), "0x%02X", static_cast<unsigned int>(value));
+				return std::string(buffer);
+			};
+			model.extra["port_b_input_mask"] = hexByte(g_web_eps_config.port_b_mask);
+			model.extra["port_b_input_value"] = hexByte(g_web_eps_config.port_b_value);
+			model.extra["port_c_input_mask"] = hexByte(g_web_eps_config.port_c_mask);
+			model.extra["port_c_input_value"] = hexByte(g_web_eps_config.port_c_value);
+			if (g_web_eps_config.cycles_per_second > 0)
+				model.extra["cycles_per_second"] = std::to_string(g_web_eps_config.cycles_per_second);
+			if (g_web_eps_config.timer1_source_hz > 0)
+				model.extra["timer1_source_hz"] = std::to_string(g_web_eps_config.timer1_source_hz);
+			if (g_web_eps_config.timer_cycle_divisor > 0)
+				model.extra["timer_cycle_divisor"] = std::to_string(g_web_eps_config.timer_cycle_divisor);
+			if (g_web_eps_config.ice_timer_scheduling)
+				model.extra["ice_timer_scheduling"] = "1";
+		}
 		if (!real_hardware) {
 			model.extra["limit_spd"] = "1";
 		}
-		if (hardware_id == casioemu::HW_EPS6800) {
-			// The legacy web EPS6800 entry point receives HP-style ROM resources.
-			model.extra["is_unpacked_nibbles"] = "1";
-		}
-		for (int ko = 0; ko < 8; ++ko) {
+		const int ko_count = casioemu::IsEpsFamily(hardware_id) ? 16 : 8;
+		for (int ko = 0; ko < ko_count; ++ko) {
 			for (int ki = 0; ki < 8; ++ki) {
 				casioemu::ButtonInfo button{};
 				button.kiko = (ko << 4) | ki;
@@ -316,6 +364,12 @@ namespace {
 		on.kiko = 0xFF;
 		on.keyname = "";
 		model.buttons.push_back(on);
+		if (casioemu::IsEpsFamily(hardware_id)) {
+			casioemu::ButtonInfo reset{};
+			reset.kiko = casioemu::BUTTON_KIKO_RESET;
+			reset.keyname = "";
+			model.buttons.push_back(reset);
+		}
 		return model;
 	}
 
@@ -914,7 +968,7 @@ void WebDebuggerQueueDownload(const char* path, const char* name) {
 		if (!rom || len <= 0) return -1;
 		const auto hardware_id = HardwareIdFromCoreType(model_type);
 		const bool has_flash = flash && flash_len > 0;
-		if (hardware_id == casioemu::HW_FX_5800P && !has_flash) return -4;
+		if (hardware_id == casioemu::HW_FX_5800P && (!has_flash || flash_len != 0x80000)) return -4;
 		if (has_flash && casioemu::IsEpsFamily(hardware_id) && flash_len < 0x10000) return -4;
 		try {
 			EnsureSdl();
@@ -946,6 +1000,38 @@ void WebDebuggerQueueDownload(const char* path, const char* name) {
 	}
 
 extern "C" {
+
+int casioemu_core_set_status_indicators(const uint32_t* packed, int count) {
+	// MakeWebModel validates hardware-specific limits when the core is created.
+	if (count < 0 || count > 4096 || (count > 0 && !packed)) return 1;
+	std::vector<casioemu::StatusIndicatorInfo> indicators;
+	indicators.reserve(static_cast<size_t>(count));
+	std::set<std::pair<unsigned short, unsigned char>> used;
+	for (int i = 0; i < count; ++i) {
+		const auto byte_offset = static_cast<unsigned short>(packed[i] >> 8);
+		const auto bit = static_cast<unsigned char>(packed[i] & 0xff);
+		if (bit > 7 || !used.emplace(byte_offset, bit).second) return 2;
+		indicators.push_back({"status" + std::to_string(i), byte_offset, bit});
+	}
+	g_web_status_indicators = std::move(indicators);
+	return 0;
+}
+
+int casioemu_core_set_eps_config(
+	int port_b_mask, int port_b_value, int port_c_mask, int port_c_value,
+	int cycles_per_second, int timer1_source_hz, int timer_cycle_divisor,
+	int ice_timer_scheduling) {
+	if (port_b_mask < 0 || port_b_mask > 0xff || port_b_value < 0 || port_b_value > 0xff
+		|| port_c_mask < 0 || port_c_mask > 0xff || port_c_value < 0 || port_c_value > 0xff
+		|| cycles_per_second < 0 || timer1_source_hz < 0 || timer_cycle_divisor < 0
+		|| (ice_timer_scheduling != 0 && ice_timer_scheduling != 1)) return 1;
+	g_web_eps_config = {
+		port_b_mask, port_b_value, port_c_mask, port_c_value,
+		cycles_per_second, timer1_source_hz, timer_cycle_divisor,
+		ice_timer_scheduling != 0,
+	};
+	return 0;
+}
 
 int casioemu_core_set_model_id(const char* model_id) {
 	SetCoreModelId(model_id);
@@ -1121,8 +1207,9 @@ int casioemu_core_update_frame() {
 	g_source_frame_rgba.resize(static_cast<size_t>(g_frame_width) * static_cast<size_t>(g_frame_height) * 4);
 	const auto& color = g_emulator->ModelDefinition.ink_color;
 	g_screen_provider->WriteFrameRgba(g_source_frame_rgba.data(), color.r, color.g, color.b);
-	const int display_height = std::max(0, g_frame_height - 1);
-	const int source_start_row = 1;
+	const bool has_embedded_status_row = g_emulator->hardware_id != casioemu::HW_EPS6009;
+	const int source_start_row = has_embedded_status_row ? 1 : 0;
+	const int display_height = std::max(0, g_frame_height - source_start_row);
 	g_frame_rgba.resize(static_cast<size_t>(g_frame_width) * static_cast<size_t>(display_height) * 4);
 	for (int y = 0; y < display_height; ++y) {
 		const auto* src = g_source_frame_rgba.data() + (static_cast<size_t>(source_start_row + y) * g_frame_width * 4);

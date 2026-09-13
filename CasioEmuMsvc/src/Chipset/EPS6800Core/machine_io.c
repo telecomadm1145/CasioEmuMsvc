@@ -47,7 +47,29 @@ size_t machine_state_lcd_copy_display(
 		size,
 		control ? &control->lcdarh : NULL,
 		control ? &control->lcdcon : NULL,
-		control ? &control->contrast : NULL);
+		control ? &control->contrast : NULL,
+		control ? &control->all_pixels_on : NULL);
+}
+
+size_t machine_state_lcd_copy_raw_memory(const struct machine_state *state, uint8_t *data, size_t size) {
+	return state && data ? lcd_copy_raw_memory_state(&state->lcd, data, size) : 0;
+}
+
+bool machine_state_lcd_get_control(const struct machine_state *state, struct machine_lcd_control *control) {
+	if (!state || !control)
+		return false;
+	lcd_get_control_state(&state->lcd, &control->lcdarh, &control->lcdcon,
+		&control->contrast, &control->all_pixels_on);
+	return true;
+}
+
+void machine_state_set_lcd_change_callback(
+	struct machine_state *state,
+	machine_lcd_change_callback callback,
+	void *user
+) {
+	if (state)
+		lcd_set_change_callback_state(&state->lcd, callback, user);
 }
 
 size_t machine_state_lcd_copy_framebuffer(const struct machine_state *state, uint8_t *data, size_t size) {

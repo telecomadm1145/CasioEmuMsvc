@@ -29,19 +29,19 @@ static void machine_state_tick_scheduled_peripherals(
 	uint32_t timer_cycles,
 	uint32_t keyboard_cycles,
 	bool tick_fast_timers,
-	bool tick_timer1
+	uint32_t timer1_cycles
 ) {
 	const enum cpu_mode mode = state->cpu.mode;
 
 	if (mode == CPU_MODE_IDLE) {
-		if (tick_timer1)
-			timer_tick_idle_state(&state->timer, timer_cycles);
+		if (timer1_cycles)
+			timer_tick_idle_state(&state->timer, timer1_cycles);
 	}
 	else if (mode != CPU_MODE_SLEEP) {
 		if (tick_fast_timers)
 			timer_tick_fast_state(&state->timer, timer_cycles);
-		if (tick_timer1)
-			timer_tick_idle_state(&state->timer, timer_cycles);
+		if (timer1_cycles)
+			timer_tick_idle_state(&state->timer, timer1_cycles);
 	}
 	kbd_tick_state(&state->kbd, keyboard_cycles);
 }
@@ -57,21 +57,26 @@ void machine_state_advance_cycles_split(
 
 	cpu_loop_state(&state->cpu, cycles);
 	machine_state_tick_scheduled_peripherals(
-		state, cycles, cycles, tick_fast_timers, tick_timer1);
+		state, cycles, cycles, tick_fast_timers, tick_timer1 ? cycles : 0);
 }
 
 void machine_state_advance_instruction_cycles(
 	struct machine_state *state,
 	uint32_t timer_cycles,
 	bool tick_fast_timers,
-	bool tick_timer1
+	uint32_t timer1_cycles
 ) {
 	if (!state)
 		return;
 
 	cpu_loop_state(&state->cpu, 1);
 	machine_state_tick_scheduled_peripherals(
-		state, timer_cycles, 1, tick_fast_timers, tick_timer1);
+		state, timer_cycles, 1, tick_fast_timers, timer1_cycles);
+}
+
+void machine_state_tick_timer1(struct machine_state *state, uint32_t cycles) {
+	if (state && cycles != 0 && state->cpu.mode != CPU_MODE_SLEEP)
+		timer_tick_idle_state(&state->timer, cycles);
 }
 
 void machine_state_tick_idle_timer1(struct machine_state *state, uint32_t cycles) {

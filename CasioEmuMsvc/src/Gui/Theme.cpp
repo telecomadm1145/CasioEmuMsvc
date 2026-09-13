@@ -1,4 +1,5 @@
 #include "Theme.h"
+#include "Peripheral/OrdinaryLcdHistory.hpp"
 #include "FileDialog.hpp"
 #ifndef CASIOEMU_CORE_WEB
 #include "SysDialog.h"
@@ -48,7 +49,12 @@ public:
 
 #ifndef __ANDROID__
 		ImGui::SameLine();
-		if (ImGui::Checkbox("Ui.LowPerformanceMode"_lc, &settings.lowPerformanceMode)) {
+		bool low_performance = settings.lowPerformanceMode;
+		if (ImGui::Checkbox("Ui.LowPerformanceMode"_lc, &low_performance)) {
+			{
+				casioemu::ordinary_lcd_history::UntrackedChange change;
+				settings.lowPerformanceMode = low_performance;
+			}
 			tm.SaveSettings();
 		}
 		if (ImGui::IsItemHovered()) {
