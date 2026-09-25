@@ -1072,7 +1072,7 @@ namespace {
 				"eps9500 TABPTRM no borrow chain", __LINE__);
 	}
 
-	bool Eps6800ExtendedFsrArithmeticSmoke() {
+	bool Eps6800FsrArithmeticProfilesSmoke() {
 		constexpr uint8_t kAccumulator = 0x0a;
 		constexpr uint8_t kStatus = 0x0f;
 		constexpr uint8_t kFsr1 = 0x04;
@@ -1097,7 +1097,7 @@ namespace {
 			return std::array<uint8_t, 2>{machine.ReadByte(fsr_reg), machine.ReadByte(bsr_reg)};
 		};
 
-		const auto CheckPointer = [&](casioemu::EpsVariant variant, uint8_t fsr_reg,
+		const auto CheckExtendedPointer = [&](casioemu::EpsVariant variant, uint8_t fsr_reg,
 			uint8_t bsr_reg, const char *name) {
 			const auto carry = Run(variant, fsr_reg, bsr_reg,
 				(uint16_t)(0x1100u | fsr_reg), 0xff, 0x11, 0x01, 0xc0);
@@ -1110,13 +1110,24 @@ namespace {
 				Check(borrow[0] == 0xff && borrow[1] == 0x0f, name, __LINE__);
 		};
 
-		return CheckPointer(casioemu::EpsVariant::Eps6800, kFsr1, kBsr1,
-			"EPS6800 mode-0 extended FSR1") &&
-			CheckPointer(casioemu::EpsVariant::Eps6800, kFsr2, kBsr2,
-				"EPS6800 mode-0 extended FSR2") &&
-			CheckPointer(casioemu::EpsVariant::Eps6800W192, kFsr1, kBsr1,
+		const auto CheckLegacyPointer = [&](uint8_t fsr_reg, uint8_t bsr_reg, const char *name) {
+			const auto carry = Run(casioemu::EpsVariant::Eps6800, fsr_reg, bsr_reg,
+				(uint16_t)(0x1100u | fsr_reg), 0xff, 0x11, 0x01, 0xc0);
+			const auto no_carry = Run(casioemu::EpsVariant::Eps6800, fsr_reg, bsr_reg,
+				(uint16_t)(0x1100u | fsr_reg), 0x80, 0x10, 0x01, 0xc0);
+			const auto high_bit_subtract = Run(casioemu::EpsVariant::Eps6800, fsr_reg, bsr_reg,
+				(uint16_t)(0x1700u | fsr_reg), 0x80, 0x10, 0x01, 0xc0);
+			return Check(carry[0] == 0x80 && carry[1] == 0x12, name, __LINE__) &&
+				Check(no_carry[0] == 0x81 && no_carry[1] == 0x10, name, __LINE__) &&
+				Check(high_bit_subtract[0] == 0x7f && high_bit_subtract[1] == 0x10,
+					name, __LINE__);
+		};
+
+		return CheckLegacyPointer(kFsr1, kBsr1, "EPS6800 legacy FSR1") &&
+			CheckLegacyPointer(kFsr2, kBsr2, "EPS6800 legacy FSR2") &&
+			CheckExtendedPointer(casioemu::EpsVariant::Eps6800W192, kFsr1, kBsr1,
 				"W192 mode-0 extended FSR1") &&
-			CheckPointer(casioemu::EpsVariant::Eps6800W192, kFsr2, kBsr2,
+			CheckExtendedPointer(casioemu::EpsVariant::Eps6800W192, kFsr2, kBsr2,
 				"W192 mode-0 extended FSR2");
 	}
 
@@ -1829,8 +1840,8 @@ int main(int argc, char** argv) {
 		std::cerr << "EPS9500 extended FSR arithmetic regression\n";
 		return 1;
 	}
-	if (!Eps6800ExtendedFsrArithmeticSmoke()) {
-		std::cerr << "EPS6800 extended FSR arithmetic regression\n";
+	if (!Eps6800FsrArithmeticProfilesSmoke()) {
+		std::cerr << "EPS6800 FSR arithmetic profile regression\n";
 		return 1;
 	}
 	if (!Eps9500RamAddressingSmoke()) {
