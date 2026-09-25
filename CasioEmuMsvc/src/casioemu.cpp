@@ -458,10 +458,13 @@ int main(int argc, char* argv[]) {
 		case SDL_WINDOWEVENT:
 			switch (event.window.event) {
 			case SDL_WINDOWEVENT_CLOSE:
-				if (SDL_Window* closedWindow = SDL_GetWindowFromID(eventWindowId)) {
-					if (SDL_GetWindowData(closedWindow, SCREEN_MIRROR_WINDOW_DATA_KEY)) {
-						break;
-					}
+				// The mirror event watcher can destroy its window before this queued
+				// close event reaches the main loop. In that case SDL_GetWindowFromID
+				// can no longer identify it, so only close the application for one of
+				// the two actual application windows.
+				if ((!emulator.window || eventWindowId != SDL_GetWindowID(emulator.window)) &&
+					(!window || eventWindowId != SDL_GetWindowID(window))) {
+					break;
 				}
 				emulator.Shutdown();
 				std::exit(0);
