@@ -71,6 +71,19 @@ public class Game extends SDLActivity {
     private static final String ONLINE_PREFS = "casioemu_online_device";
     private String pendingOnlineAuthorizationGrant = null;
     private boolean onlineAuthorizationCallbackReady = false;
+
+    public static byte[] checkUpdate(String url) {
+        try {
+            java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+            c.setRequestProperty("Accept", "application/vnd.github+json");
+            c.setRequestProperty("User-Agent", "CasioEmuMsvc-update-checker");
+            c.setConnectTimeout(5000); c.setReadTimeout(10000);
+            java.io.InputStream in = c.getInputStream(); java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[4096]; int n; while ((n = in.read(buffer)) >= 0) { if (out.size() + n > 1024 * 1024) throw new java.io.IOException("response too large"); out.write(buffer, 0, n); }
+            in.close(); return out.toByteArray();
+        } catch (Exception ex) { return null; }
+    }
+
     private static String onlineIdentityPreferenceKey(String api) throws Exception {
         byte[] digest = MessageDigest.getInstance("SHA-256").digest(api.getBytes("UTF-8"));
         return Base64.encodeToString(digest, Base64.NO_WRAP | Base64.URL_SAFE);
