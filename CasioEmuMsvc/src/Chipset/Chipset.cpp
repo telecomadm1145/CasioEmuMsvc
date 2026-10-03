@@ -911,6 +911,26 @@ namespace casioemu {
 
 	void Chipset::RaiseSoftware(size_t index) {
 		if (emulator.ModelDefinition.hardware_id == HW_TI) {
+			// ER0, not a firmware-specific RAM address, identifies the SWI
+			// display payload. Leave real hardware exception handling intact.
+			if (index == 4 || (index == 1 && !emulator.ModelDefinition.real_hardware)) {
+				if (auto* display = QueryInterface<ITiSvDisplay>()) {
+					const uint16_t address = static_cast<uint16_t>(cpu.reg_r[0]) |
+						(static_cast<uint16_t>(cpu.reg_r[1]) << 8);
+					if (index == 4) {
+						uint32_t status = 0;
+						for (unsigned i = 0; i < 4; ++i)
+							status |= uint32_t(mmu.ReadData(static_cast<uint16_t>(address + i), false)) << (i * 8);
+						display->SetTiSvStatus(status);
+					}
+					else {
+						std::array<uint8_t, ITiSvDisplay::FrameBytes> frame{};
+						for (size_t i = 0; i < frame.size(); ++i)
+							frame[i] = mmu.ReadData(static_cast<uint16_t>(address + i), false);
+						display->SetTiSvFrame(frame);
+					}
+				}
+			}
 			if ((tiDiagMode || !emulator.ModelDefinition.real_hardware) && index == 0x02) {
 				int dl = 500;
 				while (dl > 0 && tiKey == 0) {

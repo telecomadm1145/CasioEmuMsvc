@@ -98,7 +98,7 @@ namespace casioemu {
 			time, rate, threshold, screen_flashing_brightness_coeff);
 	}
 	template <HardwareId hardware_id>
-	class Screen : public Peripheral, public IScreenFrameProvider {
+	class Screen : public Peripheral, public IScreenFrameProvider, public ITiSvDisplay {
 		static constexpr bool kCaptureLcdHistory = ordinary_lcd_history::kEnabled &&
 			(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II ||
 			 hardware_id == HW_ES_PLUS || hardware_id == HW_FX_5800P);
@@ -139,6 +139,7 @@ namespace casioemu {
 
 		int ti_port7{};
 		int ti_port5{};
+		uint32_t ti_sv_status{};
 
 		float screen_scan_alpha[64]{};
 		std::array<float, 64> screen_scan_curve{};
@@ -663,10 +664,33 @@ namespace casioemu {
 		void Frame() override;
 		void Reset() override;
 		void* QueryInterface(const char* name) override {
+			if constexpr (hardware_id == HW_TI) {
+				if (strcmp(name, typeid(ITiSvDisplay).name()) == 0)
+					return static_cast<ITiSvDisplay*>(this);
+			}
 			if (strcmp(name, typeid(IScreenFrameProvider).name()) == 0) {
 				return static_cast<IScreenFrameProvider*>(this);
 			}
 			return Peripheral::QueryInterface(name);
+		}
+		void SetTiSvStatus(uint32_t status) override {
+			if constexpr (hardware_id == HW_TI) {
+				auto state_lock = LockScreenState();
+				ti_sv_status = status;
+				if (!emulator.ModelDefinition.real_hardware) {
+					ti_enabled = true;
+					ti_contrast = 112;
+				}
+			}
+		}
+		void SetTiSvFrame(const std::array<uint8_t, ITiSvDisplay::FrameBytes>& frame) override {
+			if constexpr (hardware_id == HW_TI) {
+				auto state_lock = LockScreenState();
+				if (screen_buffer)
+					std::copy(frame.begin(), frame.end(), screen_buffer);
+				ti_enabled = true;
+				ti_contrast = 112;
+			}
 		}
 		void UpdateFrameAlpha() override {
 #ifdef __EMSCRIPTEN__
@@ -712,7 +736,9 @@ namespace casioemu {
 			}
 			for (int y = 0; y < height; ++y) {
 				for (int x = 0; x < width; ++x) {
-					const float alpha = alpha_snapshot[y * 192 + x];
+					// TI exports the 64-row body separately from status alpha.
+					const int source_y = y + (hardware_id == HW_TI ? 1 : 0);
+					const float alpha = alpha_snapshot[source_y * 192 + x];
 					const int idx = (y * width + x) * 4;
 					out[idx + 0] = static_cast<uint8_t>(std::clamp(r, 0, 255));
 					out[idx + 1] = static_cast<uint8_t>(std::clamp(g, 0, 255));
@@ -738,6 +764,8 @@ namespace casioemu {
 			}
 		}
 		void SaveState(std::ostream& os) override {
+			std::unique_lock<std::mutex> state_lock;
+			if constexpr (hardware_id == HW_TI) state_lock = LockScreenState();
 			size_t bufSize = (hardware_id == HW_TI) ? (192 * 9) : RowBufferSize();
 			if (screen_buffer)
 				os.write(reinterpret_cast<const char*>(screen_buffer), bufSize);
@@ -745,6 +773,16 @@ namespace casioemu {
 			os.write(reinterpret_cast<const char*>(&hasBuf1), 1);
 			if (screen_buffer1)
 				os.write(reinterpret_cast<const char*>(screen_buffer1), bufSize);
+			if constexpr (hardware_id == HW_TI) {
+				// Reuse the seven-byte LCD metadata slot (Casio registers are
+				// unused on TI), keeping the surrounding snapshot layout intact.
+				const std::array<uint8_t, 7> state{
+					static_cast<uint8_t>(ti_sv_status), static_cast<uint8_t>(ti_sv_status >> 8),
+					static_cast<uint8_t>(ti_sv_status >> 16), static_cast<uint8_t>(ti_sv_status >> 24),
+					0x54, static_cast<uint8_t>(ti_contrast), static_cast<uint8_t>(ti_enabled)};
+				os.write(reinterpret_cast<const char*>(state.data()), state.size());
+				return;
+			}
 			os.write(reinterpret_cast<const char*>(&screen_contrast), 1);
 			os.write(reinterpret_cast<const char*>(&screen_brightness), 1);
 			os.write(reinterpret_cast<const char*>(&screen_mode), 1);
@@ -761,6 +799,8 @@ namespace casioemu {
 			os.write(reinterpret_cast<const char*>(&screen_power), 1);
 		}
 		void LoadState(std::istream& is) override {
+			std::unique_lock<std::mutex> state_lock;
+			if constexpr (hardware_id == HW_TI) state_lock = LockScreenState();
 			auto history_lock = LockLcdMutation();
 			if constexpr (kCaptureLcdHistory)
 				lcd_history.InvalidateEpoch();
@@ -771,6 +811,18 @@ namespace casioemu {
 			is.read(reinterpret_cast<char*>(&hasBuf1), 1);
 			if (hasBuf1 && screen_buffer1)
 				is.read(reinterpret_cast<char*>(screen_buffer1), bufSize);
+			if constexpr (hardware_id == HW_TI) {
+				std::array<uint8_t, 7> state{};
+				is.read(reinterpret_cast<char*>(state.data()), state.size());
+				if (state[4] != 0x54)
+					throw std::runtime_error("TI SV snapshot does not contain display state.");
+				ti_sv_status = uint32_t(state[0]) | (uint32_t(state[1]) << 8) |
+					(uint32_t(state[2]) << 16) | (uint32_t(state[3]) << 24);
+				ti_contrast = state[5];
+				ti_enabled = state[6] != 0;
+				lcd_response_reset_requested.store(true, std::memory_order_release);
+				return;
+			}
 			is.read(reinterpret_cast<char*>(&screen_contrast), 1);
 			is.read(reinterpret_cast<char*>(&screen_brightness), 1);
 			is.read(reinterpret_cast<char*>(&screen_mode), 1);
@@ -815,14 +867,14 @@ namespace casioemu {
 					ratio = 0.80f;
 				}
 #endif
+				if (!screen_gate::Get().fading_enabled)
+					ratio = 0.0f;
 				if (!ti_enabled) {
 					for (size_t i = 0; i < 65 * 192; i++) {
 						screen_ink_alpha[i] *= ratio;
 					}
 					return;
 				}
-				if (!n_ram_buffer) //  || !emulator.chipset.ti_status_buf) //  || !emulator.chipset.ti_screen_buf
-					return;
 				float ink_alpha_on = (ti_contrast - 100) * 20.0;
 				float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);
 				ink_alpha_off = screen_residual_enabled ? ink_alpha_off * screen_residual_alpha_scale : 0.0f;
@@ -830,10 +882,7 @@ namespace casioemu {
 				if (!screen_residual_enabled) {
 					ink_alpha_on = 255.0f;
 				}
-				uint8_t* screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xE708;
-				if (emulator.ModelDefinition.real_hardware) {
-					screen_buffer = this->screen_buffer;
-				}
+				const uint8_t* screen_buffer = this->screen_buffer;
 				for (int ix = 0; ix < 192; ++ix) {
 					for (int iy = 0; iy < 64; ++iy) {
 						uint32_t i = (ix << 6) | iy;
@@ -845,16 +894,11 @@ namespace casioemu {
 						data = data * ratio + (on ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
 					}
 				}
-				screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xe5d4;
-				if (emulator.ModelDefinition.real_hardware) {
-					screen_buffer = this->screen_buffer + 8 * 192;
-				}
-				int x = 0;
 				for (int ix = 1; ix != SPR_MAX; ++ix) {
-					auto off = sprite_bitmap[ix].offset;
-					auto& data = screen_ink_alpha[x];
-					data = data * ratio + ((screen_buffer[off] & sprite_bitmap[ix].mask) ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
-					x++;
+					const auto& indicator = sprite_bitmap[ix];
+					const bool on = ((ti_sv_status >> (indicator.offset * 8)) & indicator.mask) != 0;
+					auto& data = screen_ink_alpha[ix - 1];
+					data = data * ratio + (on ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
 				}
 
 				return;
@@ -997,23 +1041,30 @@ namespace casioemu {
 	template <>
 	const int Screen<HW_TI>::ROW_SIZE_DISP = 24;
 	template <>
-	const int Screen<HW_TI>::SPR_MAX = 14;
+	const int Screen<HW_TI>::SPR_MAX = 20;
 	template <>
 	const SpriteBitmap Screen<HW_TI>::sprite_bitmap[] = {
 		{"rsd_pixel", 0, 0},
-		{"rsd_2nd", 1, 17},
-		{"rsd_fix", 0, 0x00},
-		{"rsd_hbo", 0, 0x00},
-		{"rsd_sci", 0, 0x01},
-		{"rsd_eng", 0, 0x01},
-		{"rsd_deg", 0, 0x01},
-		{"rsd_rad", 0, 0x01},
-		{"rsd_bat", 0, 0x02},
-		{"rsd_wait", 1, 164},
-		{"rsd_left", 0, 0x02},
-		{"rsd_up", 0, 0x02},
-		{"rsd_down", 0, 0x02},
-		{"rsd_right", 0, 0x02},
+		// TI SV SWI 4 status bytes, least significant byte first.
+		{"rsd_l1", 0x01, 0x00},
+		{"rsd_2nd", 0x02, 0x00},
+		{"rsd_fix", 0x04, 0x00},
+		{"rsd_h", 0x08, 0x00},
+		{"rsd_b", 0x10, 0x00},
+		{"rsd_o", 0x20, 0x00},
+		{"rsd_l2", 0x40, 0x00},
+		{"rsd_sci", 0x80, 0x00},
+		{"rsd_eng", 0x01, 0x01},
+		{"rsd_de", 0x02, 0x01},
+		{"rsd_g", 0x04, 0x01},
+		{"rsd_rad", 0x08, 0x01},
+		{"rsd_l3", 0x10, 0x01},
+		{"rsd_bat", 0x20, 0x01},
+		{"rsd_wait", 0x40, 0x01},
+		{"rsd_left", 0x80, 0x01},
+		{"rsd_up", 0x01, 0x02},
+		{"rsd_down", 0x02, 0x02},
+		{"rsd_right", 0x04, 0x02},
 	};
 
 	template <>
@@ -1379,19 +1430,19 @@ namespace casioemu {
 		if constexpr (hardware_id == HW_TI) {
 			auto pp = emulator.chipset.QueryInterface<IPortProvider>();
 			pp->SetPortOutputCallback(7, [&](uint8_t data) {
+				auto state_lock = LockScreenState();
 				ti_port7 = data;
 				});
 			pp->SetPortOutputCallback(5, [&](uint8_t data) {
+				auto state_lock = LockScreenState();
 				// ti_port5 = data;
 				if (ti_a0 && !(data & 0x40)) {
 					if ((data & 0x10)) {
 						auto bit_off = ti_col;
 						auto off = bit_off + ti_page * 192;
-						if (off > 192 * 9) {
+						if (ti_col >= 192 || ti_page >= 9 || off >= 192 * 9) {
+							ti_a0 = false;
 							return;
-						}
-						if (off > 192 * 8) {
-							std::cout << std::dec << off - 192 * 8 << " <- 0x" << std::hex << ti_port7 << "\n";
 						}
 						screen_buffer[off] = ti_port7;
 						ti_col++;
@@ -2063,6 +2114,13 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 
 	template <HardwareId hardware_id>
 	void Screen<hardware_id>::Reset() {
+		if constexpr (hardware_id == HW_TI) {
+			auto state_lock = LockScreenState();
+			ti_sv_status = 0;
+			ti_enabled = false;
+			ti_a0 = false;
+			ti_port_status = ti_col = ti_page = 0;
+		}
 	}
 
 	Peripheral* CreateScreen(Emulator& emulator) {
