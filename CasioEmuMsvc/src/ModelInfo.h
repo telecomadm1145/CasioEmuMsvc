@@ -29,7 +29,7 @@ namespace casioemu {
 		HW_CLASSWIZ = 4,
 		HW_CLASSWIZ_II = 5,
 		HW_FX_5800P = 6,
-		HW_TI = 7,
+		HW_TI_MATH_PRINT = 7,
 		HW_SOLARII = 8,
 		// our test ends here, so we can add new models without worrying about breaking old configs
 		HW_EPS6800 = 9,
@@ -74,7 +74,7 @@ namespace casioemu {
 			EpsPowerKeyBehavior::None, 20, 25, 0},
 		{HW_FX_5800P, "Fx5800p", "Fx5800p", EpsVariant::None, EpsDisplayKind::None,
 			EpsPowerKeyBehavior::None, 20, 25, 0},
-		{HW_TI, "TI", "TI", EpsVariant::None, EpsDisplayKind::None,
+		{HW_TI_MATH_PRINT, "TI MathPrint", "TI", EpsVariant::None, EpsDisplayKind::None,
 			EpsPowerKeyBehavior::None, 20, 25, 0},
 		{HW_SOLARII, "SolarII", "SolarII", EpsVariant::None, EpsDisplayKind::None,
 			EpsPowerKeyBehavior::None, 20, 25, 0},

@@ -148,7 +148,7 @@ namespace casioemu {
 
 		if (!IsEpsFamily(emulator.hardware_id)) {
 			cpu.SetMemoryModel(emulator.hardware_id == HW_SOLARII ? CPU::MM_SMALL : CPU::MM_LARGE);
-			cpu.SetCPUModel(emulator.hardware_id == HW_CLASSWIZ || emulator.hardware_id == HW_CLASSWIZ_II || emulator.hardware_id == HW_TI ? CPU::CM_NX_U16 : CPU::CM_NX_U8);
+			cpu.SetCPUModel(emulator.hardware_id == HW_CLASSWIZ || emulator.hardware_id == HW_CLASSWIZ_II || emulator.hardware_id == HW_TI_MATH_PRINT ? CPU::CM_NX_U16 : CPU::CM_NX_U8);
 
             std::initializer_list<int> segments_solar{0}, segments_es_plus{0, 1, 2, 8}, segments_fx_5800p{
                 0, 1, 4, 8, 9, 10, 11, 12, 13, 14, 15
@@ -237,7 +237,7 @@ namespace casioemu {
 	}
 
 	void Chipset::ConstructInterruptSFR() {
-		if (emulator.hardware_id == HW_TI) {
+		if (emulator.hardware_id == HW_TI_MATH_PRINT) {
 			WDT_enabled = true;
 			EffectiveMICount = 59;
 			MaskableInterrupts = new InterruptSource[59];
@@ -393,7 +393,7 @@ namespace casioemu {
 		LSCLKFreq = 16384;
 
 		ResetClockGenerator();
-		if (emulator.hardware_id == HW_TI) {
+		if (emulator.hardware_id == HW_TI_MATH_PRINT) {
 			region_FCON.Setup(
 				0xF002, 1, "ClockGenerator/FCON0", this,
 				[](MMURegion* region, size_t) {
@@ -595,7 +595,7 @@ namespace casioemu {
 			return;
 		}
 		// Only tested on fx-991cnx
-		if (emulator.hardware_id != HW_TI) {
+		if (emulator.hardware_id != HW_TI_MATH_PRINT) {
 			BLKCON_mask = emulator.hardware_id == HW_CLASSWIZ ? 0x1F : 0xFF;
 			region_BLKCON.Setup(
 				0xF028, 1, "Chipset/BLKCON0", this, [](MMURegion* region, size_t) {
@@ -619,7 +619,7 @@ namespace casioemu {
 
 		ioport = new IOPorts(emulator);
 		EXIhandle = new ExternalInterrupts(emulator);
-		if (emulator.hardware_id != HW_TI) {
+		if (emulator.hardware_id != HW_TI_MATH_PRINT) {
 			peripherals.push_front(ioport);
 			peripherals.push_front(EXIhandle);
 		}
@@ -629,7 +629,7 @@ namespace casioemu {
 		peripherals.push_front(CreateKeyboard(emulator));
 		peripherals.push_front(CreateStbCtrl(emulator));
 		peripherals.push_front(CreateMiscellaneous(emulator));
-		if (emulator.hardware_id == HW_TI) {
+		if (emulator.hardware_id == HW_TI_MATH_PRINT) {
 			peripherals.push_front(CreateTimer(emulator));
 			peripherals.push_front(CreateWatchdog(emulator));
 			peripherals.push_front(CreateTimerBaseCounter(emulator));
@@ -910,7 +910,7 @@ namespace casioemu {
 	}
 
 	void Chipset::RaiseSoftware(size_t index) {
-		if (emulator.ModelDefinition.hardware_id == HW_TI) {
+		if (emulator.ModelDefinition.hardware_id == HW_TI_MATH_PRINT) {
 			// ER0, not a firmware-specific RAM address, identifies the SWI
 			// display payload. Leave real hardware exception handling intact.
 			if (index == 4 || (index == 1 && !emulator.ModelDefinition.real_hardware)) {

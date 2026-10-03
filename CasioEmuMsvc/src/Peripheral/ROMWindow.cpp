@@ -68,7 +68,7 @@ namespace casioemu {
 			SetupROMRegion(regions[4], 0x50000, 0x10000, 0x00000, strict_memory, emulator);
 			break;
 
-		case HW_TI:
+		case HW_TI_MATH_PRINT:
 		case HW_CLASSWIZ_II:
 			regions.reset(new MMURegion[16]);
 			emulator.chipset.rom_data.resize(0x60000, 0);

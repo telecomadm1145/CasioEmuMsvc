@@ -310,7 +310,7 @@ namespace {
 		}
 		model.is_sample_rom = is_sample_rom;
 		model.legacy_ko = legacy_ko;
-		model.u16_mode = hardware_id == casioemu::HW_CLASSWIZ || hardware_id == casioemu::HW_CLASSWIZ_II || hardware_id == casioemu::HW_TI;
+		model.u16_mode = hardware_id == casioemu::HW_CLASSWIZ || hardware_id == casioemu::HW_CLASSWIZ_II || hardware_id == casioemu::HW_TI_MATH_PRINT;
 		model.LARGE_model = hardware_id != casioemu::HW_SOLARII && !casioemu::IsEpsFamily(hardware_id);
 		model.ml620_mirroring = hardware_id != casioemu::HW_CLASSWIZ && !casioemu::IsEpsFamily(hardware_id);
 		model.ink_color = {0, 0, 0};

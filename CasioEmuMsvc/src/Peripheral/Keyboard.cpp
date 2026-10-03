@@ -65,7 +65,7 @@ namespace casioemu {
 				return EPS_MATRIX_SLOT_COUNT;
 			if (code == BUTTON_KIKO_RESET)
 				return EPS_MATRIX_SLOT_COUNT + 1;
-			if (hardware_id == HW_TI)
+			if (hardware_id == HW_TI_MATH_PRINT)
 				return code;
 			if (IsEpsFamily(hardware_id))
 				return EpsMatrixIndexForButtonCode(code);
@@ -322,7 +322,7 @@ namespace casioemu {
 		real_hardware = emulator.ModelDefinition.real_hardware;
 
 		clock_type = CLOCK_UNDEFINED;
-		if (emulator.hardware_id == HW_TI) {
+		if (emulator.hardware_id == HW_TI_MATH_PRINT) {
 			auto pp = emulator.chipset.QueryInterface<IPortProvider>();
 			if (!pp)
 				return;
@@ -543,7 +543,7 @@ namespace casioemu {
 				button.type = Button::BT_BUTTON;
 			button.rect = btn.rect;
 			button.code = code;
-			if (emulator.hardware_id == HW_TI) {
+			if (emulator.hardware_id == HW_TI_MATH_PRINT) {
 				int kimap[] = {7, 0, 1, 2, 3, 4, 5, 6};
 				auto ki = kimap[btn.kiko & 7];
 				auto ko = (btn.kiko >> 3);
@@ -594,7 +594,7 @@ namespace casioemu {
 	}
 
 	void Keyboard::Tick() {
-		if (emulator.ModelDefinition.hardware_id == HW_TI ||
+		if (emulator.ModelDefinition.hardware_id == HW_TI_MATH_PRINT ||
 			IsEpsFamily(emulator.ModelDefinition.hardware_id)) {
 			return;
 		}
@@ -1025,7 +1025,7 @@ namespace casioemu {
 			}
 		}
 		if (button.type == Button::BT_BUTTON) {
-			if (emulator.hardware_id == HW_TI) {
+			if (emulator.hardware_id == HW_TI_MATH_PRINT) {
 				emulator.chipset.tiKey = button.code;
 			}
 			// printf("[Keyboard][Info] KI: %d, KO: %d for button %02X\n", (int)(log(button.ki_bit) / log(2)), (int)(log(button.ko_bit) / log(2)), button.code);
@@ -1220,7 +1220,7 @@ namespace casioemu {
 	}
 
 	void Keyboard::RecalculateKI() { // This is for real_hardware=true path
-		if (emulator.hardware_id == HW_TI) {
+		if (emulator.hardware_id == HW_TI_MATH_PRINT) {
 			auto pp = emulator.chipset.QueryInterface<IPortProvider>();
 			if (!pp)
 				return;
@@ -1270,7 +1270,7 @@ namespace casioemu {
 			if (button.type == Button::BT_BUTTON && button.pressed && button.ki_bit & input_mode & ki_pulled_up)
 				keyboard_in |= button.ki_bit;
 		}
-		if (emulator.hardware_id != HW_TI) {
+		if (emulator.hardware_id != HW_TI_MATH_PRINT) {
 			if (keyboard_out & ~keyboard_out_mask & (1 << 7) && p0)
 				keyboard_in &= 0x7F;
 			if (keyboard_out & ~keyboard_out_mask & (1 << 8) && p1)

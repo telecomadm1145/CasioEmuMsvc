@@ -156,7 +156,7 @@ namespace casioemu {
 		}
 	};
 	Peripheral* CreateTimerBaseCounter(Emulator& emu) {
-		if (emu.hardware_id == HW_TI) {
+		if (emu.hardware_id == HW_TI_MATH_PRINT) {
 			return new TBC2(emu);
 		}
 		return new TimerBaseCounter(emu);
