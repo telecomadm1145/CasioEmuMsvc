@@ -14,6 +14,7 @@ namespace casioemu {
 	public:
 		static constexpr unsigned Width = 96, Height = 31, BodyBytes = 372, LcdBytes = 384;
 		static constexpr unsigned LcdControlRegister = 22, LcdContrastRegister = 37;
+		explicit T4xCore(unsigned dram_banks = 8);
 		struct DisplayState {
 			std::array<uint8_t, LcdBytes> lcd;
 			uint8_t control, contrast;
@@ -60,6 +61,7 @@ namespace casioemu {
 
 	private:
 		mutable std::mutex mutex;
+		const unsigned dram_banks;
 		std::array<uint16_t, 65536> rom{};
 		State state{};
 		std::deque<uint8_t> keys;
@@ -78,6 +80,7 @@ namespace casioemu {
 		bool ReadPair(unsigned index, uint8_t& value);
 		void DataNext();
 		void Dma();
+		bool IsDataBankMapped(unsigned bank) const;
 		void ReadKey(unsigned index);
 		bool KeyInterrupt(uint8_t code) const;
 		void ServiceKey();

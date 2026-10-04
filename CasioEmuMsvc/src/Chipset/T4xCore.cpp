@@ -6,6 +6,13 @@
 #include <stdexcept>
 
 namespace casioemu {
+	T4xCore::T4xCore(unsigned dram_banks) : dram_banks(dram_banks) {
+		if (dram_banks == 0 || dram_banks > 14)
+			throw std::invalid_argument("T4x DRAM must contain 1..14 banks");
+	}
+	bool T4xCore::IsDataBankMapped(unsigned bank) const {
+		return bank < dram_banks || bank >= 14; // Banks 14/15 contain LCD RAM.
+	}
 	bool T4xCore::LoadRom(const std::vector<uint8_t>& bytes) {
 		const std::lock_guard lock(mutex);
 		if (bytes.empty() || bytes.size() > rom.size() * 2 || bytes.size() % 2)
@@ -146,7 +153,7 @@ namespace casioemu {
 			return true;
 		}
 		unsigned bank = r[27];
-		if (bank >= 8 && bank < 14)
+		if (!IsDataBankMapped(bank))
 			return false;
 		bool enabled = bank < 14 ? (r[24] & 1) : (r[24] & 2);
 		if (enabled) {
@@ -168,7 +175,7 @@ namespace casioemu {
 			return;
 		}
 		unsigned bank = r[27];
-		if (bank >= 8 && bank < 14)
+		if (!IsDataBankMapped(bank))
 			return;
 		if (bank < 14 ? (r[24] & 1) : (r[24] & 2)) {
 			r[30] = value & 15;
@@ -237,7 +244,7 @@ namespace casioemu {
 		unsigned shift = r[56] & 7, carry = 0;
 		for (unsigned i = 0; i < count; ++i, ++src, ++dst) {
 			unsigned bank = src >> 8;
-			if ((bank >= 8 && bank < 14) || src >= 4096 || dst >= 4096)
+			if (!IsDataBankMapped(bank) || src >= 4096 || dst >= 4096)
 				break;
 			unsigned byte = state.data[src], previous = carry;
 			carry = 0;

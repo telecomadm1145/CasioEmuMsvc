@@ -168,7 +168,8 @@ namespace casioemu {
 				mmu.GenerateSegmentDispatch(segment_index);
 		}
 		else if (emulator.hardware_id == HW_TI_MULTI_VIEW) {
-			t4x = new T4xCore;
+			const auto banks = emulator.ModelDefinition.extra.find("ti_dram_banks");
+			t4x = new T4xCore(banks == emulator.ModelDefinition.extra.end() ? 8 : std::stoul(banks->second));
 		}
 		else {
 			SetupEpsCpu();
