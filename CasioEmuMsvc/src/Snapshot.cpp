@@ -268,13 +268,8 @@ void SnapshotManager::LoadSnapshot(casioemu::Emulator& emu, uint32_t id) {
     // Deserialize
     std::istringstream is(std::string(reinterpret_cast<const char*>(raw.data()), raw.size()),
                           std::ios::binary);
-    try {
-        emu.chipset.LoadStateAll(is);
-    }
-    catch (...) {
-        emu.SetPaused(wasPaused);
-        throw;
-    }
+    // A failed restore remains paused so the error can be inspected safely.
+    emu.chipset.LoadStateAll(is);
     emu.SetPaused(wasPaused);
 }
 

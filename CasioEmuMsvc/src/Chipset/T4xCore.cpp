@@ -223,8 +223,6 @@ namespace casioemu {
 			r[31] = value >> 4;
 			data_memory[(bank << 8) | (r[29] << 4) | r[28]] = value;
 		}
-		else
-			state.blocked_write = true;
 		DataNext();
 	}
 	void T4xCore::RegisterEffects(unsigned index, bool pair, bool pop, bool immediate) {
@@ -268,8 +266,6 @@ namespace casioemu {
 				if (immediate)
 					r[47] &= 14;
 			}
-			if (immediate)
-				state.ready = true;
 			break;
 		case 58:
 			if (r[58] & 1)
@@ -322,6 +318,7 @@ namespace casioemu {
 		try { cost = StepInstruction(); }
 		catch (...) { tracking_memory = false; throw; }
 		AfterInstruction();
+		AdvanceInstructionTime(1);
 		return cost;
 	}
 	unsigned T4xCore::StepInstruction() {
@@ -701,7 +698,8 @@ namespace casioemu {
 		if (state.timers)
 			for (unsigned i = 0; i < 2; ++i) {
 				if (elapsed_us >= state.timer_remaining[i]) {
-					state.timer_remaining[i] = i ? 6000 : 350000;
+					const uint32_t period = i ? 6000 : 350000;
+					state.timer_remaining[i] = period - (elapsed_us - state.timer_remaining[i]) % period;
 					if (state.reg[42 + i] & 4) {
 						state.pending |= 2 << i;
 						state.reg[40] |= 2 << i;
@@ -711,7 +709,7 @@ namespace casioemu {
 					state.timer_remaining[i] -= elapsed_us;
 			}
 		if (elapsed_us >= state.input_remaining) {
-			state.input_remaining = 100000;
+			state.input_remaining = 100000 - (elapsed_us - state.input_remaining) % 100000;
 			ServiceKey();
 		}
 		else
@@ -719,8 +717,21 @@ namespace casioemu {
 		PublishLcd();
 		CaptureDisplay();
 	}
+	void T4xCore::AdvanceInstructionTime(unsigned instructions) {
+		const uint64_t numerator = state.instruction_time_remainder + uint64_t(instructions) * 1000;
+		state.instruction_time_remainder = numerator % InstructionsPerMillisecond;
+		AdvanceTimeLocked(static_cast<uint32_t>(numerator / InstructionsPerMillisecond));
+	}
+	void T4xCore::RunBatch(unsigned count) {
+		const std::lock_guard lock(mutex);
+		AdvanceInstructionTime(RunInstructionsLocked(count));
+	}
 	void T4xCore::RunBatch(unsigned count, uint32_t elapsed_us) {
 		const std::lock_guard lock(mutex);
+		const unsigned executed = RunInstructionsLocked(count);
+		AdvanceTimeLocked(count ? uint32_t(uint64_t(elapsed_us) * executed / count) : elapsed_us);
+	}
+	unsigned T4xCore::RunInstructionsLocked(unsigned count) {
 		unsigned executed = 0;
 		while (executed < count && BeforeInstruction()) {
 			try { StepInstruction(); }
@@ -728,7 +739,7 @@ namespace casioemu {
 			++executed;
 			AfterInstruction();
 		}
-		AdvanceTimeLocked(count ? uint32_t(uint64_t(elapsed_us) * executed / count) : elapsed_us);
+		return executed;
 	}
 	uint8_t T4xCore::ReadMemory(unsigned space, unsigned address) const {
 		const std::lock_guard lock(mutex);
@@ -754,7 +765,7 @@ namespace casioemu {
 	}
 	void T4xCore::SaveState(std::ostream& out) const {
 		const std::lock_guard lock(mutex);
-		out.write("T4X2", 4);
+		out.write("T4X3", 4);
 		// Fields are written separately: no compiler padding in the snapshot format.
 		auto write = [&](const auto& v) { out.write(reinterpret_cast<const char*>(&v), sizeof(v)); };
 		write(state.reg);
@@ -768,7 +779,7 @@ namespace casioemu {
 		write(state.input_remaining);
 		write(state.key);
 		write(state.pending);
-		for (bool b : {state.page_written, state.halted, state.timers, state.lcd_dirty, state.timer_enabled[0], state.timer_enabled[1], state.ready, state.blocked_write}) {
+		for (bool b : {state.page_written, state.halted, state.timers, state.lcd_dirty, state.timer_enabled[0], state.timer_enabled[1]}) {
 			uint8_t v = b;
 			write(v);
 		}
@@ -777,6 +788,7 @@ namespace casioemu {
 		for (auto code : keys)
 			write(code);
 		write(state.elapsed_us);
+		write(state.instruction_time_remainder);
 		uint8_t depth = static_cast<uint8_t>(stack.size());
 		write(depth);
 		for (const auto& f : stack) {
@@ -789,7 +801,7 @@ namespace casioemu {
 		State next;
 		char magic[4];
 		in.read(magic, 4);
-		if (!in || (std::string(magic, 4) != "T4X1" && std::string(magic, 4) != "T4X2"))
+		if (!in || (std::string(magic, 4) != "T4X1" && std::string(magic, 4) != "T4X2" && std::string(magic, 4) != "T4X3"))
 			throw std::runtime_error("Invalid T4x snapshot");
 		auto read = [&](auto& v) { in.read(reinterpret_cast<char*>(&v), sizeof(v)); };
 		read(next.reg);
@@ -803,11 +815,16 @@ namespace casioemu {
 		read(next.input_remaining);
 		read(next.key);
 		read(next.pending);
-		bool* fields[] = {&next.page_written, &next.halted, &next.timers, &next.lcd_dirty, &next.timer_enabled[0], &next.timer_enabled[1], &next.ready, &next.blocked_write};
+		bool* fields[] = {&next.page_written, &next.halted, &next.timers, &next.lcd_dirty, &next.timer_enabled[0], &next.timer_enabled[1]};
 		for (auto field : fields) {
 			uint8_t value = 0;
 			read(value);
+			if (value > 1) throw std::runtime_error("Invalid T4x boolean state");
 			*field = value != 0;
+		}
+		if (std::string(magic, 4) != "T4X3") {
+			// Earlier formats carried two unused flags; discard their reserved slots.
+			uint8_t reserved[2]{}; read(reserved);
 		}
 		uint8_t count = 0;
 		read(count);
@@ -820,8 +837,9 @@ namespace casioemu {
 			queued.push_back(code);
 		}
 		std::vector<StackFrame> next_stack;
-		if (std::string(magic, 4) == "T4X2") {
+		if (std::string(magic, 4) != "T4X1") {
 			read(next.elapsed_us);
+			if (std::string(magic, 4) == "T4X3") read(next.instruction_time_remainder);
 			uint8_t depth = 0; read(depth);
 			if (depth > 32) throw std::runtime_error("Invalid T4x call stack");
 			while (depth--) {
@@ -833,7 +851,8 @@ namespace casioemu {
 		}
 		if (!in || std::any_of(next.reg.begin(), next.reg.end(), [](uint8_t n) { return n > 15; }) ||
 			std::any_of(next.work.begin(), next.work.end(), [](uint8_t n) { return n > 15; }) ||
-			next.timer_remaining[0] > 350000 || next.timer_remaining[1] > 6000)
+			next.timer_remaining[0] > 350000 || next.timer_remaining[1] > 6000 ||
+			next.input_remaining > 100000 || next.instruction_time_remainder >= InstructionsPerMillisecond)
 			throw std::runtime_error("Invalid T4x machine state");
 		state = next;
 		keys = std::move(queued);

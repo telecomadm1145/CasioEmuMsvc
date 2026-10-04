@@ -36,9 +36,12 @@ namespace casioemu {
 			if (emulator.hardware_id != HW_TI_MATH_PRINT) return;
 			Binary::Read(is, data_WDTCON);
 			Binary::Read(is, data_WDTMOD);
-			Binary::Read(is, data_WDP);
+			uint8_t wdp = 0, overflow = 0;
+			Binary::Read(is, wdp);
 			Binary::Read(is, WDT_counter);
-			Binary::Read(is, overflow_count);
+			Binary::Read(is, overflow);
+			if (!is || wdp > 1 || overflow > 1) throw std::runtime_error("Invalid TI watchdog state");
+			data_WDP = wdp != 0; overflow_count = overflow != 0;
 		}
 	};
 	void WatchdogTimer::Initialise() {

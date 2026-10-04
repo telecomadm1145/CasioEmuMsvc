@@ -655,6 +655,7 @@ namespace casioemu {
 			const auto total = frame_cycle_remainder.load() + elapsed;
 			frame_cycle_remainder.store(total % 1000);
 			for (Uint64 i = 0; i < total / 1000 && !Paused; ++i) chipset.RunTiMultiViewFrame();
+			if (Paused) frame_cycle_remainder.store(0);
 			return;
 		}
 		// std::lock_guard<decltype(access_mx)> access_lock(access_mx);

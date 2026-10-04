@@ -136,7 +136,7 @@ namespace casioemu {
 		void PressButtonByCode(uint8_t code);
 		bool TryReleaseButton(Button& button);
 		void ExecuteDelayedRelease(size_t button_index);
-		void SetEpsButtonState(Button& button, bool pressed);
+		void SetCoreButtonState(Button& button, bool pressed);
 		void BuildButtonShape(Button& button, const ButtonInfo& info);
 		void DestroyButtonShapes();
 		bool ButtonContainsPoint(const Button& button, int x, int y) const;
@@ -250,7 +250,7 @@ namespace casioemu {
 		if (button.pressed && !button.stuck) {
 			button.pressed = false;
 			button.pressingFingerId = -1;
-			SetEpsButtonState(button, false);
+			SetCoreButtonState(button, false);
 			if (real_hardware) {
 				RecalculateGhost();
 			}
@@ -280,11 +280,16 @@ namespace casioemu {
 		// Immediately release
 		button.pressed = false;
 		button.pressingFingerId = -1;
-		SetEpsButtonState(button, false);
+		SetCoreButtonState(button, false);
 		return true; // Indicates it was immediately released
 	}
 
-	void Keyboard::SetEpsButtonState(Button& button, bool pressed) {
+	void Keyboard::SetCoreButtonState(Button& button, bool pressed) {
+		if (auto* core = emulator.chipset.t4x) {
+			if (button.type == Button::BT_BUTTON)
+				core->Key(button.code == 45 ? 0 : button.code, pressed);
+			return;
+		}
 		if (!IsEpsFamily(emulator.hardware_id) || !emulator.chipset.epscpu)
 			return;
 		if (button.type == Button::BT_POWER) {
@@ -1035,8 +1040,7 @@ namespace casioemu {
 
 		bool state_effectively_changed = (old_pressed_state != button.pressed) || (button.pressed && old_finger_id != button.pressingFingerId);
 		if (old_pressed_state != button.pressed) {
-			if (emulator.chipset.t4x) emulator.chipset.t4x->Key(button.code == 45 ? 0 : button.code, button.pressed);
-			else SetEpsButtonState(button, button.pressed);
+			SetCoreButtonState(button, button.pressed);
 		}
 
 		if (button.type == Button::BT_BUTTON && state_effectively_changed) {

@@ -198,9 +198,7 @@ std::vector<UIWindow*> GetEditors() {
 				if (space != 3)
 					core->WriteMemory(space, static_cast<unsigned>(off), value);
 				else {
-					core->WriteCodeByte(static_cast<unsigned>(off), value);
-					m_emu->chipset.rom_data[off] = value;
-					code_viewer->PrepareDisasm();
+					m_emu->chipset.WriteTiCode(off, {&value, 1});
 				}
 			};
 			windows.push_back(editor);

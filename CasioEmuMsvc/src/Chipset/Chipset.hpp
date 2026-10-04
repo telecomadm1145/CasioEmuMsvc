@@ -9,8 +9,10 @@
 #include <SDL.h>
 #include <condition_variable>
 #include <forward_list>
+#include <functional>
 #include <iosfwd>
 #include <mutex>
+#include <span>
 #include <string>
 #include <thread>
 #include <vector>
@@ -53,7 +55,8 @@ namespace casioemu {
 		bool interrupts_active[INT_COUNT];
 		void AcceptInterrupt();
 		void EnterStandby(RunMode mode);
-		bool HasWakeRequest() const;
+		bool HasWakeRequest(RunMode mode) const;
+		void LoadStateUnchecked(std::istream& is);
 		bool AdvanceStandbyWake();
 		uint64_t standby_wake_ticks = 0;
 		template<typename Transfer>
@@ -113,7 +116,7 @@ namespace casioemu {
 		class ePSCPU* epscpu = 0;
 		class T4xCore* t4x = nullptr;
 		void RunTiMultiViewFrame();
-		bool StepTiMultiView(unsigned instructions = 1, uint32_t elapsed_us = 0);
+		bool StepTiMultiView(unsigned instructions = 1);
 
 		std::vector<unsigned char> rom_data;
 		std::vector<unsigned char> flash_data;
@@ -206,6 +209,8 @@ namespace casioemu {
 		void LoadStateAll(std::istream& is);
 		void PersistEpsRam();
 		bool ReloadRom(std::string& error);
+		bool WriteTiCode(size_t address, std::span<const uint8_t> bytes);
+		std::function<void()> on_rom_changed;
 
 		template <typename T>
 		T* QueryInterface() {

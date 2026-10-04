@@ -325,6 +325,7 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 	windows.push_back(watch_window);
 	windows.push_back(CreateCallAnalysisWindow());
 	windows.push_back(code_viewer = new CodeViewer());
+	m_emu->chipset.on_rom_changed = [] { if (code_viewer) code_viewer->PrepareDisasm(); };
 	if (nx_tools)
 		windows.push_back(injector = new Injector());
 	membp = new Breakpoints();

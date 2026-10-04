@@ -31,17 +31,20 @@ namespace casioemu {
 			uint16_t pc = 0;
 			uint64_t cycles = 0, instructions = 0;
 			uint64_t elapsed_us = 0;
+			uint32_t instruction_time_remainder = 0;
 			uint32_t timer_remaining[2]{350000, 6000};
 			uint32_t input_remaining = 0;
 			uint8_t key = 255;
 			uint8_t pending = 0;
 			bool page_written = false, halted = false, timers = false, lcd_dirty = false;
 			bool timer_enabled[2]{};
-			bool ready = false, blocked_write = false;
 		};
 		bool LoadRom(const std::vector<uint8_t>& bytes);
 		void Reset();
 		unsigned Step(); // One instruction, PC and code addresses are WORD addresses.
+		static constexpr unsigned InstructionsPerMillisecond = 3001;
+		// Normal execution and debugger ticks share the reference instruction rate.
+		void RunBatch(unsigned instructions);
 		void RunBatch(unsigned instructions, uint32_t elapsed_us);
 		void AdvanceTime(uint32_t elapsed_us);
 		void Key(uint8_t code, bool pressed);
@@ -160,6 +163,8 @@ namespace casioemu {
 		void ResetState();
 		unsigned StepInstruction();
 		void AdvanceTimeLocked(uint32_t elapsed_us);
+		void AdvanceInstructionTime(unsigned instructions);
+		unsigned RunInstructionsLocked(unsigned count);
 		Cell Work(unsigned bank, unsigned row, unsigned col);
 		unsigned StackPointer() const;
 		unsigned RawStackPointer() const { return ((state.reg[9] & 7) * 16 + (state.reg[8] & 14)) / 2; }

@@ -169,11 +169,8 @@ class PluginApi_Impl : public PluginApi {
 			return me_mmu->ReadCode(addr);
 		}
 		void WriteCode(size_t addr, uint8_t dat) override {
-			if (auto* core = m_emu->chipset.t4x) {
-				if (m_emu->GetPaused() && addr < m_emu->chipset.rom_data.size()) {
-					core->WriteCodeByte(static_cast<unsigned>(addr), dat);
-					m_emu->chipset.rom_data[addr] = dat;
-				}
+			if (m_emu->chipset.t4x) {
+				m_emu->chipset.WriteTiCode(addr, {&dat, 1});
 				return;
 			}
 			if (auto* eps = m_emu->chipset.epscpu) {
@@ -483,14 +480,8 @@ class PluginApi_Impl : public PluginApi {
 
 		void WriteCode(uint32_t address, const std::vector<uint8_t>& data) override {
 			auto lock = std::lock_guard(m_emu->access_mx);
-			if (auto* core = m_emu->chipset.t4x) {
-				if (m_emu->GetPaused()) for (size_t i = 0; i < data.size(); ++i) {
-					const uint64_t byte_address = static_cast<uint64_t>(address) + i;
-					if (byte_address >= m_emu->chipset.rom_data.size()) break;
-					core->WriteCodeByte(static_cast<unsigned>(byte_address), data[i]);
-					m_emu->chipset.rom_data[static_cast<size_t>(byte_address)] = data[i];
-				}
-				if (code_viewer) code_viewer->PrepareDisasm();
+			if (m_emu->chipset.t4x) {
+				m_emu->chipset.WriteTiCode(address, data);
 				return;
 			}
 			if (auto* eps = m_emu->chipset.epscpu) {
@@ -914,8 +905,6 @@ class PluginApi_Impl : public PluginApi {
 			m_emu->SetPaused(true);
 			auto lock = std::lock_guard(m_emu->access_mx);
 			const bool reloaded = m_emu->chipset.ReloadRom(error);
-			if (reloaded && m_emu->chipset.epscpu && code_viewer)
-				code_viewer->PrepareDisasm();
 			m_emu->SetPaused(wasPaused);
 			return reloaded;
 		}

@@ -135,12 +135,10 @@ namespace casioemu {
 		int ti_contrast{}, ti_port_status{};
 		bool ti_enabled = 0;
 		bool ti_a0 = 0;
-		bool ti_rw = 0;
 		int ti_col = 0;
 		int ti_page = 0;
 
 		int ti_port7{};
-		int ti_port5{};
 		uint32_t ti_sv_status{};
 
 		float screen_scan_alpha[64]{};
@@ -645,6 +643,8 @@ namespace casioemu {
 					emulator.ModelDefinition.screen_width,
 					emulator.ModelDefinition.screen_height).export_height;
 			}
+			if constexpr (hardware_id == HW_TI_MATH_PRINT)
+				return N_ROW + 1;
 			return hardware_id == HW_FX_5800P || hardware_id == HW_ES_PLUS ||
 				hardware_id == HW_EPS6800 ? 32 : 64;
 		}
@@ -663,9 +663,7 @@ namespace casioemu {
 			}
 			for (int y = 0; y < height; ++y) {
 				for (int x = 0; x < width; ++x) {
-					// TI exports the 64-row body separately from status alpha.
-					const int source_y = y + (hardware_id == HW_TI_MATH_PRINT ? 1 : 0);
-					const float alpha = alpha_snapshot[source_y * 192 + x];
+					const float alpha = alpha_snapshot[y * 192 + x];
 					const int idx = (y * width + x) * 4;
 					out[idx + 0] = static_cast<uint8_t>(std::clamp(r, 0, 255));
 					out[idx + 1] = static_cast<uint8_t>(std::clamp(g, 0, 255));
@@ -691,25 +689,27 @@ namespace casioemu {
 			}
 		}
 		void SaveState(std::ostream& os) override {
-			std::unique_lock<std::mutex> state_lock;
-			if constexpr (hardware_id == HW_TI_MATH_PRINT) state_lock = LockScreenState();
-			size_t bufSize = (hardware_id == HW_TI_MATH_PRINT) ? (192 * 9) : RowBufferSize();
+			if constexpr (hardware_id == HW_TI_MATH_PRINT) {
+				auto state_lock = LockScreenState();
+				os.write("SVL2", 4);
+				os.write(reinterpret_cast<const char*>(screen_buffer), 192 * 9);
+				const std::array<uint8_t, 11> state{
+					static_cast<uint8_t>(ti_sv_status), static_cast<uint8_t>(ti_sv_status >> 8),
+					static_cast<uint8_t>(ti_sv_status >> 16), static_cast<uint8_t>(ti_sv_status >> 24),
+					static_cast<uint8_t>(ti_contrast), static_cast<uint8_t>(ti_enabled),
+					static_cast<uint8_t>(ti_col), static_cast<uint8_t>(ti_page),
+					static_cast<uint8_t>(ti_port_status), static_cast<uint8_t>(ti_a0),
+					static_cast<uint8_t>(ti_port7)};
+				os.write(reinterpret_cast<const char*>(state.data()), state.size());
+				return;
+			}
+			size_t bufSize = RowBufferSize();
 			if (screen_buffer)
 				os.write(reinterpret_cast<const char*>(screen_buffer), bufSize);
 			uint8_t hasBuf1 = (screen_buffer1 != nullptr) ? 1 : 0;
 			os.write(reinterpret_cast<const char*>(&hasBuf1), 1);
 			if (screen_buffer1)
 				os.write(reinterpret_cast<const char*>(screen_buffer1), bufSize);
-			if constexpr (hardware_id == HW_TI_MATH_PRINT) {
-				// Reuse the seven-byte LCD metadata slot (Casio registers are
-				// unused on TI), keeping the surrounding snapshot layout intact.
-				const std::array<uint8_t, 7> state{
-					static_cast<uint8_t>(ti_sv_status), static_cast<uint8_t>(ti_sv_status >> 8),
-					static_cast<uint8_t>(ti_sv_status >> 16), static_cast<uint8_t>(ti_sv_status >> 24),
-					0x54, static_cast<uint8_t>(ti_contrast), static_cast<uint8_t>(ti_enabled)};
-				os.write(reinterpret_cast<const char*>(state.data()), state.size());
-				return;
-			}
 			os.write(reinterpret_cast<const char*>(&screen_contrast), 1);
 			os.write(reinterpret_cast<const char*>(&screen_brightness), 1);
 			os.write(reinterpret_cast<const char*>(&screen_mode), 1);
@@ -726,30 +726,36 @@ namespace casioemu {
 			os.write(reinterpret_cast<const char*>(&screen_power), 1);
 		}
 		void LoadState(std::istream& is) override {
-			std::unique_lock<std::mutex> state_lock;
-			if constexpr (hardware_id == HW_TI_MATH_PRINT) state_lock = LockScreenState();
+			if constexpr (hardware_id == HW_TI_MATH_PRINT) {
+				char magic[4]{};
+				std::array<uint8_t, 192 * 9> buffer{};
+				std::array<uint8_t, 11> state{};
+				is.read(magic, sizeof(magic));
+				is.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+				is.read(reinterpret_cast<char*>(state.data()), state.size());
+				if (!is || std::string(magic, 4) != "SVL2" || state[5] > 1 ||
+					state[7] > 15 || state[8] > 1 || state[9] > 1)
+					throw std::runtime_error("Invalid SmartView LCD state");
+				auto state_lock = LockScreenState();
+				std::copy(buffer.begin(), buffer.end(), screen_buffer);
+				ti_sv_status = uint32_t(state[0]) | (uint32_t(state[1]) << 8) |
+					(uint32_t(state[2]) << 16) | (uint32_t(state[3]) << 24);
+				ti_contrast = state[4]; ti_enabled = state[5] != 0;
+				ti_col = state[6]; ti_page = state[7]; ti_port_status = state[8];
+				ti_a0 = state[9] != 0; ti_port7 = state[10];
+				lcd_response_reset_requested.store(true, std::memory_order_release);
+				return;
+			}
 			auto history_lock = LockLcdMutation();
 			if constexpr (kCaptureLcdHistory)
 				lcd_history.InvalidateEpoch();
-			size_t bufSize = (hardware_id == HW_TI_MATH_PRINT) ? (192 * 9) : RowBufferSize();
+			size_t bufSize = RowBufferSize();
 			if (screen_buffer)
 				is.read(reinterpret_cast<char*>(screen_buffer), bufSize);
 			uint8_t hasBuf1 = 0;
 			is.read(reinterpret_cast<char*>(&hasBuf1), 1);
 			if (hasBuf1 && screen_buffer1)
 				is.read(reinterpret_cast<char*>(screen_buffer1), bufSize);
-			if constexpr (hardware_id == HW_TI_MATH_PRINT) {
-				std::array<uint8_t, 7> state{};
-				is.read(reinterpret_cast<char*>(state.data()), state.size());
-				if (state[4] != 0x54)
-					throw std::runtime_error("TI SV snapshot does not contain display state.");
-				ti_sv_status = uint32_t(state[0]) | (uint32_t(state[1]) << 8) |
-					(uint32_t(state[2]) << 16) | (uint32_t(state[3]) << 24);
-				ti_contrast = state[5];
-				ti_enabled = state[6] != 0;
-				lcd_response_reset_requested.store(true, std::memory_order_release);
-				return;
-			}
 			is.read(reinterpret_cast<char*>(&screen_contrast), 1);
 			is.read(reinterpret_cast<char*>(&screen_brightness), 1);
 			is.read(reinterpret_cast<char*>(&screen_mode), 1);
@@ -1358,12 +1364,11 @@ namespace casioemu {
 				});
 			pp->SetPortOutputCallback(5, [&](uint8_t data) {
 				auto state_lock = LockScreenState();
-				// ti_port5 = data;
 				if (ti_a0 && !(data & 0x40)) {
 					if ((data & 0x10)) {
 						auto bit_off = ti_col;
 						auto off = bit_off + ti_page * 192;
-						if (ti_col >= 192 || ti_page >= 9 || off >= 192 * 9) {
+						if (ti_col >= 192 || ti_page >= 9) {
 							ti_a0 = false;
 							return;
 						}

@@ -5,7 +5,6 @@
 namespace casioemu {
 
 void T4xCore::MemoryAccess(uint32_t address, uint8_t value, bool write) {
-	if (!tracking_memory) return;
 	for (auto& bp : memory_breakpoints) {
 		if (!bp.enabled || bp.address != address || bp.write != write ||
 			(bp.compare_data && (value & bp.mask) != (bp.data & bp.mask))) continue;

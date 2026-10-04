@@ -4,6 +4,7 @@
 #include "Emulator.hpp"
 #include "Logger.hpp"
 #include "Binary.h"
+#include <stdexcept>
 
 namespace casioemu {
 	class TimerBaseCounter : public Peripheral {
@@ -171,10 +172,14 @@ namespace casioemu {
 		void LoadState(std::istream& is) override {
 			Binary::Read(is, LTBRCounter);
 			Binary::Read(is, current_output);
-			Binary::Read(is, LTBR_reset_tick);
+			uint8_t reset_tick = 0;
+			Binary::Read(is, reset_tick);
 			Binary::Read(is, LTB0S);
 			Binary::Read(is, LTB1S);
 			Binary::Read(is, LTB2S);
+			if (!is || reset_tick > 1 || LTB0S < 0 || LTB0S > 7 || LTB1S < 0 || LTB1S > 7 || LTB2S < 0 || LTB2S > 7)
+				throw std::runtime_error("Invalid TI timer base selector");
+			LTBR_reset_tick = reset_tick != 0;
 		}
 	};
 	Peripheral* CreateTimerBaseCounter(Emulator& emu) {

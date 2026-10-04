@@ -34,11 +34,14 @@
 #include <Spi.h>
 #include <algorithm>
 #include <chrono>
+#include <charconv>
 #include <cmath>
 #include <cstring>
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <sstream>
+#include <type_traits>
 
 namespace casioemu {
 	constexpr uint32_t EPS_RAM_SAVE_INTERVAL_MS = 10 * 1000;
@@ -169,7 +172,14 @@ namespace casioemu {
 		}
 		else if (emulator.hardware_id == HW_TI_MULTI_VIEW) {
 			const auto banks = emulator.ModelDefinition.extra.find("ti_dram_banks");
-			t4x = new T4xCore(banks == emulator.ModelDefinition.extra.end() ? 8 : std::stoul(banks->second));
+			unsigned dram_banks = 8;
+			if (banks != emulator.ModelDefinition.extra.end()) {
+				const auto& value = banks->second;
+				const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), dram_banks);
+				if (error != std::errc{} || end != value.data() + value.size() || dram_banks < 1 || dram_banks > 14)
+					PANIC("Invalid ti_dram_banks '%s': expected an integer from 1 to 14\n", value.c_str());
+			}
+			t4x = new T4xCore(dram_banks);
 		}
 		else {
 			SetupEpsCpu();
@@ -242,7 +252,20 @@ namespace casioemu {
 		}
 
 		Reset();
+		if (on_rom_changed) on_rom_changed();
 		error.clear();
+		return true;
+	}
+
+	bool Chipset::WriteTiCode(size_t address, std::span<const uint8_t> bytes) {
+		if (!t4x || !emulator.GetPaused() || address >= rom_data.size()) return false;
+		const size_t count = std::min(bytes.size(), rom_data.size() - address);
+		if (!count) return false;
+		for (size_t i = 0; i < count; ++i) {
+			t4x->WriteCodeByte(static_cast<unsigned>(address + i), bytes[i]);
+			rom_data[address + i] = bytes[i];
+		}
+		if (on_rom_changed) on_rom_changed();
 		return true;
 	}
 
@@ -598,8 +621,11 @@ namespace casioemu {
 	void Chipset::DestructClockGenerator() {
 		region_FCON.Kill();
 		region_LTBR.Kill();
-		region_HTBR.Kill();
 		region_LTBADJ.Kill();
+		if (emulator.hardware_id == HW_TI_MATH_PRINT)
+			region_FCON1.Kill();
+		else
+			region_HTBR.Kill();
 	}
 
 	void Chipset::ConstructPeripherals() {
@@ -675,7 +701,9 @@ namespace casioemu {
 	}
 
 	void Chipset::DestructPeripherals() {
-		region_BLKCON.Kill();
+		if (!IsEpsFamily(emulator.hardware_id) && emulator.hardware_id != HW_TI_MULTI_VIEW &&
+			emulator.hardware_id != HW_TI_MATH_PRINT)
+			region_BLKCON.Kill();
 
 		for (auto& peripheral : peripherals) {
 			peripheral->Uninitialise();
@@ -877,15 +905,15 @@ namespace casioemu {
 		if (!LSCLKMode) EnterStandby(RM_HALT_H);
 	}
 
-	bool Chipset::HasWakeRequest() const {
-		const uint64_t wake_mask = run_mode == RM_STOP ? (data_int_mask & 0xFF00) : (data_int_mask | uint64_t{1});
+	bool Chipset::HasWakeRequest(RunMode mode) const {
+		const uint64_t wake_mask = mode == RM_STOP ? (data_int_mask & 0xFF00) : (data_int_mask | uint64_t{1});
 		return (data_int_pending & wake_mask) != 0 ||
 			interrupts_active[INT_RESET] || interrupts_active[INT_BREAK] || interrupts_active[INT_EMULATOR];
 	}
 
 	void Chipset::EnterStandby(RunMode mode) {
 		// An already enabled request inhibits standby, independently of MIE.
-		if (emulator.hardware_id == HW_TI_MATH_PRINT && HasWakeRequest()) return;
+		if (emulator.hardware_id == HW_TI_MATH_PRINT && HasWakeRequest(mode)) return;
 		standby_wake_ticks = 0;
 		run_mode = mode;
 	}
@@ -893,7 +921,7 @@ namespace casioemu {
 	bool Chipset::AdvanceStandbyWake() {
 		if (run_mode == RM_RUN) return true;
 		if (!standby_wake_ticks) {
-			if (!HasWakeRequest()) return false;
+			if (!HasWakeRequest(run_mode)) return false;
 			// Q416A/Q418A RC reference: DEEP-HALT waits 23 LSCLK
 			// cycles + 256 OSCLK + 2 OSCLK; HALT-H takes ~70 us.
 			// TI silicon and PLL/crystal restart timing are not confirmed.
@@ -1247,12 +1275,12 @@ namespace casioemu {
 
 	void Chipset::RunTiMultiViewFrame() {
 		if (run_mode == RM_RUN)
-			StepTiMultiView(3001, 1000);
+			StepTiMultiView(T4xCore::InstructionsPerMillisecond);
 	}
-	bool Chipset::StepTiMultiView(unsigned instructions, uint32_t elapsed_us) {
+	bool Chipset::StepTiMultiView(unsigned instructions) {
 		try {
 			t4x->EnableFunctionEvents(bool(on_t4x_call_function) || bool(on_t4x_function_return));
-			t4x->RunBatch(instructions, elapsed_us);
+			t4x->RunBatch(instructions);
 			for (const auto& event : t4x->TakeFunctionEvents()) {
 				StandaloneFunctionEventArgs args{{event.frame.pc, event.frame.lr}, event.registers, event.backtrace};
 				if (event.call) { RaiseEvent(on_t4x_call_function, args); }
@@ -1295,7 +1323,7 @@ namespace casioemu {
 
 	void Chipset::SaveStateAll(std::ostream& os) {
 		if (emulator.hardware_id == HW_TI_MATH_PRINT) {
-			Binary::Write(os, uint32_t{0x53560001});
+			Binary::Write(os, uint32_t{0x53560002});
 			TransferTiState([&](auto&... fields) { (Binary::Write(os, fields), ...); });
 		}
 		if (t4x) {
@@ -1324,11 +1352,48 @@ namespace casioemu {
 	}
 
 	void Chipset::LoadStateAll(std::istream& is) {
+		// TI peripherals restore independently. Keep a complete rollback image so
+		// a later validation failure cannot leave the CPU and LCD at different times.
+		if (emulator.hardware_id != HW_TI_MATH_PRINT && !t4x) {
+			LoadStateUnchecked(is);
+			return;
+		}
+		std::ostringstream backup(std::ios::binary);
+		SaveStateAll(backup);
+		try {
+			LoadStateUnchecked(is);
+			if (!is) throw std::runtime_error("Truncated TI snapshot");
+		}
+		catch (...) {
+			std::istringstream restore(backup.str(), std::ios::binary);
+			LoadStateUnchecked(restore);
+			throw;
+		}
+	}
+
+	void Chipset::LoadStateUnchecked(std::istream& is) {
 		if (emulator.hardware_id == HW_TI_MATH_PRINT) {
 			uint32_t version = 0;
 			Binary::Read(is, version);
-			if (version != 0x53560001) throw std::runtime_error("Unsupported SmartView snapshot version");
-			TransferTiState([&](auto&... fields) { (Binary::Read(is, fields), ...); });
+			if (!is || version != 0x53560002) throw std::runtime_error("Unsupported SmartView snapshot version");
+			const auto read_bool = [&](bool& value) {
+				uint8_t byte = 0;
+				Binary::Read(is, byte);
+				if (!is || byte > 1) throw std::runtime_error("Invalid SmartView boolean state");
+				value = byte != 0;
+			};
+			const auto read_field = [&](auto& field) {
+				using T = std::remove_reference_t<decltype(field)>;
+				if constexpr (std::is_same_v<T, bool>) read_bool(field);
+				else if constexpr (std::is_array_v<T> && std::is_same_v<std::remove_extent_t<T>, bool>)
+					for (auto& value : field) read_bool(value);
+				else Binary::Read(is, field);
+			};
+			TransferTiState([&](auto&... fields) { (read_field(fields), ...); });
+			if (!is || run_mode < RM_STOP || run_mode > RM_HALT_H ||
+				pending_interrupt_count != std::count(std::begin(interrupts_active), std::end(interrupts_active), true) ||
+				ClockDiv < 1 || ClockDiv > 32 || (ClockDiv & (ClockDiv - 1)))
+				throw std::runtime_error("Invalid SmartView chipset state");
 			// Loading state must not raise new requests through SetEnabled().
 			for (size_t i = 0; i < EffectiveMICount; ++i)
 				MaskableInterrupts[i].enabled = data_int_mask & (uint64_t{1} << (i + 1));
