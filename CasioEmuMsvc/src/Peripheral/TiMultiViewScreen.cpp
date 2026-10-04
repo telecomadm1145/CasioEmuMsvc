@@ -63,11 +63,10 @@ namespace casioemu {
 			const bool enabled = (state.control & 1) != 0;
 			// R37 (0x25) is the 4-bit contrast SFR: the ROM's 2nd +/-
 			// handler saturates it at 0..15. Zero is its startup setting.
-			// Align that setting with MathPrint's default visual level (112),
-			// then use the same alpha curve and residual settings.
+			// Use MultiView's full sixteen-level curve and shared residual settings.
 			auto settings_lock = ordinary_lcd_history::UntrackedChange::LockSettings();
-			const auto levels = enabled ? ti_lcd::CalculateTargetLevels(
-											  112 + state.contrast, screen_residual_enabled, screen_residual_alpha_scale)
+			const auto levels = enabled ? ti_lcd::CalculateMultiViewTargetLevels(
+												  state.contrast, screen_residual_enabled, screen_residual_alpha_scale)
 										: ti_lcd::TargetLevels{0.0f, 0.0f};
 			for (unsigned y = 0; y < Height; ++y)
 				for (unsigned x = 0; x < Width; ++x)
