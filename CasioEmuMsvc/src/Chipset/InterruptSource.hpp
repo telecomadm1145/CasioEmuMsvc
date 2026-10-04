@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Config.hpp"
 
 namespace casioemu
@@ -7,6 +7,7 @@ namespace casioemu
 
 	class InterruptSource
 	{
+		friend class Chipset;
 		Emulator *emulator;
 		bool enabled, setup_done;
 		size_t interrupt_index;

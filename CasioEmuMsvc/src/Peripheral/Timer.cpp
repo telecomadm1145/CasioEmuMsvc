@@ -6,6 +6,8 @@
 #include "Logger.hpp"
 
 #include <cmath>
+#include <algorithm>
+#include "Binary.h"
 #include <iostream>
 
 namespace casioemu {
@@ -164,74 +166,94 @@ namespace casioemu {
 		region_F024.Kill();
 		region_control.Kill();
 	}
-	template <typename ReadFunc, typename WriteFunc>
-		requires requires(ReadFunc read, WriteFunc write, MMURegion* reg, size_t off, uint8_t dat) {
-			{ read(reg, off) } -> std::same_as<uint8_t>;
-			{ write(reg, off, dat) } -> std::same_as<void>;
-		}
-	inline void SetupCpp(MMURegion& reg, size_t _base, size_t _size, std::string _description, ReadFunc _read, WriteFunc _write, Emulator& _emulator) {
-
-		struct Bind {
-			WriteFunc on_write;
-			ReadFunc on_read;
-		};
-
-		reg.Setup(
-			_base, _size, _description, new Bind{_write, _read}, [](MMURegion* reg, size_t off) -> uint8_t { return ((Bind*)reg->userdata)->on_read(reg, off); }, [](MMURegion* reg, size_t off, uint8_t dat) { ((Bind*)reg->userdata)->on_write(reg, off, dat); }, _emulator);
-	}
-
-	// ML62Q1000
+	// ML620 timers: eight 8-bit channels, joined in pairs for 16-bit mode.
 	class Timer16Bit : public Peripheral {
-	public:
-		class TimerUnit {
-		public:
-			TimerUnit(int i) : i(i) {}
-			int i;
-			MMURegion tm_data{}, tm_counter{}, tm_mode{}, tm_int_stat{}, tm_int_clr{};
-			uint16_t tm_data_d{}, tm_counter_d{}, tm_mode_d{}, tm_int_stat_d{}, tm_int_clr_d{};
-			
-			int tm_cnt = 0;
+		MMURegion data_region, counter_region, control_region, start_region, stop_region, status_region;
+		uint8_t data[8]{}, counter[8]{}, control[8]{}, status = 0;
+		uint16_t prescaler[8]{};
 
-			bool started = false;
-			const int int_map[8] = {27,28,35,36,43,44,51,52};
-			void Initialise(Emulator& emulator) {
-				tm_data.Setup(0xF300 + i * 2, 2, "16BitTimer/Data", &tm_data_d, MMURegion::DefaultRead<uint16_t>, MMURegion::DefaultWrite<uint16_t>, emulator);
-				tm_counter.Setup(0xF310 + i * 2, 2, "16BitTimer/Counter", &tm_counter_d, MMURegion::DefaultRead<uint16_t>, MMURegion::DefaultWrite<uint16_t>, emulator);
-				tm_mode.Setup(0xF320 + i * 2, 2, "16BitTimer/Mode", &tm_mode_d, MMURegion::DefaultRead<uint16_t>, MMURegion::DefaultWrite<uint16_t>, emulator);
-				tm_int_stat.Setup(0xF330 + i * 2, 2, "16BitTimer/InterruptStatus", &tm_int_stat_d, MMURegion::DefaultRead<uint16_t>, MMURegion::IgnoreWrite, emulator);
-				tm_int_clr.Setup(0xF340 + i * 2, 2, "16BitTimer/InterruptClear", &tm_int_clr_d, MMURegion::DefaultRead<uint16_t>, MMURegion::IgnoreWrite, emulator);
+		bool Paired(unsigned i) const { return control[i & ~1u] & 0x40; }
+		void SetRunning(uint8_t bits, bool running) {
+			for (unsigned i = 0; i < 8; ++i) {
+				if (!(bits & (1 << i)) || ((i & 1) && Paired(i))) continue;
+				if (running) status |= 1 << i;
+				else status &= ~(1 << i);
 			}
-			void Tick(Emulator& emulator) {
-				if (!started)
-					return;
-				auto divider = (tm_mode_d >> 3) & 0b111;
-				if (++tm_cnt > (1 << divider)) {
-					tm_cnt = 0;
-					tm_counter_d++;
-					// Triggered!
-					emulator.chipset.RaiseMaskable(int_map[i]);
-				}
-			}
-		};
-		TimerUnit Units[8]{0,1,2,3,4,5,6,7};
-		MMURegion TMStart{};
-		uint16_t a{};
+		}
+	public:
 		using Peripheral::Peripheral;
 		void Initialise() override {
-			for (auto& unit : Units)
-				unit.Initialise(emulator);
-			TMStart.Setup(0xF350, 2, "Timer/StartReg",&a, MMURegion::DefaultRead<uint16_t>,MMURegion::DefaultWrite<uint16_t>,emulator);
+			// Each channel selects its own LSCLK or undivided OSCLK.
+			clock_type = CLOCK_UNDEFINED;
+			auto read_byte = [](MMURegion* r, size_t offset) { return static_cast<uint8_t*>(r->userdata)[offset - r->base]; };
+			auto write_byte = [](MMURegion* r, size_t offset, uint8_t value) { static_cast<uint8_t*>(r->userdata)[offset - r->base] = value; };
+			data_region.Setup(0xF300, 8, "Timer/Data", data, read_byte, write_byte, emulator);
+			counter_region.Setup(0xF310, 8, "Timer/Counter", this,
+				[](MMURegion* r, size_t offset) { return static_cast<Timer16Bit*>(r->userdata)->counter[offset - r->base]; },
+				[](MMURegion* r, size_t offset, uint8_t) {
+					auto* self = static_cast<Timer16Bit*>(r->userdata);
+					unsigned i = static_cast<unsigned>(offset - r->base);
+					if (self->Paired(i)) {
+						i &= ~1u;
+						self->counter[i + 1] = 0;
+					}
+					self->counter[i] = 0;
+					self->prescaler[i] = 0;
+				}, emulator);
+			control_region.Setup(0xF320, 8, "Timer/Control", control, read_byte, write_byte, emulator);
+			start_region.Setup(0xF330, 1, "Timer/Start", this, MMURegion::IgnoreRead<0>,
+				[](MMURegion* r, size_t, uint8_t bits) { static_cast<Timer16Bit*>(r->userdata)->SetRunning(bits, true); }, emulator);
+			stop_region.Setup(0xF332, 1, "Timer/Stop", this, MMURegion::IgnoreRead<0>,
+				[](MMURegion* r, size_t, uint8_t bits) { static_cast<Timer16Bit*>(r->userdata)->SetRunning(bits, false); }, emulator);
+			status_region.Setup(0xF334, 1, "Timer/Status", &status, MMURegion::DefaultRead<uint8_t>, MMURegion::IgnoreWrite, emulator);
+			Reset();
 		}
-		int bug{};
+		void Reset() override {
+			std::fill_n(data, 8, 0xFF);
+			std::fill_n(counter, 8, 0);
+			std::fill_n(control, 8, 0);
+			std::fill_n(prescaler, 8, 0);
+			status = 0;
+		}
 		void Tick() override {
-			for (auto& unit : Units)
-				unit.Tick(emulator);
-			
-			//if (bug++ > 0x8000)
-			//{
-			//	bug = 0;
-			//	emulator.chipset.data_LTBR++;
-			//}
+			for (unsigned i = 0; i < 8; ++i) {
+				if (!(status & (1 << i)) || ((i & 1) && Paired(i))) continue;
+				const unsigned source = control[i] & 3;
+				const bool low_speed = source == 0 || (source == 2 && i >= 2 && i <= 5) || (source == 3 && i >= 6);
+				const bool tick = low_speed ? emulator.chipset.LSCLKTick :
+					source == 1 ? emulator.chipset.OSCLKTick : false;
+				// External timer input clocks are not modeled.
+				if (!tick) continue;
+				const unsigned div = (control[i] >> 3) & 7;
+				if (++prescaler[i] < (1u << (div == 7 ? 0 : div))) continue;
+				prescaler[i] = 0;
+				const bool paired = Paired(i);
+				const uint16_t count = counter[i] | (paired ? uint16_t(counter[i + 1]) << 8 : 0);
+				uint16_t limit = data[i] | (paired ? uint16_t(data[i + 1]) << 8 : 0);
+				if (!limit) limit = paired ? 0xFFFF : 0xFF;
+				const uint16_t next = count == limit ? 0 : count + 1;
+				counter[i] = static_cast<uint8_t>(next);
+				if (paired) counter[i + 1] = static_cast<uint8_t>(next >> 8);
+				if (count == limit) {
+					// IE/IRQ5 bits 0..7; paired mode interrupts on the odd channel.
+					emulator.chipset.MaskableInterrupts[39 + i + (paired ? 1 : 0)].TryRaise();
+					if (control[i] & 0x80) status &= ~(1 << i);
+				}
+			}
+		}
+		void SaveState(std::ostream& os) override {
+			Binary::Write(os, data);
+			Binary::Write(os, counter);
+			Binary::Write(os, control);
+			Binary::Write(os, status);
+			Binary::Write(os, prescaler);
+		}
+		void LoadState(std::istream& is) override {
+			Binary::Read(is, data);
+			Binary::Read(is, counter);
+			Binary::Read(is, control);
+			Binary::Read(is, status);
+			Binary::Read(is, prescaler);
 		}
 	};
 	Peripheral* CreateTimer(Emulator& emu) {

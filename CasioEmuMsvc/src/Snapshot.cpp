@@ -268,8 +268,13 @@ void SnapshotManager::LoadSnapshot(casioemu::Emulator& emu, uint32_t id) {
     // Deserialize
     std::istringstream is(std::string(reinterpret_cast<const char*>(raw.data()), raw.size()),
                           std::ios::binary);
-    emu.chipset.LoadStateAll(is);
-
+    try {
+        emu.chipset.LoadStateAll(is);
+    }
+    catch (...) {
+        emu.SetPaused(wasPaused);
+        throw;
+    }
     emu.SetPaused(wasPaused);
 }
 

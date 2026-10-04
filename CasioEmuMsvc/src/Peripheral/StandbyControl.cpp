@@ -1,10 +1,11 @@
-﻿#include "StandbyControl.hpp"
+#include "StandbyControl.hpp"
 
 #include "Chipset/CPU.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Chipset/MMU.hpp"
 #include "Emulator.hpp"
 #include "Logger.hpp"
+#include "Binary.h"
 
 namespace casioemu {
 	class StandbyControl : public Peripheral {
@@ -17,6 +18,16 @@ namespace casioemu {
 
 		void Initialise();
 		void Reset();
+		void SaveState(std::ostream& os) override {
+			if (emulator.hardware_id != HW_TI_MATH_PRINT) return;
+			Binary::Write(os, stpacp_last);
+			Binary::Write(os, stop_acceptor_enabled);
+		}
+		void LoadState(std::istream& is) override {
+			if (emulator.hardware_id != HW_TI_MATH_PRINT) return;
+			Binary::Read(is, stpacp_last);
+			Binary::Read(is, stop_acceptor_enabled);
+		}
 	};
 	void StandbyControl::Initialise() {
 		region_stpacp.Setup(
@@ -42,13 +53,13 @@ namespace casioemu {
 					self->emulator.chipset.Stop();
 					return;
 				}
-				if (self->emulator.hardware_id == HW_TI_MATH_PRINT) { // TODO: DEEP_HALT
+				if (self->emulator.hardware_id == HW_TI_MATH_PRINT) {
 					if (data & 0x04) {
-						self->emulator.chipset.Halt();
+						self->emulator.chipset.DeepHalt();
 						return;
 					}
 					if (data & 0x08) {
-						self->emulator.chipset.Halt();
+						self->emulator.chipset.HaltH();
 						return;
 					}
 				}

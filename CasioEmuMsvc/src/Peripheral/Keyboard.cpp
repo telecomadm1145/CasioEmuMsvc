@@ -1232,9 +1232,10 @@ namespace casioemu {
 			keyboard_in = 0;
 			for (const auto& button : buttons) { // Iterate const
 				if (button.code == 0x29) {
+					// The ROM tests KO0 (P3.0) in EXI0: while scanning,
+					// ON is a matrix key; with KO0 low it uses the wake input.
 					if (button.pressed)
-						is_on_pressed = true;
-					continue;
+						is_on_pressed = !(keyboard_out & 1);
 				}
 				if (button.type == Button::BT_BUTTON && button.pressed && button.ko_bit & keyboard_out)
 					keyboard_in |= button.ki_bit;

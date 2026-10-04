@@ -1,9 +1,11 @@
-﻿#include "ML620Ports.h"
+#include "ML620Ports.h"
 #include "Chipset.hpp"
 #include "Config.hpp"
 #include "Emulator.hpp"
 #include "MMURegion.hpp"
 #include "Peripheral.hpp"
+#include "Binary.h"
+#include <algorithm>
 #define DefSfr(x)        \
 	MMURegion reg_##x{}; \
 	uint8_t dat_##x{};
@@ -196,6 +198,15 @@ namespace casioemu {
 			output_callback = callback;
 		}
 		void UpdateInterrupt(int pi_tmp);
+		template<typename Transfer>
+		void TransferState(Transfer transfer) {
+			transfer(dat_data, dat_dir, dat_mode0, dat_mode1, dat_con,
+				dat_exicon, dat_ie, dat_is, PortLevel, PortInput, PortInputExists,
+				PortInputOld, TriggerWhenRise, TriggerWhenFall, SamplingMode);
+		}
+		void Reset() {
+			TransferState([](auto&... fields) { ((fields = 0), ...); });
+		}
 	};
 	class Ports : public Peripheral, IPortProvider {
 	public:
@@ -285,6 +296,23 @@ namespace casioemu {
 				ports[port]->PortInputExists = input_mask;
 				ports[port]->UpdateStatus();
 			}
+		}
+		void Reset() override {
+			for (auto* port : ports) if (port) port->Reset();
+			std::fill_n(ExiSelect_d, 8, 0);
+			std::fill_n(ExiCon_d, 4, 0);
+		}
+		void SaveState(std::ostream& os) override {
+			Binary::Write(os, ExiSelect_d);
+			Binary::Write(os, ExiCon_d);
+			for (auto* port : ports) if (port)
+				port->TransferState([&](auto&... fields) { (Binary::Write(os, fields), ...); });
+		}
+		void LoadState(std::istream& is) override {
+			Binary::Read(is, ExiSelect_d);
+			Binary::Read(is, ExiCon_d);
+			for (auto* port : ports) if (port)
+				port->TransferState([&](auto&... fields) { (Binary::Read(is, fields), ...); });
 		}
 	};
 	void ML620Port::UpdateInterrupt(int pi_tmp) {
