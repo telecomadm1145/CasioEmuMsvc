@@ -35,6 +35,9 @@ struct CallAnalysis : public UIWindow {
 		SetupHook(on_eps_call_function, [this](const EpsFunctionEventArgs& ea) {
 			OnCallFunction(ea.function.pc, ea.function.lr, ea.accumulator, ea.backtrace);
 		});
+		SetupHook(on_t4x_call_function, [this](const StandaloneFunctionEventArgs& ea) {
+			OnCallFunction(ea.function.pc, ea.function.lr, ea.accumulator, ea.backtrace);
+		});
 	}
 
 	void OnCallFunction(uint32_t pc, uint32_t lr, uint32_t xr0, const std::string& backtrace) {
@@ -151,8 +154,8 @@ struct CallAnalysis : public UIWindow {
 					ImGui::TableSetupColumn("R1", ImGuiTableColumnFlags_WidthFixed, 20);
 					ImGui::TableSetupColumn("R2", ImGuiTableColumnFlags_WidthFixed, 20);
 					ImGui::TableSetupColumn("R3", ImGuiTableColumnFlags_WidthFixed, 20);
-					ImGui::TableSetupColumn("ER0", ImGuiTableColumnFlags_WidthFixed, 40);
-					ImGui::TableSetupColumn("ER2", ImGuiTableColumnFlags_WidthFixed, 40);
+					ImGui::TableSetupColumn(m_emu->chipset.t4x ? "P0" : "ER0", ImGuiTableColumnFlags_WidthFixed, 40);
+					ImGui::TableSetupColumn(m_emu->chipset.t4x ? "P2" : "ER2", ImGuiTableColumnFlags_WidthFixed, 40);
 					ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch, 1);
 					ImGui::TableHeadersRow();
 					int i = 0;
@@ -173,9 +176,9 @@ struct CallAnalysis : public UIWindow {
 						ImGui::TableNextColumn();
 						ImGui::Text("%02x", (func.xr0 >> 24) & 0xff);
 						ImGui::TableNextColumn();
-						ImGui::Text("%04x", func.xr0 & 0xffff);
+						ImGui::Text("%04x", m_emu->chipset.t4x ? (func.xr0 & 15) | ((func.xr0 >> 8) & 15) << 4 : func.xr0 & 0xffff);
 						ImGui::TableNextColumn();
-						ImGui::Text("%04x", (func.xr0 >> 16) & 0xffff);
+						ImGui::Text("%04x", m_emu->chipset.t4x ? ((func.xr0 >> 16) & 15) | ((func.xr0 >> 24) & 15) << 4 : (func.xr0 >> 16) & 0xffff);
 						ImGui::TableNextColumn();
 						ImGui::PushID(i++);
 						if (ImGui::Button("CallAnalysis.Stacktrace"_lc)) {

@@ -22,6 +22,7 @@ inline constexpr Config kClassWiz{50.0, 50.0};
 inline constexpr Config kClassWizII{50.0, 50.0};
 inline constexpr Config kEpsDotMatrix{50.0, 50.0};
 inline constexpr Config kEpsSegment{50.0, 50.0};
+inline constexpr Config kTiMultiView{50.0, 50.0};
 
 inline double GainForElapsed(double elapsed_ms, double half_life_ms) {
 	// A zero half-life means an immediate transition to the target.
@@ -55,6 +56,8 @@ static_assert(IsValidHalfLife(kEpsDotMatrix.rise_half_life_ms));
 static_assert(IsValidHalfLife(kEpsDotMatrix.fall_half_life_ms));
 static_assert(IsValidHalfLife(kEpsSegment.rise_half_life_ms));
 static_assert(IsValidHalfLife(kEpsSegment.fall_half_life_ms));
+static_assert(IsValidHalfLife(kTiMultiView.rise_half_life_ms));
+static_assert(IsValidHalfLife(kTiMultiView.fall_half_life_ms));
 
 constexpr Config ForHardware(HardwareId hardware_id) {
 	switch (hardware_id) {
@@ -71,6 +74,8 @@ constexpr Config ForHardware(HardwareId hardware_id) {
 		return kEpsDotMatrix;
 	case HW_EPS6009:
 		return kEpsSegment;
+	case HW_TI_MULTI_VIEW:
+		return kTiMultiView;
 	default:
 		return {0.0, 0.0};
 	}

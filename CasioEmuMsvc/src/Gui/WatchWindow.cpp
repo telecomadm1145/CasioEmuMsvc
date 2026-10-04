@@ -221,15 +221,16 @@ void WatchWindow::UpdateRX() {
 void WatchWindow::RenderCore() {
 	if (auto* core = m_emu->chipset.t4x) {
 		const auto state = core->Snapshot();
-		ImGui::Text("T4x PC (word): %04X  SP: %02X", state.pc, state.reg[8] | (state.reg[9] << 4));
+		ImGui::Text("T4x PC (word): %04X  SP: %02X", state.pc, ((state.reg[9] & 7) * 16 + (state.reg[8] & 14)) / 2);
 		ImGui::Text("Instructions: %llu  Cycles: %llu", static_cast<unsigned long long>(state.instructions), static_cast<unsigned long long>(state.cycles));
 		ImGui::Text("%s  Pending: %02X", state.halted ? "HALT" : "RUN", state.pending);
-		if (ImGui::Button(m_emu->GetPaused() ? "Continue" : "Pause"))
+		if (ImGui::Button(m_emu->GetPaused() ? "Continue" : "Pause")) {
+			if (m_emu->GetPaused()) core->RequestContinue(); else core->CancelDebugRun();
 			m_emu->SetPaused(!m_emu->GetPaused());
+		}
 		ImGui::SameLine();
 		ImGui::BeginDisabled(!m_emu->GetPaused());
-		if (ImGui::Button("Step"))
-			m_emu->chipset.StepTiMultiView();
+		if (ImGui::Button("Step")) { core->RequestStepInto(); m_emu->chipset.StepTiMultiView(); }
 		ImGui::EndDisabled();
 		if (ImGui::BeginTable("T4xRegisters", 8, ImGuiTableFlags_Borders)) {
 			for (unsigned i = 0; i < 64; ++i) {
@@ -237,6 +238,15 @@ void WatchWindow::RenderCore() {
 				ImGui::Text("R%02u: %X", i, state.reg[i]);
 			}
 			ImGui::EndTable();
+		}
+		const auto stop = core->LastDebugStop();
+		if (stop.stopped()) ImGui::Text("Debug stop: %u at %04X", unsigned(stop.reason), stop.program_counter);
+		if (ImGui::CollapsingHeader("Call stack", ImGuiTreeNodeFlags_DefaultOpen)) {
+			const auto frames = core->StackFrames();
+			for (auto it = frames.rbegin(); it != frames.rend(); ++it) {
+				UIHelpers::ClickableAddress(it->pc, UIHelpers::JumpTarget::Code);
+				ImGui::SameLine(); ImGui::Text("%s return %04X SP %02X", it->interrupt ? "IRQ" : "CALL", it->lr, it->sp);
+			}
 		}
 		return;
 	}

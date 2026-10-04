@@ -38,6 +38,7 @@ private:
 
 	std::atomic_bool is_loaded{false};
 	bool disasm_requested = false;
+	bool core_was_paused = false;
 	bool need_roll = false;
 	bool search_activated = false;
 	bool help_activated = true;

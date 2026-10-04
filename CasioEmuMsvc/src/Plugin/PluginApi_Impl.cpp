@@ -223,6 +223,7 @@ class PluginApi_Impl : public PluginApi {
 		void Pause() override {
 			if (auto* eps = m_emu->chipset.epscpu)
 				eps->CancelDebugRun();
+			if (auto* core = m_emu->chipset.t4x) core->CancelDebugRun();
 			m_emu->SetPaused(true);
 		}
 		void Resume() override {
@@ -532,6 +533,7 @@ class PluginApi_Impl : public PluginApi {
 			m_emu->SetPaused(true);
 		}
 		void Resume() override {
+			if (auto* core = m_emu->chipset.t4x) core->RequestContinue();
 			m_emu->SetPaused(false);
 		}
 		void Reset() override {
@@ -542,15 +544,16 @@ class PluginApi_Impl : public PluginApi {
 			m_emu->SetPaused(wasPaused);
 		}
 		bool StepInto() override {
-			if (m_emu->chipset.t4x)
-				return m_emu->GetPaused() && m_emu->chipset.StepTiMultiView();
+			if (auto* core = m_emu->chipset.t4x) {
+				if (!m_emu->GetPaused()) return false;
+				core->RequestStepInto(); return m_emu->chipset.StepTiMultiView();
+			}
 			if (!code_viewer || !m_emu->GetPaused())
 				return false;
 			code_viewer->RequestStep();
 			return true;
 		}
 		bool StepOver() override {
-			if (m_emu->chipset.t4x) return false;
 			if (!code_viewer || !m_emu->GetPaused())
 				return false;
 			code_viewer->RequestTrace();
@@ -561,12 +564,13 @@ class PluginApi_Impl : public PluginApi {
 		}
 
 		std::vector<uint32_t> GetExecutionBreakpoints() override {
+			if (auto* core = m_emu->chipset.t4x) return core->ExecutionBreakpoints();
 			if (auto* eps = m_emu->chipset.epscpu)
 				return eps->ExecutionBreakpoints();
 			return code_viewer ? code_viewer->GetBreakpoints() : std::vector<uint32_t>{};
 		}
 		bool AddExecutionBreakpoint(uint32_t address) override {
-			if (!code_viewer || (m_emu->chipset.epscpu &&
+			if (!code_viewer || (m_emu->chipset.t4x && address >= 65536) || (m_emu->chipset.epscpu &&
 					address >= m_emu->chipset.epscpu->RomWordCount()))
 				return false;
 			code_viewer->AddBreakpoint(address);
@@ -586,8 +590,9 @@ class PluginApi_Impl : public PluginApi {
 
 		std::vector<DebugMemoryBreakpointInfo> GetMemoryBreakpoints() override {
 			std::vector<DebugMemoryBreakpointInfo> result;
-			if (auto* eps = m_emu->chipset.epscpu) {
-				for (const auto& bp : eps->MemoryBreakpoints())
+			if (m_emu->chipset.epscpu || m_emu->chipset.t4x) {
+				const auto breakpoints = m_emu->chipset.t4x ? m_emu->chipset.t4x->MemoryBreakpoints() : m_emu->chipset.epscpu->MemoryBreakpoints();
+				for (const auto& bp : breakpoints)
 					result.push_back({bp.address, bp.write, bp.break_when_hit, static_cast<size_t>(bp.hit_count),
 						bp.enabled, bp.compare_data, bp.data, bp.mask, bp.skip_count});
 				return result;
@@ -600,8 +605,9 @@ class PluginApi_Impl : public PluginApi {
 		}
 		std::vector<DebugMemoryBreakpointHitInfo> GetMemoryBreakpointHits(uint32_t address, bool write) override {
 			std::vector<DebugMemoryBreakpointHitInfo> result;
-			if (auto* eps = m_emu->chipset.epscpu) {
-				for (const auto& record : eps->MemoryBreakpointHits(address, write)) {
+			if (m_emu->chipset.epscpu || m_emu->chipset.t4x) {
+				const auto hits = m_emu->chipset.t4x ? m_emu->chipset.t4x->MemoryBreakpointHits(address, write) : m_emu->chipset.epscpu->MemoryBreakpointHits(address, write);
+				for (const auto& record : hits) {
 					DebugMemoryBreakpointHitInfo hit{record.program_counter, 0, {}};
 					hit.Value = record.value;
 					result.push_back(std::move(hit));
@@ -621,6 +627,7 @@ class PluginApi_Impl : public PluginApi {
 		}
 		bool AddMemoryBreakpoint(uint32_t address, bool write, bool breakWhenHit,
 			bool enabled, bool compareData, uint8_t data, uint8_t mask, uint64_t skipCount) override {
+			if (auto* core = m_emu->chipset.t4x) return core->AddMemoryBreakpoint({address, write, enabled, breakWhenHit, compareData, data, mask, skipCount, 0});
 			if (auto* eps = m_emu->chipset.epscpu)
 				return eps->AddMemoryBreakpoint({address, write, enabled, breakWhenHit,
 					compareData, data, mask, skipCount, 0});
@@ -631,11 +638,13 @@ class PluginApi_Impl : public PluginApi {
 			return true;
 		}
 		bool RemoveMemoryBreakpoint(uint32_t address, bool write) override {
+			if (auto* core = m_emu->chipset.t4x) return core->RemoveMemoryBreakpoint(address, write);
 			if (auto* eps = m_emu->chipset.epscpu)
 				return eps->RemoveMemoryBreakpoint(address, write);
 			return membp && membp->ExternalRemoveBp(address, write);
 		}
 		void ClearMemoryBreakpoints() override {
+			if (auto* core = m_emu->chipset.t4x) { core->ClearMemoryBreakpoints(); return; }
 			if (auto* eps = m_emu->chipset.epscpu) {
 				eps->ClearMemoryBreakpoints();
 				return;
@@ -646,13 +655,18 @@ class PluginApi_Impl : public PluginApi {
 
 		std::string GetBacktrace() override {
 			auto lock = std::lock_guard(m_emu->access_mx);
-			if (m_emu->chipset.t4x) return {};
+			if (m_emu->chipset.t4x) return m_emu->chipset.t4x->GetBacktrace();
 			return m_emu->chipset.epscpu ? m_emu->chipset.epscpu->GetBacktrace() : m_emu->chipset.cpu.GetBacktrace();
 		}
 		std::vector<DebugStackFrameInfo> GetStackFrames() override {
 			auto lock = std::lock_guard(m_emu->access_mx);
 			std::vector<DebugStackFrameInfo> result;
-			if (m_emu->chipset.t4x) return result;
+			if (auto* core = m_emu->chipset.t4x) {
+				const auto frames = core->StackFrames();
+				for (auto it = frames.rbegin(); it != frames.rend(); ++it)
+					result.push_back({it->pc, it->lr, it->sp, 0, 0, true, it->interrupt, lookup_symbol(it->pc, g_labels)});
+				return result;
+			}
 			if (auto* eps = m_emu->chipset.epscpu) {
 				const auto snapshot = eps->DebugSnapshot();
 				/* Innermost frame first, matching the legacy stack walk. */
@@ -926,6 +940,7 @@ class PluginApi_Impl : public PluginApi {
 				});
 			SetupHook(on_eps_call_function,
 				[handler](const EpsFunctionEventArgs& args) { handler(args.function); });
+			SetupHook(on_t4x_call_function, [handler](const StandaloneFunctionEventArgs& args) { handler(args.function); });
 		}
 
 		// 注册函数返回 hook，传入的 handler 只需要处理 FunctionEventArgs
@@ -936,6 +951,7 @@ class PluginApi_Impl : public PluginApi {
 				});
 			SetupHook(on_eps_function_return,
 				[handler](const EpsFunctionEventArgs& args) { handler(args.function); });
+			SetupHook(on_t4x_function_return, [handler](const StandaloneFunctionEventArgs& args) { handler(args.function); });
 		}
 
 		// 注册内存读取 hook，传入的 handler 只需要处理 MemoryEventArgs

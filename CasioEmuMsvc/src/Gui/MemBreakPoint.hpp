@@ -44,15 +44,15 @@ private:
 	
 	int target_sp = 0;
 	std::atomic<uint64_t> register_breakpoint_config{0};
-	uint64_t last_eps_breakpoint_version{~0ull};
+	uint64_t last_core_breakpoint_version{~0ull};
 
 	void DrawFindContent();
 
 	void DrawContent();
 	bool RegisterBreakpointTriggered(uint32_t value) const;
 	void UpdateRegisterBreakpointConfig();
-	void RefreshEpsBreakpoints();
-	void SyncEpsBreakpoints();
+	void RefreshCoreBreakpoints();
+	void SyncCoreBreakpoints();
 
 public:
 	Breakpoints() : UIWindow("Breakpoints") {

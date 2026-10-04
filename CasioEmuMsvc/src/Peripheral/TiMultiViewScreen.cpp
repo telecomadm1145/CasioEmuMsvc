@@ -9,10 +9,21 @@
 #include "ScreenOutput.hpp"
 #include "ScreenRenderSupport.hpp"
 #include "TiLcdTarget.hpp"
+#include "LcdResponse.hpp"
+#include "LcdPlatform.hpp"
+#if !defined(CASIOEMU_CORE_WEB) && !defined(__ANDROID__)
+#include "Gui/ThemeManager.h"
+#endif
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <typeinfo>
+#include <istream>
+#include <ostream>
+#include <mutex>
+#include <stdexcept>
+
+extern bool low_perf_ext;
 
 namespace casioemu {
 	class TiMultiViewScreen final : public Peripheral, public IScreenFrameProvider {
@@ -21,6 +32,9 @@ namespace casioemu {
 		// ScreenOutput currently uses the common 192-column alpha stride and
 		// reserves row 0 for status. Only 96x31 pixels are rendered/exported.
 		std::array<float, 192 * (Height + 1)> alpha{};
+		std::array<float, 192 * (Height + 1)> target{};
+		mutable std::mutex response_mutex;
+		uint64_t last_us = 0, generation = 0;
 		std::vector<SpriteInfo> sprites{StatusCount + 1};
 		std::vector<uint8_t> present = std::vector<uint8_t>(StatusCount + 1);
 		ScreenOutput output;
@@ -32,6 +46,7 @@ namespace casioemu {
 	public:
 		explicit TiMultiViewScreen(Emulator& emulator) : Peripheral(emulator), output(emulator) { clock_type = CLOCK_STOPPED; }
 		void Initialise() override {
+			if constexpr (lcd_platform::kNativeTemporalSupport) emulator.chipset.t4x->EnableDisplayHistory();
 			sprites[0] = emulator.ModelDefinition.sprites.at("rsd_pixel");
 			present[0] = 1;
 			for (size_t i = 0; i < StatusCount; ++i) {
@@ -57,28 +72,94 @@ namespace casioemu {
 				return static_cast<IScreenFrameProvider*>(this);
 			return nullptr;
 		}
-		void UpdateFrameAlpha() override {
-			const auto state = emulator.chipset.t4x->ReadDisplay();
+	private:
+		void SetTargets(const T4xCore::DisplayState& state) {
 			const auto& frame = state.lcd;
 			const bool enabled = (state.control & 1) != 0;
 			// R37 (0x25) is the 4-bit contrast SFR: the ROM's 2nd +/-
 			// handler saturates it at 0..15. Zero is its startup setting.
 			// Use MultiView's full sixteen-level curve and shared residual settings.
-			auto settings_lock = ordinary_lcd_history::UntrackedChange::LockSettings();
 			const auto levels = enabled ? ti_lcd::CalculateMultiViewTargetLevels(
 												  state.contrast, screen_residual_enabled, screen_residual_alpha_scale)
 										: ti_lcd::TargetLevels{0.0f, 0.0f};
 			for (unsigned y = 0; y < Height; ++y)
 				for (unsigned x = 0; x < Width; ++x)
-					alpha[(y + 1) * 192 + x] = (frame[y * (Width / 8) + x / 8] & (128 >> (x % 8))) ? levels.on : levels.off;
+					target[(y + 1) * 192 + x] = (frame[y * (Width / 8) + x / 8] & (128 >> (x % 8))) ? levels.on : levels.off;
 			for (size_t i = 0; i < StatusCount; ++i) {
 				unsigned bit = TI_MV_STATUS_BITS[i];
-				alpha[i] = (frame[T4xCore::BodyBytes + bit / 8] & (128 >> (bit % 8))) ? levels.on : levels.off;
+				target[i] = (frame[T4xCore::BodyBytes + bit / 8] & (128 >> (bit % 8))) ? levels.on : levels.off;
 			}
+		}
+		void Settle(uint64_t time_us) {
+			if (time_us == last_us) return;
+			const double elapsed_ms = double(time_us - last_us) / 1000.0;
+			last_us = time_us;
+			const auto config = lcd_response::ForHardware(HW_TI_MULTI_VIEW);
+			const double rise = lcd_response::GainForElapsed(elapsed_ms, config.rise_half_life_ms);
+			const double fall = lcd_response::GainForElapsed(elapsed_ms, config.fall_half_life_ms);
+			for (size_t i = 0; i < alpha.size(); ++i)
+				alpha[i] = float(lcd_response::BlendWithGains(alpha[i], target[i], rise, fall));
+		}
+		void UpdateAlphaLocked() {
+			auto settings_lock = ordinary_lcd_history::UntrackedChange::LockSettings();
+			const auto history = emulator.chipset.t4x->ConsumeDisplayHistory();
+			if (generation != history.current.generation) {
+				alpha.fill(0); target.fill(0); last_us = 0;
+				generation = history.current.generation;
+			}
+			bool immediate = !lcd_platform::kNativeTemporalSupport;
+#if !defined(CASIOEMU_CORE_WEB) && !defined(__ANDROID__)
+			immediate = immediate || ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext;
+#endif
+			if (immediate) {
+				SetTargets(history.current); alpha = target; last_us = history.current.elapsed_us; return;
+			}
+			// Settle the old target up to each LCD update, then install the new
+			// target. Keeping the intermediate refreshes makes ghosting independent
+			// of the GUI frame rate; paused emulation advances no response time.
+			for (const auto& change : history.changes) {
+				Settle(change.elapsed_us);
+				SetTargets(change);
+			}
+			Settle(history.current.elapsed_us);
+			SetTargets(history.current); // Residual settings may change while paused.
+		}
+	public:
+		void UpdateFrameAlpha() override {
+			const std::lock_guard lock(response_mutex); UpdateAlphaLocked();
+		}
+		void Reset() override {
+			const std::lock_guard lock(response_mutex);
+			alpha.fill(0); target.fill(0); last_us = 0; generation = 0;
+		}
+		void SaveState(std::ostream& out) override {
+			const std::lock_guard lock(response_mutex); UpdateAlphaLocked();
+			out.write("MVL1", 4);
+			out.write(reinterpret_cast<const char*>(alpha.data()), sizeof(alpha));
+			out.write(reinterpret_cast<const char*>(target.data()), sizeof(target));
+			out.write(reinterpret_cast<const char*>(&last_us), sizeof(last_us));
+		}
+		void LoadState(std::istream& in) override {
+			const std::lock_guard lock(response_mutex);
+			alpha.fill(0); target.fill(0); last_us = 0;
+			generation = emulator.chipset.t4x->ReadDisplay().generation;
+			if (in.peek() == std::char_traits<char>::eof()) {
+				in.clear(); generation = 0; return; // Older machine-only snapshots.
+			}
+			char magic[4]; in.read(magic, 4);
+			if (std::string(magic, 4) != "MVL1") throw std::runtime_error("Invalid MultiView LCD snapshot");
+			in.read(reinterpret_cast<char*>(alpha.data()), sizeof(alpha));
+			in.read(reinterpret_cast<char*>(target.data()), sizeof(target));
+			in.read(reinterpret_cast<char*>(&last_us), sizeof(last_us));
+			if (!in || last_us > emulator.chipset.t4x->ReadDisplay().elapsed_us)
+				throw std::runtime_error("Invalid MultiView LCD response state");
+			// The saved target already corresponds to the restored LCD latch.
+			emulator.chipset.t4x->ConsumeDisplayHistory();
 		}
 		int GetFrameWidth() const override { return Width; }
 		int GetFrameHeight() const override { return Height; }
 		void WriteFrameRgba(uint8_t* out, int r, int g, int b) const override {
+			const std::lock_guard lock(response_mutex);
 			if (!out)
 				return;
 			for (unsigned y = 0; y < Height; ++y)
@@ -92,12 +173,14 @@ namespace casioemu {
 		}
 		int GetStatusAlphaCount() const override { return StatusCount; }
 		void WriteStatusAlpha(uint8_t* out, int count) const override {
+			const std::lock_guard lock(response_mutex);
 			if (out && count > 0)
 				for (int i = 0; i < std::min(count, GetStatusAlphaCount()); ++i)
 					out[i] = static_cast<uint8_t>(std::clamp(static_cast<int>(alpha[i]), 0, 255));
 		}
 		void Frame() override {
-			UpdateFrameAlpha();
+			const std::lock_guard lock(response_mutex);
+			UpdateAlphaLocked();
 			ScreenOutputFrame frame{};
 			frame.renderer = emulator.GetRenderer();
 			frame.interface_texture = emulator.GetInterfaceTexture();

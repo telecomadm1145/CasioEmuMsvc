@@ -1197,7 +1197,14 @@ namespace casioemu {
 	}
 	bool Chipset::StepTiMultiView(unsigned instructions, uint32_t elapsed_us) {
 		try {
+			t4x->EnableFunctionEvents(bool(on_t4x_call_function) || bool(on_t4x_function_return));
 			t4x->RunBatch(instructions, elapsed_us);
+			for (const auto& event : t4x->TakeFunctionEvents()) {
+				StandaloneFunctionEventArgs args{{event.frame.pc, event.frame.lr}, event.registers, event.backtrace};
+				if (event.call) { RaiseEvent(on_t4x_call_function, args); }
+				else { RaiseEvent(on_t4x_function_return, args); }
+			}
+			if (t4x->LastDebugStop().stopped()) emulator.SetPaused(true);
 			return true;
 		}
 		catch (const std::exception& error) {
@@ -1232,7 +1239,12 @@ namespace casioemu {
 	}
 
 	void Chipset::SaveStateAll(std::ostream& os) {
-		if (t4x) { t4x->SaveState(os); return; }
+		if (t4x) {
+			t4x->SaveState(os);
+			for (auto* peripheral : peripherals)
+				if (peripheral->QueryInterface(typeid(IScreenFrameProvider).name())) peripheral->SaveState(os);
+			return;
+		}
 		if (IsEpsFamily(emulator.hardware_id)) {
 			epscpu->SaveState(os);
 			return;
@@ -1253,7 +1265,12 @@ namespace casioemu {
 	}
 
 	void Chipset::LoadStateAll(std::istream& is) {
-		if (t4x) { t4x->LoadState(is); return; }
+		if (t4x) {
+			t4x->LoadState(is);
+			for (auto* peripheral : peripherals)
+				if (peripheral->QueryInterface(typeid(IScreenFrameProvider).name())) peripheral->LoadState(is);
+			return;
+		}
 		if (IsEpsFamily(emulator.hardware_id)) {
 			epscpu->LoadState(is);
 			return;

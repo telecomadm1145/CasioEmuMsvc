@@ -320,20 +320,16 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 	}
 
 	windows.push_back(new HwController());
-	if (!multiview)
-		windows.push_back(new LabelViewer());
+	if (!multiview) windows.push_back(new LabelViewer());
 	auto* watch_window = new WatchWindow();
 	windows.push_back(watch_window);
-	if (!multiview)
-		windows.push_back(CreateCallAnalysisWindow());
+	windows.push_back(CreateCallAnalysisWindow());
 	windows.push_back(code_viewer = new CodeViewer());
 	if (nx_tools)
 		windows.push_back(injector = new Injector());
-	if (!multiview) {
-		membp = new Breakpoints();
-		windows.push_back(membp);
-		windows.push_back(CreateAddressWindow());
-	}
+	membp = new Breakpoints();
+	windows.push_back(membp);
+	if (!multiview) windows.push_back(CreateAddressWindow());
 	if (nx_tools) {
 #if !defined(TEST_BUILD)
 		windows.push_back(CreateRopCompilerWindow());
@@ -475,6 +471,15 @@ void CleanupWebDebuggerGuiWindows() {
 namespace UIHelpers {
 
 	void JumpToMemory(uint32_t addr) {
+		if (m_emu->chipset.t4x) {
+			const char* name = addr < 64 ? "T4x Registers (nibbles)" :
+				addr >= 0x100 && addr < 0x500 ? "T4x WRAM (nibbles)" :
+				addr >= 0x1000 && addr < 0x2000 ? "T4x DRAM (bytes)" : nullptr;
+			if (name) for (auto* win : windows) if (strcmp(win->name, name) == 0) {
+				win->GotoMemoryAddress(addr); return;
+			}
+			return;
+		}
 		// Prefer the "Ram" window; fall back to any window that overrides GotoMemoryAddress.
 		UIWindow* fallback = nullptr;
 		for (auto* win : windows) {

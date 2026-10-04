@@ -50,6 +50,7 @@ struct HexEditor : public UIWindow, public MemoryEditor {
 		}
 	}
 	void GotoMemoryAddress(uint32_t addr) override {
+		if (m_emu->chipset.t4x) addr -= static_cast<uint32_t>(display_base);
 		BringToFront();
 		GotoAddrAndHighlight(addr, addr + 1);
 	}
@@ -178,9 +179,10 @@ std::vector<UIWindow*> GetEditors() {
 	if (m_emu->chipset.t4x) {
 		const char* names[] = {"T4x Registers (nibbles)", "T4x WRAM (nibbles)", "T4x DRAM (bytes)", "T4x ROM (bytes)"};
 		const size_t sizes[] = {64, 1024, 4096, m_emu->chipset.rom_data.size()};
+		const size_t bases[] = {0, 0x100, 0x1000, 0};
 		for (unsigned space = 0; space < 4; ++space) {
-			auto* editor = new HexEditor(names[space], reinterpret_cast<void*>(static_cast<uintptr_t>(space)), sizes[space], 0);
-			editor->ContextMenuFn = nullptr; // nX/U8 memory hooks do not observe T4x memory.
+			auto* editor = new HexEditor(names[space], reinterpret_cast<void*>(static_cast<uintptr_t>(space)), sizes[space], bases[space]);
+			if (space == 3) editor->ContextMenuFn = nullptr; // ROM has execution breakpoints in CodeViewer.
 			editor->ReadFn = [](const ImU8* data, size_t off) -> ImU8 {
 				auto* core = m_emu->chipset.t4x;
 				unsigned space = static_cast<unsigned>(reinterpret_cast<uintptr_t>(data));

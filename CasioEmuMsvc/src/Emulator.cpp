@@ -1,4 +1,5 @@
 #include "Emulator.hpp"
+#include "Chipset/T4xCore.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Logger.hpp"
 #include "ModelConfig.h"
@@ -841,6 +842,8 @@ namespace casioemu {
 	}
 
 	void Emulator::SetPaused(bool _paused) {
+		if (!_paused && chipset.t4x && chipset.t4x->LastDebugStop().stopped())
+			chipset.t4x->RequestContinue();
 		Paused.store(_paused, std::memory_order_relaxed);
 	}
 

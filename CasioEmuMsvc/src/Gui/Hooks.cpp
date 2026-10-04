@@ -19,3 +19,6 @@ std::function<void(const EpsFunctionEventArgs&)> on_eps_function_return;
 std::function<void(MemoryEventArgs&)> on_eps_memory_read;
 std::function<void(MemoryEventArgs&)> on_eps_memory_write;
 std::function<void(casioemu::Chipset&, InterruptEventArgs&)> on_eps_interrupt;
+
+std::function<void(const StandaloneFunctionEventArgs&)> on_t4x_call_function;
+std::function<void(const StandaloneFunctionEventArgs&)> on_t4x_function_return;
