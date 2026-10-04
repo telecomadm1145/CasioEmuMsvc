@@ -8,6 +8,7 @@
 #include <CallAnalysis.h>
 #include <CPU.hpp>
 #include <Chipset.hpp>
+#include "Chipset/T4xCore.hpp"
 #include <CodeViewer.hpp>
 #include <CwiiHelp.h>
 #include <Emulator.hpp>
@@ -140,11 +141,17 @@ class PluginApi_Impl : public PluginApi {
 
 	class IMMU_Impl : public IMMU {
 		uint8_t ReadData(size_t addr) override {
+			if (auto* core = m_emu->chipset.t4x)
+				return core->ReadDebugMemory(static_cast<unsigned>(addr));
 			if (auto* eps = m_emu->chipset.epscpu)
 				return eps->ReadDebugMemory(static_cast<uint32_t>(addr));
 			return me_mmu->ReadData(addr);
 		}
 		void WriteData(size_t addr, uint8_t dat) override {
+			if (auto* core = m_emu->chipset.t4x) {
+				if (m_emu->GetPaused()) core->WriteDebugMemory(static_cast<unsigned>(addr), dat);
+				return;
+			}
 			if (auto* eps = m_emu->chipset.epscpu) {
 				eps->WriteDebugMemory(static_cast<uint32_t>(addr), dat);
 				return;
@@ -152,6 +159,8 @@ class PluginApi_Impl : public PluginApi {
 			me_mmu->WriteData(addr, dat);
 		}
 		uint16_t ReadCode(size_t addr) override {
+			if (auto* core = m_emu->chipset.t4x)
+				return addr < 0x20000 ? core->CodeWord(static_cast<uint16_t>(addr >> 1)) : 0;
 			if (auto* eps = m_emu->chipset.epscpu) {
 				/* IMMU addresses are bytes on the legacy path; the EPS core is
 				 * word-addressed. */
@@ -160,6 +169,13 @@ class PluginApi_Impl : public PluginApi {
 			return me_mmu->ReadCode(addr);
 		}
 		void WriteCode(size_t addr, uint8_t dat) override {
+			if (auto* core = m_emu->chipset.t4x) {
+				if (m_emu->GetPaused() && addr < m_emu->chipset.rom_data.size()) {
+					core->WriteCodeByte(static_cast<unsigned>(addr), dat);
+					m_emu->chipset.rom_data[addr] = dat;
+				}
+				return;
+			}
 			if (auto* eps = m_emu->chipset.epscpu) {
 				const uint32_t word_address = static_cast<uint32_t>(addr >> 1);
 				uint16_t word = eps->ReadCodeWord(word_address);
@@ -243,6 +259,7 @@ class PluginApi_Impl : public PluginApi {
 	class IChipset_Impl : public IChipset {
 		// 通过 IChipset 继承
 		void RaiseInterrupt(int index) override {
+			if (m_emu->chipset.t4x) return;
 			m_emu->chipset.RaiseMaskable(index);
 		}
 		void Tick() override {
@@ -289,6 +306,7 @@ class PluginApi_Impl : public PluginApi {
 		}
 
 		static uint32_t CurrentPc() {
+			if (m_emu->chipset.t4x) return m_emu->chipset.t4x->ProgramCounter();
 			if (m_emu->chipset.epscpu)
 				return m_emu->chipset.epscpu->ProgramCounter();
 			return (uint32_t)(m_emu->chipset.cpu.reg_csr << 16) | m_emu->chipset.cpu.reg_pc;
@@ -303,6 +321,13 @@ class PluginApi_Impl : public PluginApi {
 		std::vector<DebugRegisterInfo> GetRegisters() override {
 			auto lock = std::lock_guard(m_emu->access_mx);
 			std::vector<DebugRegisterInfo> result;
+			if (auto* core = m_emu->chipset.t4x) {
+				const auto state = core->Snapshot();
+				result.push_back({"pc", state.pc, 16});
+				for (unsigned i = 0; i < state.reg.size(); ++i)
+					result.push_back({"r" + std::to_string(i), state.reg[i], 4});
+				return result;
+			}
 			if (auto* eps = m_emu->chipset.epscpu) {
 				const auto snapshot = eps->DebugSnapshot();
 				const bool eps6009 = m_emu->hardware_id == casioemu::HW_EPS6009;
@@ -357,6 +382,14 @@ class PluginApi_Impl : public PluginApi {
 		bool WriteRegister(const char* name, uint32_t value) override {
 			auto lock = std::lock_guard(m_emu->access_mx);
 			const auto normalized = NormalizeRegisterName(name);
+			if (auto* core = m_emu->chipset.t4x) {
+				if (!m_emu->GetPaused()) return false;
+				if (normalized == "pc") { core->SetPc(static_cast<uint16_t>(value)); return true; }
+				for (unsigned i = 0; i < 64; ++i) if (normalized == "r" + std::to_string(i)) {
+					core->WriteMemory(0, i, static_cast<uint8_t>(value)); return true;
+				}
+				return false;
+			}
 			if (auto* eps = m_emu->chipset.epscpu) {
 				if (normalized == "pc") {
 					eps->SetPC(value);
@@ -388,6 +421,10 @@ class PluginApi_Impl : public PluginApi {
 			auto lock = std::lock_guard(m_emu->access_mx);
 			std::vector<uint8_t> result;
 			result.reserve(size);
+			if (auto* core = m_emu->chipset.t4x) {
+				for (size_t i = 0; i < size; ++i) result.push_back(core->ReadDebugMemory(address + static_cast<unsigned>(i)));
+				return result;
+			}
 			if (auto* eps = m_emu->chipset.epscpu) {
 				for (size_t i = 0; i < size; ++i)
 					result.push_back(eps->ReadDebugMemory(address + static_cast<uint32_t>(i)));
@@ -401,6 +438,11 @@ class PluginApi_Impl : public PluginApi {
 
 		void WriteMemory(uint32_t address, const std::vector<uint8_t>& data) override {
 			auto lock = std::lock_guard(m_emu->access_mx);
+			if (auto* core = m_emu->chipset.t4x) {
+				if (m_emu->GetPaused()) for (size_t i = 0; i < data.size(); ++i)
+					core->WriteDebugMemory(address + static_cast<unsigned>(i), data[i]);
+				return;
+			}
 			if (auto* eps = m_emu->chipset.epscpu) {
 				for (size_t i = 0; i < data.size(); ++i)
 					eps->WriteDebugMemory(address + static_cast<uint32_t>(i), data[i]);
@@ -415,6 +457,13 @@ class PluginApi_Impl : public PluginApi {
 			auto lock = std::lock_guard(m_emu->access_mx);
 			std::vector<uint16_t> result;
 			result.reserve(count);
+			if (auto* core = m_emu->chipset.t4x) {
+				for (size_t i = 0; i < count; ++i) {
+					const uint64_t byte_address = static_cast<uint64_t>(address) + i * 2;
+					result.push_back(byte_address < 0x20000 ? core->CodeWord(static_cast<uint16_t>(byte_address >> 1)) : 0);
+				}
+				return result;
+			}
 			if (auto* eps = m_emu->chipset.epscpu) {
 				const uint32_t first_word_address = (address & ~1u) >> 1;
 				for (size_t i = 0; i < count; ++i) {
@@ -433,6 +482,16 @@ class PluginApi_Impl : public PluginApi {
 
 		void WriteCode(uint32_t address, const std::vector<uint8_t>& data) override {
 			auto lock = std::lock_guard(m_emu->access_mx);
+			if (auto* core = m_emu->chipset.t4x) {
+				if (m_emu->GetPaused()) for (size_t i = 0; i < data.size(); ++i) {
+					const uint64_t byte_address = static_cast<uint64_t>(address) + i;
+					if (byte_address >= m_emu->chipset.rom_data.size()) break;
+					core->WriteCodeByte(static_cast<unsigned>(byte_address), data[i]);
+					m_emu->chipset.rom_data[static_cast<size_t>(byte_address)] = data[i];
+				}
+				if (code_viewer) code_viewer->PrepareDisasm();
+				return;
+			}
 			if (auto* eps = m_emu->chipset.epscpu) {
 				for (size_t i = 0; i < data.size(); ++i) {
 					const uint64_t byte_address = static_cast<uint64_t>(address) + i;
@@ -483,12 +542,15 @@ class PluginApi_Impl : public PluginApi {
 			m_emu->SetPaused(wasPaused);
 		}
 		bool StepInto() override {
+			if (m_emu->chipset.t4x)
+				return m_emu->GetPaused() && m_emu->chipset.StepTiMultiView();
 			if (!code_viewer || !m_emu->GetPaused())
 				return false;
 			code_viewer->RequestStep();
 			return true;
 		}
 		bool StepOver() override {
+			if (m_emu->chipset.t4x) return false;
 			if (!code_viewer || !m_emu->GetPaused())
 				return false;
 			code_viewer->RequestTrace();
@@ -584,11 +646,13 @@ class PluginApi_Impl : public PluginApi {
 
 		std::string GetBacktrace() override {
 			auto lock = std::lock_guard(m_emu->access_mx);
+			if (m_emu->chipset.t4x) return {};
 			return m_emu->chipset.epscpu ? m_emu->chipset.epscpu->GetBacktrace() : m_emu->chipset.cpu.GetBacktrace();
 		}
 		std::vector<DebugStackFrameInfo> GetStackFrames() override {
 			auto lock = std::lock_guard(m_emu->access_mx);
 			std::vector<DebugStackFrameInfo> result;
+			if (m_emu->chipset.t4x) return result;
 			if (auto* eps = m_emu->chipset.epscpu) {
 				const auto snapshot = eps->DebugSnapshot();
 				/* Innermost frame first, matching the legacy stack walk. */

@@ -48,7 +48,7 @@ namespace casioemu {
             wdt->data_WDP = !wdt->data_WDP;
             wdt->data_WDTCON = data; }, emulator);
 
-		if (emulator.hardware_id == HW_CLASSWIZ_II || emulator.hardware_id == HW_TI) {
+		if (emulator.hardware_id == HW_CLASSWIZ_II || emulator.hardware_id == HW_TI_MATH_PRINT) {
 			region_WDTMOD.Setup(0xF00F, 1, "WatchdogTimer/WDTMOD", &data_WDTMOD, MMURegion::DefaultRead<uint8_t, 0x03>, MMURegion::DefaultWrite<uint8_t, 0x03>, emulator);
 		}
 	}

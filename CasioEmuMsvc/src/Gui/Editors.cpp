@@ -1,6 +1,7 @@
 #include "Editors.h"
 #include "CPU.hpp"
 #include "Chipset/Chipset.hpp"
+#include "CodeViewer.hpp"
 #include "Hooks.h"
 #include "Localization.h"
 #include "MemBreakPoint.hpp"
@@ -8,6 +9,7 @@
 #include "Ui.hpp"
 #include "hex.hpp"
 #include "ePSCpu.h"
+#include "Chipset/T4xCore.hpp"
 
 namespace {
 	constexpr uint32_t kEpsFlashBaseWord = 0x18000;
@@ -172,15 +174,45 @@ inline auto EPS_VRAM_Hex(auto he) {
 }
 
 std::vector<UIWindow*> GetEditors() {
+	std::vector<UIWindow*> windows;
+	if (m_emu->chipset.t4x) {
+		const char* names[] = {"T4x Registers (nibbles)", "T4x WRAM (nibbles)", "T4x DRAM (bytes)", "T4x ROM (bytes)"};
+		const size_t sizes[] = {64, 1024, 4096, m_emu->chipset.rom_data.size()};
+		for (unsigned space = 0; space < 4; ++space) {
+			auto* editor = new HexEditor(names[space], reinterpret_cast<void*>(static_cast<uintptr_t>(space)), sizes[space], 0);
+			editor->ContextMenuFn = nullptr; // nX/U8 memory hooks do not observe T4x memory.
+			editor->ReadFn = [](const ImU8* data, size_t off) -> ImU8 {
+				auto* core = m_emu->chipset.t4x;
+				unsigned space = static_cast<unsigned>(reinterpret_cast<uintptr_t>(data));
+				if (space != 3)
+					return core->ReadMemory(space, static_cast<unsigned>(off));
+				return core->ReadCodeByte(static_cast<unsigned>(off));
+			};
+			editor->WriteFn = [](ImU8* data, size_t off, ImU8 value) {
+				if (!m_emu->GetPaused())
+					return;
+				auto* core = m_emu->chipset.t4x;
+				unsigned space = static_cast<unsigned>(reinterpret_cast<uintptr_t>(data));
+				if (space != 3)
+					core->WriteMemory(space, static_cast<unsigned>(off), value);
+				else {
+					core->WriteCodeByte(static_cast<unsigned>(off), value);
+					m_emu->chipset.rom_data[off] = value;
+					code_viewer->PrepareDisasm();
+				}
+			};
+			windows.push_back(editor);
+		}
+		return windows;
+	}
 	SetupHook(on_memory_write, [](casioemu::MMU& mmu, MemoryEventArgs& mea) {
 		if (mea.offset < 0x80000)
 			ram_edit_ov[mea.offset] = 255;
 	});
-	std::vector<UIWindow*> windows;
 	if (casioemu::IsEpsFamily(m_emu->hardware_id)) {
 		const size_t rom_display_bytes = m_emu->chipset.epscpu->RomFormat() == casioemu::Eps6800RomFormat::UnpackedNibbles
-			? m_emu->chipset.rom_data.size() / 2
-			: m_emu->chipset.rom_data.size();
+											 ? m_emu->chipset.rom_data.size() / 2
+											 : m_emu->chipset.rom_data.size();
 		windows.push_back(EPS_ROM_Hex(new HexEditor{"Rom", nullptr, rom_display_bytes, 0}));
 		if (!m_emu->chipset.flash_data.empty())
 			windows.push_back(EPS_FLASH_Hex(new HexEditor{"Flash", nullptr, m_emu->chipset.flash_data.size(), kEpsFlashBaseByte}));

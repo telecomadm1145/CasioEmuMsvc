@@ -7,7 +7,7 @@ namespace casioemu {
 	inline constexpr size_t GetRamBaseAddr(HardwareId hid) {
 		if (IsEpsFamily(hid))
 			return 0;
-		if (hid == HW_TI)
+		if (hid == HW_TI_MATH_PRINT)
 			return 0xB000;
 		if (hid == HW_SOLARII)
 			return 0xE000;
@@ -17,7 +17,7 @@ namespace casioemu {
 	inline constexpr size_t GetRamSize(HardwareId hid) {
 		if (IsEpsFamily(hid))
 			return 64 * 128;
-		if (hid == HW_TI)
+		if (hid == HW_TI_MATH_PRINT)
 			return 0xF000 - 0xB000;
 		if (hid == HW_SOLARII)
 			return 0x1000;
@@ -545,7 +545,7 @@ namespace casioemu {
 			};
 #endif
 		}
-		case HardwareId::HW_TI: {
+		case HardwareId::HW_TI_MATH_PRINT: {
 			return {
 				{0xC33C, 300, SColor, "Input Area"},
 			};
@@ -556,7 +556,7 @@ namespace casioemu {
 #undef SColor
 	}
 	inline constexpr size_t GetInputAreaOffset(HardwareId hid) {
-		if (hid == HW_TI)
+		if (hid == HW_TI_MATH_PRINT)
 			return 0xC33C;
 		return hid == HW_ES_PLUS ? 0x8154 : hid == HW_CLASSWIZ ? 0xD180
 															   : 0x9268;
@@ -573,7 +573,7 @@ namespace casioemu {
 		return GetInputAreaOffset(hid) + GetInputAreaOffset(hid);
 	}
 	inline constexpr size_t GetModeOffset(HardwareId hid) {
-		if (hid == HW_TI)
+		if (hid == HW_TI_MATH_PRINT)
 			return 0xB000;
 		if (IsEpsFamily(hid))
 			return 0;
@@ -589,7 +589,7 @@ namespace casioemu {
 															   : 0xBA68;
 	}
 	inline constexpr size_t GetCursorOffset(HardwareId hid) {
-		if (hid == HW_TI)
+		if (hid == HW_TI_MATH_PRINT)
 			return 0xf000;
 		return hid == HW_ES_PLUS ? 0x8110 : hid == HW_CLASSWIZ ? 0xD155
 															   : 0x91E5;
@@ -623,7 +623,7 @@ namespace casioemu {
 		if (IsEpsFamily(hid)) {
 			return {};
 		}
-		if (hid == HW_TI) {
+		if (hid == HW_TI_MATH_PRINT) {
 			return 0x8;
 		}
 		if (hid == HW_ES_PLUS) {
@@ -689,7 +689,7 @@ namespace casioemu {
 				{0x96DC, "z"},
 				{0x96EA, "PreAns"}};
 		}
-		else if (hid == HW_TI) {
+		else if (hid == HW_TI_MATH_PRINT) {
 			// size_t i = 0;
 			// return {
 			//	{0xE490 + 16 * i++, "x"},

@@ -12,7 +12,7 @@ namespace casioemu
 
         emulator.chipset.data_EXICON = 0;
 
-        if (emulator.hardware_id != HW_TI) {
+        if (emulator.hardware_id != HW_TI_MATH_PRINT) {
 			region_EXICON.Setup(0xF018, 1, "ExternalInterrupts/EXICON", &emulator.chipset.data_EXICON, MMURegion::DefaultRead<uint8_t>, MMURegion::DefaultWrite<uint8_t>, emulator);
 		}
         else {

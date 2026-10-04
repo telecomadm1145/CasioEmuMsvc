@@ -1,7 +1,17 @@
 #pragma once
+#include <array>
 #include <cstdint>
 
 namespace casioemu {
+	// TI SmartView display callbacks. Physical ROMs also issue SWI 4 before
+	// writing the segmented LCD row; observing it does not consume the SWI.
+	class ITiSvDisplay {
+	public:
+		static constexpr int FrameBytes = 192 * 64 / 8;
+		virtual void SetTiSvStatus(uint32_t status) = 0;
+		virtual void SetTiSvFrame(const std::array<uint8_t, FrameBytes>& frame) = 0;
+		virtual ~ITiSvDisplay() = default;
+	};
 	class IScreenFrameProvider {
 	public:
 		virtual void UpdateFrameAlpha() = 0;

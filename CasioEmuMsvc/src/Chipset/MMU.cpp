@@ -64,7 +64,7 @@ namespace casioemu {
 				return le_read(rom[offset]);
 			else
 				return 0;
-		case HW_TI:
+		case HW_TI_MATH_PRINT:
 		case HW_CLASSWIZ:
 			if (emulator.chipset.SegmentAccess && segment_index == 5)
 				segment_index = 0;

@@ -42,7 +42,7 @@ namespace casioemu {
 					self->emulator.chipset.Stop();
 					return;
 				}
-				if (self->emulator.hardware_id == HW_TI) { // TODO: DEEP_HALT
+				if (self->emulator.hardware_id == HW_TI_MATH_PRINT) { // TODO: DEEP_HALT
 					if (data & 0x04) {
 						self->emulator.chipset.Halt();
 						return;

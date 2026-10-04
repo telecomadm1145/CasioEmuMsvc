@@ -20,9 +20,9 @@ namespace casioemu {
 		HW_CLASSWIZ = 4,
 		HW_CLASSWIZ_II = 5,
 		HW_FX_5800P = 6,
-		HW_TI = 7,
+		HW_TI_MATH_PRINT = 7,
 		// our test ends here, so we can add new models without worrying about breaking old configs
-		HW_MAX = HW_TI,
+		HW_MAX = HW_TI_MATH_PRINT,
 		HW_SOLARII = 8,
 		HW_EPS6800 = 9,
 	};

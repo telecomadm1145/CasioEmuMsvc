@@ -29,6 +29,7 @@
 #include "Uart.h"
 #include "WatchdogTimer.hpp"
 #include "ePSCpu.h"
+#include "T4xCore.hpp"
 #include <ML620Ports.h>
 #include <Spi.h>
 #include <algorithm>
@@ -146,9 +147,9 @@ namespace casioemu {
 
 		real_hardware = emulator.ModelDefinition.real_hardware;
 
-		if (!IsEpsFamily(emulator.hardware_id)) {
+		if (!IsEpsFamily(emulator.hardware_id) && emulator.hardware_id != HW_TI_MULTI_VIEW) {
 			cpu.SetMemoryModel(emulator.hardware_id == HW_SOLARII ? CPU::MM_SMALL : CPU::MM_LARGE);
-			cpu.SetCPUModel(emulator.hardware_id == HW_CLASSWIZ || emulator.hardware_id == HW_CLASSWIZ_II || emulator.hardware_id == HW_TI ? CPU::CM_NX_U16 : CPU::CM_NX_U8);
+			cpu.SetCPUModel(emulator.hardware_id == HW_CLASSWIZ || emulator.hardware_id == HW_CLASSWIZ_II || emulator.hardware_id == HW_TI_MATH_PRINT ? CPU::CM_NX_U16 : CPU::CM_NX_U8);
 
             std::initializer_list<int> segments_solar{0}, segments_es_plus{0, 1, 2, 8}, segments_fx_5800p{
                 0, 1, 4, 8, 9, 10, 11, 12, 13, 14, 15
@@ -166,6 +167,9 @@ namespace casioemu {
                                                            : segments_classwiz_ii)
 				mmu.GenerateSegmentDispatch(segment_index);
 		}
+		else if (emulator.hardware_id == HW_TI_MULTI_VIEW) {
+			t4x = new T4xCore;
+		}
 		else {
 			SetupEpsCpu();
 		}
@@ -182,11 +186,12 @@ namespace casioemu {
 			eps_ram_save_thread.join();
 		PersistEpsRam();
 		DestructPeripherals();
-		if (!IsEpsFamily(emulator.hardware_id)) {
+		if (!IsEpsFamily(emulator.hardware_id) && emulator.hardware_id != HW_TI_MULTI_VIEW) {
 			DestructClockGenerator();
 			DestructInterruptSFR();
 		}
 		const std::lock_guard lock(eps_ram_save_mutex);
+		delete t4x;
 		delete epscpu;
 		epscpu = nullptr;
 		delete& mmu;
@@ -220,7 +225,11 @@ namespace casioemu {
 			return false;
 		}
 
-		if (epscpu) {
+		if (t4x) {
+			if (!t4x->LoadRom(data)) { error = "Invalid T4x ROM image"; return false; }
+			rom_data = std::move(data);
+		}
+		else if (epscpu) {
 			if (!epscpu->LoadRom(data, epscpu->RomFormat())) {
 				error = "Invalid EPS6800 ROM image";
 				return false;
@@ -237,7 +246,7 @@ namespace casioemu {
 	}
 
 	void Chipset::ConstructInterruptSFR() {
-		if (emulator.hardware_id == HW_TI) {
+		if (emulator.hardware_id == HW_TI_MATH_PRINT) {
 			WDT_enabled = true;
 			EffectiveMICount = 59;
 			MaskableInterrupts = new InterruptSource[59];
@@ -393,7 +402,7 @@ namespace casioemu {
 		LSCLKFreq = 16384;
 
 		ResetClockGenerator();
-		if (emulator.hardware_id == HW_TI) {
+		if (emulator.hardware_id == HW_TI_MATH_PRINT) {
 			region_FCON.Setup(
 				0xF002, 1, "ClockGenerator/FCON0", this,
 				[](MMURegion* region, size_t) {
@@ -589,13 +598,13 @@ namespace casioemu {
 	}
 
 	void Chipset::ConstructPeripherals() {
-		if (IsEpsFamily(emulator.hardware_id)) {
+		if (IsEpsFamily(emulator.hardware_id) || emulator.hardware_id == HW_TI_MULTI_VIEW) {
 			peripherals.push_front(CreateScreen(emulator));
 			peripherals.push_front(CreateKeyboard(emulator));
 			return;
 		}
 		// Only tested on fx-991cnx
-		if (emulator.hardware_id != HW_TI) {
+		if (emulator.hardware_id != HW_TI_MATH_PRINT) {
 			BLKCON_mask = emulator.hardware_id == HW_CLASSWIZ ? 0x1F : 0xFF;
 			region_BLKCON.Setup(
 				0xF028, 1, "Chipset/BLKCON0", this, [](MMURegion* region, size_t) {
@@ -619,7 +628,7 @@ namespace casioemu {
 
 		ioport = new IOPorts(emulator);
 		EXIhandle = new ExternalInterrupts(emulator);
-		if (emulator.hardware_id != HW_TI) {
+		if (emulator.hardware_id != HW_TI_MATH_PRINT) {
 			peripherals.push_front(ioport);
 			peripherals.push_front(EXIhandle);
 		}
@@ -629,7 +638,7 @@ namespace casioemu {
 		peripherals.push_front(CreateKeyboard(emulator));
 		peripherals.push_front(CreateStbCtrl(emulator));
 		peripherals.push_front(CreateMiscellaneous(emulator));
-		if (emulator.hardware_id == HW_TI) {
+		if (emulator.hardware_id == HW_TI_MATH_PRINT) {
 			peripherals.push_front(CreateTimer(emulator));
 			peripherals.push_front(CreateWatchdog(emulator));
 			peripherals.push_front(CreateTimerBaseCounter(emulator));
@@ -675,6 +684,11 @@ namespace casioemu {
 		}
 		catch (const std::exception& error) {
 			PANIC("Failed to read ROM: %s\n", error.what());
+		}
+		if (t4x) {
+			if (!t4x->LoadRom(rom_data)) PANIC("Invalid T4x ROM image\n");
+			for (auto peripheral : peripherals) peripheral->Initialise();
+			return;
 		}
 		if (IsEpsFamily(emulator.hardware_id)) {
 			const auto unpacked_entry = emulator.ModelDefinition.extra.find("is_unpacked_nibbles");
@@ -778,6 +792,13 @@ namespace casioemu {
 	}
 
 	void Chipset::Reset() {
+		if (t4x) {
+			RaiseEvent(on_reset, *this);
+			t4x->Reset();
+			for (auto peripheral : peripherals) peripheral->Reset();
+			run_mode = RM_RUN;
+			return;
+		}
 		if (IsEpsFamily(emulator.hardware_id)) {
 			RaiseEvent(on_reset, *this);
 			for (auto& peripheral : peripherals)
@@ -809,6 +830,7 @@ namespace casioemu {
 	}
 
 	void Chipset::Break() {
+		if (t4x) { emulator.SetPaused(true); return; }
 		if (IsEpsFamily(emulator.hardware_id)) {
 			InterruptEventArgs iea{};
 			iea.index = INT_BREAK;
@@ -910,7 +932,27 @@ namespace casioemu {
 	}
 
 	void Chipset::RaiseSoftware(size_t index) {
-		if (emulator.ModelDefinition.hardware_id == HW_TI) {
+		if (emulator.ModelDefinition.hardware_id == HW_TI_MATH_PRINT) {
+			// ER0, not a firmware-specific RAM address, identifies the SWI
+			// display payload. Leave real hardware exception handling intact.
+			if (index == 4 || (index == 1 && !emulator.ModelDefinition.real_hardware)) {
+				if (auto* display = QueryInterface<ITiSvDisplay>()) {
+					const uint16_t address = static_cast<uint16_t>(cpu.reg_r[0]) |
+						(static_cast<uint16_t>(cpu.reg_r[1]) << 8);
+					if (index == 4) {
+						uint32_t status = 0;
+						for (unsigned i = 0; i < 4; ++i)
+							status |= uint32_t(mmu.ReadData(static_cast<uint16_t>(address + i), false)) << (i * 8);
+						display->SetTiSvStatus(status);
+					}
+					else {
+						std::array<uint8_t, ITiSvDisplay::FrameBytes> frame{};
+						for (size_t i = 0; i < frame.size(); ++i)
+							frame[i] = mmu.ReadData(static_cast<uint16_t>(address + i), false);
+						display->SetTiSvFrame(frame);
+					}
+				}
+			}
 			if ((tiDiagMode || !emulator.ModelDefinition.real_hardware) && index == 0x02) {
 				int dl = 500;
 				while (dl > 0 && tiKey == 0) {
@@ -1080,6 +1122,10 @@ namespace casioemu {
 	}
 
 	void Chipset::Tick() {
+		if (t4x) {
+			if (run_mode == RM_RUN) StepTiMultiView();
+			return;
+		}
 		if (IsEpsFamily(emulator.hardware_id)) {
 			if (run_mode == RM_RUN && RunEpsFrame())
 				emulator.SetPaused(true);
@@ -1144,6 +1190,22 @@ namespace casioemu {
 		SYSCLKTick = false;
 	}
 
+	void Chipset::RunTiMultiViewFrame() {
+		if (run_mode == RM_RUN)
+			StepTiMultiView(3001, 1000);
+	}
+	bool Chipset::StepTiMultiView(unsigned instructions, uint32_t elapsed_us) {
+		try {
+			t4x->RunBatch(instructions, elapsed_us);
+			return true;
+		}
+		catch (const std::exception& error) {
+			logger::Info("[T4x] PC=%04X: %s\n", t4x->ProgramCounter(), error.what());
+			emulator.SetPaused(true);
+			return false;
+		}
+	}
+
 	bool Chipset::RunEpsFrame(uint32_t idle_timer_cycles) {
 		if (IsEpsFamily(emulator.hardware_id) && run_mode == RM_RUN && epscpu)
 			return epscpu->RunFrame(idle_timer_cycles);
@@ -1169,6 +1231,7 @@ namespace casioemu {
 	}
 
 	void Chipset::SaveStateAll(std::ostream& os) {
+		if (t4x) { t4x->SaveState(os); return; }
 		if (IsEpsFamily(emulator.hardware_id)) {
 			epscpu->SaveState(os);
 			return;
@@ -1189,6 +1252,7 @@ namespace casioemu {
 	}
 
 	void Chipset::LoadStateAll(std::istream& is) {
+		if (t4x) { t4x->LoadState(is); return; }
 		if (IsEpsFamily(emulator.hardware_id)) {
 			epscpu->LoadState(is);
 			return;

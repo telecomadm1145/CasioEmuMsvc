@@ -492,7 +492,7 @@ namespace casioemu {
 			if (status_rect.w <= 0 || status_rect.h <= 0)
 				throw std::runtime_error("The board SVG status frame does not expose a usable size.");
 			const auto display = ParseBoardDisplayInfo(document);
-			const Rect dest = mapper.Map(ToRect({
+			const Rect dest = ToRect(mapper.Map(SvgRect{
 				display.x + status_rect.x * display.sx,
 				display.y + status_rect.y * display.sy,
 				status_rect.w * display.sx,
@@ -609,7 +609,7 @@ namespace casioemu {
 				const int ki_mask = ToInt(ki_attr);
 				const int ko_mask = ToInt(ko_attr);
 				ButtonInfo button{};
-				button.rect = mapper.Map(ToRect(svg_rect));
+				button.rect = ToRect(mapper.Map(svg_rect));
 				button.svg_shape = mapper.WrapShape(shape);
 				button.svg_defs = defs;
 				if (ki_mask == 0 && ko_mask == 0) {
@@ -626,7 +626,7 @@ namespace casioemu {
 				else {
 					const int ki = MaskToIndex(ki_mask);
 					const int ko = MaskToIndex(ko_mask);
-					if (ki < 0 || ki >= 8 || ko < 0 || ko >= 16)
+					if (ki < 0 || ki >= 16 || ko < 0 || ko >= 16)
 						continue;
 					button.kiko = (ko << 4) | ki;
 				}
@@ -699,7 +699,7 @@ namespace casioemu {
 			if (display_w <= 0 || display_h <= 0 || screen_scale_y <= 0)
 				throw std::runtime_error("config.json must specify positive screen_width, screen_height, and screen_scale_y.");
 			screen_slot.h = screen_slot.w * static_cast<double>(display_h) / static_cast<double>(display_w) * screen_scale_y;
-			model.sprites["rsd_pixel"] = {{0, 0, display_w, display_h}, mapper.Map(ToRect(screen_slot))};
+			model.sprites["rsd_pixel"] = {{0, 0, display_w, display_h}, ToRect(mapper.Map(screen_slot))};
 			AddStatusSprites(model, board_document, mapper, configured_status_indexes);
 			return model;
 		}

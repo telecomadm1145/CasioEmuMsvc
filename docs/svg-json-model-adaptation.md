@@ -54,7 +54,7 @@
 | 4 | `HW_CLASSWIZ`    | ClassWiz、CY、EG、EY 类 |
 | 5 | `HW_CLASSWIZ_II` | ClassWiz II         |
 | 6 | `HW_FX_5800P`    | fx-5800P            |
-| 7 | `HW_TI`          | TI                  |
+| 7 | `HW_TI_MATH_PRINT` | TI MathPrint        |
 | 8 | `HW_SOLARII`     | SOLAR II            |
 | 9 | `HW_EPS6800`     | EPS6800             |
 | 10 | `HW_EPS6009`    | EPS6009             |
