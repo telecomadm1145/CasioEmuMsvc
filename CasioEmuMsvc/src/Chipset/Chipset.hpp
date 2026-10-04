@@ -94,6 +94,9 @@ namespace casioemu {
 		CPU& cpu;
 		MMU& mmu;
 		class ePSCPU* epscpu = 0;
+		class T4xCore* t4x = nullptr;
+		void RunTiMultiViewFrame();
+		bool StepTiMultiView(unsigned instructions = 1, uint32_t elapsed_us = 0);
 
 		std::vector<unsigned char> rom_data;
 		std::vector<unsigned char> flash_data;

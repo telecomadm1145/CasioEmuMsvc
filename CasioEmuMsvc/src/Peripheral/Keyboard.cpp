@@ -1,4 +1,5 @@
 #include "Keyboard.hpp"
+#include "Chipset/T4xCore.hpp"
 #include <SDL.h>
 #include <SDL_image.h>
 
@@ -65,7 +66,7 @@ namespace casioemu {
 				return EPS_MATRIX_SLOT_COUNT;
 			if (code == BUTTON_KIKO_RESET)
 				return EPS_MATRIX_SLOT_COUNT + 1;
-			if (hardware_id == HW_TI_MATH_PRINT)
+			if (hardware_id == HW_TI_MATH_PRINT || hardware_id == HW_TI_MULTI_VIEW)
 				return code;
 			if (IsEpsFamily(hardware_id))
 				return EpsMatrixIndexForButtonCode(code);
@@ -334,7 +335,8 @@ namespace casioemu {
 			pp->SetPortInput(4, 0, 0xff);
 			goto init_kbd;
 		}
-		if (IsEpsFamily(emulator.hardware_id)) {
+		if (IsEpsFamily(emulator.hardware_id) || emulator.hardware_id == HW_TI_MULTI_VIEW) {
+			clock_type = CLOCK_STOPPED;
 			goto init_kbd;
 		}
 		region_ki.Setup(0xF040, 1, "Keyboard/KI", this,
@@ -572,9 +574,9 @@ namespace casioemu {
 		keyboard_in_last = 0xFF;
 		input_filter_last = 0;
 
-		if (IsEpsFamily(emulator.hardware_id)) {
+		if (IsEpsFamily(emulator.hardware_id) || emulator.hardware_id == HW_TI_MULTI_VIEW) {
 			// A RESET contact releases the physical keyboard.  Keep the UI
-			// state in sync with the EPS core, including right-click latches.
+			// state in sync with the core, including right-click latches.
 			for (auto& button : buttons) {
 				button.pressed = false;
 				button.stuck = false;
@@ -589,12 +591,12 @@ namespace casioemu {
 			emu_ko_readcount = 0;
 		}
 
-		if (!IsEpsFamily(emulator.hardware_id))
+		if (!IsEpsFamily(emulator.hardware_id) && emulator.hardware_id != HW_TI_MULTI_VIEW)
 			RecalculateGhost();
 	}
 
 	void Keyboard::Tick() {
-		if (emulator.ModelDefinition.hardware_id == HW_TI_MATH_PRINT ||
+		if (emulator.ModelDefinition.hardware_id == HW_TI_MULTI_VIEW || emulator.ModelDefinition.hardware_id == HW_TI_MATH_PRINT ||
 			IsEpsFamily(emulator.ModelDefinition.hardware_id)) {
 			return;
 		}
@@ -1032,14 +1034,16 @@ namespace casioemu {
 		}
 
 		bool state_effectively_changed = (old_pressed_state != button.pressed) || (button.pressed && old_finger_id != button.pressingFingerId);
-		if (old_pressed_state != button.pressed)
-			SetEpsButtonState(button, button.pressed);
+		if (old_pressed_state != button.pressed) {
+			if (emulator.chipset.t4x) emulator.chipset.t4x->Key(button.code == 45 ? 0 : button.code, button.pressed);
+			else SetEpsButtonState(button, button.pressed);
+		}
 
 		if (button.type == Button::BT_BUTTON && state_effectively_changed) {
 			if (button.pressed) { // Vibrate only if it results in a pressed state
 				Vibration::vibrate(100);
 			}
-			if (!IsEpsFamily(emulator.hardware_id)) {
+			if (!IsEpsFamily(emulator.hardware_id) && emulator.hardware_id != HW_TI_MULTI_VIEW) {
 				if (real_hardware) {
 					RecalculateGhost(); // This internally calls RecalculateKI
 				}

@@ -9,6 +9,7 @@
 #include "SysDialog.h"
 #include "U8Disas.h"
 #include "ePSCpu.h"
+#include "Chipset/T4xCore.hpp"
 #ifdef CASIOEMU_CORE_WEB
 #include "WebDebuggerGui.h"
 #endif
@@ -256,7 +257,19 @@ void CodeViewer::PrepareDisasm() {
 	is_loaded.store(false, std::memory_order_release);
 	auto build_disasm = [this]() {
 		std::vector<CodeElem> new_codes;
-		if (m_emu->chipset.epscpu) {
+		if (auto* core = m_emu->chipset.t4x) {
+			for (size_t i = 0; i < m_emu->chipset.rom_data.size() / 2; ++i) {
+				CodeElem ce{};
+				ce.offset = static_cast<uint32_t>(i);
+				auto text = core->Disassemble(static_cast<uint16_t>(i));
+				std::snprintf(ce.srcbuf, sizeof(ce.srcbuf), "%s", text.c_str());
+				new_codes.push_back(ce);
+			}
+			max_row = static_cast<int>(new_codes.size());
+			codes = std::move(new_codes);
+			is_loaded.store(true, std::memory_order_release);
+		}
+		else if (m_emu->chipset.epscpu) {
 			const size_t rom_word_count = m_emu->chipset.epscpu->RomWordCount();
 			std::map<uint32_t, std::string> labels = {
 				{0x0000u, "reset"}, {0x0002u, "paint"}, {0x0004u, "reserved_04"},
@@ -946,7 +959,9 @@ void CodeViewer::RenderCore() {
 		ImGui::Text("%c %s", spinner[idx], "CodeViewer.Loading"_lc);
 		return;
 	}
-	if (m_emu->chipset.epscpu) {
+	if (m_emu->chipset.t4x)
+		pc_cache = m_emu->chipset.t4x->ProgramCounter();
+	else if (m_emu->chipset.epscpu) {
 		pc_cache = m_emu->chipset.epscpu->ProgramCounter();
 	}
 	ImVec2 sz;
@@ -1087,6 +1102,7 @@ void CodeViewer::RenderCore() {
 			RequestStep();
 		}
 		ImGui::SameLine();
+		ImGui::BeginDisabled(m_emu->chipset.t4x != nullptr);
 		if (UIHelpers::ButtonWithShortcut("CodeViewer.Trace"_lc, "F10")) {
 			RequestTrace();
 		}
@@ -1094,6 +1110,7 @@ void CodeViewer::RenderCore() {
 		if (UIHelpers::ButtonWithShortcut("CodeViewer.JumpOut"_lc, "Shift+F11")) {
 			RequestStepOut();
 		}
+		ImGui::EndDisabled();
 		ImGui::SameLine();
 		if (UIHelpers::ButtonWithShortcut("CodeViewer.Continue"_lc, "F5")) {
 			RequestContinue();
@@ -1133,6 +1150,12 @@ void CodeViewer::RenderCore() {
 }
 
 void CodeViewer::RequestStep() {
+	if (auto* core = m_emu->chipset.t4x) {
+		m_emu->SetPaused(true);
+		m_emu->chipset.StepTiMultiView();
+		JumpTo(core->ProgramCounter());
+		return;
+	}
 	if (m_emu->chipset.epscpu) {
 		m_emu->chipset.epscpu->RequestStepInto();
 		m_emu->SetPaused(false);
@@ -1143,6 +1166,7 @@ void CodeViewer::RequestStep() {
 }
 
 void CodeViewer::RequestTrace() {
+	if (m_emu->chipset.t4x) return;
 	if (m_emu->chipset.epscpu) {
 		m_emu->chipset.epscpu->RequestStepOver();
 		m_emu->SetPaused(false);
@@ -1153,6 +1177,7 @@ void CodeViewer::RequestTrace() {
 }
 
 bool CodeViewer::RequestStepOut() {
+	if (m_emu->chipset.t4x) return false;
 	if (m_emu->chipset.epscpu) {
 		if (!m_emu->chipset.epscpu->RequestStepOut())
 			return false;
@@ -1183,6 +1208,7 @@ void CodeViewer::RequestRunTo(uint32_t word_address) {
 }
 
 void CodeViewer::AddBreakpoint(uint32_t address) {
+	if (m_emu->chipset.t4x) return;
 	if (!is_loaded.load(std::memory_order_acquire))
 		return;
 	if (m_emu->chipset.epscpu) {

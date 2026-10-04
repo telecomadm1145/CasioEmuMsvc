@@ -29,6 +29,7 @@
 #include "Uart.h"
 #include "WatchdogTimer.hpp"
 #include "ePSCpu.h"
+#include "T4xCore.hpp"
 #include <ML620Ports.h>
 #include <Spi.h>
 #include <algorithm>
@@ -146,7 +147,7 @@ namespace casioemu {
 
 		real_hardware = emulator.ModelDefinition.real_hardware;
 
-		if (!IsEpsFamily(emulator.hardware_id)) {
+		if (!IsEpsFamily(emulator.hardware_id) && emulator.hardware_id != HW_TI_MULTI_VIEW) {
 			cpu.SetMemoryModel(emulator.hardware_id == HW_SOLARII ? CPU::MM_SMALL : CPU::MM_LARGE);
 			cpu.SetCPUModel(emulator.hardware_id == HW_CLASSWIZ || emulator.hardware_id == HW_CLASSWIZ_II || emulator.hardware_id == HW_TI_MATH_PRINT ? CPU::CM_NX_U16 : CPU::CM_NX_U8);
 
@@ -166,6 +167,9 @@ namespace casioemu {
                                                            : segments_classwiz_ii)
 				mmu.GenerateSegmentDispatch(segment_index);
 		}
+		else if (emulator.hardware_id == HW_TI_MULTI_VIEW) {
+			t4x = new T4xCore;
+		}
 		else {
 			SetupEpsCpu();
 		}
@@ -182,11 +186,12 @@ namespace casioemu {
 			eps_ram_save_thread.join();
 		PersistEpsRam();
 		DestructPeripherals();
-		if (!IsEpsFamily(emulator.hardware_id)) {
+		if (!IsEpsFamily(emulator.hardware_id) && emulator.hardware_id != HW_TI_MULTI_VIEW) {
 			DestructClockGenerator();
 			DestructInterruptSFR();
 		}
 		const std::lock_guard lock(eps_ram_save_mutex);
+		delete t4x;
 		delete epscpu;
 		epscpu = nullptr;
 		delete& mmu;
@@ -220,7 +225,11 @@ namespace casioemu {
 			return false;
 		}
 
-		if (epscpu) {
+		if (t4x) {
+			if (!t4x->LoadRom(data)) { error = "Invalid T4x ROM image"; return false; }
+			rom_data = std::move(data);
+		}
+		else if (epscpu) {
 			if (!epscpu->LoadRom(data, epscpu->RomFormat())) {
 				error = "Invalid EPS6800 ROM image";
 				return false;
@@ -589,7 +598,7 @@ namespace casioemu {
 	}
 
 	void Chipset::ConstructPeripherals() {
-		if (IsEpsFamily(emulator.hardware_id)) {
+		if (IsEpsFamily(emulator.hardware_id) || emulator.hardware_id == HW_TI_MULTI_VIEW) {
 			peripherals.push_front(CreateScreen(emulator));
 			peripherals.push_front(CreateKeyboard(emulator));
 			return;
@@ -675,6 +684,11 @@ namespace casioemu {
 		}
 		catch (const std::exception& error) {
 			PANIC("Failed to read ROM: %s\n", error.what());
+		}
+		if (t4x) {
+			if (!t4x->LoadRom(rom_data)) PANIC("Invalid T4x ROM image\n");
+			for (auto peripheral : peripherals) peripheral->Initialise();
+			return;
 		}
 		if (IsEpsFamily(emulator.hardware_id)) {
 			const auto unpacked_entry = emulator.ModelDefinition.extra.find("is_unpacked_nibbles");
@@ -778,6 +792,13 @@ namespace casioemu {
 	}
 
 	void Chipset::Reset() {
+		if (t4x) {
+			RaiseEvent(on_reset, *this);
+			t4x->Reset();
+			for (auto peripheral : peripherals) peripheral->Reset();
+			run_mode = RM_RUN;
+			return;
+		}
 		if (IsEpsFamily(emulator.hardware_id)) {
 			RaiseEvent(on_reset, *this);
 			for (auto& peripheral : peripherals)
@@ -809,6 +830,7 @@ namespace casioemu {
 	}
 
 	void Chipset::Break() {
+		if (t4x) { emulator.SetPaused(true); return; }
 		if (IsEpsFamily(emulator.hardware_id)) {
 			InterruptEventArgs iea{};
 			iea.index = INT_BREAK;
@@ -1100,6 +1122,10 @@ namespace casioemu {
 	}
 
 	void Chipset::Tick() {
+		if (t4x) {
+			if (run_mode == RM_RUN) StepTiMultiView();
+			return;
+		}
 		if (IsEpsFamily(emulator.hardware_id)) {
 			if (run_mode == RM_RUN && RunEpsFrame())
 				emulator.SetPaused(true);
@@ -1164,6 +1190,22 @@ namespace casioemu {
 		SYSCLKTick = false;
 	}
 
+	void Chipset::RunTiMultiViewFrame() {
+		if (run_mode == RM_RUN)
+			StepTiMultiView(3001, 1000);
+	}
+	bool Chipset::StepTiMultiView(unsigned instructions, uint32_t elapsed_us) {
+		try {
+			t4x->RunBatch(instructions, elapsed_us);
+			return true;
+		}
+		catch (const std::exception& error) {
+			logger::Info("[T4x] PC=%04X: %s\n", t4x->ProgramCounter(), error.what());
+			emulator.SetPaused(true);
+			return false;
+		}
+	}
+
 	bool Chipset::RunEpsFrame(uint32_t idle_timer_cycles) {
 		if (IsEpsFamily(emulator.hardware_id) && run_mode == RM_RUN && epscpu)
 			return epscpu->RunFrame(idle_timer_cycles);
@@ -1189,6 +1231,7 @@ namespace casioemu {
 	}
 
 	void Chipset::SaveStateAll(std::ostream& os) {
+		if (t4x) { t4x->SaveState(os); return; }
 		if (IsEpsFamily(emulator.hardware_id)) {
 			epscpu->SaveState(os);
 			return;
@@ -1209,6 +1252,7 @@ namespace casioemu {
 	}
 
 	void Chipset::LoadStateAll(std::istream& is) {
+		if (t4x) { t4x->LoadState(is); return; }
 		if (IsEpsFamily(emulator.hardware_id)) {
 			epscpu->LoadState(is);
 			return;

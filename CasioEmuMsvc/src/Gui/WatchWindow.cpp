@@ -2,6 +2,7 @@
 #include "Chipset/CPU.hpp"
 #include "Chipset/Chipset.hpp"
 #include "Chipset/ePSCpu.h"
+#include "Chipset/T4xCore.hpp"
 #include "CodeViewer.hpp"
 #include "Config.hpp"
 #include "Models.h"
@@ -218,10 +219,30 @@ void WatchWindow::UpdateRX() {
 }
 
 void WatchWindow::RenderCore() {
+	if (auto* core = m_emu->chipset.t4x) {
+		const auto state = core->Snapshot();
+		ImGui::Text("T4x PC (word): %04X  SP: %02X", state.pc, state.reg[8] | (state.reg[9] << 4));
+		ImGui::Text("Instructions: %llu  Cycles: %llu", static_cast<unsigned long long>(state.instructions), static_cast<unsigned long long>(state.cycles));
+		ImGui::Text("%s  Pending: %02X", state.halted ? "HALT" : "RUN", state.pending);
+		if (ImGui::Button(m_emu->GetPaused() ? "Continue" : "Pause"))
+			m_emu->SetPaused(!m_emu->GetPaused());
+		ImGui::SameLine();
+		ImGui::BeginDisabled(!m_emu->GetPaused());
+		if (ImGui::Button("Step"))
+			m_emu->chipset.StepTiMultiView();
+		ImGui::EndDisabled();
+		if (ImGui::BeginTable("T4xRegisters", 8, ImGuiTableFlags_Borders)) {
+			for (unsigned i = 0; i < 64; ++i) {
+				ImGui::TableNextColumn();
+				ImGui::Text("R%02u: %X", i, state.reg[i]);
+			}
+			ImGui::EndTable();
+		}
+		return;
+	}
 	char_width = ImGui::CalcTextSize("F").x;
 	casioemu::Chipset& chipset = m_emu->chipset;
-	ImGui::BeginChild("##reg_trace", ImVec2(0, ImGui::GetTextLineHeightWithSpacing() *
-		(m_emu->chipset.epscpu ? 11.0f : 8.0f)), false, 0);
+	ImGui::BeginChild("##reg_trace", ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * (m_emu->chipset.epscpu ? 11.0f : 8.0f)), false, 0);
 	auto rm = m_emu->chipset.run_mode;
 	using casioemu::Chipset::RM_HALT;
 	using casioemu::Chipset::RM_RUN;

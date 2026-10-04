@@ -18,6 +18,8 @@
 
 */
 #include "Screen.hpp"
+#include "TiMultiViewScreen.hpp"
+#include "TiLcdTarget.hpp"
 #include "ScreenOutput.hpp"
 #include "ScreenRenderSupport.hpp"
 #include "SolarIIScreen.hpp"
@@ -163,10 +165,7 @@ namespace casioemu {
 		SDL_Renderer* renderer{};
 		SDL_Texture* interface_texture{};
 #ifndef CASIOEMU_CORE_WEB
-		SDL_Texture* pixel_screen_texture{};
-		int pixel_screen_texture_width = 0;
-		int pixel_screen_texture_height = 0;
-		std::vector<uint8_t> pixel_screen_pixels;
+		PixelScreenTexture pixel_screen_texture;
 #endif
 		float screen_ink_alpha[66 * 192]{};
 		std::array<float, 66 * 192> eps_screen_ink_alpha{};
@@ -564,75 +563,6 @@ namespace casioemu {
 			return static_cast<uint8_t>(std::clamp(static_cast<int>(alpha), 0, 255));
 		}
 
-#ifndef CASIOEMU_CORE_WEB
-		void ResetPixelScreenTexture() {
-			if (pixel_screen_texture) {
-				SDL_DestroyTexture(pixel_screen_texture);
-				pixel_screen_texture = nullptr;
-			}
-			pixel_screen_texture_width = 0;
-			pixel_screen_texture_height = 0;
-			pixel_screen_pixels.clear();
-		}
-
-		bool EnsurePixelScreenTexture(int width, int height) {
-			if (!renderer || width <= 0 || height <= 0)
-				return false;
-			if (pixel_screen_texture && pixel_screen_texture_width == width && pixel_screen_texture_height == height)
-				return true;
-
-			ResetPixelScreenTexture();
-			pixel_screen_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, width, height);
-			if (!pixel_screen_texture) {
-				SDL_Log("[Screen][Warn] SDL_CreateTexture failed for pixel screen: %s", SDL_GetError());
-				return false;
-			}
-			SDL_SetTextureBlendMode(pixel_screen_texture, SDL_BLENDMODE_BLEND);
-#if SDL_VERSION_ATLEAST(2, 0, 12)
-			SDL_SetTextureScaleMode(pixel_screen_texture, SDL_ScaleModeNearest);
-#endif
-			pixel_screen_texture_width = width;
-			pixel_screen_texture_height = height;
-			pixel_screen_pixels.resize(static_cast<size_t>(width) * static_cast<size_t>(height) * 4);
-			return true;
-		}
-
-		void WritePixelScreenTexture(int logical_width, int logical_height, const float* alpha_buffer) {
-			if (!alpha_buffer)
-				return;
-			if (pixel_screen_pixels.size() < static_cast<size_t>(logical_width) * static_cast<size_t>(logical_height) * 4)
-				return;
-			for (int y = 0; y != logical_height; ++y) {
-				const int source_y = y + 1;
-				for (int x = 0; x != logical_width; ++x) {
-					const float alpha_value = alpha_buffer[x + source_y * 192];
-					const SDL_Color colour = ScreenPixelColour(ink_colour, alpha_value);
-
-					const size_t pixel_offset = (static_cast<size_t>(y) * static_cast<size_t>(logical_width) + static_cast<size_t>(x)) * 4;
-					pixel_screen_pixels[pixel_offset + 0] = colour.r;
-					pixel_screen_pixels[pixel_offset + 1] = colour.g;
-					pixel_screen_pixels[pixel_offset + 2] = colour.b;
-					pixel_screen_pixels[pixel_offset + 3] = colour.a;
-				}
-			}
-		}
-
-		bool RenderPixelScreenTexture(const SDL_Rect& lcd_dest, int logical_width, int logical_height, const float* alpha_buffer) {
-			if (!EnsurePixelScreenTexture(logical_width, logical_height))
-				return false;
-			WritePixelScreenTexture(logical_width, logical_height, alpha_buffer);
-			if (SDL_UpdateTexture(pixel_screen_texture, nullptr, pixel_screen_pixels.data(), logical_width * 4) != 0) {
-				SDL_Log("[Screen][Warn] SDL_UpdateTexture failed for pixel screen: %s", SDL_GetError());
-				return false;
-			}
-			if (SDL_RenderCopy(renderer, pixel_screen_texture, nullptr, &lcd_dest) != 0) {
-				SDL_Log("[Screen][Warn] SDL_RenderCopy failed for pixel screen: %s", SDL_GetError());
-				return false;
-			}
-			return true;
-		}
-#endif
-
 	public:
 		Screen(Emulator& emu)
 			: Peripheral(emu) {
@@ -651,9 +581,6 @@ namespace casioemu {
 #endif
 			for (auto& texture : sprite_svg_textures)
 				texture.Reset();
-#ifndef CASIOEMU_CORE_WEB
-			ResetPixelScreenTexture();
-#endif
 			if (screen_buffer)
 				delete[] screen_buffer;
 			if (screen_buffer1)
@@ -875,13 +802,9 @@ namespace casioemu {
 					}
 					return;
 				}
-				float ink_alpha_on = (ti_contrast - 100) * 20.0;
-				float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);
-				ink_alpha_off = screen_residual_enabled ? ink_alpha_off * screen_residual_alpha_scale : 0.0f;
-				ink_alpha_on = std::clamp(ink_alpha_on, 0.0f, 255.0f);
-				if (!screen_residual_enabled) {
-					ink_alpha_on = 255.0f;
-				}
+				const auto levels = ti_lcd::CalculateTargetLevels(ti_contrast, screen_residual_enabled, screen_residual_alpha_scale);
+				const float ink_alpha_on = levels.on;
+				const float ink_alpha_off = levels.off;
 				const uint8_t* screen_buffer = this->screen_buffer;
 				for (int ix = 0; ix < 192; ++ix) {
 					for (int iy = 0; iy < 64; ++iy) {
@@ -2097,7 +2020,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 
 #ifndef CASIOEMU_CORE_WEB
 		if (!segment_lcd)
-			RenderPixelScreenTexture(lcd_dest, logical_width, logical_height, frame_screen_ink_alpha.data());
+			pixel_screen_texture.Render(renderer, lcd_dest, logical_width, logical_height, ink_colour, frame_screen_ink_alpha.data());
 #endif
 
 #if !defined(__EMSCRIPTEN__) && !defined(CASIOEMU_CORE_WEB)
@@ -2139,6 +2062,8 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		case HW_SOLARII:
 			return CreateSolarIIScreen(emulator);
 
+		case HW_TI_MULTI_VIEW:
+			return CreateTiMultiViewScreen(emulator);
 		case HW_TI_MATH_PRINT:
 			return new Screen<HW_TI_MATH_PRINT>(emulator);
 		case HW_EPS6800:

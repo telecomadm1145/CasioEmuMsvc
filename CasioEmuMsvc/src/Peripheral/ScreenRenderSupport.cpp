@@ -182,6 +182,51 @@ void RenderModelSprite(SDL_Renderer* renderer, SDL_Texture* interface_texture, S
 	SDL_RenderCopy(renderer, interface_texture, &src, &dest);
 }
 #ifndef CASIOEMU_CORE_WEB
+PixelScreenTexture::~PixelScreenTexture() {
+	Reset();
+}
+void PixelScreenTexture::Reset() {
+	if (texture)
+		SDL_DestroyTexture(texture);
+	texture = nullptr;
+	width = height = 0;
+	pixels.clear();
+}
+void PixelScreenTexture::Render(SDL_Renderer* renderer, const SDL_Rect& dest, int requested_width, int requested_height,
+	const ColourInfo& ink_colour, const float* alpha) {
+	if (!texture || width != requested_width || height != requested_height) {
+		Reset();
+		texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, requested_width, requested_height);
+		if (!texture) {
+			SDL_Log("[Screen][Warn] SDL_CreateTexture failed for pixel screen: %s", SDL_GetError());
+			return;
+		}
+		SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+#if SDL_VERSION_ATLEAST(2, 0, 12)
+		SDL_SetTextureScaleMode(texture, SDL_ScaleModeNearest);
+#endif
+		width = requested_width;
+		height = requested_height;
+		pixels.resize(static_cast<size_t>(width) * height * 4);
+	}
+	// The shared alpha buffer reserves its first 192-column row for status.
+	for (int y = 0; y < height; ++y)
+		for (int x = 0; x < width; ++x) {
+			const auto colour = ScreenPixelColour(ink_colour, alpha[x + (y + 1) * 192]);
+			const size_t offset = (static_cast<size_t>(y) * width + x) * 4;
+			pixels[offset] = colour.r;
+			pixels[offset + 1] = colour.g;
+			pixels[offset + 2] = colour.b;
+			pixels[offset + 3] = colour.a;
+		}
+	if (SDL_UpdateTexture(texture, nullptr, pixels.data(), width * 4) != 0) {
+		SDL_Log("[Screen][Warn] SDL_UpdateTexture failed for pixel screen: %s", SDL_GetError());
+		return;
+	}
+	if (SDL_RenderCopy(renderer, texture, nullptr, &dest) != 0)
+		SDL_Log("[Screen][Warn] SDL_RenderCopy failed for pixel screen: %s", SDL_GetError());
+}
+
 SDL_Color ScreenPixelColour(const ColourInfo& ink_colour, float alpha_value) {
 	SDL_Color colour{
 		static_cast<Uint8>(ink_colour.r),
