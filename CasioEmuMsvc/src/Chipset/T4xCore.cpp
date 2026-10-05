@@ -1,10 +1,17 @@
 #include "T4xCore.hpp"
 #include <algorithm>
+#include <chrono>
 #include <istream>
 #include <ostream>
 #include <stdexcept>
 
 namespace casioemu {
+	namespace {
+		uint64_t DisplayTimeNs() {
+			return std::chrono::duration_cast<std::chrono::nanoseconds>(
+				std::chrono::steady_clock::now().time_since_epoch()).count();
+		}
+	}
 	T4xCore::T4xCore(unsigned dram_banks) : dram_banks(dram_banks) {
 		if (dram_banks == 0 || dram_banks > 14)
 			throw std::invalid_argument("T4x DRAM must contain 1..14 banks");
@@ -42,7 +49,7 @@ namespace casioemu {
 	}
 	T4xCore::DisplayState T4xCore::ReadDisplay() const {
 		const std::lock_guard lock(mutex);
-		return {state.lcd, state.reg[LcdControlRegister], state.reg[LcdContrastRegister], state.elapsed_us, display_generation};
+		return {state.lcd, state.reg[LcdControlRegister], state.reg[LcdContrastRegister], state.elapsed_us, display_generation, DisplayTimeNs()};
 	}
 	void T4xCore::EnableDisplayHistory() {
 		const std::lock_guard lock(mutex);
@@ -50,9 +57,10 @@ namespace casioemu {
 	}
 	void T4xCore::CaptureDisplay() {
 		if (!display_history_enabled) return;
-		DisplayState next{state.lcd, state.reg[LcdControlRegister], state.reg[LcdContrastRegister], state.elapsed_us, display_generation};
+		DisplayState next{state.lcd, state.reg[LcdControlRegister], state.reg[LcdContrastRegister], state.elapsed_us, display_generation, 0};
 		if (last_display.generation == next.generation && last_display.lcd == next.lcd &&
 			last_display.control == next.control && last_display.contrast == next.contrast) return;
+		next.steady_ns = DisplayTimeNs();
 		last_display = next;
 		display_history.push_back(next);
 		// A minimized/stalled renderer resumes from a fresh baseline instead of
@@ -63,7 +71,7 @@ namespace casioemu {
 		const std::lock_guard lock(mutex);
 		CaptureDisplay();
 		DisplayHistory result{{display_history.begin(), display_history.end()},
-			{state.lcd, state.reg[LcdControlRegister], state.reg[LcdContrastRegister], state.elapsed_us, display_generation}};
+			{state.lcd, state.reg[LcdControlRegister], state.reg[LcdContrastRegister], state.elapsed_us, display_generation, DisplayTimeNs()}};
 		display_history.clear(); return result;
 	}
 	uint16_t T4xCore::ProgramCounter() const {

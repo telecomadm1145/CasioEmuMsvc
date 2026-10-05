@@ -22,6 +22,7 @@ namespace casioemu {
 			uint8_t control, contrast;
 			uint64_t elapsed_us;
 			uint64_t generation;
+			uint64_t steady_ns; // LCD presentation time; independent of CPU pause/speed.
 		};
 		struct State {
 			std::array<uint8_t, 64> reg{};

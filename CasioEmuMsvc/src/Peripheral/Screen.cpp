@@ -304,7 +304,7 @@ namespace casioemu {
 			if constexpr (!IsEpsFamily(hardware_id)) {
 				return {};
 			}
-#if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
+#if defined(CASIOEMU_CORE_WEB) || defined(__EMSCRIPTEN__) || defined(__ANDROID__)
 			eps_lcd_response_active = false;
 			return {};
 #else
@@ -818,9 +818,7 @@ namespace casioemu {
 				return;
 			}
 			else if constexpr (IsEpsFamily(hardware_id)) {
-			#ifndef __EMSCRIPTEN__
-				ratio = 0.80f;
-			#endif
+				ratio = lcd_platform::LegacyBlendRatio(0.0f, low_performance);
 				bool eps_residual_enabled;
 				float eps_residual_alpha_scale;
 				EpsLcdResponseTick eps_response;

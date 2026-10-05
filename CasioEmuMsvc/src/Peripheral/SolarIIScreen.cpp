@@ -1,19 +1,30 @@
 #include "SolarIIScreen.hpp"
 #include "Screen.hpp"
 #include "ScreenRenderSupport.hpp"
+#include "LcdPlatform.hpp"
+#include "LcdResponse.hpp"
+#include "OrdinaryLcdHistory.hpp"
 #include "Peripheral.hpp"
 #include "Chipset/MMURegion.hpp"
 #include "Emulator.hpp"
 #include "Gui/HwController.h"
+#if !defined(CASIOEMU_CORE_WEB) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+#include "Gui/ThemeManager.h"
+#endif
 
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <chrono>
+#include <cmath>
 #include <cstring>
 #include <ios>
 #include <istream>
 #include <ostream>
+#include <mutex>
 #include <typeinfo>
+
+extern bool low_perf_ext;
 
 namespace casioemu {
     class SolarIIScreen : public Peripheral, public IScreenFrameProvider {
@@ -162,6 +173,9 @@ namespace casioemu {
         }};
 
         std::array<uint8_t, STATUS_BITS.size()> status_alpha{};
+        std::array<double, STATUS_BITS.size()> response_alpha{};
+        std::chrono::steady_clock::time_point last_response_tick{};
+        mutable std::mutex response_mutex;
         std::array<SpriteInfo, STATUS_BITS.size()> status_sprite_info{};
         std::array<bool, STATUS_BITS.size()> status_sprite_present{};
         std::array<SvgSpriteTextureCache, STATUS_BITS.size()> status_svg_textures{};
@@ -244,6 +258,8 @@ namespace casioemu {
         }
 
         void SaveState(std::ostream& os) override {
+            const std::lock_guard lock(response_mutex);
+            UpdateAlphaLocked();
             os.write(reinterpret_cast<const char*>(&display_control), 1);
             os.write(reinterpret_cast<const char*>(display_data.data()), display_data.size());
             os.write(reinterpret_cast<const char*>(&screen_range), 1);
@@ -255,6 +271,7 @@ namespace casioemu {
         }
 
         void LoadState(std::istream& is) override {
+            const std::lock_guard lock(response_mutex);
             is.read(reinterpret_cast<char*>(&display_control), 1);
             is.read(reinterpret_cast<char*>(display_data.data()), display_data.size());
             is.read(reinterpret_cast<char*>(&screen_range), 1);
@@ -263,41 +280,51 @@ namespace casioemu {
             is.read(reinterpret_cast<char*>(&screen_brightness), 1);
             is.read(reinterpret_cast<char*>(&screen_refresh_rate), 1);
             is.read(reinterpret_cast<char*>(status_alpha.data()), status_alpha.size());
+            std::copy(status_alpha.begin(), status_alpha.end(), response_alpha.begin());
+            last_response_tick = std::chrono::steady_clock::now();
         }
 
-        void UpdateFrameAlpha() override {
+    private:
+        void UpdateAlphaLocked() {
+            auto settings_lock = ordinary_lcd_history::UntrackedChange::LockSettings();
             const uint8_t* data = DisplayData();
-            if (!data) {
-                status_alpha.fill(0);
-                return;
-            }
-            constexpr float kResidualFadeRatio = 0.50f;
+            const auto now = std::chrono::steady_clock::now();
+            const double elapsed_ms = last_response_tick == std::chrono::steady_clock::time_point{} ? 0.0 :
+                std::chrono::duration<double, std::milli>(now - last_response_tick).count();
+            last_response_tick = now;
+#if !defined(CASIOEMU_CORE_WEB) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+            const bool low_performance = ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext;
+#else
+            constexpr bool low_performance = false;
+#endif
+            const bool temporal = lcd_platform::kNativeTemporalSupport && !low_performance;
+            const float ratio = lcd_platform::LegacyBlendRatio(0.0f, low_performance);
+            const auto config = lcd_response::ForHardware(HW_SOLARII);
+            const double rise = lcd_response::GainForElapsed(elapsed_ms, config.rise_half_life_ms);
+            const double fall = lcd_response::GainForElapsed(elapsed_ms, config.fall_half_life_ms);
             const bool display_enabled = IsSolarIIDisplayEnabled();
-            if (!display_enabled) {
-                if (screen_residual_enabled) {
-                    for (auto& alpha : status_alpha) {
-                        alpha = static_cast<uint8_t>(std::clamp(static_cast<int>(static_cast<float>(alpha) * kResidualFadeRatio + 0.5f), 0, 255));
-                    }
-                }
-                else {
-                    status_alpha.fill(0);
-                }
-                return;
-            }
             for (size_t i = 0; i < STATUS_BITS.size(); ++i) {
                 const auto bit = STATUS_BITS[i];
-                const bool enabled = bit.offset < DISPLAY_STORAGE_LEN && (data[bit.offset] & (1 << bit.bit));
-                const uint8_t target = CalculateSolarIIStatusAlpha(enabled);
-                if (screen_residual_enabled) {
-                    const float alpha = static_cast<float>(status_alpha[i]) * kResidualFadeRatio + static_cast<float>(target) * (1.0f - kResidualFadeRatio);
-                    status_alpha[i] = static_cast<uint8_t>(std::clamp(static_cast<int>(alpha + 0.5f), 0, 255));
-                }
-                else {
-                    status_alpha[i] = target;
-                }
+                const bool enabled = (data[bit.offset] & (1 << bit.bit)) != 0;
+                const double target = display_enabled ? CalculateSolarIIStatusAlpha(enabled) : 0;
+                auto& alpha = response_alpha[i];
+                alpha = temporal ? lcd_response::BlendWithGains(alpha, target, rise, fall) :
+                    alpha * ratio + target * (1 - ratio);
+                status_alpha[i] = static_cast<uint8_t>(std::clamp(std::lround(alpha), 0L, 255L));
             }
         }
 
+    public:
+        void UpdateFrameAlpha() override {
+            const std::lock_guard lock(response_mutex);
+            UpdateAlphaLocked();
+        }
+        void Reset() override {
+            const std::lock_guard lock(response_mutex);
+            status_alpha.fill(0);
+            response_alpha.fill(0);
+            last_response_tick = {};
+        }
         int GetFrameWidth() const override { return FRAME_WIDTH; }
         int GetFrameHeight() const override { return FRAME_HEIGHT_WITH_STATUS_ROW; }
         void WriteFrameRgba(uint8_t* out, int r, int g, int b) const override {
@@ -309,6 +336,7 @@ namespace casioemu {
         }
         int GetStatusAlphaCount() const override { return static_cast<int>(status_alpha.size()); }
         void WriteStatusAlpha(uint8_t* out, int max_len) const override {
+            const std::lock_guard lock(response_mutex);
             if (!out || max_len <= 0) return;
             const int count = std::min(max_len, GetStatusAlphaCount());
             std::copy(status_alpha.begin(), status_alpha.begin() + count, out);
@@ -317,7 +345,8 @@ namespace casioemu {
             if (!renderer || !interface_texture)
                 return;
 
-            UpdateFrameAlpha();
+            const std::lock_guard lock(response_mutex);
+            UpdateAlphaLocked();
             SDL_SetTextureColorMod(interface_texture, ink_colour.r, ink_colour.g, ink_colour.b);
             for (size_t i = 0; i < status_alpha.size(); ++i) {
                 if (!status_sprite_present[i])

@@ -34,7 +34,7 @@ namespace casioemu {
 		std::array<float, 192 * (Height + 1)> alpha{};
 		std::array<float, 192 * (Height + 1)> target{};
 		mutable std::mutex response_mutex;
-		uint64_t last_us = 0, generation = 0;
+		uint64_t last_ns = 0, generation = 0;
 		std::vector<SpriteInfo> sprites{StatusCount + 1};
 		std::vector<uint8_t> present = std::vector<uint8_t>(StatusCount + 1);
 		ScreenOutput output;
@@ -91,10 +91,10 @@ namespace casioemu {
 				target[i] = (frame[T4xCore::BodyBytes + bit / 8] & (128 >> (bit % 8))) ? levels.on : levels.off;
 			}
 		}
-		void Settle(uint64_t time_us) {
-			if (time_us == last_us) return;
-			const double elapsed_ms = double(time_us - last_us) / 1000.0;
-			last_us = time_us;
+		void Settle(uint64_t time_ns) {
+			if (time_ns <= last_ns) return;
+			const double elapsed_ms = double(time_ns - last_ns) / 1000000.0;
+			last_ns = time_ns;
 			const auto config = lcd_response::ForHardware(HW_TI_MULTI_VIEW);
 			const double rise = lcd_response::GainForElapsed(elapsed_ms, config.rise_half_life_ms);
 			const double fall = lcd_response::GainForElapsed(elapsed_ms, config.fall_half_life_ms);
@@ -105,7 +105,8 @@ namespace casioemu {
 			auto settings_lock = ordinary_lcd_history::UntrackedChange::LockSettings();
 			const auto history = emulator.chipset.t4x->ConsumeDisplayHistory();
 			if (generation != history.current.generation) {
-				alpha.fill(0); target.fill(0); last_us = 0;
+				alpha.fill(0); target.fill(0);
+				last_ns = history.changes.empty() ? history.current.steady_ns : history.changes.front().steady_ns;
 				generation = history.current.generation;
 			}
 			bool temporal = lcd_platform::kNativeTemporalSupport;
@@ -120,17 +121,17 @@ namespace casioemu {
 				const float ratio = lcd_platform::LegacyBlendRatio(0.0f, low_performance);
 				for (size_t i = 0; i < alpha.size(); ++i)
 					alpha[i] = alpha[i] * ratio + target[i] * (1 - ratio);
-				last_us = history.current.elapsed_us;
+				last_ns = history.current.steady_ns;
 				return;
 			}
 			// Settle the old target up to each LCD update, then install the new
 			// target. Keeping the intermediate refreshes makes ghosting independent
-			// of the GUI frame rate; paused emulation advances no response time.
+			// of the GUI frame rate. Presentation time continues while the CPU pauses.
 			for (const auto& change : history.changes) {
-				Settle(change.elapsed_us);
+				Settle(change.steady_ns);
 				SetTargets(change);
 			}
-			Settle(history.current.elapsed_us);
+			Settle(history.current.steady_ns);
 			SetTargets(history.current); // Residual settings may change while paused.
 		}
 	public:
@@ -139,14 +140,16 @@ namespace casioemu {
 		}
 		void Reset() override {
 			const std::lock_guard lock(response_mutex);
-			alpha.fill(0); target.fill(0); last_us = 0; generation = 0;
+			alpha.fill(0); target.fill(0); last_ns = 0; generation = 0;
 		}
 		void SaveState(std::ostream& out) override {
 			const std::lock_guard lock(response_mutex); UpdateAlphaLocked();
 			out.write("MVL1", 4);
 			out.write(reinterpret_cast<const char*>(alpha.data()), sizeof(alpha));
 			out.write(reinterpret_cast<const char*>(target.data()), sizeof(target));
-			out.write(reinterpret_cast<const char*>(&last_us), sizeof(last_us));
+			// Keep the MVL1 latch-position field; host timestamps are reanchored on load.
+			const auto elapsed_us = emulator.chipset.t4x->ReadDisplay().elapsed_us;
+			out.write(reinterpret_cast<const char*>(&elapsed_us), sizeof(elapsed_us));
 		}
 		void LoadState(std::istream& in) override {
 			const std::lock_guard lock(response_mutex);
@@ -163,7 +166,7 @@ namespace casioemu {
 				!std::all_of(next_alpha.begin(), next_alpha.end(), valid_alpha) ||
 				!std::all_of(next_target.begin(), next_target.end(), valid_alpha))
 				throw std::runtime_error("Invalid MultiView LCD response state");
-			alpha = next_alpha; target = next_target; last_us = next_us;
+			alpha = next_alpha; target = next_target; last_ns = display.steady_ns;
 			generation = display.generation;
 			// The saved target already corresponds to the restored LCD latch.
 			emulator.chipset.t4x->ConsumeDisplayHistory();

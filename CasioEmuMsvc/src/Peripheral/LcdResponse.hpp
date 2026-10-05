@@ -24,6 +24,7 @@ inline constexpr Config kEpsDotMatrix{50.0, 50.0};
 inline constexpr Config kEpsSegment{50.0, 50.0};
 inline constexpr Config kTiMultiView{50.0, 50.0};
 inline constexpr Config kTiMathPrint{50.0, 50.0};
+inline constexpr Config kSolarII{50.0, 50.0};
 
 inline double GainForElapsed(double elapsed_ms, double half_life_ms) {
 	// A zero half-life means an immediate transition to the target.
@@ -61,6 +62,8 @@ static_assert(IsValidHalfLife(kTiMultiView.rise_half_life_ms));
 static_assert(IsValidHalfLife(kTiMultiView.fall_half_life_ms));
 static_assert(IsValidHalfLife(kTiMathPrint.rise_half_life_ms));
 static_assert(IsValidHalfLife(kTiMathPrint.fall_half_life_ms));
+static_assert(IsValidHalfLife(kSolarII.rise_half_life_ms));
+static_assert(IsValidHalfLife(kSolarII.fall_half_life_ms));
 
 constexpr Config ForHardware(HardwareId hardware_id) {
 	switch (hardware_id) {
@@ -81,6 +84,8 @@ constexpr Config ForHardware(HardwareId hardware_id) {
 		return kTiMultiView;
 	case HW_TI_MATH_PRINT:
 		return kTiMathPrint;
+	case HW_SOLARII:
+		return kSolarII;
 	default:
 		return {0.0, 0.0};
 	}
