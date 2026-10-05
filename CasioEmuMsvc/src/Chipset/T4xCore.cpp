@@ -451,7 +451,7 @@ namespace casioemu {
 					if (overflow && !(op == 7 && variant == 3))
 						result = sub ? result + radix : result % radix;
 					if (!(op == 7 && variant == 3))
-						a = result;
+						a = result & 15; // BCD correction can stay negative for non-decimal operands.
 					// Block operations accumulate Z rather than resetting it for each digit.
 					r[0] = (r[0] & 12) | ((r[0] & 2) && result == 0 ? 2 : 0) | (overflow ? 1 : 0);
 				}
