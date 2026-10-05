@@ -288,7 +288,7 @@ namespace casioemu {
 				[](MMURegion* region, size_t offset, uint8_t data) {
 					offset -= region->base;
 					Chipset* chipset = (Chipset*)region->userdata;
-					size_t mask = (static_cast<size_t>(1) << (chipset->EffectiveMICount + 1)) - (chipset->WDT_enabled ? 1 : 2);
+					const uint64_t mask = (uint64_t{1} << (chipset->EffectiveMICount + 1)) - (chipset->WDT_enabled ? 1 : 2);
 					chipset->data_int_mask = (chipset->data_int_mask & (~(static_cast<unsigned long long>(0xFF) << (offset * 8)))) | (static_cast<unsigned long long>(data) << (offset * 8));
 					chipset->data_int_mask &= mask;
 					for (size_t i = 0; i < chipset->EffectiveMICount; i++) {
@@ -1280,6 +1280,7 @@ namespace casioemu {
 			StepTiMultiView(T4xCore::InstructionsPerMillisecond);
 	}
 	bool Chipset::StepTiMultiView(unsigned instructions) {
+		const std::lock_guard execution_lock(emulator.access_mx);
 		try {
 			t4x->EnableFunctionEvents(bool(on_t4x_call_function) || bool(on_t4x_function_return));
 			t4x->RunBatch(instructions);
@@ -1299,12 +1300,14 @@ namespace casioemu {
 	}
 
 	bool Chipset::RunEpsFrame(uint32_t idle_timer_cycles) {
+		const std::lock_guard execution_lock(emulator.access_mx);
 		if (IsEpsFamily(emulator.hardware_id) && run_mode == RM_RUN && epscpu)
 			return epscpu->RunFrame(idle_timer_cycles);
 		return false;
 	}
 
 	void Chipset::EmulatorTick() {
+		const std::lock_guard execution_lock(emulator.access_mx);
 		if (emulator.hardware_id == HW_TI_MATH_PRINT) return;
 		for (auto& peripheral : peripherals) {
 			switch (peripheral->clock_type) {
@@ -1319,11 +1322,13 @@ namespace casioemu {
 	}
 
 	void Chipset::UIEvent(SDL_Event event) {
+		const std::lock_guard execution_lock(emulator.access_mx);
 		for (auto peripheral : peripherals)
 			peripheral->UIEvent(event);
 	}
 
 	void Chipset::SaveStateAll(std::ostream& os) {
+		const std::lock_guard execution_lock(emulator.access_mx);
 		if (emulator.hardware_id == HW_TI_MATH_PRINT) {
 			Binary::Write(os, uint32_t{0x53560002});
 			TransferTiState([&](auto&... fields) { (Binary::Write(os, fields), ...); });
@@ -1354,6 +1359,7 @@ namespace casioemu {
 	}
 
 	void Chipset::LoadStateAll(std::istream& is) {
+		const std::lock_guard execution_lock(emulator.access_mx);
 		// TI peripherals restore independently. Keep a complete rollback image so
 		// a later validation failure cannot leave the CPU and LCD at different times.
 		if (emulator.hardware_id != HW_TI_MATH_PRINT && !t4x) {

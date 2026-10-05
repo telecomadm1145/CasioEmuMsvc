@@ -98,6 +98,7 @@ namespace casioemu {
 		Emulator(ModelInfo def, bool paused = false, bool headless = true, std::string modelPath = "");
 		~Emulator();
 
+		// Serializes execution with snapshot save/restore, including rollback.
 		FairRecursiveMutex access_mx;
 		HardwareId hardware_id;
 		std::map<std::string, std::string>& argv_map;

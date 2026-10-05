@@ -261,6 +261,7 @@ class PluginApi_Impl : public PluginApi {
 			m_emu->chipset.RaiseMaskable(index);
 		}
 		void Tick() override {
+			const std::lock_guard execution_lock(m_emu->access_mx);
 			m_emu->chipset.Tick();
 		}
 		void SetStatus(RunStatus status) override {

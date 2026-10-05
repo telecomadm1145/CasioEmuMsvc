@@ -11,7 +11,7 @@
 #include "TiLcdTarget.hpp"
 #include "LcdResponse.hpp"
 #include "LcdPlatform.hpp"
-#if !defined(CASIOEMU_CORE_WEB) && !defined(__ANDROID__)
+#if !defined(CASIOEMU_CORE_WEB) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
 #include "Gui/ThemeManager.h"
 #endif
 #include <algorithm>

@@ -325,6 +325,7 @@ namespace casioemu {
 			tick_thread = new std::thread([this] {
 				while (1) {
 					{
+						const std::lock_guard execution_lock(access_mx);
 						if (!Running())
 							break;
 						if (!Paused)
@@ -480,6 +481,7 @@ namespace casioemu {
 				tick_thread = new std::thread([this] {
 					while (1) {
 						{
+							const std::lock_guard execution_lock(access_mx);
 							if (!Running())
 								break;
 							if (!Paused)
@@ -649,6 +651,7 @@ namespace casioemu {
 	}
 
 	void Emulator::TimerCallback() {
+		const std::lock_guard execution_lock(access_mx);
 		if (hardware_id == HW_TI_MULTI_VIEW) {
 			const auto elapsed = cycles.GetDelta();
 			if (Paused) { frame_cycle_remainder.store(0); return; }
@@ -843,6 +846,7 @@ namespace casioemu {
 	}
 
 	void Emulator::SetPaused(bool _paused) {
+		const std::lock_guard execution_lock(access_mx);
 		if (!_paused && chipset.t4x && chipset.t4x->LastDebugStop().stopped())
 			chipset.t4x->RequestContinue();
 		Paused.store(_paused, std::memory_order_relaxed);
@@ -881,6 +885,7 @@ namespace casioemu {
 	}
 
 	void Emulator::SetClockSpeed(float speed) {
+		const std::lock_guard execution_lock(access_mx);
 		cycles.Setup((unsigned int)(cycles_per_second * speed), timer_interval);
 		frame_cycle_remainder.store(0, std::memory_order_relaxed);
 		eps_timer1_cycle_remainder.store(0, std::memory_order_relaxed);

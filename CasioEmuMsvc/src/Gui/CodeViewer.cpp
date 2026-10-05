@@ -962,8 +962,16 @@ void CodeViewer::RenderCore() {
 		ImGui::Text("%c %s", spinner[idx], "CodeViewer.Loading"_lc);
 		return;
 	}
-	if (m_emu->chipset.t4x) {
-		const auto pc = m_emu->chipset.t4x->ProgramCounter();
+	if (auto* core = m_emu->chipset.t4x) {
+		// Keep the GUI mirror on this thread, including changes made while loading.
+		break_points.clear();
+		for (const auto address : core->ExecutionBreakpoints()) {
+			auto it = std::lower_bound(codes.begin(), codes.end(), address,
+				[](const CodeElem& line, uint32_t value) { return line.offset < value; });
+			if (it != codes.end() && it->offset == address)
+				break_points[static_cast<int>(it - codes.begin())] = 1;
+		}
+		const auto pc = core->ProgramCounter();
 		const bool paused = m_emu->GetPaused();
 		if (paused && (!core_was_paused || pc_cache != pc)) JumpTo(pc);
 		pc_cache = pc;
@@ -1229,7 +1237,10 @@ void CodeViewer::RequestRunTo(uint32_t word_address) {
 }
 
 void CodeViewer::AddBreakpoint(uint32_t address) {
-	if (m_emu->chipset.t4x) m_emu->chipset.t4x->AddExecutionBreakpoint(address);
+	if (auto* core = m_emu->chipset.t4x) {
+		core->AddExecutionBreakpoint(address);
+		return;
+	}
 	if (!is_loaded.load(std::memory_order_acquire))
 		return;
 	if (m_emu->chipset.epscpu) {
@@ -1249,7 +1260,10 @@ void CodeViewer::AddBreakpoint(uint32_t address) {
 }
 
 void CodeViewer::RemoveBreakpoint(uint32_t address) {
-	if (m_emu->chipset.t4x) m_emu->chipset.t4x->RemoveExecutionBreakpoint(address);
+	if (auto* core = m_emu->chipset.t4x) {
+		core->RemoveExecutionBreakpoint(address);
+		return;
+	}
 	if (!is_loaded.load(std::memory_order_acquire))
 		return;
 	if (m_emu->chipset.epscpu) {
@@ -1268,7 +1282,10 @@ void CodeViewer::RemoveBreakpoint(uint32_t address) {
 }
 
 void CodeViewer::ClearBreakpoints() {
-	if (m_emu->chipset.t4x) m_emu->chipset.t4x->ClearExecutionBreakpoints();
+	if (auto* core = m_emu->chipset.t4x) {
+		core->ClearExecutionBreakpoints();
+		return;
+	}
 	break_points.clear();
 	if (m_emu->chipset.epscpu)
 		m_emu->chipset.epscpu->ClearExecutionBreakpoints();
@@ -1282,6 +1299,12 @@ std::vector<uint32_t> CodeViewer::GetBreakpoints() const {
 			result.push_back(codes[index].offset);
 	}
 	return result;
+}
+
+size_t CodeViewer::GetBreakpointCount() const {
+	if (auto* core = m_emu->chipset.t4x)
+		return core->ExecutionBreakpoints().size();
+	return break_points.size();
 }
 
 std::vector<CodeElem> CodeViewer::GetDisassembly(uint32_t address, size_t count) const {

@@ -82,5 +82,5 @@ public:
 	std::vector<CodeElem> GetDisassembly(uint32_t address, size_t count) const;
 	void Search(bool next);
 	void ExportDisassembly();
-	size_t GetBreakpointCount() const { return break_points.size(); }
+	size_t GetBreakpointCount() const;
 };
