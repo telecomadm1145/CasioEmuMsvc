@@ -285,6 +285,14 @@ namespace casioemu {
 	}
 
 	void Keyboard::SetCoreButtonState(Button& button, bool pressed) {
+		if (emulator.hardware_id == HW_TI_MATH_PRINT && real_hardware &&
+			button.code == 0x29 && pressed && (keyboard_out & 1)) {
+			// EXI0 checks the self-test key sequence before the matrix scan.
+			// A new ON press must produce that edge even when KO0 is high.
+			if (auto* ports = emulator.chipset.QueryInterface<IPortProvider>())
+				ports->SetPortInput(0, 0x20, 0x20);
+			return;
+		}
 		if (auto* core = emulator.chipset.t4x) {
 			if (button.type == Button::BT_BUTTON)
 				core->Key(button.code == 45 ? 0 : button.code, pressed);
@@ -1236,8 +1244,8 @@ namespace casioemu {
 			keyboard_in = 0;
 			for (const auto& button : buttons) { // Iterate const
 				if (button.code == 0x29) {
-					// The ROM tests KO0 (P3.0) in EXI0: while scanning,
-					// ON is a matrix key; with KO0 low it uses the wake input.
+					// Held ON participates in the matrix while KO0 is high,
+					// and uses the wake input while KO0 is low.
 					if (button.pressed)
 						is_on_pressed = !(keyboard_out & 1);
 				}
