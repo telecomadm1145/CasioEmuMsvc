@@ -368,7 +368,7 @@ void UpdateEpsScreen(EpsScreenContext& context) {
 		context.temporal_state.Reset();
 	}
 
-	const float transition_ratio = context.residual_enabled ? context.transition_ratio : 0.0f;
+	const float transition_ratio = context.transition_ratio;
 	if (context.hardware_id == HW_EPS6009) {
 		std::array<uint8_t, 0x88> lcd{};
 		Eps6800LcdControl control{};

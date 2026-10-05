@@ -18,11 +18,14 @@
 
 */
 #include "Screen.hpp"
+#include "TiMultiViewScreen.hpp"
+#include "TiLcdTarget.hpp"
 #include "ScreenOutput.hpp"
 #include "ScreenRenderSupport.hpp"
 #include "SolarIIScreen.hpp"
 #include "EpsScreen.hpp"
 #include "LcdResponse.hpp"
+#include "LcdPlatform.hpp"
 #include "OrdinaryLcdHistory.hpp"
 #include "OrdinaryLcdTarget.hpp"
 #include "OrdinaryLcdFrame.hpp"
@@ -98,7 +101,7 @@ namespace casioemu {
 			time, rate, threshold, screen_flashing_brightness_coeff);
 	}
 	template <HardwareId hardware_id>
-	class Screen : public Peripheral, public IScreenFrameProvider {
+	class Screen : public Peripheral, public IScreenFrameProvider, public ITiSvDisplay {
 		static constexpr bool kCaptureLcdHistory = ordinary_lcd_history::kEnabled &&
 			(hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II ||
 			 hardware_id == HW_ES_PLUS || hardware_id == HW_FX_5800P);
@@ -133,12 +136,11 @@ namespace casioemu {
 		int ti_contrast{}, ti_port_status{};
 		bool ti_enabled = 0;
 		bool ti_a0 = 0;
-		bool ti_rw = 0;
 		int ti_col = 0;
 		int ti_page = 0;
 
 		int ti_port7{};
-		int ti_port5{};
+		uint32_t ti_sv_status{};
 
 		float screen_scan_alpha[64]{};
 		std::array<float, 64> screen_scan_curve{};
@@ -162,10 +164,7 @@ namespace casioemu {
 		SDL_Renderer* renderer{};
 		SDL_Texture* interface_texture{};
 #ifndef CASIOEMU_CORE_WEB
-		SDL_Texture* pixel_screen_texture{};
-		int pixel_screen_texture_width = 0;
-		int pixel_screen_texture_height = 0;
-		std::vector<uint8_t> pixel_screen_pixels;
+		PixelScreenTexture pixel_screen_texture;
 #endif
 		float screen_ink_alpha[66 * 192]{};
 		std::array<float, 66 * 192> eps_screen_ink_alpha{};
@@ -262,10 +261,11 @@ namespace casioemu {
 
 		bool LcdResponseEligible() const {
 			if constexpr (!(hardware_id == HW_FX_5800P || hardware_id == HW_ES_PLUS ||
-				hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II)) {
+				hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II ||
+				hardware_id == HW_TI_MATH_PRINT)) {
 				return false;
 			}
-#if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
+#if defined(CASIOEMU_CORE_WEB) || defined(__EMSCRIPTEN__) || defined(__ANDROID__)
 			return false;
 #else
 			return !ThemeManager::Instance().Settings().lowPerformanceMode && !low_perf_ext;
@@ -304,7 +304,7 @@ namespace casioemu {
 			if constexpr (!IsEpsFamily(hardware_id)) {
 				return {};
 			}
-#if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
+#if defined(CASIOEMU_CORE_WEB) || defined(__EMSCRIPTEN__) || defined(__ANDROID__)
 			eps_lcd_response_active = false;
 			return {};
 #else
@@ -563,75 +563,6 @@ namespace casioemu {
 			return static_cast<uint8_t>(std::clamp(static_cast<int>(alpha), 0, 255));
 		}
 
-#ifndef CASIOEMU_CORE_WEB
-		void ResetPixelScreenTexture() {
-			if (pixel_screen_texture) {
-				SDL_DestroyTexture(pixel_screen_texture);
-				pixel_screen_texture = nullptr;
-			}
-			pixel_screen_texture_width = 0;
-			pixel_screen_texture_height = 0;
-			pixel_screen_pixels.clear();
-		}
-
-		bool EnsurePixelScreenTexture(int width, int height) {
-			if (!renderer || width <= 0 || height <= 0)
-				return false;
-			if (pixel_screen_texture && pixel_screen_texture_width == width && pixel_screen_texture_height == height)
-				return true;
-
-			ResetPixelScreenTexture();
-			pixel_screen_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, width, height);
-			if (!pixel_screen_texture) {
-				SDL_Log("[Screen][Warn] SDL_CreateTexture failed for pixel screen: %s", SDL_GetError());
-				return false;
-			}
-			SDL_SetTextureBlendMode(pixel_screen_texture, SDL_BLENDMODE_BLEND);
-#if SDL_VERSION_ATLEAST(2, 0, 12)
-			SDL_SetTextureScaleMode(pixel_screen_texture, SDL_ScaleModeNearest);
-#endif
-			pixel_screen_texture_width = width;
-			pixel_screen_texture_height = height;
-			pixel_screen_pixels.resize(static_cast<size_t>(width) * static_cast<size_t>(height) * 4);
-			return true;
-		}
-
-		void WritePixelScreenTexture(int logical_width, int logical_height, const float* alpha_buffer) {
-			if (!alpha_buffer)
-				return;
-			if (pixel_screen_pixels.size() < static_cast<size_t>(logical_width) * static_cast<size_t>(logical_height) * 4)
-				return;
-			for (int y = 0; y != logical_height; ++y) {
-				const int source_y = y + 1;
-				for (int x = 0; x != logical_width; ++x) {
-					const float alpha_value = alpha_buffer[x + source_y * 192];
-					const SDL_Color colour = ScreenPixelColour(ink_colour, alpha_value);
-
-					const size_t pixel_offset = (static_cast<size_t>(y) * static_cast<size_t>(logical_width) + static_cast<size_t>(x)) * 4;
-					pixel_screen_pixels[pixel_offset + 0] = colour.r;
-					pixel_screen_pixels[pixel_offset + 1] = colour.g;
-					pixel_screen_pixels[pixel_offset + 2] = colour.b;
-					pixel_screen_pixels[pixel_offset + 3] = colour.a;
-				}
-			}
-		}
-
-		bool RenderPixelScreenTexture(const SDL_Rect& lcd_dest, int logical_width, int logical_height, const float* alpha_buffer) {
-			if (!EnsurePixelScreenTexture(logical_width, logical_height))
-				return false;
-			WritePixelScreenTexture(logical_width, logical_height, alpha_buffer);
-			if (SDL_UpdateTexture(pixel_screen_texture, nullptr, pixel_screen_pixels.data(), logical_width * 4) != 0) {
-				SDL_Log("[Screen][Warn] SDL_UpdateTexture failed for pixel screen: %s", SDL_GetError());
-				return false;
-			}
-			if (SDL_RenderCopy(renderer, pixel_screen_texture, nullptr, &lcd_dest) != 0) {
-				SDL_Log("[Screen][Warn] SDL_RenderCopy failed for pixel screen: %s", SDL_GetError());
-				return false;
-			}
-			return true;
-		}
-#endif
-
 	public:
 		Screen(Emulator& emu)
 			: Peripheral(emu) {
@@ -650,9 +581,6 @@ namespace casioemu {
 #endif
 			for (auto& texture : sprite_svg_textures)
 				texture.Reset();
-#ifndef CASIOEMU_CORE_WEB
-			ResetPixelScreenTexture();
-#endif
 			if (screen_buffer)
 				delete[] screen_buffer;
 			if (screen_buffer1)
@@ -663,10 +591,33 @@ namespace casioemu {
 		void Frame() override;
 		void Reset() override;
 		void* QueryInterface(const char* name) override {
+			if constexpr (hardware_id == HW_TI_MATH_PRINT) {
+				if (strcmp(name, typeid(ITiSvDisplay).name()) == 0)
+					return static_cast<ITiSvDisplay*>(this);
+			}
 			if (strcmp(name, typeid(IScreenFrameProvider).name()) == 0) {
 				return static_cast<IScreenFrameProvider*>(this);
 			}
 			return Peripheral::QueryInterface(name);
+		}
+		void SetTiSvStatus(uint32_t status) override {
+			if constexpr (hardware_id == HW_TI_MATH_PRINT) {
+				auto state_lock = LockScreenState();
+				ti_sv_status = status;
+				if (!emulator.ModelDefinition.real_hardware) {
+					ti_enabled = true;
+					ti_contrast = 112;
+				}
+			}
+		}
+		void SetTiSvFrame(const std::array<uint8_t, ITiSvDisplay::FrameBytes>& frame) override {
+			if constexpr (hardware_id == HW_TI_MATH_PRINT) {
+				auto state_lock = LockScreenState();
+				if (screen_buffer)
+					std::copy(frame.begin(), frame.end(), screen_buffer);
+				ti_enabled = true;
+				ti_contrast = 112;
+			}
 		}
 		void UpdateFrameAlpha() override {
 #ifdef __EMSCRIPTEN__
@@ -694,6 +645,8 @@ namespace casioemu {
 					emulator.ModelDefinition.screen_width,
 					emulator.ModelDefinition.screen_height).export_height;
 			}
+			if constexpr (hardware_id == HW_TI_MATH_PRINT)
+				return N_ROW + 1;
 			return hardware_id == HW_FX_5800P || hardware_id == HW_ES_PLUS ||
 				hardware_id == HW_EPS6800 ? 32 : 64;
 		}
@@ -738,7 +691,21 @@ namespace casioemu {
 			}
 		}
 		void SaveState(std::ostream& os) override {
-			size_t bufSize = (hardware_id == HW_TI) ? (192 * 9) : RowBufferSize();
+			if constexpr (hardware_id == HW_TI_MATH_PRINT) {
+				auto state_lock = LockScreenState();
+				os.write("SVL2", 4);
+				os.write(reinterpret_cast<const char*>(screen_buffer), 192 * 9);
+				const std::array<uint8_t, 11> state{
+					static_cast<uint8_t>(ti_sv_status), static_cast<uint8_t>(ti_sv_status >> 8),
+					static_cast<uint8_t>(ti_sv_status >> 16), static_cast<uint8_t>(ti_sv_status >> 24),
+					static_cast<uint8_t>(ti_contrast), static_cast<uint8_t>(ti_enabled),
+					static_cast<uint8_t>(ti_col), static_cast<uint8_t>(ti_page),
+					static_cast<uint8_t>(ti_port_status), static_cast<uint8_t>(ti_a0),
+					static_cast<uint8_t>(ti_port7)};
+				os.write(reinterpret_cast<const char*>(state.data()), state.size());
+				return;
+			}
+			size_t bufSize = RowBufferSize();
 			if (screen_buffer)
 				os.write(reinterpret_cast<const char*>(screen_buffer), bufSize);
 			uint8_t hasBuf1 = (screen_buffer1 != nullptr) ? 1 : 0;
@@ -761,10 +728,30 @@ namespace casioemu {
 			os.write(reinterpret_cast<const char*>(&screen_power), 1);
 		}
 		void LoadState(std::istream& is) override {
+			if constexpr (hardware_id == HW_TI_MATH_PRINT) {
+				char magic[4]{};
+				std::array<uint8_t, 192 * 9> buffer{};
+				std::array<uint8_t, 11> state{};
+				is.read(magic, sizeof(magic));
+				is.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+				is.read(reinterpret_cast<char*>(state.data()), state.size());
+				if (!is || std::string(magic, 4) != "SVL2" || state[5] > 1 ||
+					state[7] > 15 || state[8] > 1 || state[9] > 1)
+					throw std::runtime_error("Invalid SmartView LCD state");
+				auto state_lock = LockScreenState();
+				std::copy(buffer.begin(), buffer.end(), screen_buffer);
+				ti_sv_status = uint32_t(state[0]) | (uint32_t(state[1]) << 8) |
+					(uint32_t(state[2]) << 16) | (uint32_t(state[3]) << 24);
+				ti_contrast = state[4]; ti_enabled = state[5] != 0;
+				ti_col = state[6]; ti_page = state[7]; ti_port_status = state[8];
+				ti_a0 = state[9] != 0; ti_port7 = state[10];
+				lcd_response_reset_requested.store(true, std::memory_order_release);
+				return;
+			}
 			auto history_lock = LockLcdMutation();
 			if constexpr (kCaptureLcdHistory)
 				lcd_history.InvalidateEpoch();
-			size_t bufSize = (hardware_id == HW_TI) ? (192 * 9) : RowBufferSize();
+			size_t bufSize = RowBufferSize();
 			if (screen_buffer)
 				is.read(reinterpret_cast<char*>(screen_buffer), bufSize);
 			uint8_t hasBuf1 = 0;
@@ -794,46 +781,23 @@ namespace casioemu {
 				ratio = 1 - 1e-4;
 			else
 				ratio = 1 - 5e-4;
-#ifdef __EMSCRIPTEN__
-			ratio = 0.0f;
-#elif defined(__ANDROID__)
-			ratio = 0.80f;
+#if !defined(CASIOEMU_CORE_WEB) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+			const bool low_performance = ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext;
 #else
-			if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext) {
-				ratio = 0.80f;
-			}
+			constexpr bool low_performance = false;
 #endif
+			ratio = lcd_platform::LegacyBlendRatio(ratio, low_performance);
 			const auto lcd_response = BeginLcdResponseTick();
-			if constexpr (hardware_id == HW_TI) {
-				ratio = 1 - 1e-4;
-#ifdef __EMSCRIPTEN__
-				ratio = 0.0f;
-#elif defined(__ANDROID__)
-				ratio = 0.80f;
-#else
-				if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext) {
-					ratio = 0.80f;
-				}
-#endif
+			if constexpr (hardware_id == HW_TI_MATH_PRINT) {
+				ratio = lcd_platform::LegacyBlendRatio(0.0f, low_performance);
 				if (!ti_enabled) {
-					for (size_t i = 0; i < 65 * 192; i++) {
-						screen_ink_alpha[i] *= ratio;
-					}
+					ApplyLcdAlphaDecay(0, 65 * 192, ratio, lcd_response);
 					return;
 				}
-				if (!n_ram_buffer) //  || !emulator.chipset.ti_status_buf) //  || !emulator.chipset.ti_screen_buf
-					return;
-				float ink_alpha_on = (ti_contrast - 100) * 20.0;
-				float ink_alpha_off = std::clamp(ink_alpha_on * 0.1, 0.0, 255.0);
-				ink_alpha_off = screen_residual_enabled ? ink_alpha_off * screen_residual_alpha_scale : 0.0f;
-				ink_alpha_on = std::clamp(ink_alpha_on, 0.0f, 255.0f);
-				if (!screen_residual_enabled) {
-					ink_alpha_on = 255.0f;
-				}
-				uint8_t* screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xE708;
-				if (emulator.ModelDefinition.real_hardware) {
-					screen_buffer = this->screen_buffer;
-				}
+				const auto levels = ti_lcd::CalculateTargetLevels(ti_contrast, screen_residual_enabled, screen_residual_alpha_scale);
+				const float ink_alpha_on = levels.on;
+				const float ink_alpha_off = levels.off;
+				const uint8_t* screen_buffer = this->screen_buffer;
 				for (int ix = 0; ix < 192; ++ix) {
 					for (int iy = 0; iy < 64; ++iy) {
 						uint32_t i = (ix << 6) | iy;
@@ -841,28 +805,20 @@ namespace casioemu {
 						int subIndx = (i & 7);
 						int mask = (1 << subIndx);
 						bool on = (screen_buffer[bIndx] & mask) != 0;
-						auto& data = screen_ink_alpha[(iy * 192 + 192) + ix];
-						data = data * ratio + (on ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
+						ApplyLcdAlpha((iy * 192 + 192) + ix,
+							on ? ink_alpha_on : ink_alpha_off, ratio, lcd_response);
 					}
 				}
-				screen_buffer = (uint8_t*)n_ram_buffer - casioemu::GetRamBaseAddr(hardware_id) + 0xe5d4;
-				if (emulator.ModelDefinition.real_hardware) {
-					screen_buffer = this->screen_buffer + 8 * 192;
-				}
-				int x = 0;
 				for (int ix = 1; ix != SPR_MAX; ++ix) {
-					auto off = sprite_bitmap[ix].offset;
-					auto& data = screen_ink_alpha[x];
-					data = data * ratio + ((screen_buffer[off] & sprite_bitmap[ix].mask) ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
-					x++;
+					const auto& indicator = sprite_bitmap[ix];
+					const bool on = ((ti_sv_status >> (indicator.offset * 8)) & indicator.mask) != 0;
+					ApplyLcdAlpha(ix - 1, on ? ink_alpha_on : ink_alpha_off, ratio, lcd_response);
 				}
 
 				return;
 			}
 			else if constexpr (IsEpsFamily(hardware_id)) {
-			#ifndef __EMSCRIPTEN__
-				ratio = 0.80f;
-			#endif
+				ratio = lcd_platform::LegacyBlendRatio(0.0f, low_performance);
 				bool eps_residual_enabled;
 				float eps_residual_alpha_scale;
 				EpsLcdResponseTick eps_response;
@@ -989,31 +945,38 @@ namespace casioemu {
 	};
 
 	template <>
-	const int Screen<HW_TI>::N_ROW = 64;
+	const int Screen<HW_TI_MATH_PRINT>::N_ROW = 64;
 	template <>
-	const int Screen<HW_TI>::ROW_SIZE = 32;
+	const int Screen<HW_TI_MATH_PRINT>::ROW_SIZE = 32;
 	template <>
-	const int Screen<HW_TI>::OFFSET = 32;
+	const int Screen<HW_TI_MATH_PRINT>::OFFSET = 32;
 	template <>
-	const int Screen<HW_TI>::ROW_SIZE_DISP = 24;
+	const int Screen<HW_TI_MATH_PRINT>::ROW_SIZE_DISP = 24;
 	template <>
-	const int Screen<HW_TI>::SPR_MAX = 14;
+	const int Screen<HW_TI_MATH_PRINT>::SPR_MAX = 20;
 	template <>
-	const SpriteBitmap Screen<HW_TI>::sprite_bitmap[] = {
+	const SpriteBitmap Screen<HW_TI_MATH_PRINT>::sprite_bitmap[] = {
 		{"rsd_pixel", 0, 0},
-		{"rsd_2nd", 1, 17},
-		{"rsd_fix", 0, 0x00},
-		{"rsd_hbo", 0, 0x00},
-		{"rsd_sci", 0, 0x01},
-		{"rsd_eng", 0, 0x01},
-		{"rsd_deg", 0, 0x01},
-		{"rsd_rad", 0, 0x01},
-		{"rsd_bat", 0, 0x02},
-		{"rsd_wait", 1, 164},
-		{"rsd_left", 0, 0x02},
-		{"rsd_up", 0, 0x02},
-		{"rsd_down", 0, 0x02},
-		{"rsd_right", 0, 0x02},
+		// TI SV SWI 4 status bytes, least significant byte first.
+		{"rsd_l1", 0x01, 0x00},
+		{"rsd_2nd", 0x02, 0x00},
+		{"rsd_fix", 0x04, 0x00},
+		{"rsd_h", 0x08, 0x00},
+		{"rsd_b", 0x10, 0x00},
+		{"rsd_o", 0x20, 0x00},
+		{"rsd_l2", 0x40, 0x00},
+		{"rsd_sci", 0x80, 0x00},
+		{"rsd_eng", 0x01, 0x01},
+		{"rsd_de", 0x02, 0x01},
+		{"rsd_g", 0x04, 0x01},
+		{"rsd_rad", 0x08, 0x01},
+		{"rsd_l3", 0x10, 0x01},
+		{"rsd_bat", 0x20, 0x01},
+		{"rsd_wait", 0x40, 0x01},
+		{"rsd_left", 0x80, 0x01},
+		{"rsd_up", 0x01, 0x02},
+		{"rsd_down", 0x02, 0x02},
+		{"rsd_right", 0x04, 0x02},
 	};
 
 	template <>
@@ -1249,7 +1212,7 @@ namespace casioemu {
 						continue;
 					}
 				}
-			if constexpr (IsEpsFamily(hardware_id)) {
+			if constexpr (IsEpsFamily(hardware_id) || hardware_id == HW_TI_MATH_PRINT) {
 				SDL_Delay(10);
 				}
 #ifdef __ANDROID__
@@ -1327,7 +1290,7 @@ namespace casioemu {
 			}
 
 			ink_colour = emulator.ModelDefinition.ink_color;
-			if constexpr (hardware_id == HW_TI) {
+			if constexpr (hardware_id == HW_TI_MATH_PRINT) {
 				screen_buffer = new uint8_t[192 * 9];
 				// TODO: remove this
 				memset(screen_buffer, 0, 192 * 9);
@@ -1376,22 +1339,21 @@ namespace casioemu {
 			StartUpdateThread();
 			return;
 		}
-		if constexpr (hardware_id == HW_TI) {
+		if constexpr (hardware_id == HW_TI_MATH_PRINT) {
 			auto pp = emulator.chipset.QueryInterface<IPortProvider>();
 			pp->SetPortOutputCallback(7, [&](uint8_t data) {
+				auto state_lock = LockScreenState();
 				ti_port7 = data;
 				});
 			pp->SetPortOutputCallback(5, [&](uint8_t data) {
-				// ti_port5 = data;
+				auto state_lock = LockScreenState();
 				if (ti_a0 && !(data & 0x40)) {
 					if ((data & 0x10)) {
 						auto bit_off = ti_col;
 						auto off = bit_off + ti_page * 192;
-						if (off > 192 * 9) {
+						if (ti_col >= 192 || ti_page >= 9) {
+							ti_a0 = false;
 							return;
-						}
-						if (off > 192 * 8) {
-							std::cout << std::dec << off - 192 * 8 << " <- 0x" << std::hex << ti_port7 << "\n";
 						}
 						screen_buffer[off] = ti_port7;
 						ti_col++;
@@ -2046,7 +2008,7 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 
 #ifndef CASIOEMU_CORE_WEB
 		if (!segment_lcd)
-			RenderPixelScreenTexture(lcd_dest, logical_width, logical_height, frame_screen_ink_alpha.data());
+			pixel_screen_texture.Render(renderer, lcd_dest, logical_width, logical_height, ink_colour, frame_screen_ink_alpha.data());
 #endif
 
 #if !defined(__EMSCRIPTEN__) && !defined(CASIOEMU_CORE_WEB)
@@ -2063,6 +2025,13 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 
 	template <HardwareId hardware_id>
 	void Screen<hardware_id>::Reset() {
+		if constexpr (hardware_id == HW_TI_MATH_PRINT) {
+			auto state_lock = LockScreenState();
+			ti_sv_status = 0;
+			ti_enabled = false;
+			ti_a0 = false;
+			ti_port_status = ti_col = ti_page = 0;
+		}
 	}
 
 	Peripheral* CreateScreen(Emulator& emulator) {
@@ -2081,8 +2050,10 @@ n为行扫描计数，[0xF03B] = ( ( n / ( [0xF036] == 0 ? 64 : [0xF035] ) ) % 2
 		case HW_SOLARII:
 			return CreateSolarIIScreen(emulator);
 
-		case HW_TI:
-			return new Screen<HW_TI>(emulator);
+		case HW_TI_MULTI_VIEW:
+			return CreateTiMultiViewScreen(emulator);
+		case HW_TI_MATH_PRINT:
+			return new Screen<HW_TI_MATH_PRINT>(emulator);
 		case HW_EPS6800:
 			return new Screen<HW_EPS6800>(emulator);
 		case HW_EPS6800_W192:

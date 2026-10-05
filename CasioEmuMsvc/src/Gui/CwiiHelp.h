@@ -167,7 +167,7 @@ namespace __temp_namesp_1456456 {
 		return dat;
 	}
 	inline std::string BCD2Str(const char* p) {
-		if (m_emu->hardware_id == casioemu::HW_TI) {
+		if (m_emu->hardware_id == casioemu::HW_TI_MATH_PRINT) {
 			return TiBCD2Str(p);
 		}
 		auto sz = casioemu::GetVariableSize(m_emu->hardware_id);

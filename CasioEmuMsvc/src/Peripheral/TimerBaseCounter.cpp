@@ -1,8 +1,10 @@
-﻿#include "TimerBaseCounter.hpp"
+#include "TimerBaseCounter.hpp"
 
 #include "Chipset/Chipset.hpp"
 #include "Emulator.hpp"
 #include "Logger.hpp"
+#include "Binary.h"
+#include <stdexcept>
 
 namespace casioemu {
 	class TimerBaseCounter : public Peripheral {
@@ -82,7 +84,7 @@ namespace casioemu {
 		bool LTBR_reset_tick;
 
 		size_t LTBRCounter;
-		const size_t LTBROutputCount = 64;
+		const size_t LTBROutputCount = 128;
 
 		MMURegion reg_LTBINT;
 
@@ -126,6 +128,9 @@ namespace casioemu {
 			LTBRCounter = 0;
 			current_output = 0;
 			LTBR_reset_tick = false;
+			LTB0S = 0;
+			LTB1S = 3;
+			LTB2S = 6;
 		}
 		void Tick() {
 			if (LTBR_reset_tick) {
@@ -143,6 +148,8 @@ namespace casioemu {
 					emulator.chipset.MaskableInterrupts[LTB0INT].TryRaise();
 				if (current_output & (1 << LTB1S))
 					emulator.chipset.MaskableInterrupts[LTB1INT].TryRaise();
+				if (current_output & (1 << LTB2S))
+					emulator.chipset.MaskableInterrupts[LTB2INT].TryRaise();
 			}
 		}
 		void ResetLSCLK() {
@@ -154,9 +161,29 @@ namespace casioemu {
 			emulator.chipset.MaskableInterrupts[LTB1INT].TryRaise();
 			emulator.chipset.MaskableInterrupts[LTB2INT].TryRaise();
 		}
+		void SaveState(std::ostream& os) override {
+			Binary::Write(os, LTBRCounter);
+			Binary::Write(os, current_output);
+			Binary::Write(os, LTBR_reset_tick);
+			Binary::Write(os, LTB0S);
+			Binary::Write(os, LTB1S);
+			Binary::Write(os, LTB2S);
+		}
+		void LoadState(std::istream& is) override {
+			Binary::Read(is, LTBRCounter);
+			Binary::Read(is, current_output);
+			uint8_t reset_tick = 0;
+			Binary::Read(is, reset_tick);
+			Binary::Read(is, LTB0S);
+			Binary::Read(is, LTB1S);
+			Binary::Read(is, LTB2S);
+			if (!is || reset_tick > 1 || LTB0S < 0 || LTB0S > 7 || LTB1S < 0 || LTB1S > 7 || LTB2S < 0 || LTB2S > 7)
+				throw std::runtime_error("Invalid TI timer base selector");
+			LTBR_reset_tick = reset_tick != 0;
+		}
 	};
 	Peripheral* CreateTimerBaseCounter(Emulator& emu) {
-		if (emu.hardware_id == HW_TI) {
+		if (emu.hardware_id == HW_TI_MATH_PRINT) {
 			return new TBC2(emu);
 		}
 		return new TimerBaseCounter(emu);

@@ -213,6 +213,7 @@ uint32_t SnapshotManager::SaveSnapshot(
     uint32_t parentId,
     const std::string& label,
     bool capturePreview) {
+    std::unique_lock transaction_lock(emu.access_mx);
     // Pause emulator during save
     bool wasPaused = emu.GetPaused();
     emu.SetPaused(true);
@@ -246,11 +247,13 @@ uint32_t SnapshotManager::SaveSnapshot(
     Nodes.push_back(std::move(node));
 
     emu.SetPaused(wasPaused);
+    transaction_lock.unlock();
     FlushAutoSave();
     return newId;
 }
 
 void SnapshotManager::LoadSnapshot(casioemu::Emulator& emu, uint32_t id) {
+    const std::lock_guard transaction_lock(emu.access_mx);
     auto it = std::find_if(Nodes.begin(), Nodes.end(),
         [id](const SnapshotNode& n) { return n.Id == id; });
     if (it == Nodes.end())
@@ -268,8 +271,8 @@ void SnapshotManager::LoadSnapshot(casioemu::Emulator& emu, uint32_t id) {
     // Deserialize
     std::istringstream is(std::string(reinterpret_cast<const char*>(raw.data()), raw.size()),
                           std::ios::binary);
+    // A failed restore remains paused so the error can be inspected safely.
     emu.chipset.LoadStateAll(is);
-
     emu.SetPaused(wasPaused);
 }
 

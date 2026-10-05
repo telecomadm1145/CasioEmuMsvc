@@ -301,8 +301,10 @@ void gui_loop() {
 }
 
 static CodeViewer* CreateDebuggerGuiWindows() {
-	while (!me_mmu)
+	while (!me_mmu && !m_emu->chipset.t4x)
 		std::this_thread::sleep_for(std::chrono::microseconds(1));
+	const bool multiview = m_emu->chipset.t4x != nullptr;
+	const bool nx_tools = !casioemu::IsEpsFamily(m_emu->hardware_id) && !multiview;
 	std::filesystem::path label_file = m_emu->GetModelFilePath("labels.txt");
 	if (!label_file.empty() && std::filesystem::exists(label_file))
 		g_labels = parseFile(label_file.string());
@@ -313,22 +315,23 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 		windows.push_back(CreateFx5800FileSystem());
 	}
 
-	if (m_emu->hardware_id != casioemu::HW_SOLARII && !casioemu::IsEpsFamily(m_emu->hardware_id)) {
+	if (m_emu->hardware_id != casioemu::HW_SOLARII && nx_tools) {
 		windows.push_back(new VariableWindow());
 	}
 
 	windows.push_back(new HwController());
-	windows.push_back(new LabelViewer());
+	if (!multiview) windows.push_back(new LabelViewer());
 	auto* watch_window = new WatchWindow();
 	windows.push_back(watch_window);
 	windows.push_back(CreateCallAnalysisWindow());
 	windows.push_back(code_viewer = new CodeViewer());
-	if (!casioemu::IsEpsFamily(m_emu->hardware_id))
+	m_emu->chipset.on_rom_changed = [] { if (code_viewer) code_viewer->PrepareDisasm(); };
+	if (nx_tools)
 		windows.push_back(injector = new Injector());
 	membp = new Breakpoints();
 	windows.push_back(membp);
-	windows.push_back(CreateAddressWindow());
-	if (!casioemu::IsEpsFamily(m_emu->hardware_id)) {
+	if (!multiview) windows.push_back(CreateAddressWindow());
+	if (nx_tools) {
 #if !defined(TEST_BUILD)
 		windows.push_back(CreateRopCompilerWindow());
 #endif
@@ -340,12 +343,14 @@ static CodeViewer* CreateDebuggerGuiWindows() {
 	windows.push_back(snapshot_window = static_cast<SnapshotWindow*>(CreateSnapshotWindow()));
 #endif
 #ifndef CASIOEMU_CORE_WEB
-	if (!casioemu::IsEpsFamily(m_emu->hardware_id))
+	if (nx_tools)
 		windows.push_back(new QrCodeWindow());
 #endif
 	windows.push_back(MakeThemeWindow());
-	auto* bitmap_window = CreateBitmapViewer();
-	windows.push_back(bitmap_window);
+	if (!multiview) {
+		auto* bitmap_window = CreateBitmapViewer();
+		windows.push_back(bitmap_window);
+	}
 	for (auto item : GetEditors()) {
 		windows.push_back(item);
 	}
@@ -467,6 +472,15 @@ void CleanupWebDebuggerGuiWindows() {
 namespace UIHelpers {
 
 	void JumpToMemory(uint32_t addr) {
+		if (m_emu->chipset.t4x) {
+			const char* name = addr < 64 ? "T4x Registers (nibbles)" :
+				addr >= 0x100 && addr < 0x500 ? "T4x WRAM (nibbles)" :
+				addr >= 0x1000 && addr < 0x2000 ? "T4x DRAM (bytes)" : nullptr;
+			if (name) for (auto* win : windows) if (strcmp(win->name, name) == 0) {
+				win->GotoMemoryAddress(addr); return;
+			}
+			return;
+		}
 		// Prefer the "Ram" window; fall back to any window that overrides GotoMemoryAddress.
 		UIWindow* fallback = nullptr;
 		for (auto* win : windows) {

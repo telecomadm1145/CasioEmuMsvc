@@ -1,4 +1,5 @@
 #include "Keyboard.hpp"
+#include "Chipset/T4xCore.hpp"
 #include <SDL.h>
 #include <SDL_image.h>
 
@@ -65,7 +66,7 @@ namespace casioemu {
 				return EPS_MATRIX_SLOT_COUNT;
 			if (code == BUTTON_KIKO_RESET)
 				return EPS_MATRIX_SLOT_COUNT + 1;
-			if (hardware_id == HW_TI)
+			if (hardware_id == HW_TI_MATH_PRINT || hardware_id == HW_TI_MULTI_VIEW)
 				return code;
 			if (IsEpsFamily(hardware_id))
 				return EpsMatrixIndexForButtonCode(code);
@@ -135,7 +136,7 @@ namespace casioemu {
 		void PressButtonByCode(uint8_t code);
 		bool TryReleaseButton(Button& button);
 		void ExecuteDelayedRelease(size_t button_index);
-		void SetEpsButtonState(Button& button, bool pressed);
+		void SetCoreButtonState(Button& button, bool pressed);
 		void BuildButtonShape(Button& button, const ButtonInfo& info);
 		void DestroyButtonShapes();
 		bool ButtonContainsPoint(const Button& button, int x, int y) const;
@@ -249,7 +250,7 @@ namespace casioemu {
 		if (button.pressed && !button.stuck) {
 			button.pressed = false;
 			button.pressingFingerId = -1;
-			SetEpsButtonState(button, false);
+			SetCoreButtonState(button, false);
 			if (real_hardware) {
 				RecalculateGhost();
 			}
@@ -279,11 +280,16 @@ namespace casioemu {
 		// Immediately release
 		button.pressed = false;
 		button.pressingFingerId = -1;
-		SetEpsButtonState(button, false);
+		SetCoreButtonState(button, false);
 		return true; // Indicates it was immediately released
 	}
 
-	void Keyboard::SetEpsButtonState(Button& button, bool pressed) {
+	void Keyboard::SetCoreButtonState(Button& button, bool pressed) {
+		if (auto* core = emulator.chipset.t4x) {
+			if (button.type == Button::BT_BUTTON)
+				core->Key(button.code == 45 ? 0 : button.code, pressed);
+			return;
+		}
 		if (!IsEpsFamily(emulator.hardware_id) || !emulator.chipset.epscpu)
 			return;
 		if (button.type == Button::BT_POWER) {
@@ -322,7 +328,7 @@ namespace casioemu {
 		real_hardware = emulator.ModelDefinition.real_hardware;
 
 		clock_type = CLOCK_UNDEFINED;
-		if (emulator.hardware_id == HW_TI) {
+		if (emulator.hardware_id == HW_TI_MATH_PRINT) {
 			auto pp = emulator.chipset.QueryInterface<IPortProvider>();
 			if (!pp)
 				return;
@@ -334,7 +340,8 @@ namespace casioemu {
 			pp->SetPortInput(4, 0, 0xff);
 			goto init_kbd;
 		}
-		if (IsEpsFamily(emulator.hardware_id)) {
+		if (IsEpsFamily(emulator.hardware_id) || emulator.hardware_id == HW_TI_MULTI_VIEW) {
+			clock_type = CLOCK_STOPPED;
 			goto init_kbd;
 		}
 		region_ki.Setup(0xF040, 1, "Keyboard/KI", this,
@@ -543,7 +550,7 @@ namespace casioemu {
 				button.type = Button::BT_BUTTON;
 			button.rect = btn.rect;
 			button.code = code;
-			if (emulator.hardware_id == HW_TI) {
+			if (emulator.hardware_id == HW_TI_MATH_PRINT) {
 				int kimap[] = {7, 0, 1, 2, 3, 4, 5, 6};
 				auto ki = kimap[btn.kiko & 7];
 				auto ko = (btn.kiko >> 3);
@@ -572,9 +579,9 @@ namespace casioemu {
 		keyboard_in_last = 0xFF;
 		input_filter_last = 0;
 
-		if (IsEpsFamily(emulator.hardware_id)) {
+		if (IsEpsFamily(emulator.hardware_id) || emulator.hardware_id == HW_TI_MULTI_VIEW) {
 			// A RESET contact releases the physical keyboard.  Keep the UI
-			// state in sync with the EPS core, including right-click latches.
+			// state in sync with the core, including right-click latches.
 			for (auto& button : buttons) {
 				button.pressed = false;
 				button.stuck = false;
@@ -589,12 +596,12 @@ namespace casioemu {
 			emu_ko_readcount = 0;
 		}
 
-		if (!IsEpsFamily(emulator.hardware_id))
+		if (!IsEpsFamily(emulator.hardware_id) && emulator.hardware_id != HW_TI_MULTI_VIEW)
 			RecalculateGhost();
 	}
 
 	void Keyboard::Tick() {
-		if (emulator.ModelDefinition.hardware_id == HW_TI ||
+		if (emulator.ModelDefinition.hardware_id == HW_TI_MULTI_VIEW || emulator.ModelDefinition.hardware_id == HW_TI_MATH_PRINT ||
 			IsEpsFamily(emulator.ModelDefinition.hardware_id)) {
 			return;
 		}
@@ -1025,21 +1032,22 @@ namespace casioemu {
 			}
 		}
 		if (button.type == Button::BT_BUTTON) {
-			if (emulator.hardware_id == HW_TI) {
+			if (emulator.hardware_id == HW_TI_MATH_PRINT) {
 				emulator.chipset.tiKey = button.code;
 			}
 			// printf("[Keyboard][Info] KI: %d, KO: %d for button %02X\n", (int)(log(button.ki_bit) / log(2)), (int)(log(button.ko_bit) / log(2)), button.code);
 		}
 
 		bool state_effectively_changed = (old_pressed_state != button.pressed) || (button.pressed && old_finger_id != button.pressingFingerId);
-		if (old_pressed_state != button.pressed)
-			SetEpsButtonState(button, button.pressed);
+		if (old_pressed_state != button.pressed) {
+			SetCoreButtonState(button, button.pressed);
+		}
 
 		if (button.type == Button::BT_BUTTON && state_effectively_changed) {
 			if (button.pressed) { // Vibrate only if it results in a pressed state
 				Vibration::vibrate(100);
 			}
-			if (!IsEpsFamily(emulator.hardware_id)) {
+			if (!IsEpsFamily(emulator.hardware_id) && emulator.hardware_id != HW_TI_MULTI_VIEW) {
 				if (real_hardware) {
 					RecalculateGhost(); // This internally calls RecalculateKI
 				}
@@ -1220,7 +1228,7 @@ namespace casioemu {
 	}
 
 	void Keyboard::RecalculateKI() { // This is for real_hardware=true path
-		if (emulator.hardware_id == HW_TI) {
+		if (emulator.hardware_id == HW_TI_MATH_PRINT) {
 			auto pp = emulator.chipset.QueryInterface<IPortProvider>();
 			if (!pp)
 				return;
@@ -1228,9 +1236,10 @@ namespace casioemu {
 			keyboard_in = 0;
 			for (const auto& button : buttons) { // Iterate const
 				if (button.code == 0x29) {
+					// The ROM tests KO0 (P3.0) in EXI0: while scanning,
+					// ON is a matrix key; with KO0 low it uses the wake input.
 					if (button.pressed)
-						is_on_pressed = true;
-					continue;
+						is_on_pressed = !(keyboard_out & 1);
 				}
 				if (button.type == Button::BT_BUTTON && button.pressed && button.ko_bit & keyboard_out)
 					keyboard_in |= button.ki_bit;
@@ -1270,7 +1279,7 @@ namespace casioemu {
 			if (button.type == Button::BT_BUTTON && button.pressed && button.ki_bit & input_mode & ki_pulled_up)
 				keyboard_in |= button.ki_bit;
 		}
-		if (emulator.hardware_id != HW_TI) {
+		if (emulator.hardware_id != HW_TI_MATH_PRINT) {
 			if (keyboard_out & ~keyboard_out_mask & (1 << 7) && p0)
 				keyboard_in &= 0x7F;
 			if (keyboard_out & ~keyboard_out_mask & (1 << 8) && p1)

@@ -3,6 +3,7 @@
 #include <SDL.h>
 #include <cstddef>
 #include <utility>
+#include <vector>
 #include "ModelInfo.h"
 
 namespace casioemu {
@@ -34,5 +35,20 @@ std::pair<int, int> CurrentRenderTargetSpriteSize(SDL_Renderer* renderer, const 
 void RenderModelSprite(SDL_Renderer* renderer, SDL_Texture* interface_texture, SvgSpriteTextureCache* svg_texture, const SpriteInfo& sprite, const ColourInfo& ink_colour, uint8_t alpha);
 #ifndef CASIOEMU_CORE_WEB
 SDL_Color ScreenPixelColour(const ColourInfo& ink_colour, float alpha_value);
+
+class PixelScreenTexture {
+public:
+	PixelScreenTexture() = default;
+	PixelScreenTexture(const PixelScreenTexture&) = delete;
+	PixelScreenTexture& operator=(const PixelScreenTexture&) = delete;
+	~PixelScreenTexture();
+	void Reset();
+	void Render(SDL_Renderer* renderer, const SDL_Rect& dest, int width, int height,
+		const ColourInfo& ink_colour, const float* alpha);
+private:
+	SDL_Texture* texture = nullptr;
+	int width = 0, height = 0;
+	std::vector<uint8_t> pixels;
+};
 #endif
 } // namespace casioemu

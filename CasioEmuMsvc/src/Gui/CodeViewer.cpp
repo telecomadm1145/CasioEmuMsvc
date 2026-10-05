@@ -9,6 +9,7 @@
 #include "SysDialog.h"
 #include "U8Disas.h"
 #include "ePSCpu.h"
+#include "Chipset/T4xCore.hpp"
 #ifdef CASIOEMU_CORE_WEB
 #include "WebDebuggerGui.h"
 #endif
@@ -256,7 +257,21 @@ void CodeViewer::PrepareDisasm() {
 	is_loaded.store(false, std::memory_order_release);
 	auto build_disasm = [this]() {
 		std::vector<CodeElem> new_codes;
-		if (m_emu->chipset.epscpu) {
+		if (auto* core = m_emu->chipset.t4x) {
+			for (size_t i = 0; i < m_emu->chipset.rom_data.size() / 2; ++i) {
+				CodeElem ce{};
+				ce.offset = static_cast<uint32_t>(i);
+				auto text = core->Disassemble(static_cast<uint16_t>(i));
+				uint16_t target;
+				if (core->BranchTarget(static_cast<uint16_t>(i), target)) ce.xref_operand = target;
+				std::snprintf(ce.srcbuf, sizeof(ce.srcbuf), "%s", text.c_str());
+				new_codes.push_back(ce);
+			}
+			max_row = static_cast<int>(new_codes.size());
+			codes = std::move(new_codes);
+			is_loaded.store(true, std::memory_order_release);
+		}
+		else if (m_emu->chipset.epscpu) {
 			const size_t rom_word_count = m_emu->chipset.epscpu->RomWordCount();
 			std::map<uint32_t, std::string> labels = {
 				{0x0000u, "reset"}, {0x0002u, "paint"}, {0x0004u, "reserved_04"},
@@ -483,7 +498,7 @@ void CodeViewer::ExternalBP() {
 
 void CodeViewer::DrawContent() {
 	ImGuiListClipper c;
-	c.Begin(max_row, ImGui::GetTextLineHeight());
+	c.Begin(max_row, ImGui::GetTextLineHeightWithSpacing());
 	hovered_line = -1;
 	while (c.Step()) {
 		first_col = c.DisplayStart;
@@ -508,10 +523,10 @@ void CodeViewer::DrawContent() {
 							if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) {
 								RemoveBreakpoint(e.offset);
 							}
-							if (auto* eps = m_emu->chipset.epscpu) {
+							if (m_emu->chipset.epscpu || m_emu->chipset.t4x) {
 								const std::string popup_id = "##eps_exec_bp_" + std::to_string(line_i);
 								if (ImGui::BeginPopupContextItem(popup_id.c_str())) {
-									auto details = eps->ExecutionBreakpointDetails();
+									auto details = m_emu->chipset.t4x ? m_emu->chipset.t4x->ExecutionBreakpointDetails() : m_emu->chipset.epscpu->ExecutionBreakpointDetails();
 									auto detail = std::find_if(details.begin(), details.end(), [&](const auto& item) {
 										return item.address == e.offset;
 									});
@@ -523,8 +538,10 @@ void CodeViewer::DrawContent() {
 											changed = true;
 										}
 										ImGui::Text("Hit count: %llu", static_cast<unsigned long long>(detail->hit_count));
-										if (changed)
-											eps->ConfigureExecutionBreakpoint(*detail);
+										if (changed) {
+											if (m_emu->chipset.t4x) m_emu->chipset.t4x->ConfigureExecutionBreakpoint(*detail);
+											else m_emu->chipset.epscpu->ConfigureExecutionBreakpoint(*detail);
+										}
 									}
 									ImGui::EndPopup();
 								}
@@ -575,7 +592,7 @@ void CodeViewer::DrawContent() {
 		}
 	}
 	if (need_roll) {
-		float v = (float)cur_col / max_row * ImGui::GetScrollMaxY(); // 谁写的j7代码啊，跳着都吐了
+		float v = cur_col * ImGui::GetTextLineHeightWithSpacing();
 		auto origv = ImGui::GetScrollY();
 		if (v < origv || (v - origv > (ImGui::GetWindowHeight() - 200))) {
 			ImGui::SetScrollY(v);
@@ -930,7 +947,6 @@ static std::string GetInstructionHelp(const std::string& mnem, const std::string
 
 	return help;
 }
-static int s(bool x) { return x ? 1 : 0; }
 void CodeViewer::RenderCore() {
 #ifdef CASIOEMU_CORE_WEB
 	if (!disasm_requested) {
@@ -946,7 +962,22 @@ void CodeViewer::RenderCore() {
 		ImGui::Text("%c %s", spinner[idx], "CodeViewer.Loading"_lc);
 		return;
 	}
-	if (m_emu->chipset.epscpu) {
+	if (auto* core = m_emu->chipset.t4x) {
+		// Keep the GUI mirror on this thread, including changes made while loading.
+		break_points.clear();
+		for (const auto address : core->ExecutionBreakpoints()) {
+			auto it = std::lower_bound(codes.begin(), codes.end(), address,
+				[](const CodeElem& line, uint32_t value) { return line.offset < value; });
+			if (it != codes.end() && it->offset == address)
+				break_points[static_cast<int>(it - codes.begin())] = 1;
+		}
+		const auto pc = core->ProgramCounter();
+		const bool paused = m_emu->GetPaused();
+		if (paused && (!core_was_paused || pc_cache != pc)) JumpTo(pc);
+		pc_cache = pc;
+		core_was_paused = paused;
+	}
+	else if (m_emu->chipset.epscpu) {
 		pc_cache = m_emu->chipset.epscpu->ProgramCounter();
 	}
 	ImVec2 sz;
@@ -974,7 +1005,10 @@ void CodeViewer::RenderCore() {
 	}
 	ImGui::TextUnformatted(header.c_str());
 	ImGui::Separator();
-	ImGui::BeginChild("##scrolling", ImVec2(0, -30 * (1 + s(search_activated) + s(help_activated) * 1.6))); // Adjusted to make space for bottom controls
+	const float bottom_height = (2 + int(search_activated)) * ImGui::GetFrameHeightWithSpacing()
+		+ (help_activated ? 45.0f + ImGui::GetStyle().ItemSpacing.y : 0.0f)
+		+ ImGui::GetStyle().ItemSpacing.y;
+	ImGui::BeginChild("##scrolling", ImVec2(0, -bottom_height));
 	DrawContent();
 	ImGui::EndChild();
 	// ImGui::SameLine(); // ？？？
@@ -1005,9 +1039,10 @@ void CodeViewer::RenderCore() {
 		if (m_emu->GetPaused() && ImGui::IsKeyPressed(ImGuiKey_F10, false)) {
 			RequestTrace();
 		}
-		// F11: Step (Step Into)
+		// F11: Step Into; Shift+F11: Step Out
 		if (m_emu->GetPaused() && ImGui::IsKeyPressed(ImGuiKey_F11, false)) {
-			RequestStep();
+			if (ImGui::GetIO().KeyShift) RequestStepOut();
+			else RequestStep();
 		}
 		// Ctrl+G: Go to PC
 		if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_G, false)) {
@@ -1099,7 +1134,7 @@ void CodeViewer::RenderCore() {
 			RequestContinue();
 		}
 		ImGui::SameLine();
-		if (m_emu->chipset.epscpu) {
+		if (m_emu->chipset.epscpu || m_emu->chipset.t4x) {
 			if (ImGui::Button("Free Run"))
 				RequestContinue(false);
 			ImGui::SameLine();
@@ -1116,6 +1151,7 @@ void CodeViewer::RenderCore() {
 			stepping = false;
 			if (m_emu->chipset.epscpu)
 				m_emu->chipset.epscpu->CancelDebugRun();
+			if (m_emu->chipset.t4x) m_emu->chipset.t4x->CancelDebugRun();
 			m_emu->SetPaused(true);
 			JumpTo(pc_cache);
 		}
@@ -1133,6 +1169,13 @@ void CodeViewer::RenderCore() {
 }
 
 void CodeViewer::RequestStep() {
+	if (auto* core = m_emu->chipset.t4x) {
+		m_emu->SetPaused(true);
+		core->RequestStepInto();
+		m_emu->chipset.StepTiMultiView();
+		JumpTo(core->ProgramCounter());
+		return;
+	}
 	if (m_emu->chipset.epscpu) {
 		m_emu->chipset.epscpu->RequestStepInto();
 		m_emu->SetPaused(false);
@@ -1143,6 +1186,9 @@ void CodeViewer::RequestStep() {
 }
 
 void CodeViewer::RequestTrace() {
+	if (auto* core = m_emu->chipset.t4x) {
+		core->RequestStepOver(); m_emu->SetPaused(false); return;
+	}
 	if (m_emu->chipset.epscpu) {
 		m_emu->chipset.epscpu->RequestStepOver();
 		m_emu->SetPaused(false);
@@ -1153,6 +1199,10 @@ void CodeViewer::RequestTrace() {
 }
 
 bool CodeViewer::RequestStepOut() {
+	if (auto* core = m_emu->chipset.t4x) {
+		if (!core->RequestStepOut()) return false;
+		m_emu->SetPaused(false); return true;
+	}
 	if (m_emu->chipset.epscpu) {
 		if (!m_emu->chipset.epscpu->RequestStepOut())
 			return false;
@@ -1170,12 +1220,16 @@ bool CodeViewer::RequestStepOut() {
 }
 
 void CodeViewer::RequestContinue(bool honor_breakpoints) {
+	if (m_emu->chipset.t4x) m_emu->chipset.t4x->RequestContinue(honor_breakpoints);
 	if (m_emu->chipset.epscpu)
 		m_emu->chipset.epscpu->RequestContinue(honor_breakpoints);
 	m_emu->SetPaused(false);
 }
 
 void CodeViewer::RequestRunTo(uint32_t word_address) {
+	if (m_emu->chipset.t4x && word_address < 65536) {
+		m_emu->chipset.t4x->RequestRunToAddress(uint16_t(word_address)); m_emu->SetPaused(false);
+	}
 	if (m_emu->chipset.epscpu) {
 		m_emu->chipset.epscpu->RequestRunToAddress(word_address);
 		m_emu->SetPaused(false);
@@ -1183,6 +1237,10 @@ void CodeViewer::RequestRunTo(uint32_t word_address) {
 }
 
 void CodeViewer::AddBreakpoint(uint32_t address) {
+	if (auto* core = m_emu->chipset.t4x) {
+		core->AddExecutionBreakpoint(address);
+		return;
+	}
 	if (!is_loaded.load(std::memory_order_acquire))
 		return;
 	if (m_emu->chipset.epscpu) {
@@ -1202,6 +1260,10 @@ void CodeViewer::AddBreakpoint(uint32_t address) {
 }
 
 void CodeViewer::RemoveBreakpoint(uint32_t address) {
+	if (auto* core = m_emu->chipset.t4x) {
+		core->RemoveExecutionBreakpoint(address);
+		return;
+	}
 	if (!is_loaded.load(std::memory_order_acquire))
 		return;
 	if (m_emu->chipset.epscpu) {
@@ -1220,18 +1282,29 @@ void CodeViewer::RemoveBreakpoint(uint32_t address) {
 }
 
 void CodeViewer::ClearBreakpoints() {
+	if (auto* core = m_emu->chipset.t4x) {
+		core->ClearExecutionBreakpoints();
+		return;
+	}
 	break_points.clear();
 	if (m_emu->chipset.epscpu)
 		m_emu->chipset.epscpu->ClearExecutionBreakpoints();
 }
 
 std::vector<uint32_t> CodeViewer::GetBreakpoints() const {
+	if (m_emu->chipset.t4x) return m_emu->chipset.t4x->ExecutionBreakpoints();
 	std::vector<uint32_t> result;
 	for (const auto& [index, state] : break_points) {
 		if (state == 1 && index >= 0 && static_cast<size_t>(index) < codes.size())
 			result.push_back(codes[index].offset);
 	}
 	return result;
+}
+
+size_t CodeViewer::GetBreakpointCount() const {
+	if (auto* core = m_emu->chipset.t4x)
+		return core->ExecutionBreakpoints().size();
+	return break_points.size();
 }
 
 std::vector<CodeElem> CodeViewer::GetDisassembly(uint32_t address, size_t count) const {

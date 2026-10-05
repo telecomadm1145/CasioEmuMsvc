@@ -83,7 +83,7 @@ void HwController::RenderCore() {
 	}
 #endif
 
-	if (!casioemu::IsEpsFamily(m_emu->hardware_id)) {
+	if (!casioemu::IsEpsFamily(m_emu->hardware_id) && m_emu->hardware_id != casioemu::HW_TI_MULTI_VIEW) {
 		auto gate = casioemu::screen_gate::Get();
 		int flashing_threshold = gate.flashing_threshold;
 		if (ImGui::SliderInt("HwController.Value1"_lc, &flashing_threshold, 0, 0x3F))
@@ -106,11 +106,14 @@ void HwController::RenderCore() {
 	if (ImGui::SliderInt("HwController.CPS"_lc, &cps, 1, 28, "2^%d CPS")) {
 		m_emu->cycles.Setup((Uint64)1 << cps, m_emu->cycles.timer_interval);
 	}
-	ImGui::Text("%.6f MHz", (double)m_emu->cycles.cycles_per_second / 1024 / 1024);
+	if (m_emu->hardware_id == casioemu::HW_TI_MULTI_VIEW)
+		ImGui::Text("Reference speed: %.3fx", (double)m_emu->cycles.cycles_per_second / 1000000.0);
+	else
+		ImGui::Text("%.6f MHz", (double)m_emu->cycles.cycles_per_second / 1024 / 1024);
 	
 	ImGui::Spacing();
 	
-	if (!casioemu::IsEpsFamily(m_emu->hardware_id)) {
+	if (!casioemu::IsEpsFamily(m_emu->hardware_id) && m_emu->hardware_id != casioemu::HW_TI_MULTI_VIEW) {
 		static bool pdx[8];
 		int pd = m_emu->ModelDefinition.pd_value;
 
@@ -174,11 +177,7 @@ void HwController::RenderCore() {
 		m_emu->SetPaused(true);
 		auto lg = std::lock_guard(m_emu->access_mx);
 		std::string error;
-		if (m_emu->chipset.ReloadRom(error)) {
-			if (m_emu->chipset.epscpu && code_viewer)
-				code_viewer->PrepareDisasm();
-		}
-		else {
+		if (!m_emu->chipset.ReloadRom(error)) {
 			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
 				"HwController.HotReload"_lc, error.c_str(), window);
 		}

@@ -29,14 +29,15 @@ namespace casioemu {
 		HW_CLASSWIZ = 4,
 		HW_CLASSWIZ_II = 5,
 		HW_FX_5800P = 6,
-		HW_TI = 7,
+		HW_TI_MATH_PRINT = 7,
 		HW_SOLARII = 8,
 		// our test ends here, so we can add new models without worrying about breaking old configs
 		HW_EPS6800 = 9,
 		HW_EPS6009 = 10,
 		HW_EPS9500 = 11,
 		HW_EPS6800_W192 = 12,
-		HW_MAX = HW_EPS6800_W192,
+		HW_TI_MULTI_VIEW = 13,
+		HW_MAX = HW_TI_MULTI_VIEW,
 	};
 
 	enum class EpsDisplayKind : unsigned char {
@@ -65,7 +66,7 @@ namespace casioemu {
 		size_t eps_status_size;
 	};
 
-	inline constexpr std::array<HardwareDescriptor, 10> HARDWARE_DESCRIPTORS{{
+	inline constexpr std::array<HardwareDescriptor, 11> HARDWARE_DESCRIPTORS{{
 		{HW_ES_PLUS, "ES(P)", "ESP", EpsVariant::None, EpsDisplayKind::None,
 			EpsPowerKeyBehavior::None, 20, 25, 0},
 		{HW_CLASSWIZ, "CWX", "CWX", EpsVariant::None, EpsDisplayKind::None,
@@ -74,7 +75,7 @@ namespace casioemu {
 			EpsPowerKeyBehavior::None, 20, 25, 0},
 		{HW_FX_5800P, "Fx5800p", "Fx5800p", EpsVariant::None, EpsDisplayKind::None,
 			EpsPowerKeyBehavior::None, 20, 25, 0},
-		{HW_TI, "TI", "TI", EpsVariant::None, EpsDisplayKind::None,
+		{HW_TI_MATH_PRINT, "TI MathPrint", "TI", EpsVariant::None, EpsDisplayKind::None,
 			EpsPowerKeyBehavior::None, 20, 25, 0},
 		{HW_SOLARII, "SolarII", "SolarII", EpsVariant::None, EpsDisplayKind::None,
 			EpsPowerKeyBehavior::None, 20, 25, 0},
@@ -86,6 +87,8 @@ namespace casioemu {
 			EpsPowerKeyBehavior::CoreContact, 20, 25, 4},
 		{HW_EPS6800_W192, "EPS6800_W192", "EPS6800_W192", EpsVariant::Eps6800W192, EpsDisplayKind::DotMatrix6800W192,
 			EpsPowerKeyBehavior::HostCpuReset, 40, 60, 24},
+		{HW_TI_MULTI_VIEW, "TI MultiView", "TI MV", EpsVariant::None, EpsDisplayKind::None,
+			EpsPowerKeyBehavior::None, 20, 25, 0},
 	}};
 	static_assert(HARDWARE_DESCRIPTORS.size() == static_cast<size_t>(HW_MAX - HW_MIN + 1));
 

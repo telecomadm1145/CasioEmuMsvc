@@ -97,6 +97,8 @@ public:
 		Stop,
 		Halt,
 		Run,
+		DeepHalt,
+		HaltH,
 	};
 	virtual void SetStatus(RunStatus status) = 0;
 	virtual RunStatus GetStatus() = 0;

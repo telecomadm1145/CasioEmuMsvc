@@ -6,6 +6,7 @@
  * C core internals throughout the application.
  */
 #pragma once
+#include "CoreDebug.hpp"
 
 #include "EpsVariant.h"
 
@@ -78,56 +79,11 @@ namespace casioemu {
 		bool complete = false;
 	};
 
-	enum class Eps6800DebugStopReason : uint8_t {
-		None,
-		Step,
-		StepOver,
-		StepOut,
-		RunToAddress,
-		ExecutionBreakpoint,
-		MemoryBreakpoint,
-		Hook,
-		Break
-	};
-
-	struct Eps6800DebugStop {
-		Eps6800DebugStopReason reason{Eps6800DebugStopReason::None};
-		uint32_t program_counter{}; // 16-bit instruction-word address
-		uint64_t instruction_count{};
-		uint64_t cycle_count{};
-		uint32_t memory_address{};
-		uint8_t memory_value{};
-		bool memory_write{};
-
-		bool stopped() const { return reason != Eps6800DebugStopReason::None; }
-	};
-
-	struct Eps6800MemoryBreakpointHit {
-		uint32_t program_counter{};
-		uint32_t address{};
-		uint8_t value{};
-		bool write{};
-		uint64_t instruction_count{};
-	};
-
-	struct Eps6800ExecutionBreakpoint {
-		uint32_t address{};
-		bool enabled{true};
-		uint64_t skip_count{};
-		uint64_t hit_count{};
-	};
-
-	struct Eps6800MemoryBreakpoint {
-		uint32_t address{}; // 0x00-0x7f SFR, 0x80-0x20ff banked RAM
-		bool write{};
-		bool enabled{true};
-		bool break_when_hit{true};
-		bool compare_data{};
-		uint8_t data{};
-		uint8_t mask{0xff};
-		uint64_t skip_count{};
-		uint64_t hit_count{};
-	};
+	using Eps6800DebugStopReason = DebugStopReason;
+	using Eps6800DebugStop = DebugStop;
+	using Eps6800MemoryBreakpointHit = MemoryBreakpointHit;
+	using Eps6800ExecutionBreakpoint = ExecutionBreakpoint;
+	using Eps6800MemoryBreakpoint = MemoryBreakpoint;
 
 	struct Eps6800DebugSnapshot {
 		uint32_t program_counter{}; // 16-bit instruction-word address

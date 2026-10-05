@@ -9,8 +9,10 @@
 #include <SDL.h>
 #include <condition_variable>
 #include <forward_list>
+#include <functional>
 #include <iosfwd>
 #include <mutex>
+#include <span>
 #include <string>
 #include <thread>
 #include <vector>
@@ -37,7 +39,9 @@ namespace casioemu {
 		enum RunMode {
 			RM_STOP,
 			RM_HALT,
-			RM_RUN
+			RM_RUN,
+			RM_DEEP_HALT,
+			RM_HALT_H
 		};
 		RunMode run_mode;
 
@@ -50,6 +54,22 @@ namespace casioemu {
 		size_t pending_interrupt_count;
 		bool interrupts_active[INT_COUNT];
 		void AcceptInterrupt();
+		void EnterStandby(RunMode mode);
+		bool HasWakeRequest(RunMode mode) const;
+		void LoadStateUnchecked(std::istream& is);
+		bool AdvanceStandbyWake();
+		uint64_t standby_wake_ticks = 0;
+		template<typename Transfer>
+		void TransferTiState(Transfer transfer) {
+			transfer(run_mode, standby_wake_ticks, data_int_mask, data_int_pending,
+				interrupts_active, pending_interrupt_count, isMIBlocked,
+				data_FCON, data_FCON1, data_LTBR, data_HTBR, data_LTBADJ,
+				ClockDiv, LSCLKMode, LSCLKTickCounter, HSCLKTickCounter,
+				HSCLKTimeCounter, SYSCLKTickCounter, LSCLKTimeCounter,
+				LSCLKThresh, LSCLKFreqAddition, LSCLK_output, HSCLK_output,
+				LSCLKTick, HSCLKTick, SYSCLKTick, OSCLKTick, LTBCReset, HTBCReset,
+				tiKey, tiDiagMode, SegmentAccess, remap);
+		}
 		void RaiseSoftware(size_t index);
 
 		void ConstructPeripherals();
@@ -94,6 +114,9 @@ namespace casioemu {
 		CPU& cpu;
 		MMU& mmu;
 		class ePSCPU* epscpu = 0;
+		class T4xCore* t4x = nullptr;
+		void RunTiMultiViewFrame();
+		bool StepTiMultiView(unsigned instructions = 1);
 
 		std::vector<unsigned char> rom_data;
 		std::vector<unsigned char> flash_data;
@@ -125,6 +148,7 @@ namespace casioemu {
 		bool LSCLKMode;
 
 		bool LSCLKTick, HSCLKTick, SYSCLKTick;
+		bool OSCLKTick = false;
 		bool LTBCReset, HTBCReset;
 
 		const int HTBROutputCount = 128;
@@ -161,6 +185,8 @@ namespace casioemu {
 		void Reset();
 		void Break();
 		void Halt();
+		void DeepHalt();
+		void HaltH();
 		void Stop();
 		bool GetRunningState();
 		void RaiseEmulator();
@@ -183,6 +209,8 @@ namespace casioemu {
 		void LoadStateAll(std::istream& is);
 		void PersistEpsRam();
 		bool ReloadRom(std::string& error);
+		bool WriteTiCode(size_t address, std::span<const uint8_t> bytes);
+		std::function<void()> on_rom_changed;
 
 		template <typename T>
 		T* QueryInterface() {

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Config.hpp"
 #include <SDL.h>
 #include <SDL_image.h>
@@ -54,7 +54,7 @@ namespace casioemu {
 		unsigned int timer_interval;
 		/* Written by SetClockSpeed (UI thread) and by TimerCallback (timer
 		 * thread); keep it atomic to avoid a data race. */
-		std::atomic<Uint64> eps_frame_cycle_remainder{0};
+		std::atomic<Uint64> frame_cycle_remainder{0};
 		std::atomic<Uint64> eps_timer1_cycle_remainder{0};
 		bool running;
 		std::atomic<bool> Paused;
@@ -98,6 +98,7 @@ namespace casioemu {
 		Emulator(ModelInfo def, bool paused = false, bool headless = true, std::string modelPath = "");
 		~Emulator();
 
+		// Serializes execution with snapshot save/restore, including rollback.
 		FairRecursiveMutex access_mx;
 		HardwareId hardware_id;
 		std::map<std::string, std::string>& argv_map;
