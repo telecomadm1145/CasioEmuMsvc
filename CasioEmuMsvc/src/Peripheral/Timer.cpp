@@ -230,7 +230,7 @@ namespace casioemu {
 				const bool paired = Paired(i);
 				const uint16_t count = counter[i] | (paired ? uint16_t(counter[i + 1]) << 8 : 0);
 				uint16_t limit = data[i] | (paired ? uint16_t(data[i + 1]) << 8 : 0);
-				if (!limit) limit = paired ? 0xFFFF : 0xFF;
+				if (!limit) limit = 1;
 				const uint16_t next = count == limit ? 0 : count + 1;
 				counter[i] = static_cast<uint8_t>(next);
 				if (paired) counter[i + 1] = static_cast<uint8_t>(next >> 8);

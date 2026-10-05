@@ -108,12 +108,20 @@ namespace casioemu {
 				alpha.fill(0); target.fill(0); last_us = 0;
 				generation = history.current.generation;
 			}
-			bool immediate = !lcd_platform::kNativeTemporalSupport;
-#if !defined(CASIOEMU_CORE_WEB) && !defined(__ANDROID__)
-			immediate = immediate || ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext;
+			bool temporal = lcd_platform::kNativeTemporalSupport;
+#if !defined(CASIOEMU_CORE_WEB) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+			const bool low_performance = ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext;
+			temporal = temporal && !low_performance;
+#else
+			constexpr bool low_performance = false;
 #endif
-			if (immediate) {
-				SetTargets(history.current); alpha = target; last_us = history.current.elapsed_us; return;
+			if (!temporal) {
+				SetTargets(history.current);
+				const float ratio = lcd_platform::LegacyBlendRatio(0.0f, low_performance);
+				for (size_t i = 0; i < alpha.size(); ++i)
+					alpha[i] = alpha[i] * ratio + target[i] * (1 - ratio);
+				last_us = history.current.elapsed_us;
+				return;
 			}
 			// Settle the old target up to each LCD update, then install the new
 			// target. Keeping the intermediate refreshes makes ghosting independent

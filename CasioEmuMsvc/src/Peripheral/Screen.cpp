@@ -25,6 +25,7 @@
 #include "SolarIIScreen.hpp"
 #include "EpsScreen.hpp"
 #include "LcdResponse.hpp"
+#include "LcdPlatform.hpp"
 #include "OrdinaryLcdHistory.hpp"
 #include "OrdinaryLcdTarget.hpp"
 #include "OrdinaryLcdFrame.hpp"
@@ -260,10 +261,11 @@ namespace casioemu {
 
 		bool LcdResponseEligible() const {
 			if constexpr (!(hardware_id == HW_FX_5800P || hardware_id == HW_ES_PLUS ||
-				hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II)) {
+				hardware_id == HW_CLASSWIZ || hardware_id == HW_CLASSWIZ_II ||
+				hardware_id == HW_TI_MATH_PRINT)) {
 				return false;
 			}
-#if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
+#if defined(CASIOEMU_CORE_WEB) || defined(__EMSCRIPTEN__) || defined(__ANDROID__)
 			return false;
 #else
 			return !ThemeManager::Instance().Settings().lowPerformanceMode && !low_perf_ext;
@@ -779,33 +781,17 @@ namespace casioemu {
 				ratio = 1 - 1e-4;
 			else
 				ratio = 1 - 5e-4;
-#ifdef __EMSCRIPTEN__
-			ratio = 0.0f;
-#elif defined(__ANDROID__)
-			ratio = 0.80f;
+#if !defined(CASIOEMU_CORE_WEB) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+			const bool low_performance = ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext;
 #else
-			if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext) {
-				ratio = 0.80f;
-			}
+			constexpr bool low_performance = false;
 #endif
+			ratio = lcd_platform::LegacyBlendRatio(ratio, low_performance);
 			const auto lcd_response = BeginLcdResponseTick();
 			if constexpr (hardware_id == HW_TI_MATH_PRINT) {
-				ratio = 1 - 1e-4;
-#ifdef __EMSCRIPTEN__
-				ratio = 0.0f;
-#elif defined(__ANDROID__)
-				ratio = 0.80f;
-#else
-				if (ThemeManager::Instance().Settings().lowPerformanceMode || low_perf_ext) {
-					ratio = 0.80f;
-				}
-#endif
-				if (!screen_gate::Get().fading_enabled)
-					ratio = 0.0f;
+				ratio = lcd_platform::LegacyBlendRatio(0.0f, low_performance);
 				if (!ti_enabled) {
-					for (size_t i = 0; i < 65 * 192; i++) {
-						screen_ink_alpha[i] *= ratio;
-					}
+					ApplyLcdAlphaDecay(0, 65 * 192, ratio, lcd_response);
 					return;
 				}
 				const auto levels = ti_lcd::CalculateTargetLevels(ti_contrast, screen_residual_enabled, screen_residual_alpha_scale);
@@ -819,15 +805,14 @@ namespace casioemu {
 						int subIndx = (i & 7);
 						int mask = (1 << subIndx);
 						bool on = (screen_buffer[bIndx] & mask) != 0;
-						auto& data = screen_ink_alpha[(iy * 192 + 192) + ix];
-						data = data * ratio + (on ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
+						ApplyLcdAlpha((iy * 192 + 192) + ix,
+							on ? ink_alpha_on : ink_alpha_off, ratio, lcd_response);
 					}
 				}
 				for (int ix = 1; ix != SPR_MAX; ++ix) {
 					const auto& indicator = sprite_bitmap[ix];
 					const bool on = ((ti_sv_status >> (indicator.offset * 8)) & indicator.mask) != 0;
-					auto& data = screen_ink_alpha[ix - 1];
-					data = data * ratio + (on ? ink_alpha_on : ink_alpha_off) * (1 - ratio);
+					ApplyLcdAlpha(ix - 1, on ? ink_alpha_on : ink_alpha_off, ratio, lcd_response);
 				}
 
 				return;
@@ -1229,7 +1214,7 @@ namespace casioemu {
 						continue;
 					}
 				}
-			if constexpr (IsEpsFamily(hardware_id)) {
+			if constexpr (IsEpsFamily(hardware_id) || hardware_id == HW_TI_MATH_PRINT) {
 				SDL_Delay(10);
 				}
 #ifdef __ANDROID__

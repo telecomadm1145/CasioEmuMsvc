@@ -434,6 +434,8 @@ namespace casioemu {
 				[](MMURegion* region, size_t, uint8_t data) {
 					Chipset* chipset = (Chipset*)region->userdata;
 					chipset->data_FCON1 = data & 0b11010111;
+					// Disabling RC oscillation automatically selects LSCLK.
+					if (!(chipset->data_FCON1 & 0x02)) chipset->data_FCON1 &= ~uint8_t{0x01};
 					chipset->LSCLKMode = !(chipset->data_FCON1 & 0x1);
 				},
 				emulator);
