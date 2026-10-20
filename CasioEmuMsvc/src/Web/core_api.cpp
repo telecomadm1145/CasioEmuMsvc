@@ -289,10 +289,13 @@ namespace {
 		g_gui_background_checked = false;
 	}
 
-	casioemu::ModelInfo MakeWebModel(bool real_hardware, bool is_sample_rom, int pd_value, int model_type, bool legacy_ko) {
+	casioemu::ModelInfo MakeWebModel(bool real_hardware, bool is_sample_rom, int pd_value, int model_type, bool legacy_ko, size_t rom_size) {
 		const auto hardware_id = HardwareIdFromCoreType(model_type);
 		casioemu::ModelInfo model{};
-		model.csr_mask = hardware_id == casioemu::HW_SOLARII ? 0x0 : (hardware_id == casioemu::HW_ES_PLUS ? 0x1 : 0xf);
+		model.csr_mask = hardware_id == casioemu::HW_SOLARII ? 0x0 : 0xf;
+		if (hardware_id == casioemu::HW_ES_PLUS) {
+			model.csr_mask = rom_size > 0x20000 ? 0x3 : 0x1;
+		}
 		model.hardware_id = hardware_id;
 		model.real_hardware = real_hardware;
 		model.pd_value = static_cast<unsigned char>(pd_value & 0xff);
@@ -977,7 +980,7 @@ void WebDebuggerQueueDownload(const char* path, const char* name) {
 			g_emulator.reset();
 			if (!WriteRomFile(rom, len)) return -2;
 			if (has_flash && !WriteFlashFile(flash, flash_len)) return -4;
-			auto model = MakeWebModel(true, false, pd_value, model_type, legacy_ko != 0);
+			auto model = MakeWebModel(true, false, pd_value, model_type, legacy_ko != 0, len);
 			// EPS W192 models may or may not have an external flash image. Only
 			// attach the resource when the caller actually supplied one.
 			if (has_flash && casioemu::IsEpsFamily(hardware_id))
@@ -1056,7 +1059,7 @@ int casioemu_core_init_sim_rom(const uint8_t* rom, int len, int is_sample_rom, i
 		const auto hardware_id = HardwareIdFromCoreType(model_type);
 		auto normalized_rom = NormalizeSimulatorRomForWeb(rom, len, hardware_id);
 		if (!WriteRomFile(normalized_rom.data(), static_cast<int>(normalized_rom.size()))) return -2;
-		auto model = MakeWebModel(false, is_sample_rom != 0, pd_value, model_type, legacy_ko != 0);
+		auto model = MakeWebModel(false, is_sample_rom != 0, pd_value, model_type, legacy_ko != 0, normalized_rom.size());
 		const auto model_dir = CurrentWebModelDir();
 		std::filesystem::create_directories(model_dir);
 		g_emulator = std::make_unique<casioemu::Emulator>(model, false, true, model_dir);
