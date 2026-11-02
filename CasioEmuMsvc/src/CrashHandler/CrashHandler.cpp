@@ -192,7 +192,9 @@ static bool IsGpuDriverInvolved(EXCEPTION_POINTERS* pExceptionPointers) {
 class GlobalCrashHandler {
 public:
 	GlobalCrashHandler() {
-		AddVectoredExceptionHandler(1, CustomUnhandledExceptionFilter);
+		// Vectored handlers run before C++ catch blocks. Running crash reporting
+		// there also processes handled exceptions (including UI Automation's)
+		// and can reenter DbgHelp while it is already processing an exception.
 		SetUnhandledExceptionFilter(CustomUnhandledExceptionFilter);
 	}
 } g_crashhandler;
@@ -203,6 +205,12 @@ LONG WINAPI CustomUnhandledExceptionFilter(EXCEPTION_POINTERS* pExceptionPointer
 
 	auto code = pExceptionPointers->ExceptionRecord->ExceptionCode;
 	if (code < 0x80000000)
+		return EXCEPTION_CONTINUE_SEARCH;
+
+	// DbgHelp is not thread-safe. Only one fatal exception may enter the
+	// reporter, including when reporting itself raises another exception.
+	static volatile LONG reporting = 0;
+	if (InterlockedCompareExchange(&reporting, 1, 0) != 0)
 		return EXCEPTION_CONTINUE_SEARCH;
 
 #ifndef ENABLE_SENTRY
