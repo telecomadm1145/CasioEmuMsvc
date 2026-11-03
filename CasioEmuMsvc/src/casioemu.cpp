@@ -1,4 +1,5 @@
 #include "Config.hpp"
+#include "CrashHandler/CrashHandler.hpp"
 #include "Gui/PopUpDisplay.h"
 #include "Gui/ThemeManager.h"
 #include "Ui.hpp"
@@ -197,6 +198,9 @@ int main(int argc, char* argv[]) {
 	sentry_options_set_database_path(options, ".sentry");
 	sentry_options_set_release(options, "CasioEmuMsvc@" EMULATOR_VERSION);
 	sentry_options_set_debug(options, 1);
+#ifdef _WIN32
+	ConfigureSentryCrashHandler(options);
+#endif
 	sentry_init(options);
 #endif
 #ifdef __ANDROID__

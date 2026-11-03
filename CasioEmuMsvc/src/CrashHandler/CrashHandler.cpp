@@ -8,10 +8,7 @@
 #include <iostream>
 
 #pragma comment(lib, "dbghelp.lib")
-#include "Config.hpp"
-#ifdef ENABLE_SENTRY
-#include "sentry.h"
-#endif
+#include "CrashHandler.hpp"
 
 static const char* kCrashLockFile = ".crash.switch_renderer";
 static void TouchCrashLock() {
@@ -199,6 +196,23 @@ public:
 	}
 } g_crashhandler;
 
+#ifdef ENABLE_SENTRY
+static sentry_value_t OnSentryCrash(const sentry_ucontext_t* context, sentry_value_t event, void*) {
+	if (context) {
+		auto exception_pointers = context->exception_ptrs;
+		CustomUnhandledExceptionFilter(&exception_pointers);
+	}
+	// Keep the event so Crashpad can finish capturing and reporting the crash.
+	return event;
+}
+
+void ConfigureSentryCrashHandler(sentry_options_t* options) {
+	// Crashpad replaces our unhandled-exception filter during sentry_init().
+	// Run the guarded reporter through its crash hook without replacing its filter.
+	sentry_options_set_on_crash(options, OnSentryCrash, nullptr);
+}
+#endif
+
 LONG WINAPI CustomUnhandledExceptionFilter(EXCEPTION_POINTERS* pExceptionPointers) {
 	if (IsDebuggerPresent())
 		return EXCEPTION_CONTINUE_SEARCH;
@@ -242,7 +256,7 @@ LONG WINAPI CustomUnhandledExceptionFilter(EXCEPTION_POINTERS* pExceptionPointer
 				 "CasioEmuMsvc.pdb, and the crashdump.dmp.\n";
 	std::cerr << "Press any key to close...\n";
 #else
-	std::cerr << "Error has been reported to developer.\n";
+	std::cerr << "Handing crash report to Sentry.\n";
 #endif
 	std::cerr.flush();
 
