@@ -331,8 +331,9 @@ namespace {
 						throw std::runtime_error("Status indicator byte is outside the selected EPS model's LCD status area.");
 				}
 			}
-			model.status_indicators = g_web_status_indicators;
 		}
+		if (casioemu::IsEpsFamily(hardware_id) || hardware_id == casioemu::HW_TI_MULTI_VIEW)
+			model.status_indicators = g_web_status_indicators;
 		if (casioemu::IsEpsFamily(hardware_id)) {
 			auto hexByte = [](int value) {
 				char buffer[8]{};
