@@ -79,6 +79,7 @@ namespace {
 		bool ice_timer_scheduling = false;
 	};
 	WebEpsConfig g_web_eps_config;
+	int g_web_ti_dram_banks = 8;
 	std::vector<uint8_t> g_snapshot_buffer;
 	bool g_qr_active = false;
 	int g_qr_version = 0;
@@ -292,7 +293,7 @@ namespace {
 	casioemu::ModelInfo MakeWebModel(bool real_hardware, bool is_sample_rom, int pd_value, int model_type, bool legacy_ko, size_t rom_size) {
 		const auto hardware_id = HardwareIdFromCoreType(model_type);
 		casioemu::ModelInfo model{};
-		model.csr_mask = hardware_id == casioemu::HW_SOLARII ? 0x0 : 0xf;
+		model.csr_mask = hardware_id == casioemu::HW_SOLARII || hardware_id == casioemu::HW_TI_MULTI_VIEW ? 0x0 : 0xf;
 		if (hardware_id == casioemu::HW_ES_PLUS) {
 			model.csr_mask = rom_size > 0x20000 ? 0x3 : 0x1;
 		}
@@ -305,7 +306,7 @@ namespace {
 		if (hardware_id == casioemu::HW_FX_5800P) {
 			model.flash_path = kFlashPath;
 		}
-		model.enable_new_screen = false;
+		model.enable_new_screen = hardware_id == casioemu::HW_TI_MATH_PRINT;
 		if (hardware_id == casioemu::HW_EPS6009) {
 			model.screen_width = 96;
 			model.screen_height = 31;
@@ -314,8 +315,8 @@ namespace {
 		model.is_sample_rom = is_sample_rom;
 		model.legacy_ko = legacy_ko;
 		model.u16_mode = hardware_id == casioemu::HW_CLASSWIZ || hardware_id == casioemu::HW_CLASSWIZ_II || hardware_id == casioemu::HW_TI_MATH_PRINT;
-		model.LARGE_model = hardware_id != casioemu::HW_SOLARII && !casioemu::IsEpsFamily(hardware_id);
-		model.ml620_mirroring = hardware_id != casioemu::HW_CLASSWIZ && !casioemu::IsEpsFamily(hardware_id);
+		model.LARGE_model = hardware_id != casioemu::HW_SOLARII && hardware_id != casioemu::HW_TI_MULTI_VIEW && !casioemu::IsEpsFamily(hardware_id);
+		model.ml620_mirroring = hardware_id != casioemu::HW_CLASSWIZ && hardware_id != casioemu::HW_TI_MULTI_VIEW && !casioemu::IsEpsFamily(hardware_id);
 		model.ink_color = {0, 0, 0};
 		if (casioemu::IsEpsFamily(hardware_id)) {
 			const auto* descriptor = casioemu::FindHardwareDescriptor(hardware_id);
@@ -351,12 +352,15 @@ namespace {
 			if (g_web_eps_config.ice_timer_scheduling)
 				model.extra["ice_timer_scheduling"] = "1";
 		}
+		if (hardware_id == casioemu::HW_TI_MULTI_VIEW)
+			model.extra["ti_dram_banks"] = std::to_string(g_web_ti_dram_banks);
 		if (!real_hardware) {
 			model.extra["limit_spd"] = "1";
 		}
 		const int ko_count = casioemu::IsEpsFamily(hardware_id) ? 16 : 8;
+		const int ki_count = hardware_id == casioemu::HW_TI_MATH_PRINT || hardware_id == casioemu::HW_TI_MULTI_VIEW ? 16 : 8;
 		for (int ko = 0; ko < ko_count; ++ko) {
-			for (int ki = 0; ki < 8; ++ki) {
+			for (int ki = 0; ki < ki_count; ++ki) {
 				casioemu::ButtonInfo button{};
 				button.kiko = (ko << 4) | ki;
 				button.keyname = "";
@@ -367,7 +371,7 @@ namespace {
 		on.kiko = 0xFF;
 		on.keyname = "";
 		model.buttons.push_back(on);
-		if (casioemu::IsEpsFamily(hardware_id)) {
+		if (casioemu::IsEpsFamily(hardware_id) || hardware_id == casioemu::HW_TI_MATH_PRINT || hardware_id == casioemu::HW_TI_MULTI_VIEW) {
 			casioemu::ButtonInfo reset{};
 			reset.kiko = casioemu::BUTTON_KIKO_RESET;
 			reset.keyname = "";
@@ -465,9 +469,10 @@ namespace {
 			addr = 0x8000;
 			len = 0x2000;
 			return true;
+		case casioemu::HW_TI_MATH_PRINT:
 		case casioemu::HW_FX_5800P:
-			addr = static_cast<uint32_t>(casioemu::GetRamBaseAddr(casioemu::HW_FX_5800P));
-			len = static_cast<int>(casioemu::GetRamSize(casioemu::HW_FX_5800P));
+			addr = static_cast<uint32_t>(casioemu::GetRamBaseAddr(g_emulator->hardware_id));
+			len = static_cast<int>(casioemu::GetRamSize(g_emulator->hardware_id));
 			return true;
 		case casioemu::HW_SOLARII:
 			addr = 0xE000;
@@ -1033,6 +1038,12 @@ int casioemu_core_set_eps_config(
 		cycles_per_second, timer1_source_hz, timer_cycle_divisor,
 		ice_timer_scheduling != 0,
 	};
+	return 0;
+}
+
+int casioemu_core_set_ti_dram_banks(int banks) {
+	if (banks < 1 || banks > 14) return 1;
+	g_web_ti_dram_banks = banks;
 	return 0;
 }
 
