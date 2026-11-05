@@ -15,7 +15,7 @@
 #include "Gui/ThemeManager.h"
 #endif
 #include <algorithm>
-#include <cstdio>
+#include <array>
 #include <cstring>
 #include <typeinfo>
 #include <istream>
@@ -28,17 +28,17 @@ extern bool low_perf_ext;
 namespace casioemu {
 	class TiMultiViewScreen final : public Peripheral, public IScreenFrameProvider {
 		static constexpr unsigned Width = T4xCore::Width, Height = T4xCore::Height;
-		static constexpr size_t StatusCount = TI_MV_STATUS_BITS.size();
+		size_t StatusCount() const { return emulator.ModelDefinition.status_indicators.size(); }
 		// ScreenOutput currently uses the common 192-column alpha stride and
 		// reserves row 0 for status. Export includes it; the body is 96x31.
 		std::array<float, 192 * (Height + 1)> alpha{};
 		std::array<float, 192 * (Height + 1)> target{};
 		mutable std::mutex response_mutex;
 		uint64_t last_ns = 0, generation = 0;
-		std::vector<SpriteInfo> sprites{StatusCount + 1};
-		std::vector<uint8_t> present = std::vector<uint8_t>(StatusCount + 1);
+		std::vector<SpriteInfo> sprites;
+		std::vector<uint8_t> present;
 		ScreenOutput output;
-		std::array<SvgSpriteTextureCache, StatusCount> status_textures;
+		std::vector<SvgSpriteTextureCache> status_textures;
 #ifndef CASIOEMU_CORE_WEB
 		PixelScreenTexture pixel_texture;
 #endif
@@ -47,13 +47,20 @@ namespace casioemu {
 		explicit TiMultiViewScreen(Emulator& emulator) : Peripheral(emulator), output(emulator) { clock_type = CLOCK_STOPPED; }
 		void Initialise() override {
 			if constexpr (lcd_platform::kNativeTemporalSupport) emulator.chipset.t4x->EnableDisplayHistory();
+			const auto& indicators = emulator.ModelDefinition.status_indicators;
+			if (indicators.empty() || indicators.size() > (T4xCore::LcdBytes - T4xCore::BodyBytes) * 8)
+				throw std::runtime_error("Invalid MultiView status indicator count.");
+			for (const auto& indicator : indicators)
+				if (indicator.byte_offset >= T4xCore::LcdBytes - T4xCore::BodyBytes || indicator.bit > 7)
+					throw std::runtime_error("MultiView status bit is outside the LCD status area.");
 			if (emulator.headless) return;
+			sprites.resize(StatusCount() + 1);
+			present.assign(StatusCount() + 1, 0);
+			status_textures.resize(StatusCount());
 			sprites[0] = emulator.ModelDefinition.sprites.at("rsd_pixel");
 			present[0] = 1;
-			for (size_t i = 0; i < StatusCount; ++i) {
-				char name[32];
-				std::snprintf(name, sizeof(name), "rsd_mv_%02u", TI_MV_STATUS_BITS[i]);
-				auto it = emulator.ModelDefinition.sprites.find(name);
+			for (size_t i = 0; i < StatusCount(); ++i) {
+				auto it = emulator.ModelDefinition.sprites.find(indicators[i].sprite_name);
 				if (it != emulator.ModelDefinition.sprites.end()) {
 					sprites[i + 1] = it->second;
 					present[i + 1] = 1;
@@ -86,9 +93,9 @@ namespace casioemu {
 			for (unsigned y = 0; y < Height; ++y)
 				for (unsigned x = 0; x < Width; ++x)
 					target[(y + 1) * 192 + x] = (frame[y * (Width / 8) + x / 8] & (128 >> (x % 8))) ? levels.on : levels.off;
-			for (size_t i = 0; i < StatusCount; ++i) {
-				unsigned bit = TI_MV_STATUS_BITS[i];
-				target[i] = (frame[T4xCore::BodyBytes + bit / 8] & (128 >> (bit % 8))) ? levels.on : levels.off;
+			for (size_t i = 0; i < StatusCount(); ++i) {
+				const auto& indicator = emulator.ModelDefinition.status_indicators[i];
+				target[i] = (frame[T4xCore::BodyBytes + indicator.byte_offset] & (128 >> indicator.bit)) ? levels.on : levels.off;
 			}
 		}
 		void Settle(uint64_t time_ns) {
@@ -186,7 +193,7 @@ namespace casioemu {
 					out[offset + 3] = static_cast<uint8_t>(std::clamp(static_cast<int>(alpha[y * 192 + x]), 0, 255));
 				}
 		}
-		int GetStatusAlphaCount() const override { return StatusCount; }
+		int GetStatusAlphaCount() const override { return static_cast<int>(StatusCount()); }
 		void WriteStatusAlpha(uint8_t* out, int count) const override {
 			const std::lock_guard lock(response_mutex);
 			if (out && count > 0)
@@ -207,7 +214,7 @@ namespace casioemu {
 			frame.logical_width = Width;
 			frame.logical_height = Height;
 			frame.lcd_dest = sprites[0].dest;
-			for (size_t i = 0; i < StatusCount; ++i) {
+			for (size_t i = 0; i < StatusCount(); ++i) {
 				const auto opacity = static_cast<uint8_t>(std::clamp(static_cast<int>(alpha[i]), 0, 255));
 				if (present[i + 1] && opacity)
 					RenderModelSprite(frame.renderer, frame.interface_texture, &status_textures[i], sprites[i + 1], *frame.ink_colour, opacity);
